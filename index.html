@@ -1,467 +1,313 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  LayoutDashboard, Users, Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
-  CheckCircle2, Circle, ExternalLink, Info, Clock, Briefcase, UserCircle2, Save, Loader2, Trash2, 
-  LogOut, Layout, FileText, Settings, BarChart3, CheckSquare, AlertTriangle, Smile, Meh, Frown, Instagram,
-  Video, Edit3, ArrowRight, UserPlus, MonitorPlay, MoreVertical, Search, Menu
-} from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, setDoc } from 'firebase/firestore';
-
-// --- CONFIGURACIÓN E INICIALIZACIÓN ---
-const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'cluster-agency-pro-mobile-v3';
-
-// --- CONSTANTES ---
-const MONTH_NAMES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-const TOAST_TIMEOUT = 3000;
-
-// --- APP PRINCIPAL ---
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [view, setView] = useState('dashboard');
-  const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState(null); 
-  
-  // Estado para Menú Móvil
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  // Datos
-  const [clients, setClients] = useState([]);
-  const [events, setEvents] = useState([]);
-  const [managers, setManagers] = useState([]);
-  const [editingTasks, setEditingTasks] = useState([]);
-
-  // UI & Modales
-  const [selectedClient, setSelectedClient] = useState(null);
-  const [selectedManager, setSelectedManager] = useState(null);
-  const [modalConfig, setModalConfig] = useState({ isOpen: false, type: null, data: null });
-  const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, type: null, id: null, title: '' });
-  const [eventParams, setEventParams] = useState(null); 
-
-  // Auth
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (error) { console.error("Error Auth:", error); }
-    };
-    initAuth();
-    return onAuthStateChanged(auth, setUser);
-  }, []);
-
-  // Carga de Datos
-  useEffect(() => {
-    if (!user) return;
-    const unsubs = [
-      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), s => {
-        const list = s.docs.map(d => ({id: d.id, ...d.data()}));
-        setClients(list);
-        if (selectedClient) setSelectedClient(list.find(c => c.id === selectedClient.id));
-      }),
-      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), s => setEvents(s.docs.map(d => ({id: d.id, ...d.data()})))),
-      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), s => setManagers(s.docs.map(d => ({id: d.id, ...d.data()})))),
-      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), s => {
-        setEditingTasks(s.docs.map(d => ({id: d.id, ...d.data()})));
-        setLoading(false);
-      })
-    ];
-    return () => unsubs.forEach(u => u());
-  }, [user, selectedClient?.id]);
-
-  // Helpers
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), TOAST_TIMEOUT);
-  };
-  const closeModal = () => setModalConfig({ isOpen: false, type: null, data: null });
-  const closeDelete = () => setDeleteConfirm({ isOpen: false, type: null, id: null });
-  const handleNavigate = (newView) => {
-    setView(newView);
-    setIsMobileMenuOpen(false); // Cerrar menú móvil al navegar
-  };
-
-  // --- ACCIONES (CRUD) ---
-  const addClient = async (formData) => {
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { 
-      ...formData, 
-      manager: formData.manager || "", 
-      status: 'Activo', 
-      mood: 'Contento', 
-      createdAt: new Date().toISOString(), 
-      workflow: { week1: false, week2: false, week3: false, week4: false }, 
-      references: { tone: "Por definir", contentType: "General" } 
-    });
-    showToast('Cliente creado'); closeModal();
-  };
-  const updateClient = async (id, data) => await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), data);
-  const deleteClient = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id)); showToast('Cliente eliminado'); closeDelete(); setSelectedClient(null); setView('clients'); };
-  const addManager = async (formData) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), formData); showToast('Manager agregado'); closeModal(); };
-  const deleteManager = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'managers', id)); showToast('Manager eliminado'); closeDelete(); if(selectedManager?.id === id) { setSelectedManager(null); setView('managers'); } };
-  const addEvent = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data); showToast('Evento agendado'); closeModal(); };
-  const updateEvent = async (id, title) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id), { title }); showToast('Evento actualizado'); };
-  const deleteEvent = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id)); showToast('Evento eliminado'); closeDelete(); };
-  const addTask = async (formData) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), { ...formData, status: 'editar' }); showToast('Tarea creada'); closeModal(); };
-  const advanceTask = async (task) => { const next = task.status === 'editar' ? 'correccion' : task.status === 'correccion' ? 'aprobado' : null; if (next) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', task.id), { status: next }); };
-  const deleteTask = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id)); showToast('Tarea eliminada'); };
-
-  if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-purple-600 h-10 w-10" /></div>;
-
-  return (
-    <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden flex-col md:flex-row">
-      
-      {/* HEADER MÓVIL */}
-      <div className="md:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center z-30 shadow-sm shrink-0">
-        <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white font-black">C</div>
-            <span className="font-black text-slate-800 text-lg tracking-tight">CLUSTER</span>
-        </div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-      </div>
-
-      {/* SIDEBAR */}
-      <div className={`fixed inset-0 z-40 bg-slate-900/50 transition-opacity duration-300 md:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileMenuOpen(false)} />
-
-      <aside className={`fixed md:relative z-50 h-full bg-white border-r border-slate-200 flex flex-col shadow-xl md:shadow-none w-64 shrink-0 transition-transform duration-300 ease-in-out top-0 left-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <div className="p-8 hidden md:block">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white font-black text-lg">C</div>
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight">CLUSTER</h1>
-          </div>
-          <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest pl-11">Agency OS</p>
-        </div>
-        
-        <nav className="flex-1 px-4 space-y-1 pt-20 md:pt-4 overflow-y-auto">
-          <SidebarItem active={view === 'dashboard'} onClick={() => handleNavigate('dashboard')} icon={<LayoutDashboard size={20} />} label="Panel Central" color="purple" />
-          <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Gestión</div>
-          <SidebarItem active={view === 'clients' || view === 'client-detail'} onClick={() => handleNavigate('clients')} icon={<Briefcase size={20} />} label="Clientes" color="blue" />
-          <SidebarItem active={view === 'managers' || view === 'manager-detail'} onClick={() => handleNavigate('managers')} icon={<Users size={20} />} label="Account Managers" color="indigo" />
-          
-          <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Producción</div>
-          <SidebarItem active={view === 'calendar'} onClick={() => handleNavigate('calendar')} icon={<CalendarIcon size={20} />} label="Agenda Global" color="emerald" />
-          <SidebarItem active={view === 'editions'} onClick={() => handleNavigate('editions')} icon={<Video size={20} />} label="Sala de Edición" color="amber" />
-        </nav>
-
-        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-md">GO</div>
-            <div><p className="text-sm font-bold text-slate-700">Gerente Ops</p><p className="text-[10px] font-bold text-green-600 uppercase flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Conectado</p></div>
-        </div>
-      </aside>
-
-      {/* CONTENIDO PRINCIPAL */}
-      <main className="flex-1 overflow-y-auto relative scroll-smooth bg-slate-50 w-full h-full">
-        <div className="p-4 md:p-8 max-w-[1600px] mx-auto min-h-full pb-20">
-          
-          {view === 'dashboard' && <DashboardView clients={clients} managers={managers} events={events} tasks={editingTasks} />}
-          
-          {view === 'managers' && (
-            <ManagersView managers={managers} onAdd={() => setModalConfig({ isOpen: true, type: 'manager' })} 
-              onSelect={(m) => { setSelectedManager(m); setView('manager-detail'); }}
-              onDelete={(m) => setDeleteConfirm({ isOpen: true, type: 'manager', id: m.id, title: m.name })} />
-          )}
-
-          {view === 'manager-detail' && selectedManager && (
-            <ManagerDetail manager={selectedManager} events={events} onBack={() => setView('managers')}
-              onAddEvent={(date) => setModalConfig({ isOpen: true, type: 'event', data: { date, type: 'publication', contextId: selectedManager.id } })}
-              onDeleteEvent={(e) => setDeleteConfirm({ isOpen: true, type: 'event', id: e.id, title: e.title })}
-              onEditEvent={updateEvent} />
-          )}
-
-          {view === 'clients' && (
-            <ClientsView clients={clients} onAdd={() => setModalConfig({ isOpen: true, type: 'client' })} 
-              onSelect={(c) => { setSelectedClient(c); setView('client-detail'); }} />
-          )}
-
-          {view === 'client-detail' && selectedClient && (
-            <ClientDetail client={selectedClient} onBack={() => setView('clients')} onUpdate={updateClient}
-              onDelete={() => setDeleteConfirm({ isOpen: true, type: 'client', id: selectedClient.id, title: selectedClient.name })} />
-          )}
-
-          {view === 'calendar' && (
-            <GlobalCalendar events={events} onAddEvent={(date) => setModalConfig({ isOpen: true, type: 'event', data: { date, type: 'production' } })}
-              onDeleteEvent={(e) => setDeleteConfirm({ isOpen: true, type: 'event', id: e.id, title: e.title })}
-              onEditEvent={updateEvent} />
-          )}
-
-          {view === 'editions' && (
-            <EditionsView tasks={editingTasks} onAdd={() => setModalConfig({ isOpen: true, type: 'task' })} 
-              onAdvance={advanceTask} onDelete={deleteTask} />
-          )}
-        </div>
-      </main>
-
-      {/* COMPONENTES FLOTANTES */}
-      {toast && <Toast message={toast.message} type={toast.type} />}
-      {modalConfig.isOpen && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} actions={{ addClient, addManager, addEvent, addTask }} />}
-      {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} actions={{ deleteClient, deleteManager, deleteEvent }} />}
-    </div>
-  );
-}
-
-// --- SUB-COMPONENTES ---
-
-const SidebarItem = ({ active, onClick, icon, label, color }) => {
-  const activeClasses = `bg-${color}-50 text-${color}-700 shadow-sm border-${color}-100`;
-  const inactiveClasses = "text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-transparent";
-  
-  return (
-    <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 group ${active ? activeClasses : inactiveClasses}`}>
-      <div className={`transition-transform duration-200 ${active ? 'scale-110' : 'group-hover:scale-110'}`}>{icon}</div>
-      <span className="font-bold text-sm">{label}</span>
-      {active && <ChevronRight size={14} className={`ml-auto text-${color}-400`} />}
-    </button>
-  );
-};
-
-const DashboardView = ({ clients, managers, events, tasks }) => (
-  <div className="space-y-8 animate-in fade-in duration-500">
-    <div><h2 className="text-2xl md:text-3xl font-black text-slate-800">Resumen Operativo</h2><p className="text-slate-500 font-medium mt-1 text-sm md:text-base">Vista general del rendimiento.</p></div>
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-      <StatCard title="Clientes Activos" value={clients.length} icon={<Briefcase />} color="blue" />
-      <StatCard title="Equipo Managers" value={managers.length} icon={<Users />} color="indigo" />
-      <StatCard title="Producciones Mes" value={events.filter(e => e.type === 'production').length} icon={<MonitorPlay />} color="emerald" />
-      <StatCard title="Pendientes Edición" value={tasks.filter(t => t.status !== 'aprobado').length} icon={<Video />} color="amber" />
-    </div>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cluster Agency OS</title>
     
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-            <h3 className="font-bold text-slate-700">Estado de Cuentas</h3>
-            <span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded-full">En Vivo</span>
-        </div>
-        <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm min-w-[600px]">
-                <thead className="bg-white text-slate-400 font-bold uppercase text-xs border-b border-slate-100">
-                    <tr>
-                        <th className="px-6 py-3">Cliente</th>
-                        <th className="px-6 py-3">Manager</th>
-                        <th className="px-6 py-3 text-center">Progreso</th>
-                        <th className="px-6 py-3 text-center">Estado</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                    {clients.slice(0, 5).map(c => {
-                        const progress = Object.values(c.workflow).filter(Boolean).length;
-                        return (
-                            <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-6 py-4 font-bold text-slate-700">{c.name}</td>
-                                <td className="px-6 py-4 text-slate-500">{c.manager || 'Sin asignar'}</td>
-                                <td className="px-6 py-4"><div className="flex items-center gap-2 justify-center"><div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden max-w-[100px]"><div className="h-full bg-purple-500 rounded-full" style={{ width: `${progress * 25}%` }}></div></div><span className="text-xs font-bold text-purple-600">{progress * 25}%</span></div></td>
-                                <td className="px-6 py-4 text-center"><span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100"><CheckCircle2 size={12} /> Activo</span></td>
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
-        </div>
-    </div>
-  </div>
-);
+    <!-- Tailwind CSS para los estilos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
 
-const ManagersView = ({ managers, onAdd, onSelect, onDelete }) => (
-  <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-      <h2 className="text-2xl md:text-3xl font-black text-slate-800">Account Managers</h2>
-      <Button onClick={onAdd} icon={<UserPlus size={18}/>}>Agregar Manager</Button>
-    </div>
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {managers.map(m => (
-        <div key={m.id} onClick={() => onSelect(m)} className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-xl hover:border-purple-200 transition-all cursor-pointer group relative">
-          <div className="absolute top-4 right-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); onDelete(m); }} className="p-2 bg-white text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={16}/></button></div>
-          <div className="flex items-center gap-4 mb-4">
-            <div className="h-16 w-16 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 flex items-center justify-center text-2xl font-black text-indigo-600">{m.name.charAt(0)}</div>
-            <div><h3 className="font-bold text-lg text-slate-800">{m.name}</h3><p className="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded-md inline-block mt-1">{m.assignedAccounts?.length || 0} Cuentas</p></div>
-          </div>
-          <div className="flex gap-2 flex-wrap">{m.assignedAccounts?.slice(0, 3).map((acc, i) => <span key={i} className="text-[10px] font-bold px-2 py-1 bg-slate-50 border border-slate-100 rounded text-slate-600 truncate max-w-[80px]">{acc}</span>)}</div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
+    <!-- Importaciones de librerías para que funcione sin instalar nada -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.292.0",
+            "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+            "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js",
+            "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
+        }
+    }
+    </script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
 
-const ManagerDetail = ({ manager, events, onBack, onAddEvent, onDeleteEvent, onEditEvent }) => (
-  <div className="h-full flex flex-col space-y-6 animate-in zoom-in-95 duration-300">
-    <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-        <button onClick={onBack} className="p-2 hover:bg-slate-200 rounded-full"><ChevronLeft/></button>
-        <div>
-            <h2 className="text-2xl font-black text-slate-800">{manager.name}</h2>
-            <span className="text-sm font-bold text-indigo-600">Planificación de Publicaciones</span>
-        </div>
-    </div>
-    <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-      <CalendarGrid events={events.filter(e => e.contextId === manager.id)} onAdd={onAddEvent} onDelete={onDeleteEvent} onEdit={onEditEvent} type="publication" />
-    </div>
-  </div>
-);
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            LayoutDashboard, Users, Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
+            CheckCircle2, Circle, ExternalLink, Info, Clock, Briefcase, UserCircle2, Save, Loader2, Trash2, 
+            LogOut, Layout, FileText, Settings, BarChart3, CheckSquare, AlertTriangle, Smile, Meh, Frown, Instagram,
+            Video, Edit3, ArrowRight, UserPlus, MonitorPlay, MoreVertical, Search, Menu
+        } from 'lucide-react';
+        import { initializeApp } from 'firebase/app';
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+        import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 
-const ClientsView = ({ clients, onAdd, onSelect }) => (
-  <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h2 className="text-2xl md:text-3xl font-black text-slate-800">Cartera de Clientes</h2>
-        <Button onClick={onAdd} color="blue" icon={<Plus size={18}/>}>Nuevo Cliente</Button>
-    </div>
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {clients.map(c => (
-        <div key={c.id} onClick={() => onSelect(c)} className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer relative">
-          <div className="flex justify-between mb-4"><div className="h-14 w-14 bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-2xl flex items-center justify-center text-xl font-black text-blue-600">{c.logo}</div><div className={`w-3 h-3 rounded-full ${c.mood === 'En Riesgo' ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div></div>
-          <h3 className="text-lg font-bold text-slate-800">{c.name}</h3><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{c.niche}</p>
-          <div className="pt-4 border-t border-slate-50 flex items-center gap-2 text-sm font-medium text-slate-600"><UserCircle2 size={16} className="text-blue-400"/> {c.manager || 'Sin asignar'}</div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
+        // --- ⚠️ AQUI PONDRÁS TU CONFIGURACIÓN DE FIREBASE DESPUÉS ⚠️ ---
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        
+        let app, auth, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (error) { 
+            console.warn("Firebase no conectado (Modo Demo Local)"); 
+        }
 
-const ClientDetail = ({ client, onBack, onUpdate, onDelete }) => (
-  <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in duration-500">
-    <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-blue-600 font-bold text-sm uppercase tracking-wider"><ChevronLeft size={16}/> Volver</button>
-    <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
-      <div className="bg-slate-900 p-6 md:p-8 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div className="flex items-center gap-6"><div className="h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-3xl font-black">{client.logo}</div><div><h1 className="text-2xl md:text-3xl font-black">{client.name}</h1><p className="text-blue-300 text-sm font-bold mt-1">{client.package}</p></div></div>
-        <div className="flex gap-2 bg-white/10 p-1 rounded-xl">{['Contento', 'Neutral', 'En Riesgo'].map(m => <button key={m} onClick={() => onUpdate(client.id, {mood: m})} className={`p-2 rounded-lg ${client.mood === m ? 'bg-white/20' : 'opacity-50 hover:opacity-100'}`}>{m === 'Contento' ? <Smile className="text-green-400"/> : m === 'Neutral' ? <Meh className="text-yellow-400"/> : <Frown className="text-red-400"/>}</button>)}</div>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
-        <div className="lg:col-span-2 p-6 md:p-8 space-y-8">
-          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100"><h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Instagram size={14}/> Redes</h3><div className="flex flex-col md:flex-row gap-2"><input defaultValue={client.instagram} onBlur={(e) => onUpdate(client.id, {instagram: e.target.value})} placeholder="Link Instagram..." className="flex-1 bg-white border-slate-200 rounded-xl text-sm px-4 py-3 border outline-none"/>{client.instagram && <a href={client.instagram} target="_blank" className="bg-pink-50 text-pink-600 px-4 py-3 rounded-xl font-bold text-sm hover:bg-pink-100 flex items-center justify-center gap-2">Ver <ExternalLink size={14}/></a>}</div></div>
-          <div className="flex flex-col md:flex-row gap-4">
-              <span className="flex items-center gap-2 font-bold text-slate-600 bg-slate-50 px-4 py-2 rounded-xl"><UserCircle2 className="text-blue-400"/> {client.manager || 'Sin asignar'}</span>
-              <button onClick={onDelete} className="text-red-400 hover:text-red-600 text-xs font-bold flex items-center gap-2"><Trash2 size={14}/> ELIMINAR CLIENTE</button>
-          </div>
-        </div>
-        <div className="p-6 md:p-8 bg-slate-50/50"><h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2"><CheckCircle2 size={14}/> Workflow</h3><div className="space-y-3">{['week1', 'week2', 'week3', 'week4'].map((w, i) => <CheckItem key={w} label={['Estrategia', 'Producción', 'Aprobación', 'Reporte'][i]} checked={client.workflow[w]} onToggle={() => onUpdate(client.id, {[`workflow.${w}`]: !client.workflow[w]})} />)}</div></div>
-      </div>
-    </div>
-  </div>
-);
+        const appId = 'cluster-agency-pro-mobile-v3';
+        const MONTH_NAMES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
-const GlobalCalendar = ({ events, onAddEvent, onDeleteEvent, onEditEvent }) => (
-  <div className="h-full flex flex-col space-y-6 animate-in fade-in duration-500">
-    <h2 className="text-2xl md:text-3xl font-black text-slate-800">Agenda Global</h2>
-    <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-      <CalendarGrid events={events.filter(e => e.type === 'production')} onAdd={onAddEvent} onDelete={onDeleteEvent} onEdit={onEditEvent} type="production" />
-    </div>
-  </div>
-);
+        // --- APP PRINCIPAL ---
+        function App() {
+            const [user, setUser] = useState(null);
+            const [view, setView] = useState('dashboard');
+            const [loading, setLoading] = useState(true);
+            const [toast, setToast] = useState(null); 
+            const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-const EditionsView = ({ tasks, onAdd, onAdvance, onDelete }) => (
-  <div className="h-full flex flex-col space-y-6 animate-in fade-in duration-500">
-    <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black text-slate-800">Sala de Edición</h2><Button onClick={onAdd} color="amber" icon={<Video size={18}/>}>Nueva Tarea</Button></div>
-    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden">
-      {[{id:'editar', t:'Por Editar', c:'slate'}, {id:'correccion', t:'En Corrección', c:'amber'}, {id:'aprobado', t:'Aprobado', c:'emerald'}].map(col => (
-        <div key={col.id} className="flex flex-col bg-slate-50 rounded-2xl border border-slate-200 h-full overflow-hidden">
-          <div className={`p-4 font-black text-xs uppercase tracking-widest border-b border-slate-100 flex items-center gap-2 text-${col.c}-600 bg-${col.c}-50/50`}>{col.t}</div>
-          <div className="p-4 flex-1 overflow-y-auto space-y-3 custom-scroll">
-            {tasks.filter(t => t.status === col.id).map(t => (
-              <div key={t.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all group">
-                <div className="flex justify-between mb-2"><span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded uppercase">{t.editor}</span><button onClick={() => onDelete(t.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={14}/></button></div>
-                <p className="font-bold text-slate-700 text-sm mb-3">{t.title}</p>
-                {col.id !== 'aprobado' && <button onClick={() => onAdvance(t)} className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold bg-slate-50 text-slate-500 hover:bg-${col.c}-100 hover:text-${col.c}-700`}>Avanzar <ArrowRight size={12}/></button>}
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
+            const [clients, setClients] = useState([]);
+            const [events, setEvents] = useState([]);
+            const [managers, setManagers] = useState([]);
+            const [editingTasks, setEditingTasks] = useState([]);
 
-// --- COMPONENTES UI Y UTILIDADES ---
+            const [selectedClient, setSelectedClient] = useState(null);
+            const [selectedManager, setSelectedManager] = useState(null);
+            const [modalConfig, setModalConfig] = useState({ isOpen: false, type: null, data: null });
+            const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, type: null, id: null, title: '' });
+            const [eventParams, setEventParams] = useState(null); 
 
-const StatCard = ({ title, value, icon, color }) => (
-  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
-    <div><p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{title}</p><p className="text-3xl font-black text-slate-800">{value}</p></div>
-    <div className={`p-3 rounded-xl bg-${color}-50 text-${color}-600`}>{icon}</div>
-  </div>
-);
+            useEffect(() => {
+                if(!auth) { setLoading(false); return; }
+                const initAuth = async () => {
+                    try { await signInAnonymously(auth); } catch (e) { console.error(e); }
+                };
+                initAuth();
+                return onAuthStateChanged(auth, u => { setUser(u); setLoading(false); });
+            }, []);
 
-const Button = ({ children, onClick, type = 'button', color = 'purple', full, icon }) => (
-  <button type={type} onClick={onClick} className={`${full ? 'w-full' : ''} bg-${color}-600 hover:bg-${color}-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-${color}-200 flex items-center justify-center gap-2 transition-all transform active:scale-95`}>{icon} {children}</button>
-);
+            useEffect(() => {
+                if (!user || !db) return;
+                const unsubs = [
+                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), s => {
+                        const list = s.docs.map(d => ({id: d.id, ...d.data()}));
+                        setClients(list);
+                        if (selectedClient) setSelectedClient(list.find(c => c.id === selectedClient.id));
+                    }),
+                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), s => setEvents(s.docs.map(d => ({id: d.id, ...d.data()})))),
+                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), s => setManagers(s.docs.map(d => ({id: d.id, ...d.data()})))),
+                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), s => setEditingTasks(s.docs.map(d => ({id: d.id, ...d.data()}))))
+                ];
+                return () => unsubs.forEach(u => u());
+            }, [user, selectedClient?.id]);
 
-const CheckItem = ({ label, checked, onToggle }) => (
-  <button onClick={onToggle} className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${checked ? 'bg-green-50 border-green-200 text-green-800' : 'bg-white border-slate-200 text-slate-500 hover:border-blue-300'}`}><span className="font-bold text-sm">{label}</span>{checked ? <CheckCircle2 size={20} className="text-green-500" /> : <Circle size={20} />}</button>
-);
+            const showToast = (message, type = 'success') => {
+                setToast({ message, type });
+                setTimeout(() => setToast(null), 3000);
+            };
+            const closeModal = () => setModalConfig({ isOpen: false, type: null, data: null });
+            const closeDelete = () => setDeleteConfirm({ isOpen: false, type: null, id: null });
+            const handleNavigate = (newView) => { setView(newView); setIsMobileMenuOpen(false); };
 
-const CalendarGrid = ({ events, onAdd, onDelete, onEdit, type }) => {
-  const [date, setDate] = useState(new Date());
-  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-  const colorClass = type === 'production' ? 'emerald' : 'indigo';
+            const addClient = async (formData) => {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { 
+                    ...formData, manager: formData.manager || "", status: 'Activo', mood: 'Contento', createdAt: new Date().toISOString(), 
+                    workflow: { week1: false, week2: false, week3: false, week4: false }
+                });
+                showToast('Cliente creado'); closeModal();
+            };
+            const updateClient = async (id, data) => await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), data);
+            const deleteClient = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id)); showToast('Cliente eliminado'); closeDelete(); setSelectedClient(null); setView('clients'); };
+            const addManager = async (formData) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), formData); showToast('Manager agregado'); closeModal(); };
+            const deleteManager = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'managers', id)); showToast('Manager eliminado'); closeDelete(); if(selectedManager?.id === id) { setSelectedManager(null); setView('managers'); } };
+            const addEvent = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data); showToast('Evento agendado'); closeModal(); };
+            const updateEvent = async (id, title) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id), { title }); showToast('Evento actualizado'); };
+            const deleteEvent = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id)); showToast('Evento eliminado'); closeDelete(); };
+            const addTask = async (formData) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), { ...formData, status: 'editar' }); showToast('Tarea creada'); closeModal(); };
+            const advanceTask = async (task) => { const next = task.status === 'editar' ? 'correccion' : task.status === 'correccion' ? 'aprobado' : null; if (next) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', task.id), { status: next }); };
+            const deleteTask = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id)); showToast('Tarea eliminada'); };
 
-  return (
-    <>
-      <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-white">
-        <div className={`font-bold text-${colorClass}-600 uppercase text-xs tracking-widest`}>Vista Mensual</div>
-        <div className="flex items-center gap-4 bg-slate-50 rounded-lg p-1">
-          <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() - 1, 1))} className="p-2 hover:bg-white rounded-md text-slate-500 shadow-sm"><ChevronLeft size={16}/></button>
-          <span className="font-black text-slate-700 w-32 text-center text-sm uppercase">{MONTH_NAMES[date.getMonth()]} {date.getFullYear()}</span>
-          <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() + 1, 1))} className="p-2 hover:bg-white rounded-md text-slate-500 shadow-sm"><ChevronRight size={16}/></button>
-        </div>
-      </div>
-      <div className="flex-1 overflow-x-auto overflow-y-auto bg-slate-50 custom-scroll">
-        <div className="grid grid-cols-7 auto-rows-fr min-w-[800px] h-full">
-            {['D','L','M','M','J','V','S'].map(d => <div key={d} className="py-2 text-center text-[10px] font-black text-slate-400 border-r border-b bg-white sticky top-0 z-10">{d}</div>)}
-            {Array(startDay).fill(null).map((_, i) => <div key={`empty-${i}`} className="border-r border-b border-slate-200/50 bg-slate-50/50" />)}
-            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
-            const dStr = new Date(date.getFullYear(), date.getMonth(), d).toISOString().split('T')[0];
-            const dayEvents = events.filter(e => e.date === dStr);
+            if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-purple-600 h-10 w-10" /></div>;
+
             return (
-                <div key={d} onClick={() => onAdd(new Date(date.getFullYear(), date.getMonth(), d))} className="border-r border-b border-slate-200/60 bg-white p-2 min-h-[100px] hover:bg-slate-50 transition-colors cursor-pointer group relative">
-                <span className={`text-xs font-bold text-slate-400 group-hover:text-${colorClass}-500`}>{d}</span>
-                <div className="mt-1 space-y-1">
-                    {dayEvents.map(e => (
-                    <div key={e.id} onClick={(ev) => {ev.stopPropagation(); onEdit(e.id, e.title)}} className={`text-[10px] font-bold p-1.5 rounded-md border shadow-sm cursor-text relative group/evt bg-${colorClass}-50 text-${colorClass}-700 border-${colorClass}-100 hover:border-${colorClass}-300`}>
-                        {e.title}
-                        <button onClick={(ev) => {ev.stopPropagation(); onDelete(e.id, e.title)}} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 hidden group-hover/evt:flex shadow-sm hover:scale-110 transition-transform"><X size={8}/></button>
+                <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden flex-col md:flex-row">
+                    <div className="md:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center z-30 shadow-sm shrink-0">
+                        <div className="flex items-center gap-2"><div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white font-black">C</div><span className="font-black text-slate-800 text-lg tracking-tight">CLUSTER</span></div>
+                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">{isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}</button>
                     </div>
-                    ))}
-                </div>
-                <Plus className={`absolute bottom-2 right-2 text-${colorClass}-300 opacity-0 group-hover:opacity-100 transition-opacity`} size={16}/>
+
+                    <div className={`fixed inset-0 z-40 bg-slate-900/50 transition-opacity duration-300 md:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileMenuOpen(false)} />
+
+                    <aside className={`fixed md:relative z-50 h-full bg-white border-r border-slate-200 flex flex-col shadow-xl md:shadow-none w-64 shrink-0 transition-transform duration-300 ease-in-out top-0 left-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+                        <div className="p-8 hidden md:block">
+                            <div className="flex items-center gap-3 mb-1"><div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white font-black text-lg">C</div><h1 className="text-2xl font-black text-slate-800 tracking-tight">CLUSTER</h1></div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest pl-11">Agency OS</p>
+                        </div>
+                        <nav className="flex-1 px-4 space-y-1 pt-20 md:pt-4 overflow-y-auto">
+                            <SidebarItem active={view === 'dashboard'} onClick={() => handleNavigate('dashboard')} icon={<LayoutDashboard size={20} />} label="Panel Central" color="purple" />
+                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Gestión</div>
+                            <SidebarItem active={view === 'clients' || view === 'client-detail'} onClick={() => handleNavigate('clients')} icon={<Briefcase size={20} />} label="Clientes" color="blue" />
+                            <SidebarItem active={view === 'managers' || view === 'manager-detail'} onClick={() => handleNavigate('managers')} icon={<Users size={20} />} label="Account Managers" color="indigo" />
+                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Producción</div>
+                            <SidebarItem active={view === 'calendar'} onClick={() => handleNavigate('calendar')} icon={<CalendarIcon size={20} />} label="Agenda Global" color="emerald" />
+                            <SidebarItem active={view === 'editions'} onClick={() => handleNavigate('editions')} icon={<Video size={20} />} label="Sala de Edición" color="amber" />
+                        </nav>
+                    </aside>
+
+                    <main className="flex-1 overflow-y-auto relative scroll-smooth bg-slate-50 w-full h-full">
+                        <div className="p-4 md:p-8 max-w-[1600px] mx-auto min-h-full pb-20">
+                            {view === 'dashboard' && <DashboardView clients={clients} managers={managers} events={events} tasks={editingTasks} />}
+                            {view === 'managers' && <ManagersView managers={managers} onAdd={() => setModalConfig({ isOpen: true, type: 'manager' })} onSelect={(m) => { setSelectedManager(m); setView('manager-detail'); }} onDelete={(m) => setDeleteConfirm({ isOpen: true, type: 'manager', id: m.id, title: m.name })} />}
+                            {view === 'manager-detail' && selectedManager && <ManagerDetail manager={selectedManager} events={events} onBack={() => setView('managers')} onAddEvent={(date) => setModalConfig({ isOpen: true, type: 'event', data: { date, type: 'publication', contextId: selectedManager.id } })} onDeleteEvent={(e) => setDeleteConfirm({ isOpen: true, type: 'event', id: e.id, title: e.title })} onEditEvent={updateEvent} />}
+                            {view === 'clients' && <ClientsView clients={clients} onAdd={() => setModalConfig({ isOpen: true, type: 'client' })} onSelect={(c) => { setSelectedClient(c); setView('client-detail'); }} />}
+                            {view === 'client-detail' && selectedClient && <ClientDetail client={selectedClient} onBack={() => setView('clients')} onUpdate={updateClient} onDelete={() => setDeleteConfirm({ isOpen: true, type: 'client', id: selectedClient.id, title: selectedClient.name })} />}
+                            {view === 'calendar' && <GlobalCalendar events={events} onAddEvent={(date) => setModalConfig({ isOpen: true, type: 'event', data: { date, type: 'production' } })} onDeleteEvent={(e) => setDeleteConfirm({ isOpen: true, type: 'event', id: e.id, title: e.title })} onEditEvent={updateEvent} />}
+                            {view === 'editions' && <EditionsView tasks={editingTasks} onAdd={() => setModalConfig({ isOpen: true, type: 'task' })} onAdvance={advanceTask} onDelete={deleteTask} />}
+                        </div>
+                    </main>
+
+                    {toast && <Toast message={toast.message} type={toast.type} />}
+                    {modalConfig.isOpen && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} actions={{ addClient, addManager, addEvent, addTask }} />}
+                    {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} actions={{ deleteClient, deleteManager, deleteEvent, deleteTask }} />}
                 </div>
             );
-            })}
-        </div>
-      </div>
-    </>
-  );
-};
+        }
 
-const Modal = ({ config, onClose, clients, managers, actions }) => {
-  const { type, data } = config;
-  return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50"><h3 className="font-bold text-lg text-slate-800">{type === 'client' ? 'Nuevo Cliente' : type === 'manager' ? 'Nuevo Manager' : type === 'task' ? 'Nueva Tarea' : data.type === 'production' ? 'Agendar Producción' : 'Agendar Publicación'}</h3><button onClick={onClose}><X size={20} className="text-slate-500"/></button></div>
-        <div className="p-6">
-          {type === 'client' && <form onSubmit={(e) => { e.preventDefault(); actions.addClient(Object.fromEntries(new FormData(e.target))); }} className="space-y-4"><Input name="name" placeholder="Nombre" required /><Input name="niche" placeholder="Rubro" required /><Input name="package" placeholder="Paquete" required /><Input name="instagram" placeholder="Link Instagram" /><select name="manager" className="w-full p-3 border rounded-xl bg-slate-50 outline-none"><option value="">Asignar Manager (Opcional)</option>{managers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}</select><Button type="submit" full>Guardar</Button></form>}
-          {type === 'manager' && <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.target); const accounts = Array.from(e.target.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value); actions.addManager({ name: fd.get('name'), email: fd.get('email'), assignedAccounts: accounts }); }} className="space-y-4"><Input name="name" placeholder="Nombre" required /><Input name="email" placeholder="Correo" required /><div className="border p-3 rounded-xl max-h-40 overflow-y-auto bg-slate-50 custom-scroll"><p className="text-xs font-bold text-slate-400 mb-2 uppercase">Cuentas</p>{clients.map(c => <label key={c.id} className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer"><input type="checkbox" value={c.name} className="w-4 h-4 text-purple-600 rounded" /><span className="text-sm font-medium">{c.name}</span></label>)}</div><Button type="submit" full>Crear</Button></form>}
-          {type === 'task' && <form onSubmit={(e) => { e.preventDefault(); actions.addTask(Object.fromEntries(new FormData(e.target))); }} className="space-y-4"><Input name="title" placeholder="Título" required /><Input name="editor" placeholder="Editor" required /><textarea name="notes" placeholder="Notas..." className="w-full p-3 bg-slate-50 border rounded-xl outline-none h-24 text-sm"></textarea><Button type="submit" color="amber" full>Crear</Button></form>}
-          {type === 'event' && <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.target); actions.addEvent({ date: data.date.toISOString().split('T')[0], title: `${fd.get('time')} - ${fd.get('title')}`, type: data.type, contextId: data.contextId || null }); }} className="space-y-4"><div className="text-center p-3 bg-slate-50 rounded-xl border mb-4"><p className="text-lg font-black text-slate-800 capitalize">{data.date.toLocaleDateString('es-HN', { weekday: 'long', day: 'numeric', month: 'long' })}</p></div><Input name="title" placeholder={data.type === 'production' ? "Nombre Producción" : "Contenido"} required autoFocus /><Input name="time" type="time" label={data.type === 'production' ? 'Hora Inicio' : 'Hora Publicación'} required /><Button type="submit" color={data.type === 'production' ? 'emerald' : 'indigo'} full>Agendar</Button></form>}
-        </div>
-      </div>
-    </div>
-  );
-};
+        const SidebarItem = ({ active, onClick, icon, label, color }) => (
+            <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 group ${active ? `bg-${color}-50 text-${color}-700 shadow-sm border-${color}-100` : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-transparent"}`}>
+                <div className={`transition-transform duration-200 ${active ? 'scale-110' : 'group-hover:scale-110'}`}>{icon}</div><span className="font-bold text-sm">{label}</span>{active && <ChevronRight size={14} className={`ml-auto text-${color}-400`} />}
+            </button>
+        );
 
-const DeleteConfirmModal = ({ config, onClose, actions }) => (
-  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-in zoom-in-95">
-      <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><AlertTriangle size={28} /></div>
-      <h3 className="text-lg font-bold text-slate-800 mb-2">¿Eliminar {config.title}?</h3>
-      <p className="text-sm text-slate-500 mb-6">Esta acción no se puede deshacer.</p>
-      <div className="flex gap-3"><button onClick={onClose} className="flex-1 py-3 bg-white border font-bold rounded-xl hover:bg-slate-50">Cancelar</button><button onClick={() => { if (config.type === 'client') actions.deleteClient(config.id); else if (config.type === 'manager') actions.deleteManager(config.id); else if (config.type === 'event') actions.deleteEvent(config.id); else if (config.type === 'task') actions.deleteTask(config.id); }} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">Confirmar</button></div>
-    </div>
-  </div>
-);
+        const DashboardView = ({ clients, managers, events, tasks }) => (
+            <div className="space-y-8 animate-in fade-in duration-500">
+                <div><h2 className="text-2xl md:text-3xl font-black text-slate-800">Resumen Operativo</h2></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                    <StatCard title="Clientes Activos" value={clients.length} icon={<Briefcase />} color="blue" />
+                    <StatCard title="Equipo Managers" value={managers.length} icon={<Users />} color="indigo" />
+                    <StatCard title="Producciones" value={events.filter(e => e.type === 'production').length} icon={<MonitorPlay />} color="emerald" />
+                    <StatCard title="Por Editar" value={tasks.filter(t => t.status !== 'aprobado').length} icon={<Video />} color="amber" />
+                </div>
+            </div>
+        );
 
-const Toast = ({ message, type }) => (<div className={`fixed bottom-6 right-6 px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 z-[70] ${type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 text-white'}`}>{type === 'success' ? <CheckCircle2 size={20} className="text-green-400"/> : <AlertTriangle size={20}/>}<span className="font-bold text-sm">{message}</span></div>);
-const Input = ({ label, ...props }) => (<div>{label && <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">{label}</label>}<input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-medium text-slate-700 transition-all placeholder:text-slate-400" {...props} /></div>);
+        const ManagersView = ({ managers, onAdd, onSelect, onDelete }) => (
+            <div className="space-y-6 fade-in">
+                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4"><h2 className="text-2xl font-black text-slate-800">Account Managers</h2><Button onClick={onAdd} icon={<UserPlus size={18}/>}>Agregar Manager</Button></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {managers.map(m => (
+                        <div key={m.id} onClick={() => onSelect(m)} className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-xl hover:border-purple-200 cursor-pointer group relative">
+                            <button onClick={(e) => { e.stopPropagation(); onDelete(m); }} className="absolute top-4 right-4 text-red-500 opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
+                            <div className="flex items-center gap-4 mb-4"><div className="h-16 w-16 bg-indigo-50 rounded-2xl flex items-center justify-center text-2xl font-black text-indigo-600">{m.name.charAt(0)}</div><div><h3 className="font-bold text-lg text-slate-800">{m.name}</h3><p className="text-xs text-slate-500 font-medium">{m.assignedAccounts?.length || 0} Cuentas</p></div></div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+
+        const ManagerDetail = ({ manager, events, onBack, onAddEvent, onDeleteEvent, onEditEvent }) => (
+            <div className="h-full flex flex-col space-y-6 fade-in">
+                <div className="flex items-center gap-4"><button onClick={onBack} className="p-2 hover:bg-slate-200 rounded-full"><ChevronLeft/></button><div><h2 className="text-2xl font-black text-slate-800">{manager.name}</h2><span className="text-sm font-bold text-indigo-600">Publicaciones</span></div></div>
+                <div className="flex-1 bg-white rounded-2xl border shadow-sm flex flex-col"><CalendarGrid events={events.filter(e => e.contextId === manager.id)} onAdd={onAddEvent} onDelete={onDeleteEvent} onEdit={onEditEvent} type="publication" /></div>
+            </div>
+        );
+
+        const ClientsView = ({ clients, onAdd, onSelect }) => (
+            <div className="space-y-6 fade-in">
+                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4"><h2 className="text-2xl font-black text-slate-800">Cartera de Clientes</h2><Button onClick={onAdd} color="blue" icon={<Plus size={18}/>}>Nuevo Cliente</Button></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {clients.map(c => (
+                        <div key={c.id} onClick={() => onSelect(c)} className="bg-white p-6 rounded-2xl border hover:shadow-xl cursor-pointer"><div className="flex justify-between mb-4"><div className="h-14 w-14 bg-blue-50 rounded-2xl flex items-center justify-center text-xl font-black text-blue-600">{c.logo}</div><div className={`w-3 h-3 rounded-full ${c.mood === 'En Riesgo' ? 'bg-red-500' : 'bg-green-500'}`}></div></div><h3 className="text-lg font-bold text-slate-800">{c.name}</h3><div className="pt-4 border-t border-slate-50 mt-4 flex items-center gap-2 text-sm font-medium text-slate-600"><UserCircle2 size={16} className="text-blue-400"/> {c.manager || 'Sin asignar'}</div></div>
+                    ))}
+                </div>
+            </div>
+        );
+
+        const ClientDetail = ({ client, onBack, onUpdate, onDelete }) => (
+            <div className="space-y-6 max-w-5xl mx-auto fade-in">
+                <button onClick={onBack} className="flex items-center gap-2 text-slate-400 font-bold text-sm uppercase"><ChevronLeft size={16}/> Volver</button>
+                <div className="bg-white rounded-3xl border shadow-xl overflow-hidden">
+                    <div className="bg-slate-900 p-6 md:p-8 text-white flex flex-col md:flex-row justify-between gap-6"><div className="flex items-center gap-6"><div className="h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-3xl font-black">{client.logo}</div><div><h1 className="text-2xl font-black">{client.name}</h1></div></div></div>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x">
+                        <div className="lg:col-span-2 p-6 md:p-8 space-y-8">
+                            <button onClick={onDelete} className="text-red-400 hover:text-red-600 text-xs font-bold flex items-center gap-2"><Trash2 size={14}/> ELIMINAR CLIENTE</button>
+                        </div>
+                        <div className="p-6 md:p-8 bg-slate-50/50"><div className="space-y-3">{['week1', 'week2', 'week3', 'week4'].map((w, i) => <CheckItem key={w} label={['Estrategia', 'Producción', 'Aprobación', 'Reporte'][i]} checked={client.workflow[w]} onToggle={() => onUpdate(client.id, {[`workflow.${w}`]: !client.workflow[w]})} />)}</div></div>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const GlobalCalendar = ({ events, onAddEvent, onDeleteEvent, onEditEvent }) => (
+            <div className="h-full flex flex-col space-y-6 fade-in"><h2 className="text-2xl font-black text-slate-800">Agenda Global</h2><div className="flex-1 bg-white rounded-2xl border shadow-sm flex flex-col"><CalendarGrid events={events.filter(e => e.type === 'production')} onAdd={onAddEvent} onDelete={onDeleteEvent} onEdit={onEditEvent} type="production" /></div></div>
+        );
+
+        const EditionsView = ({ tasks, onAdd, onAdvance, onDelete }) => (
+            <div className="h-full flex flex-col space-y-6 fade-in">
+                <div className="flex justify-between items-center"><h2 className="text-2xl font-black text-slate-800">Edición</h2><Button onClick={onAdd} color="amber" icon={<Video size={18}/>}>Nueva Tarea</Button></div>
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden">
+                    {[{id:'editar', t:'Por Editar', c:'slate'}, {id:'correccion', t:'En Corrección', c:'amber'}, {id:'aprobado', t:'Aprobado', c:'emerald'}].map(col => (
+                        <div key={col.id} className="flex flex-col bg-slate-50 rounded-2xl border h-full overflow-hidden">
+                            <div className={`p-4 font-black text-xs uppercase tracking-widest border-b bg-${col.c}-50/50 text-${col.c}-600`}>{col.t}</div>
+                            <div className="p-4 flex-1 overflow-y-auto space-y-3">
+                                {tasks.filter(t => t.status === col.id).map(t => (
+                                    <div key={t.id} className="bg-white p-4 rounded-xl border shadow-sm"><div className="flex justify-between mb-2"><span className="text-[10px] font-bold text-slate-400">{t.editor}</span><button onClick={() => onDelete(t.id)} className="text-red-500"><Trash2 size={14}/></button></div><p className="font-bold text-slate-700 text-sm mb-3">{t.title}</p>{col.id !== 'aprobado' && <button onClick={() => onAdvance(t)} className="w-full text-xs font-bold bg-slate-50 text-slate-500 py-2 rounded-lg">Avanzar</button>}</div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+
+        const StatCard = ({ title, value, icon, color }) => (<div className="bg-white p-6 rounded-2xl border flex justify-between"><div><p className="text-xs font-bold text-slate-400 uppercase">{title}</p><p className="text-3xl font-black">{value}</p></div><div className={`p-3 rounded-xl bg-${color}-50 text-${color}-600`}>{icon}</div></div>);
+        const Button = ({ children, onClick, type = 'button', color = 'purple', icon }) => (<button type={type} onClick={onClick} className={`bg-${color}-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2`}>{icon} {children}</button>);
+        const CheckItem = ({ label, checked, onToggle }) => (<button onClick={onToggle} className={`w-full flex items-center justify-between p-4 rounded-xl border ${checked ? 'bg-green-50 text-green-800' : 'bg-white'}`}><span className="font-bold text-sm">{label}</span>{checked ? <CheckCircle2 size={20} className="text-green-500" /> : <Circle size={20} />}</button>);
+        
+        const CalendarGrid = ({ events, onAdd, onDelete, onEdit, type }) => {
+            const [date, setDate] = useState(new Date());
+            const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+            const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+            const colorClass = type === 'production' ? 'emerald' : 'indigo';
+            return (
+                <div className="flex-1 overflow-x-auto bg-slate-50 custom-scroll"><div className="grid grid-cols-7 min-w-[800px] h-full">
+                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+                        const dStr = new Date(date.getFullYear(), date.getMonth(), d).toISOString().split('T')[0];
+                        const dayEvents = events.filter(e => e.date === dStr);
+                        return (<div key={d} onClick={() => onAdd(new Date(date.getFullYear(), date.getMonth(), d))} className="border-r border-b bg-white p-2 min-h-[100px] cursor-pointer relative"><span className="text-xs font-bold text-slate-400">{d}</span><div className="mt-1 space-y-1">{dayEvents.map(e => (<div key={e.id} onClick={(ev) => {ev.stopPropagation(); onEdit(e.id, e.title)}} className={`text-[10px] font-bold p-1.5 rounded bg-${colorClass}-50 text-${colorClass}-700 relative group`}>{e.title}<button onClick={(ev) => {ev.stopPropagation(); onDelete(e.id, e.title)}} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full hidden group-hover:block"><X size={10}/></button></div>))}</div></div>);
+                    })}
+                </div></div>
+            );
+        };
+
+        const Modal = ({ config, onClose, clients, managers, actions }) => {
+            const { type, data } = config;
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"><div className="p-6">
+                        {type === 'client' && <form onSubmit={(e) => { e.preventDefault(); actions.addClient(Object.fromEntries(new FormData(e.target))); }} className="space-y-4"><Input name="name" placeholder="Nombre" required /><Input name="niche" placeholder="Rubro" required /><Input name="package" placeholder="Paquete" required /><select name="manager" className="w-full p-3 border rounded-xl"><option value="">Asignar Manager (Opcional)</option>{managers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}</select><Button type="submit">Guardar</Button></form>}
+                        {type === 'manager' && <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.target); actions.addManager({ name: fd.get('name'), email: fd.get('email') }); }} className="space-y-4"><Input name="name" placeholder="Nombre" required /><Input name="email" placeholder="Correo" required /><Button type="submit">Crear</Button></form>}
+                        {type === 'task' && <form onSubmit={(e) => { e.preventDefault(); actions.addTask(Object.fromEntries(new FormData(e.target))); }} className="space-y-4"><Input name="title" placeholder="Título" required /><Input name="editor" placeholder="Editor" required /><Button type="submit" color="amber">Crear</Button></form>}
+                        {type === 'event' && <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.target); actions.addEvent({ date: data.date.toISOString().split('T')[0], title: fd.get('title'), type: data.type, contextId: data.contextId || null }); }} className="space-y-4"><Input name="title" placeholder="Título" required /><Button type="submit">Agendar</Button></form>}
+                    </div></div>
+                </div>
+            );
+        };
+
+        const DeleteConfirmModal = ({ config, onClose, actions }) => (
+            <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 text-center"><h3 className="font-bold text-lg mb-4">¿Eliminar?</h3><div className="flex gap-3"><button onClick={onClose} className="flex-1 py-3 border rounded-xl">Cancelar</button><button onClick={() => { if(config.type==='client') actions.deleteClient(config.id); if(config.type==='manager') actions.deleteManager(config.id); if(config.type==='event') actions.deleteEvent(config.id); if(config.type==='task') actions.deleteTask(config.id); }} className="flex-1 py-3 bg-red-600 text-white rounded-xl">Confirmar</button></div></div></div>
+        );
+
+        const Toast = ({ message }) => (<div className="fixed bottom-6 right-6 px-6 py-3 bg-slate-800 text-white rounded-xl z-[70] font-bold text-sm">{message}</div>);
+        const Input = (props) => <input className="w-full p-3 border rounded-xl" {...props} />;
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
