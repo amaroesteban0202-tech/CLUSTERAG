@@ -54,32 +54,30 @@
             AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick
         } from 'lucide-react';
         import { initializeApp } from 'firebase/app';
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+        import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
         import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 
-        // --- ⚠️ AQUI PONDRÁS TU CONFIGURACIÓN DE FIREBASE DESPUÉS ⚠️ ---
-       // --- ⚠️ AQUÍ ESTÁ TU CONFIGURACIÓN DE FIREBASE ⚠️ ---
-// Se reemplazó el JSON.parse por tus llaves reales
-const firebaseConfig = {
-  apiKey: "AIzaSyBAnY2ihWlow17H-TjUKgueWpw2MqYpzUc",
-  authDomain: "cluster-41f73.firebaseapp.com",
-  projectId: "cluster-41f73",
-  storageBucket: "cluster-41f73.firebasestorage.app",
-  messagingSenderId: "210834819744",
-  appId: "1:210834819744:web:e10ca79a3f9a5eb866d7c5",
-  measurementId: "G-N16QDLDC7P"
-};
+        // --- ⚠️ AQUÍ ESTÁ TU CONFIGURACIÓN DE FIREBASE ⚠️ ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyBAnY2ihWlow17H-TjUKgueWpw2MqYpzUc",
+          authDomain: "cluster-41f73.firebaseapp.com",
+          projectId: "cluster-41f73",
+          storageBucket: "cluster-41f73.firebasestorage.app",
+          messagingSenderId: "210834819744",
+          appId: "1:210834819744:web:e10ca79a3f9a5eb866d7c5",
+          measurementId: "G-N16QDLDC7P"
+        };
 
-let app, auth, db;
-try {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-} catch (error) {
-    console.warn("Firebase no conectado (Modo Demo Local)", error);
-}
+        let app, auth, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (error) {
+            console.warn("Firebase no conectado (Modo Demo Local)", error);
+        }
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'cluster-agency-pro-mobile-v6';
+        const appId = 'cluster-agency-pro-mobile-v6';
         const MONTH_NAMES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
         
         // --- 🕒 MOTOR DE TIEMPO ESTRICTO: ZONA HORARIA HONDURAS (GMT-6) ---
@@ -178,7 +176,7 @@ try {
             
             const [modalConfig, setModalConfig] = useState({ isOpen: false, type: null, data: null, isEdit: false });
             const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, type: null, id: null, title: '' });
-            const [eventAction, setEventAction] = useState({ isOpen: false, event: null, type: null }); // Nuevo estado para Menú Táctil
+            const [eventAction, setEventAction] = useState({ isOpen: false, event: null, type: null }); 
             
             // Efecto Tema Oscuro
             useEffect(() => {
@@ -197,12 +195,12 @@ try {
                 if(!auth) { setLoading(false); return; }
                 const initAuth = async () => {
                     try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch (error) { console.error("Error de Autenticación:", error); }
+                        // Usamos autenticación anónima nativa en tu proyecto.
+                        // IMPORTANTE: Debes habilitar "Anónimo" en Firebase Console -> Authentication -> Sign-in method
+                        await signInAnonymously(auth);
+                    } catch (error) { 
+                        console.error("Error de Autenticación. Asegúrate de habilitar Anónimo en tu consola de Firebase.", error); 
+                    }
                 };
                 initAuth();
                 
@@ -215,23 +213,36 @@ try {
 
             // Carga de Datos
             useEffect(() => {
-                if (!user || !db) return;
-                const errHandler = (err) => console.error("Error de Firestore:", err);
+                // Removemos el bloqueo de (!user) para asegurar que lea los datos 
+                // si tus reglas de Firestore están abiertas para todos.
+                if (!db) return;
+                const errHandler = (err) => {
+                    console.error("Error de Firestore (Revisa tus Reglas de Seguridad):", err);
+                    showToast("No se pudieron cargar los datos. Revisa permisos.", "error");
+                };
 
                 const unsubs = [
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), s => {
                         const list = s.docs.map(d => ({id: d.id, ...d.data()}));
                         setClients(list);
-                        if (selectedClient) setSelectedClient(list.find(c => c.id === selectedClient.id));
+                        setSelectedClient(prev => prev ? list.find(c => c.id === prev.id) || null : null);
                     }, errHandler),
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), s => setEvents(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
-                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), s => setManagers(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
-                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), s => setEditors(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
+                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), s => {
+                        const list = s.docs.map(d => ({id: d.id, ...d.data()}));
+                        setManagers(list);
+                        setSelectedManager(prev => prev ? list.find(m => m.id === prev.id) || null : null);
+                    }, errHandler),
+                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), s => {
+                        const list = s.docs.map(d => ({id: d.id, ...d.data()}));
+                        setEditors(list);
+                        setSelectedEditor(prev => prev ? list.find(e => e.id === prev.id) || null : null);
+                    }, errHandler),
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), s => setEditingTasks(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), s => setAccountTasks(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler)
                 ];
                 return () => unsubs.forEach(u => u());
-            }, [user, selectedClient?.id]);
+            }, []); // Array de dependencias vacío, optimizado.
 
             // Helpers
             const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
@@ -249,47 +260,83 @@ try {
                 setEventAction({ isOpen: true, event, type });
             };
 
-            // Notificaciones / Badges (Cálculos)
             const urgentEditions = editingTasks.filter(t => t.priority === 'urgente' && t.status !== 'aprobado').length;
             const pendingAccounts = accountTasks.filter(t => t.status === 'por_disenar').length;
 
-            // --- ACCIONES CRUD ---
+            // --- ACCIONES CRUD (Con Try/Catch obligatorios) ---
             const addClient = async (fd) => {
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { ...fd, manager: fd.manager || "", status: 'Activo', mood: 'Contento', createdAt: getHondurasTodayStr(), workflow: { week1: false, week2: false, week3: false, week4: false } });
-                showToast('Cliente creado'); closeModal();
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { ...fd, manager: fd.manager || "", status: 'Activo', mood: 'Contento', createdAt: getHondurasTodayStr(), workflow: { week1: false, week2: false, week3: false, week4: false } });
+                    showToast('Cliente creado'); closeModal();
+                } catch(e) { console.error(e); showToast('Error al crear. Verifica tus Reglas de Firestore', 'error'); }
             };
-            const updateClient = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), data); showToast('Cliente actualizado'); closeModal(); };
+            const updateClient = async (id, data) => { 
+                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), data); showToast('Cliente actualizado'); closeModal(); }
+                catch(e) { console.error(e); showToast('Error al actualizar', 'error'); }
+            };
             
             const addManager = async (fd) => {
-                const color = ACCOUNT_COLORS[managers.length % ACCOUNT_COLORS.length];
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), { ...fd, color });
-                showToast('Account Manager agregado'); closeModal();
+                try {
+                    const color = ACCOUNT_COLORS[managers.length % ACCOUNT_COLORS.length];
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), { ...fd, color });
+                    showToast('Account Manager agregado'); closeModal();
+                } catch(e) { console.error(e); showToast('Error al agregar', 'error'); }
             };
-            const updateManager = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'managers', id), data); showToast('Manager actualizado'); closeModal(); };
+            const updateManager = async (id, data) => { 
+                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'managers', id), data); showToast('Manager actualizado'); closeModal(); }
+                catch(e) { console.error(e); showToast('Error al actualizar', 'error'); }
+            };
 
             const addEditor = async (fd) => {
-                const color = EDITOR_COLORS[editors.length % EDITOR_COLORS.length];
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), { ...fd, color });
-                showToast('Editor agregado'); closeModal();
+                try {
+                    const color = EDITOR_COLORS[editors.length % EDITOR_COLORS.length];
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), { ...fd, color });
+                    showToast('Editor agregado'); closeModal();
+                } catch(e) { console.error(e); showToast('Error al agregar', 'error'); }
             };
-            const updateEditor = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editors', id), data); showToast('Editor actualizado'); closeModal(); };
+            const updateEditor = async (id, data) => { 
+                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editors', id), data); showToast('Editor actualizado'); closeModal(); }
+                catch(e) { console.error(e); showToast('Error al actualizar', 'error'); }
+            };
 
-            const addAccountTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), { ...data, status: 'por_disenar' }); showToast('Tarea agendada'); closeModal(); };
-            const updateAccountTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id), data); showToast('Tarea guardada'); closeModal(); };
+            const addAccountTask = async (data) => { 
+                try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), { ...data, status: 'por_disenar' }); showToast('Tarea agendada'); closeModal(); }
+                catch(e) { console.error(e); showToast('Error al guardar', 'error'); }
+            };
+            const updateAccountTask = async (id, data) => { 
+                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id), data); showToast('Tarea guardada'); closeModal(); }
+                catch(e) { console.error(e); showToast('Error al actualizar', 'error'); }
+            };
             const advanceAccountTask = async (task) => {
-                const next = task.status === 'por_disenar' ? 'aprobacion_interna' : task.status === 'aprobacion_interna' ? 'aprobado_internamente' : task.status === 'aprobado_internamente' ? 'publicado' : null;
-                if (next) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', task.id), { status: next });
+                try {
+                    const next = task.status === 'por_disenar' ? 'aprobacion_interna' : task.status === 'aprobacion_interna' ? 'aprobado_internamente' : task.status === 'aprobado_internamente' ? 'publicado' : null;
+                    if (next) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', task.id), { status: next });
+                } catch(e) { console.error(e); showToast('Error al avanzar tarea', 'error'); }
             };
 
-            const addEditingTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), { ...data, status: 'editar' }); showToast('Tarea agendada'); closeModal(); };
-            const updateEditingTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id), data); showToast('Tarea guardada'); closeModal(); };
+            const addEditingTask = async (data) => { 
+                try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), { ...data, status: 'editar' }); showToast('Tarea agendada'); closeModal(); }
+                catch(e) { console.error(e); showToast('Error al guardar', 'error'); }
+            };
+            const updateEditingTask = async (id, data) => { 
+                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id), data); showToast('Tarea guardada'); closeModal(); }
+                catch(e) { console.error(e); showToast('Error al actualizar', 'error'); }
+            };
             const advanceEditingTask = async (task) => {
-                const next = task.status === 'editar' ? 'correccion' : task.status === 'correccion' ? 'aprobado' : null;
-                if (next) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', task.id), { status: next });
+                try {
+                    const next = task.status === 'editar' ? 'correccion' : task.status === 'correccion' ? 'aprobado' : null;
+                    if (next) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', task.id), { status: next });
+                } catch(e) { console.error(e); showToast('Error al avanzar tarea', 'error'); }
             };
 
-            const addEvent = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data); showToast('Evento agendado'); closeModal(); };
-            const updateEvent = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id), data); showToast('Evento guardado'); closeModal(); };
+            const addEvent = async (data) => { 
+                try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data); showToast('Evento agendado'); closeModal(); }
+                catch(e) { console.error(e); showToast('Error al guardar', 'error'); }
+            };
+            const updateEvent = async (id, data) => { 
+                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id), data); showToast('Evento guardado'); closeModal(); }
+                catch(e) { console.error(e); showToast('Error al actualizar', 'error'); }
+            };
 
             const handleDelete = async () => {
                 const { type, id } = deleteConfirm;
@@ -301,7 +348,7 @@ try {
                     if (type === 'accountTask') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id));
                     if (type === 'editingTask') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id));
                     showToast('Eliminado correctamente');
-                } catch(e) { console.error(e); showToast('Error al eliminar', 'error'); }
+                } catch(e) { console.error(e); showToast('Error al eliminar. Revisa permisos', 'error'); }
                 closeDelete();
             };
 
