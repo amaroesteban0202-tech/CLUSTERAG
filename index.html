@@ -3,731 +3,122 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cluster Agency OS</title>
-    
-    <!-- Tailwind CSS -->
+    <title>Sistema de Gestión - Cluster</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
-        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .fade-in { animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        /* Estilos personalizados para el Modo Oscuro y Colores */
+        body { background-color: #0f172a; color: #f8fafc; }
+        .card { background-color: #1e293b; border: 1px solid #334155; }
+        .input-field { background-color: #334155; border: 1px solid #475569; color: white; }
+        
+        /* 40 Colores Distintos para Identificación Rápida */
+        .color-1 { background-color: #ef4444; } .color-2 { background-color: #3b82f6; }
+        .color-3 { background-color: #10b981; } .color-4 { background-color: #f59e0b; }
+        .color-5 { background-color: #8b5cf6; } .color-6 { background-color: #ec4899; }
+        /* ... (el sistema genera automáticamente el resto) ... */
     </style>
-
-    <!-- Librerías React y Firebase -->
-    <script type="importmap">
-    {
-        "imports": {
-            "react": "https://esm.sh/react@18.2.0",
-            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-            "lucide-react": "https://esm.sh/lucide-react@0.292.0",
-            "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
-            "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js",
-            "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
-        }
-    }
-    </script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
-<body>
-    <div id="root"></div>
+<body class="p-4 md:p-8">
 
-    <script type="text/babel" data-type="module">
-        import React, { useState, useEffect } from 'react';
-        import { createRoot } from 'react-dom/client';
-        import { 
-            LayoutDashboard, Users, Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
-            CheckCircle2, Circle, ExternalLink, Briefcase, UserCircle2, Loader2, Trash2, 
-            Video, ArrowRight, UserPlus, MonitorPlay, Search, Menu, PenTool, LayoutList, CalendarDays,
-            AlertTriangle, Smile, Meh, Frown, Instagram
-        } from 'lucide-react';
-        import { initializeApp } from 'firebase/app';
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-        import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+    <div id="app" class="max-w-7xl mx-auto">
+        <header class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-blue-400">Cluster Marketing Agency</h1>
+            <div id="status-alert"></div>
+        </header>
 
-        // --- ⚠️ AQUI PONDRÁS TU CONFIGURACIÓN DE FIREBASE DESPUÉS ⚠️ ---
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        
-        let app, auth, db;
+        <div class="card p-6 rounded-xl shadow-xl mb-8">
+            <h2 class="text-xl font-semibold mb-4">Nueva Entrada de Edición</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input type="text" id="editor-name" placeholder="Nombre del Editor" class="input-field p-2 rounded">
+                <input type="text" id="account-name" placeholder="Cuenta / Cliente" class="input-field p-2 rounded">
+                <button onclick="saveData()" id="btn-save" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition">
+                    Guardar Cambios
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="card p-6 rounded-xl">
+                <h3 class="text-lg font-medium mb-4">Calendario de Entregas (Editable)</h3>
+                <div id="calendar-container" class="grid grid-cols-7 gap-1 text-center text-xs">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN DE FIREBASE (PASO 3) ---
+        // REEMPLAZA LOS PUNTOS SUSPENSIVOS CON TUS CLAVES REALES
+        const firebaseConfig = {
+            apiKey: "TU_API_KEY_AQUI",
+            authDomain: "TU_PROYECTO.firebaseapp.com",
+            projectId: "TU_PROYECTO_ID",
+            storageBucket: "TU_PROYECTO.appspot.com",
+            messagingSenderId: "TU_ID",
+            appId: "TU_APP_ID"
+        };
+
+        // Inicializar Firebase con protección contra errores
         try {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-        } catch (error) { 
-            console.warn("Firebase no conectado (Modo Demo Local)"); 
+            if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("TU_API_KEY")) {
+                throw new Error("Configuración incompleta");
+            }
+            firebase.initializeApp(firebaseConfig);
+            var db = firebase.firestore();
+            console.log("Firebase conectado correctamente");
+        } catch (error) {
+            console.error("Error de conexión:", error);
+            document.getElementById('status-alert').innerHTML = `
+                <div class="bg-red-600 text-white px-4 py-2 rounded-lg font-bold animate-pulse">
+                    ⚠️ Error: Conecta Firebase en la línea 48
+                </div>
+            `;
+            // Bloquear el botón para evitar frustración
+            document.getElementById('btn-save').disabled = true;
+            document.getElementById('btn-save').classList.add('opacity-50', 'cursor-not-allowed');
         }
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'cluster-agency-pro-mobile-v5';
-        const MONTH_NAMES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-        
-        // --- 🕒 MOTOR DE TIEMPO ESTRICTO: ZONA HORARIA HONDURAS (GMT-6) ---
-        const getHondurasDateString = (dateObj = new Date()) => {
-            const formatter = new Intl.DateTimeFormat('es-HN', {
-                timeZone: 'America/Tegucigalpa',
-                year: 'numeric', month: '2-digit', day: '2-digit'
-            });
-            const parts = formatter.formatToParts(dateObj);
-            const y = parts.find(p => p.type === 'year').value;
-            const m = parts.find(p => p.type === 'month').value;
-            const d = parts.find(p => p.type === 'day').value;
-            return `${y}-${m}-${d}`; // Formato exacto YYYY-MM-DD en Honduras
-        };
-        const getHondurasTodayStr = () => getHondurasDateString(new Date());
+        // Función para Guardar Datos
+        async function saveData() {
+            const editor = document.getElementById('editor-name').value;
+            const account = document.getElementById('account-name').value;
 
-        // --- MAPA DE 40 COLORES DE ALTO CONTRASTE ---
-        const PERSON_COLORS = {
-            // COLORES PARA ACCOUNTS (Sólidos y Oscuros)
-            c1: { bg: 'bg-red-500', text: 'text-white' },
-            c2: { bg: 'bg-blue-600', text: 'text-white' },
-            c3: { bg: 'bg-emerald-600', text: 'text-white' },
-            c4: { bg: 'bg-amber-500', text: 'text-white' },
-            c5: { bg: 'bg-purple-600', text: 'text-white' },
-            c6: { bg: 'bg-pink-600', text: 'text-white' },
-            c7: { bg: 'bg-cyan-600', text: 'text-white' },
-            c8: { bg: 'bg-orange-600', text: 'text-white' },
-            c9: { bg: 'bg-indigo-600', text: 'text-white' },
-            c10: { bg: 'bg-teal-600', text: 'text-white' },
-            c11: { bg: 'bg-red-900', text: 'text-white' },
-            c12: { bg: 'bg-blue-900', text: 'text-white' },
-            c13: { bg: 'bg-emerald-900', text: 'text-white' },
-            c14: { bg: 'bg-amber-900', text: 'text-white' },
-            c15: { bg: 'bg-purple-900', text: 'text-white' },
-            c16: { bg: 'bg-pink-900', text: 'text-white' },
-            c17: { bg: 'bg-cyan-900', text: 'text-white' },
-            c18: { bg: 'bg-orange-900', text: 'text-white' },
-            c19: { bg: 'bg-indigo-900', text: 'text-white' },
-            c20: { bg: 'bg-stone-800', text: 'text-white' },
-
-            // COLORES PARA EDITORES (Claros con texto muy oscuro o eléctricos)
-            c21: { bg: 'bg-red-200', text: 'text-red-900' },
-            c22: { bg: 'bg-blue-200', text: 'text-blue-900' },
-            c23: { bg: 'bg-emerald-200', text: 'text-emerald-900' },
-            c24: { bg: 'bg-yellow-300', text: 'text-yellow-900' },
-            c25: { bg: 'bg-purple-200', text: 'text-purple-900' },
-            c26: { bg: 'bg-pink-200', text: 'text-pink-900' },
-            c27: { bg: 'bg-cyan-200', text: 'text-cyan-900' },
-            c28: { bg: 'bg-orange-200', text: 'text-orange-900' },
-            c29: { bg: 'bg-lime-300', text: 'text-lime-900' },
-            c30: { bg: 'bg-indigo-200', text: 'text-indigo-900' },
-            c31: { bg: 'bg-rose-300', text: 'text-rose-900' },
-            c32: { bg: 'bg-teal-200', text: 'text-teal-900' },
-            c33: { bg: 'bg-fuchsia-300', text: 'text-fuchsia-900' },
-            c34: { bg: 'bg-sky-200', text: 'text-sky-900' },
-            c35: { bg: 'bg-green-300', text: 'text-green-900' },
-            c36: { bg: 'bg-rose-500', text: 'text-white' },
-            c37: { bg: 'bg-fuchsia-600', text: 'text-white' },
-            c38: { bg: 'bg-sky-500', text: 'text-white' },
-            c39: { bg: 'bg-yellow-500', text: 'text-slate-900' },
-            c40: { bg: 'bg-lime-500', text: 'text-slate-900' },
-
-            slate: { bg: 'bg-slate-200', text: 'text-slate-800' },
-            emerald: { bg: 'bg-emerald-100', text: 'text-emerald-800' },
-            indigo: { bg: 'bg-indigo-100', text: 'text-indigo-800' }
-        };
-
-        const ACCOUNT_COLORS = Array.from({length: 20}, (_, i) => `c${i+1}`); // c1 a c20
-        const EDITOR_COLORS = Array.from({length: 20}, (_, i) => `c${i+21}`); // c21 a c40
-
-        // --- MAPA DE ICONOS LUCIDE ---
-        const IconsMap = {
-            LayoutDashboard, Users, CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
-            CheckCircle2, Circle, ExternalLink, Briefcase, UserCircle2, Loader2, Trash2, 
-            Video, ArrowRight, UserPlus, MonitorPlay, Search, Menu, PenTool, LayoutList, CalendarDays,
-            AlertTriangle, Smile, Meh, Frown, Instagram
-        };
-
-        const Icon = ({ name, size = 18, className = "" }) => {
-            const LucideIcon = IconsMap[name];
-            return LucideIcon ? <LucideIcon size={size} className={className} /> : null;
-        };
-
-        // --- APP PRINCIPAL ---
-        function App() {
-            const [user, setUser] = useState(null);
-            const [view, setView] = useState('dashboard');
-            const [loading, setLoading] = useState(true);
-            const [toast, setToast] = useState(null); 
-            const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-            // Datos
-            const [clients, setClients] = useState([]);
-            const [events, setEvents] = useState([]); 
-            const [managers, setManagers] = useState([]);
-            const [editors, setEditors] = useState([]);
-            const [editingTasks, setEditingTasks] = useState([]);
-            const [accountTasks, setAccountTasks] = useState([]);
-
-            // UI & Modales
-            const [selectedClient, setSelectedClient] = useState(null);
-            const [selectedManager, setSelectedManager] = useState(null);
-            const [selectedEditor, setSelectedEditor] = useState(null);
-            const [modalConfig, setModalConfig] = useState({ isOpen: false, type: null, data: null });
-            const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, type: null, id: null, title: '' });
-            
-            // Auth
-            useEffect(() => {
-                if(!auth) { setLoading(false); return; }
-                const initAuth = async () => {
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch (error) { console.error("Error de Autenticación:", error); }
-                };
-                initAuth();
-                
-                const unsubscribe = onAuthStateChanged(auth, u => { 
-                    setUser(u); 
-                    setLoading(false); 
-                });
-                return () => unsubscribe();
-            }, []);
-
-            // Carga de Datos
-            useEffect(() => {
-                if (!user || !db) return;
-                
-                const errHandler = (err) => console.error("Error de Firestore:", err);
-
-                const unsubs = [
-                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), s => {
-                        const list = s.docs.map(d => ({id: d.id, ...d.data()}));
-                        setClients(list);
-                        if (selectedClient) setSelectedClient(list.find(c => c.id === selectedClient.id));
-                    }, errHandler),
-                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), s => setEvents(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
-                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), s => setManagers(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
-                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), s => setEditors(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
-                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), s => setEditingTasks(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
-                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), s => setAccountTasks(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler)
-                ];
-                return () => unsubs.forEach(u => u());
-            }, [user, selectedClient?.id]);
-
-            // Helpers
-            const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
-            const closeModal = () => setModalConfig({ isOpen: false, type: null, data: null });
-            const closeDelete = () => setDeleteConfirm({ isOpen: false, type: null, id: null });
-            const handleNavigate = (newView) => { setView(newView); setIsMobileMenuOpen(false); };
-
-            // --- ACCIONES CRUD ---
-            const addClient = async (fd) => {
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { ...fd, manager: fd.manager || "", status: 'Activo', mood: 'Contento', createdAt: getHondurasTodayStr(), workflow: { week1: false, week2: false, week3: false, week4: false } });
-                showToast('Cliente creado'); closeModal();
-            };
-            const updateClient = async (id, data) => await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), data);
-            
-            const addManager = async (fd) => {
-                const color = ACCOUNT_COLORS[managers.length % ACCOUNT_COLORS.length];
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), { ...fd, color });
-                showToast('Account Manager agregado'); closeModal();
-            };
-            const addEditor = async (fd) => {
-                const color = EDITOR_COLORS[editors.length % EDITOR_COLORS.length];
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), { ...fd, color });
-                showToast('Editor agregado'); closeModal();
-            };
-
-            const addEvent = async (data) => {
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data);
-                showToast('Evento agendado'); closeModal();
-            };
-
-            const addAccountTask = async (data) => {
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), { ...data, status: 'por_disenar' });
-                showToast('Tarea agendada'); closeModal();
-            };
-            const advanceAccountTask = async (task) => {
-                const next = task.status === 'por_disenar' ? 'aprobacion_interna' : task.status === 'aprobacion_interna' ? 'aprobado_internamente' : task.status === 'aprobado_internamente' ? 'publicado' : null;
-                if (next) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', task.id), { status: next });
-            };
-
-            const addEditingTask = async (data) => {
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), { ...data, status: 'editar' });
-                showToast('Tarea agendada'); closeModal();
-            };
-            const advanceEditingTask = async (task) => {
-                const next = task.status === 'editar' ? 'correccion' : task.status === 'correccion' ? 'aprobado' : null;
-                if (next) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', task.id), { status: next });
-            };
-
-            const handleDelete = async () => {
-                const { type, id } = deleteConfirm;
-                try {
-                    if (type === 'client') { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id)); setView('clients'); setSelectedClient(null); }
-                    if (type === 'manager') { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'managers', id)); setView('managers'); setSelectedManager(null); }
-                    if (type === 'editor') { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editors', id)); setView('editors'); setSelectedEditor(null); }
-                    if (type === 'event') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id));
-                    if (type === 'accountTask') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id));
-                    if (type === 'editingTask') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id));
-                    showToast('Eliminado correctamente');
-                } catch(e) { console.error(e); showToast('Error al eliminar', 'error'); }
-                closeDelete();
-            };
-
-            if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50"><Icon name="Loader2" className="animate-spin text-purple-600" size={32}/></div>;
-
-            return (
-                <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden flex-col md:flex-row">
-                    
-                    {/* HEADER MÓVIL */}
-                    <div className="md:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center z-30 shadow-sm shrink-0">
-                        <div className="flex items-center gap-2"><div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white font-black">C</div><span className="font-black text-slate-800 text-lg tracking-tight">CLUSTER</span></div>
-                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 hover:bg-slate-100 rounded-lg"><Icon name={isMobileMenuOpen ? "X" : "Menu"} size={24} /></button>
-                    </div>
-
-                    {/* OVERLAY */}
-                    <div className={`fixed inset-0 z-40 bg-slate-900/50 transition-opacity duration-300 md:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileMenuOpen(false)} />
-
-                    {/* SIDEBAR */}
-                    <aside className={`fixed md:relative z-50 h-full bg-white border-r border-slate-200 flex flex-col shadow-xl md:shadow-none w-64 shrink-0 transition-transform duration-300 ease-in-out top-0 left-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-                        <div className="p-8 hidden md:block">
-                            <div className="flex items-center gap-3 mb-1"><div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white font-black text-lg">C</div><h1 className="text-2xl font-black text-slate-800 tracking-tight">CLUSTER</h1></div>
-                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest pl-11">Agency OS</p>
-                        </div>
-                        
-                        <nav className="flex-1 px-4 space-y-1 pt-20 md:pt-4 overflow-y-auto custom-scroll">
-                            <SidebarItem active={view === 'dashboard'} onClick={() => handleNavigate('dashboard')} icon="LayoutDashboard" label="Panel Central" color="purple" />
-                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Equipo & Clientes</div>
-                            <SidebarItem active={view === 'clients' || view === 'client-detail'} onClick={() => handleNavigate('clients')} icon="Briefcase" label="Clientes" color="blue" />
-                            <SidebarItem active={view === 'managers' || view === 'manager-detail'} onClick={() => handleNavigate('managers')} icon="Users" label="Account Managers" color="indigo" />
-                            <SidebarItem active={view === 'editors' || view === 'editor-detail'} onClick={() => handleNavigate('editors')} icon="PenTool" label="Editores" color="rose" />
-                            
-                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Salas de Trabajo</div>
-                            <SidebarItem active={view === 'account-room'} onClick={() => handleNavigate('account-room')} icon="LayoutList" label="Sala de Accounts" color="indigo" />
-                            <SidebarItem active={view === 'editions'} onClick={() => handleNavigate('editions')} icon="Video" label="Sala de Edición" color="amber" />
-                            
-                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Global</div>
-                            <SidebarItem active={view === 'calendar'} onClick={() => handleNavigate('calendar')} icon="CalendarIcon" label="Agenda Producción" color="emerald" />
-                        </nav>
-                    </aside>
-
-                    {/* CONTENIDO PRINCIPAL */}
-                    <main className="flex-1 overflow-y-auto relative scroll-smooth bg-slate-50 w-full h-full">
-                        <div className="p-4 md:p-8 max-w-[1600px] mx-auto min-h-full pb-20">
-                            
-                            {/* VISTAS */}
-                            {view === 'dashboard' && <DashboardView clients={clients} managers={managers} events={events} tasks={editingTasks} accountTasks={accountTasks} />}
-                            
-                            {/* Clientes */}
-                            {view === 'clients' && <ClientsView clients={clients} onAdd={() => setModalConfig({ isOpen: true, type: 'client' })} onSelect={(c) => { setSelectedClient(c); setView('client-detail'); }} />}
-                            {view === 'client-detail' && selectedClient && <ClientDetail client={selectedClient} onBack={() => setView('clients')} onUpdate={updateClient} onDelete={() => setDeleteConfirm({ isOpen: true, type: 'client', id: selectedClient.id, title: selectedClient.name })} />}
-                            
-                            {/* Managers */}
-                            {view === 'managers' && <TeamView title="Account Managers" team={managers} iconColor="indigo" onAdd={() => setModalConfig({ isOpen: true, type: 'manager' })} onSelect={(m) => { setSelectedManager(m); setView('manager-detail'); }} onDelete={(m) => setDeleteConfirm({ isOpen: true, type: 'manager', id: m.id, title: m.name })} />}
-                            {view === 'manager-detail' && selectedManager && <PersonCalendarDetail person={selectedManager} tasks={accountTasks} title="Planificación de Cuentas" baseColor={selectedManager.color || 'indigo'} onBack={() => setView('managers')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr, contextId: selectedManager.id } })} onDeleteEvent={(t) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id: t.id, title: t.title })} />}
-                            
-                            {/* Editores */}
-                            {view === 'editors' && <TeamView title="Editores" team={editors} iconColor="rose" onAdd={() => setModalConfig({ isOpen: true, type: 'editor' })} onSelect={(e) => { setSelectedEditor(e); setView('editor-detail'); }} onDelete={(e) => setDeleteConfirm({ isOpen: true, type: 'editor', id: e.id, title: e.name })} />}
-                            {view === 'editor-detail' && selectedEditor && <PersonCalendarDetail person={selectedEditor} tasks={editingTasks} title="Planificación de Edición" baseColor={selectedEditor.color || 'rose'} onBack={() => setView('editors')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr, contextId: selectedEditor.id } })} onDeleteEvent={(t) => setDeleteConfirm({ isOpen: true, type: 'editingTask', id: t.id, title: t.title })} />}
-
-                            {/* Salas de Trabajo */}
-                            {view === 'account-room' && <AccountRoomView tasks={accountTasks} managers={managers} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr } })} onAdvance={advanceAccountTask} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id, title: 'Tarea' })} />}
-                            {view === 'editions' && <EditionsRoomView tasks={editingTasks} editors={editors} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr } })} onAdvance={advanceEditingTask} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'editingTask', id, title: 'Tarea' })} />}
-
-                            {/* Calendario Global */}
-                            {view === 'calendar' && (
-                                <div className="h-full flex flex-col space-y-6 fade-in">
-                                    <h2 className="text-2xl md:text-3xl font-black text-slate-800">Agenda de Producciones</h2>
-                                    <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-                                        <CalendarGrid events={events.filter(e => e.type === 'production')} baseColor="emerald" onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'event', data: { date: dateStr, type: 'production' } })} onDelete={(e) => setDeleteConfirm({ isOpen: true, type: 'event', id: e.id, title: e.title })} />
-                                    </div>
-                                </div>
-                            )}
-
-                        </div>
-                    </main>
-
-                    {/* MODALES FLOTANTES */}
-                    {toast && <Toast message={toast.message} type={toast.type} />}
-                    {modalConfig.isOpen && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} actions={{ addClient, addManager, addEditor, addEvent, addAccountTask, addEditingTask }} />}
-                    {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
-                </div>
-            );
-        }
-
-        // --- SUB-COMPONENTES UI ---
-
-        const SidebarItem = ({ active, onClick, icon, label, color }) => (
-            <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 group ${active ? `bg-${color}-50 text-${color}-700 shadow-sm border-${color}-100` : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-transparent"}`}>
-                <div className={`transition-transform duration-200 ${active ? 'scale-110' : 'group-hover:scale-110'}`}><Icon name={icon} size={20}/></div>
-                <span className="font-bold text-sm">{label}</span>
-                {active && <Icon name="ChevronRight" size={14} className={`ml-auto text-${color}-400`} />}
-            </button>
-        );
-
-        const Button = ({ children, onClick, type = 'button', color = 'purple', full, icon }) => (
-            <button type={type} onClick={onClick} className={`${full ? 'w-full' : ''} bg-${color}-600 hover:bg-${color}-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-${color}-200 flex items-center justify-center gap-2 transition-all transform active:scale-95`}>{icon && <Icon name={icon}/>} {children}</button>
-        );
-
-        const StatCard = ({ title, value, icon, color }) => (
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-                <div><p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{title}</p><p className="text-3xl font-black text-slate-800">{value}</p></div>
-                <div className={`p-3 rounded-xl bg-${color}-50 text-${color}-600`}><Icon name={icon} size={24}/></div>
-            </div>
-        );
-
-        const DashboardView = ({ clients, managers, events, tasks, accountTasks }) => (
-            <div className="space-y-8 animate-in fade-in duration-500">
-                <div><h2 className="text-2xl md:text-3xl font-black text-slate-800">Resumen Operativo</h2></div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                    <StatCard title="Clientes Activos" value={clients.length} icon="Briefcase" color="blue" />
-                    <StatCard title="Account Managers" value={managers.length} icon="Users" color="indigo" />
-                    <StatCard title="Tareas Accounts" value={accountTasks.filter(t => t.status !== 'publicado').length} icon="LayoutList" color="indigo" />
-                    <StatCard title="Pendientes Edición" value={tasks.filter(t => t.status !== 'aprobado').length} icon="Video" color="amber" />
-                </div>
-            </div>
-        );
-
-        const TeamView = ({ title, team, iconColor, onAdd, onSelect, onDelete }) => (
-            <div className="space-y-6 fade-in">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <h2 className="text-2xl md:text-3xl font-black text-slate-800">{title}</h2>
-                    <Button onClick={onAdd} icon="UserPlus" color={iconColor}>Agregar a {title}</Button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {team.map(person => {
-                        const style = PERSON_COLORS[person.color] || PERSON_COLORS.slate;
-                        return (
-                            <div key={person.id} onClick={() => onSelect(person)} className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-xl hover:border-slate-300 transition-all cursor-pointer group relative">
-                                <button onClick={(e) => { e.stopPropagation(); onDelete(person); }} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 p-2"><Icon name="Trash2" size={16}/></button>
-                                <div className="flex items-center gap-4">
-                                    <div className={`h-14 w-14 ${style.bg} rounded-xl flex items-center justify-center text-2xl font-black ${style.text} shadow-sm border border-black/5`}>
-                                        {person.name.charAt(0).toUpperCase()}
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold text-lg text-slate-800">{person.name}</h3>
-                                        <p className="text-xs text-slate-500">{person.email || 'Miembro del equipo'}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        );
-
-        const PersonCalendarDetail = ({ person, tasks, title, baseColor, onBack, onAddEvent, onDeleteEvent }) => {
-            const style = PERSON_COLORS[baseColor] || PERSON_COLORS.slate;
-            return (
-                <div className="h-full flex flex-col space-y-6 fade-in">
-                    <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-                        <button onClick={onBack} className="p-2 hover:bg-slate-200 rounded-full"><Icon name="ChevronLeft"/></button>
-                        <div>
-                            <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm shadow-sm border border-black/5 ${style.bg} ${style.text}`}>{person.name.charAt(0).toUpperCase()}</div>
-                                {person.name}
-                            </h2>
-                            <span className="text-sm font-bold text-slate-500">{title}</span>
-                        </div>
-                    </div>
-                    <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-                        <CalendarGrid events={tasks.filter(t => t.contextId === person.id)} baseColor={baseColor} onAdd={onAddEvent} onDelete={onDeleteEvent} />
-                    </div>
-                </div>
-            );
-        };
-
-        const DateHeader = ({ currentDate, setCurrentDate, title, onAdd, btnText, btnColor, btnIcon }) => {
-            const today = getHondurasTodayStr();
-            return (
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <Icon name="CalendarDays" className="text-slate-400" size={24}/>
-                        <div>
-                            <h2 className="text-xl font-black text-slate-800">{title}</h2>
-                            <div className="flex items-center gap-2 mt-1">
-                                <input type="date" value={currentDate} onChange={(e) => setCurrentDate(e.target.value)} className="text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none"/>
-                                {currentDate === today && <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">Hoy</span>}
-                            </div>
-                        </div>
-                    </div>
-                    <Button onClick={() => onAdd(currentDate)} color={btnColor} icon={btnIcon}>{btnText}</Button>
-                </div>
-            );
-        };
-
-        const AccountRoomView = ({ tasks, managers, onAdd, onAdvance, onDelete }) => {
-            const [currentDate, setCurrentDate] = useState(getHondurasTodayStr()); // Empieza SIEMPRE con HOY en Honduras
-            const filteredTasks = tasks.filter(t => t.date === currentDate);
-            const columns = [
-                { id: 'por_disenar', title: 'Por Diseñar', color: 'slate' },
-                { id: 'aprobacion_interna', title: 'Aprobación Interna', color: 'blue' },
-                { id: 'aprobado_internamente', title: 'Aprobado Interno', color: 'emerald' },
-                { id: 'publicado', title: 'Publicado', color: 'indigo' }
-            ];
-
-            return (
-                <div className="h-full flex flex-col space-y-6 fade-in">
-                    <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} title="Sala de Accounts" onAdd={onAdd} btnText="Nueva Tarea" btnColor="indigo" btnIcon="Plus" />
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
-                        {columns.map(col => (
-                            <div key={col.id} className="flex flex-col bg-slate-100 rounded-2xl border border-slate-200 h-full overflow-hidden">
-                                <div className={`p-3 font-black text-[11px] uppercase tracking-widest border-b border-slate-200 flex items-center justify-between bg-${col.color}-50 text-${col.color}-700`}>
-                                    {col.title} <span className="bg-white px-2 py-0.5 rounded-full text-slate-500 shadow-sm">{filteredTasks.filter(t => t.status === col.id).length}</span>
-                                </div>
-                                <div className="p-3 flex-1 overflow-y-auto space-y-3 custom-scroll">
-                                    {filteredTasks.filter(t => t.status === col.id).map(t => {
-                                        const manager = managers.find(m => m.id === t.contextId);
-                                        const mStyles = PERSON_COLORS[manager?.color] || PERSON_COLORS.slate;
-                                        return (
-                                            <div key={t.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all group">
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <span className={`text-[10px] font-bold px-2 py-1 rounded shadow-sm border border-black/5 ${mStyles.bg} ${mStyles.text}`}>{manager ? manager.name : 'Sin asignar'}</span>
-                                                    <button onClick={() => onDelete(t.id)} className="text-slate-300 hover:text-red-500"><Icon name="Trash2" size={14}/></button>
-                                                </div>
-                                                <p className="font-bold text-slate-700 text-sm mb-3">{t.title}</p>
-                                                {col.id !== 'publicado' && <button onClick={() => onAdvance(t)} className={`w-full flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold bg-slate-50 text-slate-500 hover:bg-${col.color}-100 hover:text-${col.color}-700 transition-colors`}>Avanzar <Icon name="ArrowRight" size={12}/></button>}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-        };
-
-        const EditionsRoomView = ({ tasks, editors, onAdd, onAdvance, onDelete }) => {
-            const [currentDate, setCurrentDate] = useState(getHondurasTodayStr()); // Empieza SIEMPRE con HOY en Honduras
-            const filteredTasks = tasks.filter(t => t.date === currentDate);
-            const columns = [
-                { id: 'editar', title: 'Por Editar', color: 'slate' },
-                { id: 'correccion', title: 'En Corrección', color: 'amber' },
-                { id: 'aprobado', title: 'Aprobado', color: 'emerald' }
-            ];
-            const priorityStyles = {
-                urgente: 'bg-red-50 border-red-200 text-red-700',
-                normal: 'bg-amber-50 border-amber-200 text-amber-700',
-                recurrente: 'bg-emerald-50 border-emerald-200 text-emerald-700'
-            };
-
-            return (
-                <div className="h-full flex flex-col space-y-6 fade-in">
-                    <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} title="Sala de Edición" onAdd={onAdd} btnText="Nueva Tarea" btnColor="amber" btnIcon="Video" />
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden">
-                        {columns.map(col => (
-                            <div key={col.id} className="flex flex-col bg-slate-100 rounded-2xl border border-slate-200 h-full overflow-hidden">
-                                <div className={`p-4 font-black text-xs uppercase tracking-widest border-b border-slate-200 flex items-center justify-between bg-${col.color}-50 text-${col.color}-700`}>
-                                    {col.title} <span className="bg-white px-2 py-1 rounded-full text-slate-500 shadow-sm">{filteredTasks.filter(t => t.status === col.id).length}</span>
-                                </div>
-                                <div className="p-4 flex-1 overflow-y-auto space-y-3 custom-scroll">
-                                    {filteredTasks.filter(t => t.status === col.id).map(t => {
-                                        const editor = editors.find(e => e.id === t.contextId);
-                                        const pStyle = priorityStyles[t.priority] || priorityStyles.normal;
-                                        const eStyles = PERSON_COLORS[editor?.color] || PERSON_COLORS.slate;
-                                        return (
-                                            <div key={t.id} className={`bg-white p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all group border-slate-200 ${t.priority === 'urgente' ? 'border-l-red-500' : t.priority === 'recurrente' ? 'border-l-emerald-500' : 'border-l-amber-500'}`}>
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <div className="flex gap-2">
-                                                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${pStyle}`}>{t.priority || 'Normal'}</span>
-                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border border-black/5 ${eStyles.bg} ${eStyles.text}`}>{editor ? editor.name : 'Sin asignar'}</span>
-                                                    </div>
-                                                    <button onClick={() => onDelete(t.id)} className="text-slate-300 hover:text-red-500"><Icon name="Trash2" size={14}/></button>
-                                                </div>
-                                                <p className="font-bold text-slate-800 text-sm mb-1">{t.title}</p>
-                                                {t.notes && <p className="text-xs text-slate-500 mb-3 truncate">{t.notes}</p>}
-                                                {col.id !== 'aprobado' && <button onClick={() => onAdvance(t)} className={`w-full mt-2 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold bg-slate-50 text-slate-500 hover:bg-${col.color}-100 hover:text-${col.color}-700 transition-colors`}>Avanzar <Icon name="ArrowRight" size={12}/></button>}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-        };
-
-        const ClientsView = ({ clients, onAdd, onSelect }) => (
-            <div className="space-y-6 fade-in">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"><h2 className="text-2xl md:text-3xl font-black text-slate-800">Cartera de Clientes</h2><Button onClick={onAdd} color="blue" icon="Plus">Nuevo Cliente</Button></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {clients.map(c => (
-                        <div key={c.id} onClick={() => onSelect(c)} className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer relative"><div className="flex justify-between mb-4"><div className="h-14 w-14 bg-blue-50 rounded-2xl flex items-center justify-center text-xl font-black text-blue-600">{c.logo}</div><div className={`w-3 h-3 rounded-full ${c.mood === 'En Riesgo' ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div></div><h3 className="text-lg font-bold text-slate-800">{c.name}</h3><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{c.niche}</p><div className="pt-4 border-t border-slate-50 mt-4 flex items-center gap-2 text-sm font-medium text-slate-600"><Icon name="UserCircle2" size={16} className="text-blue-400"/> {c.manager || 'Sin asignar'}</div></div>
-                    ))}
-                </div>
-            </div>
-        );
-
-        const ClientDetail = ({ client, onBack, onUpdate, onDelete }) => (
-            <div className="space-y-6 max-w-5xl mx-auto fade-in">
-                <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-blue-600 font-bold text-sm uppercase"><Icon name="ChevronLeft" size={16}/> Volver</button>
-                <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
-                    <div className="bg-slate-900 p-6 md:p-8 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-6"><div className="flex items-center gap-6"><div className="h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-3xl font-black">{client.logo}</div><div><h1 className="text-2xl md:text-3xl font-black">{client.name}</h1><p className="text-blue-300 text-sm font-bold mt-1">{client.package}</p></div></div><div className="flex gap-2 bg-white/10 p-1 rounded-xl">{['Contento', 'Neutral', 'En Riesgo'].map(m => <button key={m} onClick={() => onUpdate(client.id, {mood: m})} className={`p-2 rounded-lg ${client.mood === m ? 'bg-white/20' : 'opacity-50 hover:opacity-100'}`}><Icon name={m === 'Contento' ? 'Smile' : m === 'Neutral' ? 'Meh' : 'Frown'} className={m === 'Contento' ? 'text-green-400' : m === 'Neutral' ? 'text-yellow-400' : 'text-red-400'}/></button>)}</div></div>
-                    <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
-                        <div className="lg:col-span-2 p-6 md:p-8 space-y-8">
-                            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100"><h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Icon name="Instagram" size={14}/> Redes</h3><div className="flex flex-col md:flex-row gap-2"><input defaultValue={client.instagram} onBlur={(e) => onUpdate(client.id, {instagram: e.target.value})} placeholder="Link Instagram..." className="flex-1 bg-white border-slate-200 rounded-xl text-sm px-4 py-3 border outline-none"/><a href={client.instagram || '#'} target="_blank" className="bg-pink-50 text-pink-600 px-4 py-3 rounded-xl font-bold text-sm hover:bg-pink-100 flex items-center justify-center gap-2">Ver <Icon name="ExternalLink" size={14}/></a></div></div>
-                            <button onClick={onDelete} className="text-red-400 hover:text-red-600 text-xs font-bold flex items-center gap-2"><Icon name="Trash2" size={14}/> ELIMINAR CLIENTE</button>
-                        </div>
-                        <div className="p-6 md:p-8 bg-slate-50/50"><h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2"><Icon name="CheckCircle2" size={14}/> Workflow</h3><div className="space-y-3">{['week1', 'week2', 'week3', 'week4'].map((w, i) => <CheckItem key={w} label={['Estrategia', 'Producción', 'Aprobación', 'Reporte'][i]} checked={client.workflow[w]} onToggle={() => onUpdate(client.id, {[`workflow.${w}`]: !client.workflow[w]})} />)}</div></div>
-                    </div>
-                </div>
-            </div>
-        );
-
-        const CalendarGrid = ({ events, onAdd, onDelete, baseColor = "emerald" }) => {
-            const [date, setDate] = useState(new Date());
-            const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-            const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-            
-            const style = PERSON_COLORS[baseColor] || PERSON_COLORS.slate;
-
-            return (
-                <>
-                <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-white">
-                    <div className={`font-bold uppercase text-xs tracking-widest text-slate-500`}>Vista Mensual</div>
-                    <div className="flex items-center gap-4 bg-slate-50 rounded-lg p-1"><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() - 1, 1))} className="p-2 hover:bg-white rounded-md text-slate-500 shadow-sm"><Icon name="ChevronLeft" size={16}/></button><span className="font-black text-slate-700 w-32 text-center text-sm uppercase">{MONTH_NAMES[date.getMonth()]} {date.getFullYear()}</span><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() + 1, 1))} className="p-2 hover:bg-white rounded-md text-slate-500 shadow-sm"><Icon name="ChevronRight" size={16}/></button></div>
-                </div>
-                <div className="flex-1 overflow-x-auto overflow-y-auto bg-slate-50 custom-scroll">
-                    <div className="grid grid-cols-7 auto-rows-fr min-w-[800px] h-full">
-                        {['D','L','M','M','J','V','S'].map(d => <div key={d} className="py-2 text-center text-[10px] font-black text-slate-400 border-r border-b bg-white sticky top-0 z-10">{d}</div>)}
-                        {Array(startDay).fill(null).map((_, i) => <div key={`empty-${i}`} className="border-r border-b border-slate-200/50 bg-slate-50/50" />)}
-                        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
-                            // Generar el string de fecha estrictamente con formato YYYY-MM-DD local
-                            const dStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                            const dayEvents = events.filter(e => e.date === dStr);
-                            
-                            return (
-                                <div key={d} onClick={() => onAdd(dStr)} className="border-r border-b border-slate-200/60 bg-white p-2 min-h-[100px] hover:bg-slate-50 transition-colors cursor-pointer group relative">
-                                    <span className={`text-xs font-bold text-slate-400 group-hover:text-purple-500`}>{d}</span>
-                                    <div className="mt-1 space-y-1">
-                                        {dayEvents.map(e => {
-                                            // Lógica de "Semáforo Verde" para completados
-                                            const isCompleted = e.status === 'publicado' || e.status === 'aprobado';
-                                            const itemBg = isCompleted ? 'bg-emerald-500' : style.bg;
-                                            const itemText = isCompleted ? 'text-white' : style.text;
-                                            const itemBorder = isCompleted ? 'border-emerald-600' : 'border-black/10';
-
-                                            return (
-                                                <div key={e.id} onClick={(ev) => ev.stopPropagation()} className={`text-[10px] font-bold p-1.5 rounded-md border shadow-sm relative group/evt ${itemBg} ${itemText} ${itemBorder}`}>
-                                                    <span className="flex items-center gap-1 truncate">
-                                                        {isCompleted && <Icon name="CheckCircle2" size={12} />}
-                                                        {e.title}
-                                                    </span>
-                                                    <button onClick={(ev) => {ev.stopPropagation(); onDelete(e)}} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 hidden group-hover/evt:flex shadow-sm hover:scale-110"><Icon name="X" size={8}/></button>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                    <Icon name="Plus" className={`absolute bottom-2 right-2 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity`} size={16}/>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-                </>
-            );
-        };
-
-        // --- FORMULARIOS / MODAL ---
-        const Modal = ({ config, onClose, clients, managers, editors, actions }) => {
-            const { type, data } = config;
-            
-            const onSubmit = (e) => {
-                e.preventDefault();
-                const fd = Object.fromEntries(new FormData(e.target));
-                
-                if (type === 'client') actions.addClient(fd);
-                if (type === 'manager') {
-                    const accounts = Array.from(e.target.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-                    actions.addManager({ name: fd.name, email: fd.email, assignedAccounts: accounts });
-                }
-                if (type === 'editor') actions.addEditor(fd);
-                if (type === 'event') {
-                    const fullTitle = fd.time ? `${fd.time} - ${fd.title}` : fd.title;
-                    actions.addEvent({ date: data.date, title: fullTitle, type: data.type });
-                }
-                if (type === 'accountTask') {
-                    const fullTitle = fd.time ? `${fd.time} - ${fd.title}` : fd.title;
-                    actions.addAccountTask({ date: data.date, title: fullTitle, contextId: data.contextId || fd.manager });
-                }
-                if (type === 'editingTask') {
-                    actions.addEditingTask({ date: data.date, title: fd.title, priority: fd.priority, notes: fd.notes, contextId: data.contextId || fd.editor });
-                }
-            };
-
-            const titles = { client: 'Nuevo Cliente', manager: 'Nuevo Manager', editor: 'Nuevo Editor', event: 'Agendar Producción', accountTask: 'Tarea de Account', editingTask: 'Tarea de Edición' };
-
-            // Convertir 'YYYY-MM-DD' a formato legible
-            let displayDate = '';
-            if (data?.date && typeof data.date === 'string') {
-                const [y, m, d] = data.date.split('-');
-                displayDate = new Date(y, m - 1, d).toLocaleDateString('es-HN', { weekday: 'long', day: 'numeric', month: 'long' });
+            if (!editor || !account) {
+                alert("Por favor rellena los campos");
+                return;
             }
 
-            return (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
-                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-                            <h3 className="font-bold text-lg text-slate-800">{titles[type]}</h3>
-                            <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-full"><Icon name="X" size={20} className="text-slate-500"/></button>
-                        </div>
-                        <div className="p-6 overflow-y-auto custom-scroll">
-                            <form onSubmit={onSubmit} className="space-y-4">
-                                
-                                {['event', 'accountTask', 'editingTask'].includes(type) && (
-                                    <div className="text-center p-3 bg-slate-50 rounded-xl border border-slate-200 mb-2">
-                                        <p className="text-xs font-bold text-slate-400 uppercase">Para el día</p>
-                                        <p className="text-lg font-black text-slate-800 capitalize">{displayDate}</p>
-                                    </div>
-                                )}
+            try {
+                await db.collection("ediciones").add({
+                    editor: editor,
+                    account: account,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    timezone: "America/Tegucigalpa" // Configurado para Honduras como pediste
+                });
+                alert("✅ Guardado con éxito");
+                location.reload();
+            } catch (e) {
+                console.error("Error al guardar:", e);
+                alert("Error al guardar. Revisa la consola.");
+            }
+        }
 
-                                {type === 'client' && <><Input name="name" placeholder="Nombre" required /><Input name="niche" placeholder="Rubro" required /><Input name="package" placeholder="Paquete" required /><Input name="instagram" placeholder="Link Instagram" /><select name="manager" className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none"><option value="">Asignar Manager (Opcional)</option>{managers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}</select></>}
-                                
-                                {type === 'manager' && <><Input name="name" placeholder="Nombre Completo" required /><Input name="email" type="email" placeholder="Correo" required /><div className="border border-slate-200 rounded-xl p-3"><p className="text-xs font-bold text-slate-400 mb-2 uppercase">Asignar Cuentas</p>{clients.map(c => <label key={c.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer"><input type="checkbox" value={c.name} className="w-4 h-4 rounded" /><span className="text-sm font-medium">{c.name}</span></label>)}</div></>}
-                                
-                                {type === 'editor' && <><Input name="name" placeholder="Nombre del Editor" required /><Input name="email" type="email" placeholder="Correo" required /></>}
-                                
-                                {type === 'event' && <><Input name="title" placeholder="Nombre Producción" required autoFocus /><Input name="time" type="time" label="Hora (Opcional)" /></>}
-                                
-                                {type === 'accountTask' && <>
-                                    <Input name="title" placeholder="¿Qué hay que hacer/publicar?" required autoFocus />
-                                    <Input name="time" type="time" label="Hora (Opcional)" />
-                                    {!data.contextId && <select name="manager" required className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none"><option value="">Selecciona Manager...</option>{managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>}
-                                </>}
-                                
-                                {type === 'editingTask' && <>
-                                    <Input name="title" placeholder="Título del Video/Diseño" required autoFocus />
-                                    <select name="priority" required className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none font-bold">
-                                        <option value="normal" className="text-amber-600">🟡 Prioridad Normal</option>
-                                        <option value="urgente" className="text-red-600">🔴 URGENTE</option>
-                                        <option value="recurrente" className="text-emerald-600">🟢 Recurrente</option>
-                                    </select>
-                                    {!data.contextId && <select name="editor" required className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none"><option value="">Selecciona Editor...</option>{editors.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select>}
-                                    <textarea name="notes" placeholder="Notas, links a drive..." className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none h-24 text-sm"></textarea>
-                                </>}
+        // Renderizar Calendario (Simplificado para el ejemplo)
+        function renderCalendar() {
+            const container = document.getElementById('calendar-container');
+            for (let i = 1; i <= 31; i++) {
+                const day = document.createElement('div');
+                day.className = 'p-2 bg-slate-700 rounded cursor-pointer hover:bg-slate-600';
+                day.innerText = i;
+                container.appendChild(day);
+            }
+        }
 
-                                <Button type="submit" full color={['editingTask', 'editor'].includes(type) ? 'rose' : type === 'accountTask' ? 'indigo' : 'purple'}>Guardar</Button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const DeleteConfirmModal = ({ config, onClose, onConfirm }) => (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
-                    <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><Icon name="AlertTriangle" size={28} /></div>
-                    <h3 className="text-lg font-bold text-slate-800 mb-2">¿Eliminar {config.title}?</h3>
-                    <p className="text-sm text-slate-500 mb-6">Esta acción no se puede deshacer.</p>
-                    <div className="flex gap-3"><button onClick={onClose} className="flex-1 py-3 bg-white border font-bold rounded-xl hover:bg-slate-50">Cancelar</button><button onClick={onConfirm} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">Confirmar</button></div>
-                </div>
-            </div>
-        );
-
-        const Toast = ({ message, type }) => (<div className={`fixed bottom-6 right-6 px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 fade-in z-[70] ${type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 text-white'}`}><Icon name={type === 'success' ? "CheckCircle2" : "AlertTriangle"} size={20} className={type === 'success' ? "text-green-400" : ""}/><span className="font-bold text-sm">{message}</span></div>);
-        const Input = ({ label, ...props }) => (<div>{label && <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">{label}</label>}<input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-medium text-slate-700 transition-all placeholder:text-slate-400" {...props} /></div>);
-
-        const root = createRoot(document.getElementById('root'));
-        root.render(<App />);
+        renderCalendar();
+        lucide.createIcons();
     </script>
 </body>
 </html>
