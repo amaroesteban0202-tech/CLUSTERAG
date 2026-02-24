@@ -24,12 +24,14 @@
         .dark .custom-scroll::-webkit-scrollbar-thumb { background: #334155; }
         .fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
         /* Efectos Mejorados para Drag & Drop */
-        .dragging { 
-            opacity: 1 !important; 
-            transform: scale(1.02) !important; 
-            box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.5), 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important; 
-            z-index: 50 !important; 
+        .drag-source-hidden { 
+            position: absolute !important;
+            opacity: 0 !important; 
+            pointer-events: none !important;
+            z-index: -100 !important;
+            transition: none !important; 
         }
         .drag-over { 
             background-color: rgba(139, 92, 246, 0.08) !important; 
@@ -700,7 +702,7 @@
                     clone.style.borderRadius = '0.75rem';
                     clone.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.4)';
                     clone.style.transform = 'rotate(3deg) scale(1.05)'; // Efecto visual 3D al levantar
-                    clone.style.zIndex = '9999';
+                    clone.style.zIndex = '99999';
                     clone.style.pointerEvents = 'none';
                     document.body.appendChild(clone);
                     
@@ -708,11 +710,12 @@
                 } catch(err) { console.error("Ghost clone error:", err); }
 
                 const target = e.currentTarget;
-                setTimeout(() => target.classList.add('dragging'), 0);
+                // Oculta la tarjeta original sacándola del flujo para que no ocupe espacio
+                setTimeout(() => target.classList.add('drag-source-hidden'), 0);
             };
 
             const handleDragEnd = (e, taskId) => {
-                e.currentTarget.classList.remove('dragging');
+                e.currentTarget.classList.remove('drag-source-hidden');
                 setDraggedTaskId(null);
                 document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
                 
@@ -866,7 +869,7 @@
                     clone.style.borderRadius = '0.75rem';
                     clone.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.4)';
                     clone.style.transform = 'rotate(3deg) scale(1.05)';
-                    clone.style.zIndex = '9999';
+                    clone.style.zIndex = '99999';
                     clone.style.pointerEvents = 'none';
                     document.body.appendChild(clone);
                     
@@ -874,11 +877,12 @@
                 } catch(err) { console.error("Ghost clone error:", err); }
 
                 const target = e.currentTarget;
-                setTimeout(() => target.classList.add('dragging'), 0);
+                // Oculta la tarjeta original sacándola del flujo para que no ocupe espacio
+                setTimeout(() => target.classList.add('drag-source-hidden'), 0);
             };
 
             const handleDragEnd = (e, taskId) => {
-                e.currentTarget.classList.remove('dragging');
+                e.currentTarget.classList.remove('drag-source-hidden');
                 setDraggedTaskId(null);
                 document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
                 
