@@ -24,9 +24,19 @@
         .dark .custom-scroll::-webkit-scrollbar-thumb { background: #334155; }
         .fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        /* Efectos para Drag & Drop */
-        .dragging { opacity: 0.5; transform: scale(0.95); }
-        .drag-over { background-color: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.5); border-style: dashed; }
+        /* Efectos Mejorados para Drag & Drop */
+        .dragging { 
+            opacity: 1 !important; 
+            transform: scale(1.02) !important; 
+            box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.5), 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important; 
+            z-index: 50 !important; 
+        }
+        .drag-over { 
+            background-color: rgba(139, 92, 246, 0.08) !important; 
+            border-color: rgba(139, 92, 246, 0.6) !important; 
+            border-style: dashed !important; 
+            transform: scale(1.01) !important;
+        }
     </style>
 
     <!-- Librería para Animación de Confeti -->
@@ -672,14 +682,43 @@
             const handleDragStart = (e, taskId) => {
                 setDraggedTaskId(taskId);
                 e.dataTransfer.effectAllowed = 'move';
-                // Añadido timeout para que la tarjeta en sí no desaparezca de la vista original instantáneamente
-                setTimeout(() => e.target.classList.add('dragging'), 0);
+                
+                try {
+                    // Crear un clon exacto para evitar la transparencia por defecto del navegador (Opacidad 100%)
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    const clone = e.currentTarget.cloneNode(true);
+                    clone.id = "custom-drag-ghost-" + taskId;
+                    clone.style.width = `${rect.width}px`;
+                    clone.style.height = `${rect.height}px`;
+                    clone.style.position = 'absolute';
+                    clone.style.top = '-9999px';
+                    clone.style.left = '-9999px';
+                    clone.style.opacity = '1'; 
+                    clone.style.backgroundColor = document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff';
+                    clone.style.borderRadius = '0.75rem';
+                    clone.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.4)';
+                    clone.style.transform = 'rotate(3deg) scale(1.05)'; // Efecto visual 3D al levantar
+                    clone.style.zIndex = '9999';
+                    clone.style.pointerEvents = 'none';
+                    document.body.appendChild(clone);
+                    
+                    e.dataTransfer.setDragImage(clone, x, y);
+                } catch(err) { console.error("Ghost clone error:", err); }
+
+                const target = e.currentTarget;
+                setTimeout(() => target.classList.add('dragging'), 0);
             };
 
-            const handleDragEnd = (e) => {
-                e.target.classList.remove('dragging');
+            const handleDragEnd = (e, taskId) => {
+                e.currentTarget.classList.remove('dragging');
                 setDraggedTaskId(null);
                 document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+                
+                // Limpiar el clon virtual de arrastre
+                const clone = document.getElementById("custom-drag-ghost-" + taskId);
+                if (clone) clone.remove();
             };
 
             const handleDragOver = (e) => {
@@ -713,7 +752,7 @@
                             const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
 
                             return (
-                                <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden"
+                                <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300"
                                      onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(e) => handleDrop(e, col.id)}>
                                     
                                     <div className={`p-3 font-black text-[11px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
@@ -730,7 +769,7 @@
                                             
                                             return (
                                                 <div key={t.id} onClick={() => onTaskClick(t)} 
-                                                     draggable="true" onDragStart={(e) => handleDragStart(e, t.id)} onDragEnd={handleDragEnd}
+                                                     draggable="true" onDragStart={(e) => handleDragStart(e, t.id)} onDragEnd={(e) => handleDragEnd(e, t.id)}
                                                      className={`bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all group cursor-grab active:cursor-grabbing border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${isOverdue ? 'border-l-red-500 dark:bg-red-950/20' : 'border-l-indigo-500'}`}>
                                                     
                                                     <div className="flex justify-between items-start mb-2">
@@ -809,13 +848,42 @@
             const handleDragStart = (e, taskId) => {
                 setDraggedTaskId(taskId);
                 e.dataTransfer.effectAllowed = 'move';
-                setTimeout(() => e.target.classList.add('dragging'), 0);
+                
+                try {
+                    // Crear clon para asegurar 100% de opacidad y efecto 3D al arrastrar
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    const clone = e.currentTarget.cloneNode(true);
+                    clone.id = "custom-drag-ghost-edit-" + taskId;
+                    clone.style.width = `${rect.width}px`;
+                    clone.style.height = `${rect.height}px`;
+                    clone.style.position = 'absolute';
+                    clone.style.top = '-9999px';
+                    clone.style.left = '-9999px';
+                    clone.style.opacity = '1';
+                    clone.style.backgroundColor = document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff';
+                    clone.style.borderRadius = '0.75rem';
+                    clone.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.4)';
+                    clone.style.transform = 'rotate(3deg) scale(1.05)';
+                    clone.style.zIndex = '9999';
+                    clone.style.pointerEvents = 'none';
+                    document.body.appendChild(clone);
+                    
+                    e.dataTransfer.setDragImage(clone, x, y);
+                } catch(err) { console.error("Ghost clone error:", err); }
+
+                const target = e.currentTarget;
+                setTimeout(() => target.classList.add('dragging'), 0);
             };
 
-            const handleDragEnd = (e) => {
-                e.target.classList.remove('dragging');
+            const handleDragEnd = (e, taskId) => {
+                e.currentTarget.classList.remove('dragging');
                 setDraggedTaskId(null);
                 document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+                
+                const clone = document.getElementById("custom-drag-ghost-edit-" + taskId);
+                if (clone) clone.remove();
             };
 
             const handleDragOver = (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
@@ -841,7 +909,7 @@
                             const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
 
                             return (
-                                <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden"
+                                <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300"
                                      onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(e) => handleDrop(e, col.id)}>
                                     
                                     <div className={`p-4 font-black text-xs uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
@@ -860,7 +928,7 @@
 
                                             return (
                                                 <div key={t.id} onClick={() => onTaskClick(t)} 
-                                                     draggable="true" onDragStart={(e) => handleDragStart(e, t.id)} onDragEnd={handleDragEnd}
+                                                     draggable="true" onDragStart={(e) => handleDragStart(e, t.id)} onDragEnd={(e) => handleDragEnd(e, t.id)}
                                                      className={`bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all group cursor-grab active:cursor-grabbing border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${borderLeftColor} ${isOverdue ? 'dark:bg-red-950/10' : ''}`}>
                                                     
                                                     <div className="flex justify-between items-start mb-2">
