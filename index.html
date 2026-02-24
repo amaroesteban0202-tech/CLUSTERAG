@@ -54,7 +54,7 @@
             AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick
         } from 'lucide-react';
         import { initializeApp } from 'firebase/app';
-        import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
         import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 
         // --- ⚠️ AQUÍ ESTÁ TU CONFIGURACIÓN DE FIREBASE ⚠️ ---
@@ -77,7 +77,7 @@
             console.warn("Firebase no conectado", error);
         }
 
-        const appId = 'cluster-agency-pro-mobile-v6';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'cluster-agency-pro-mobile-v6';
         const MONTH_NAMES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
         
         // --- 🕒 MOTOR DE TIEMPO ESTRICTO: ZONA HORARIA HONDURAS (GMT-6) ---
@@ -130,7 +130,9 @@
 
             slate: { bg: 'bg-slate-200 dark:bg-slate-700', text: 'text-slate-800 dark:text-slate-100' },
             emerald: { bg: 'bg-emerald-100 dark:bg-emerald-900', text: 'text-emerald-800 dark:text-emerald-100' },
-            indigo: { bg: 'bg-indigo-100 dark:bg-indigo-900', text: 'text-indigo-800 dark:text-indigo-100' }
+            indigo: { bg: 'bg-indigo-100 dark:bg-indigo-900', text: 'text-indigo-800 dark:text-indigo-100' },
+            blue: { bg: 'bg-blue-100 dark:bg-blue-900', text: 'text-blue-800 dark:text-blue-100' },
+            amber: { bg: 'bg-amber-100 dark:bg-amber-900', text: 'text-amber-800 dark:text-amber-100' },
         };
 
         const ACCOUNT_COLORS = Array.from({length: 20}, (_, i) => `c${i+1}`);
@@ -150,7 +152,8 @@
 
         // --- APP PRINCIPAL ---
         function App() {
-            const [loading, setLoading] = useState(false); // Quitamos el loading inicial de Auth
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
             const [toast, setToast] = useState(null); 
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -175,7 +178,10 @@
             
             const [modalConfig, setModalConfig] = useState({ isOpen: false, type: null, data: null, isEdit: false });
             const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, type: null, id: null, title: '' });
-            const [eventAction, setEventAction] = useState({ isOpen: false, event: null, type: null }); 
+            const [eventAction, setEventAction] = useState({ isOpen: false, event: null, type: null });
+            
+            // Nuevo estado para el modal de Detalles del Día (Calendario General)
+            const [dayDetailsModal, setDayDetailsModal] = useState({ isOpen: false, date: null }); 
             
             // Efecto Tema Oscuro
             useEffect(() => {
@@ -189,36 +195,51 @@
                 }
             }, [isDark]);
 
-            // Carga de Datos (Totalmente libre, sin depender de usuario)
+            // Auth (ACTUALIZADO PARA PREVENIR MISMATCH CON CUSTOM CONFIG)
             useEffect(() => {
-                if (!db) return;
-                
-                const errHandler = (err) => {
-                    console.error("Error cargando datos:", err);
+                if(!auth) { setLoading(false); return; }
+                const initAuth = async () => {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            try {
+                                await signInWithCustomToken(auth, __initial_auth_token);
+                            } catch (tokenError) {
+                                console.warn("Token mismatch detectado (Probablemente usando Firebase propio). Forzando acceso anónimo...");
+                                await signInAnonymously(auth);
+                            }
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) { console.error("Error de Autenticación:", error); }
                 };
+                initAuth();
+                
+                const unsubscribe = onAuthStateChanged(auth, u => { 
+                    setUser(u); 
+                    setLoading(false); 
+                });
+                return () => unsubscribe();
+            }, []);
+
+            // Carga de Datos
+            useEffect(() => {
+                if (!user || !db) return;
+                const errHandler = (err) => console.error("Error de Firestore:", err);
 
                 const unsubs = [
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), s => {
                         const list = s.docs.map(d => ({id: d.id, ...d.data()}));
                         setClients(list);
-                        setSelectedClient(prev => prev ? list.find(c => c.id === prev.id) || null : null);
+                        if (selectedClient) setSelectedClient(list.find(c => c.id === selectedClient.id));
                     }, errHandler),
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), s => setEvents(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
-                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), s => {
-                        const list = s.docs.map(d => ({id: d.id, ...d.data()}));
-                        setManagers(list);
-                        setSelectedManager(prev => prev ? list.find(m => m.id === prev.id) || null : null);
-                    }, errHandler),
-                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), s => {
-                        const list = s.docs.map(d => ({id: d.id, ...d.data()}));
-                        setEditors(list);
-                        setSelectedEditor(prev => prev ? list.find(e => e.id === prev.id) || null : null);
-                    }, errHandler),
+                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), s => setManagers(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
+                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), s => setEditors(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), s => setEditingTasks(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), s => setAccountTasks(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler)
                 ];
                 return () => unsubs.forEach(u => u());
-            }, []); // Dependencias vacías, carga apenas arranca
+            }, [user, selectedClient?.id]);
 
             // Helpers
             const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
@@ -236,83 +257,55 @@
                 setEventAction({ isOpen: true, event, type });
             };
 
+            // Notificaciones / Badges (Cálculos)
             const urgentEditions = editingTasks.filter(t => t.priority === 'urgente' && t.status !== 'aprobado').length;
             const pendingAccounts = accountTasks.filter(t => t.status === 'por_disenar').length;
 
-            // --- ACCIONES CRUD (Libres de Auth) ---
+            // --- AGRUPACIÓN DE ACTIVIDADES PARA EL CALENDARIO GENERAL ---
+            // Junta todas las bases de datos en un solo lugar con etiquetas para el Calendario Maestro
+            const allActivities = [
+                ...events.map(e => ({ ...e, collectionType: 'event', _color: 'emerald', _icon: 'CalendarIcon', _label: 'Producción' })),
+                ...accountTasks.map(t => ({ ...t, collectionType: 'accountTask', _color: 'indigo', _icon: 'LayoutList', _label: 'Account' })),
+                ...editingTasks.map(t => ({ ...t, collectionType: 'editingTask', _color: 'amber', _icon: 'Video', _label: 'Edición' }))
+            ];
+
+            // --- ACCIONES CRUD ---
             const addClient = async (fd) => {
-                try {
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { ...fd, manager: fd.manager || "", status: 'Activo', mood: 'Contento', createdAt: getHondurasTodayStr(), workflow: { week1: false, week2: false, week3: false, week4: false } });
-                    showToast('Cliente creado'); closeModal();
-                } catch(e) { console.error(e); showToast('Error al crear', 'error'); }
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { ...fd, manager: fd.manager || "", status: 'Activo', mood: 'Contento', createdAt: getHondurasTodayStr(), workflow: { week1: false, week2: false, week3: false, week4: false } });
+                showToast('Cliente creado'); closeModal();
             };
-            const updateClient = async (id, data) => { 
-                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), data); showToast('Cliente actualizado'); closeModal(); }
-                catch(e) { console.error(e); showToast('Error al actualizar', 'error'); }
-            };
+            const updateClient = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), data); showToast('Cliente actualizado'); closeModal(); };
             
             const addManager = async (fd) => {
-                try {
-                    const color = ACCOUNT_COLORS[managers.length % ACCOUNT_COLORS.length];
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), { ...fd, color });
-                    showToast('Account Manager agregado'); closeModal();
-                } catch(e) { console.error(e); showToast('Error al agregar', 'error'); }
+                const color = ACCOUNT_COLORS[managers.length % ACCOUNT_COLORS.length];
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), { ...fd, color });
+                showToast('Account Manager agregado'); closeModal();
             };
-            const updateManager = async (id, data) => { 
-                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'managers', id), data); showToast('Manager actualizado'); closeModal(); }
-                catch(e) { console.error(e); showToast('Error al actualizar', 'error'); }
-            };
+            const updateManager = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'managers', id), data); showToast('Manager actualizado'); closeModal(); };
 
             const addEditor = async (fd) => {
-                try {
-                    const color = EDITOR_COLORS[editors.length % EDITOR_COLORS.length];
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), { ...fd, color });
-                    showToast('Editor agregado'); closeModal();
-                } catch(e) { console.error(e); showToast('Error al agregar', 'error'); }
+                const color = EDITOR_COLORS[editors.length % EDITOR_COLORS.length];
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), { ...fd, color });
+                showToast('Editor agregado'); closeModal();
             };
-            const updateEditor = async (id, data) => { 
-                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editors', id), data); showToast('Editor actualizado'); closeModal(); }
-                catch(e) { console.error(e); showToast('Error al actualizar', 'error'); }
-            };
+            const updateEditor = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editors', id), data); showToast('Editor actualizado'); closeModal(); };
 
-            const addAccountTask = async (data) => { 
-                try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), { ...data, status: 'por_disenar' }); showToast('Tarea agendada'); closeModal(); }
-                catch(e) { console.error(e); showToast('Error al guardar', 'error'); }
-            };
-            const updateAccountTask = async (id, data) => { 
-                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id), data); showToast('Tarea guardada'); closeModal(); }
-                catch(e) { console.error(e); showToast('Error al actualizar', 'error'); }
-            };
+            const addAccountTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), { ...data, status: 'por_disenar' }); showToast('Tarea agendada'); closeModal(); };
+            const updateAccountTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id), data); showToast('Tarea guardada'); closeModal(); };
             const advanceAccountTask = async (task) => {
-                try {
-                    const next = task.status === 'por_disenar' ? 'aprobacion_interna' : task.status === 'aprobacion_interna' ? 'aprobado_internamente' : task.status === 'aprobado_internamente' ? 'publicado' : null;
-                    if (next) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', task.id), { status: next });
-                } catch(e) { console.error(e); showToast('Error al avanzar tarea', 'error'); }
+                const next = task.status === 'por_disenar' ? 'aprobacion_interna' : task.status === 'aprobacion_interna' ? 'aprobado_internamente' : task.status === 'aprobado_internamente' ? 'publicado' : null;
+                if (next) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', task.id), { status: next });
             };
 
-            const addEditingTask = async (data) => { 
-                try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), { ...data, status: 'editar' }); showToast('Tarea agendada'); closeModal(); }
-                catch(e) { console.error(e); showToast('Error al guardar', 'error'); }
-            };
-            const updateEditingTask = async (id, data) => { 
-                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id), data); showToast('Tarea guardada'); closeModal(); }
-                catch(e) { console.error(e); showToast('Error al actualizar', 'error'); }
-            };
+            const addEditingTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), { ...data, status: 'editar' }); showToast('Tarea agendada'); closeModal(); };
+            const updateEditingTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id), data); showToast('Tarea guardada'); closeModal(); };
             const advanceEditingTask = async (task) => {
-                try {
-                    const next = task.status === 'editar' ? 'correccion' : task.status === 'correccion' ? 'aprobado' : null;
-                    if (next) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', task.id), { status: next });
-                } catch(e) { console.error(e); showToast('Error al avanzar tarea', 'error'); }
+                const next = task.status === 'editar' ? 'correccion' : task.status === 'correccion' ? 'aprobado' : null;
+                if (next) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', task.id), { status: next });
             };
 
-            const addEvent = async (data) => { 
-                try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data); showToast('Evento agendado'); closeModal(); }
-                catch(e) { console.error(e); showToast('Error al guardar', 'error'); }
-            };
-            const updateEvent = async (id, data) => { 
-                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id), data); showToast('Evento guardado'); closeModal(); }
-                catch(e) { console.error(e); showToast('Error al actualizar', 'error'); }
-            };
+            const addEvent = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data); showToast('Evento agendado'); closeModal(); };
+            const updateEvent = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id), data); showToast('Evento guardado'); closeModal(); };
 
             const handleDelete = async () => {
                 const { type, id } = deleteConfirm;
@@ -362,6 +355,7 @@
                             <SidebarItem active={view === 'editions'} onClick={() => handleNavigate('editions')} icon="Video" label="Sala de Edición" color="amber" badge={urgentEditions > 0 ? urgentEditions : null} badgeColor="bg-red-500 text-white animate-pulse" />
                             
                             <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-2">Global</div>
+                            <SidebarItem active={view === 'general-calendar'} onClick={() => handleNavigate('general-calendar')} icon="CalendarDays" label="Calendario General" color="blue" />
                             <SidebarItem active={view === 'calendar'} onClick={() => handleNavigate('calendar')} icon="CalendarIcon" label="Agenda Producción" color="emerald" />
                         </nav>
 
@@ -396,11 +390,23 @@
                             {view === 'editors' && <TeamView title="Editores" team={editors} iconColor="rose" onAdd={() => setModalConfig({ isOpen: true, type: 'editor' })} onSelect={(e) => { setSelectedEditor(e); handleNavigate('editor-detail'); }} onDelete={(e) => setDeleteConfirm({ isOpen: true, type: 'editor', id: e.id, title: e.name })} onEdit={(e) => setModalConfig({ isOpen: true, type: 'editor', data: e, isEdit: true })} />}
                             {view === 'editor-detail' && selectedEditor && <PersonCalendarDetail person={selectedEditor} tasks={editingTasks} title="Planificación de Edición" baseColor={selectedEditor.color || 'rose'} onBack={() => handleNavigate('editors')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr, contextId: selectedEditor.id } })} onEventClick={(e) => handleEventClick(e, 'editingTask')} />}
 
-                            {/* Salas de Trabajo */}
+                            {/* Salas de Trabajo (INTACTAS, MISMA CONFIGURACIÓN) */}
                             {view === 'account-room' && <AccountRoomView tasks={accountTasks} managers={managers} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'accountTask', data: task, isEdit: true })} onAdvance={advanceAccountTask} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id, title: 'Tarea' })} />}
                             {view === 'editions' && <EditionsRoomView tasks={editingTasks} editors={editors} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'editingTask', data: task, isEdit: true })} onAdvance={advanceEditingTask} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'editingTask', id, title: 'Tarea' })} />}
 
-                            {/* Calendario Global */}
+                            {/* NUEVO: Calendario General Global */}
+                            {view === 'general-calendar' && (
+                                <div className="h-full flex flex-col space-y-6 fade-in">
+                                    <div className="flex justify-between items-center">
+                                        <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">Calendario General</h2>
+                                    </div>
+                                    <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden">
+                                        <GeneralCalendarGrid activities={allActivities} onDayClick={(dateStr) => setDayDetailsModal({ isOpen: true, date: dateStr })} />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Calendario Solo Producción */}
                             {view === 'calendar' && (
                                 <div className="h-full flex flex-col space-y-6 fade-in">
                                     <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">Agenda de Producciones</h2>
@@ -417,8 +423,10 @@
                     {toast && <Toast message={toast.message} type={toast.type} />}
                     {modalConfig.isOpen && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask }} />}
                     {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
-                    {/* Nuevo Menú de Acción para Tareas en Calendario */}
+                    {/* Menú de Acción para Tareas en Calendario (Móvil) */}
                     <EventActionModal config={eventAction} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
+                    {/* Nuevo Modal de Detalle de Día del Calendario General */}
+                    <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
                 </div>
             );
         }
@@ -721,6 +729,7 @@
             </div>
         );
 
+        // Calendario original (Solo eventos de una persona/producción)
         const CalendarGrid = ({ events, onAdd, onEventClick, baseColor = "emerald" }) => {
             const [date, setDate] = useState(new Date());
             const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -772,7 +781,51 @@
             );
         };
 
-        // --- MENÚ DE ACCIÓN PARA TAREAS (MÓVIL/TABLET OPTIMIZADO) ---
+        // --- NUEVO: Calendario General Global (Da click al día para ver detalles) ---
+        const GeneralCalendarGrid = ({ activities, onDayClick }) => {
+            const [date, setDate] = useState(new Date());
+            const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+            const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+
+            return (
+                <>
+                <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+                    <div className={`font-bold uppercase text-xs tracking-widest text-slate-500 dark:text-slate-400`}>Mes - Todas las Tareas</div>
+                    <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800 rounded-lg p-1"><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() - 1, 1))} className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"><Icon name="ChevronLeft" size={16}/></button><span className="font-black text-slate-700 dark:text-slate-200 w-32 text-center text-sm uppercase">{MONTH_NAMES[date.getMonth()]} {date.getFullYear()}</span><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() + 1, 1))} className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"><Icon name="ChevronRight" size={16}/></button></div>
+                </div>
+                <div className="flex-1 overflow-x-auto overflow-y-auto bg-slate-50 dark:bg-slate-950 custom-scroll">
+                    <div className="grid grid-cols-7 auto-rows-fr min-w-[800px] h-full">
+                        {['D','L','M','M','J','V','S'].map(d => <div key={d} className="py-2 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 border-r border-b border-slate-200/50 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">{d}</div>)}
+                        {Array(startDay).fill(null).map((_, i) => <div key={`empty-${i}`} className="border-r border-b border-slate-200/50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30" />)}
+                        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+                            const dStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                            const dayActivities = activities.filter(e => e.date === dStr);
+                            
+                            return (
+                                <div key={d} onClick={() => onDayClick(dStr)} className="border-r border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 min-h-[120px] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group relative">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className={`text-xs font-bold text-slate-400 dark:text-slate-500 group-hover:text-blue-500 dark:group-hover:text-blue-400`}>{d}</span>
+                                        {dayActivities.length > 0 && <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full">{dayActivities.length}</span>}
+                                    </div>
+                                    <div className="space-y-1">
+                                        {dayActivities.slice(0, 4).map((act, idx) => (
+                                            <div key={idx} className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate bg-${act._color}-50 dark:bg-${act._color}-500/20 text-${act._color}-700 dark:text-${act._color}-400 border border-${act._color}-200 dark:border-${act._color}-500/30`}>
+                                                {act.title}
+                                            </div>
+                                        ))}
+                                        {dayActivities.length > 4 && <div className="text-[10px] font-bold text-slate-400 text-center mt-1">+{dayActivities.length - 4} más</div>}
+                                    </div>
+                                    <Icon name="ExternalLink" className={`absolute bottom-2 right-2 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity`} size={14}/>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+                </>
+            );
+        };
+
+        // --- MENÚ DE ACCIÓN PARA TAREAS INDIVIDUALES (Mobile) ---
         const EventActionModal = ({ config, onClose, onEdit, onDelete }) => {
             if (!config.isOpen) return null;
             return (
@@ -793,6 +846,57 @@
                             <button onClick={onClose} className="w-full py-4 text-slate-500 dark:text-slate-400 font-bold rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors mt-2">
                                 Cancelar
                             </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- NUEVO: Modal de Detalles Diarios para Calendario General ---
+        const DayDetailsModal = ({ config, onClose, activities, onEdit, onDelete }) => {
+            if (!config.isOpen) return null;
+            
+            const dayActivities = activities.filter(a => a.date === config.date);
+            
+            let displayDate = '';
+            if (config.date) {
+                const [y, m, d] = config.date.split('-');
+                displayDate = new Date(y, m - 1, d).toLocaleDateString('es-HN', { weekday: 'long', day: 'numeric', month: 'long' });
+            }
+
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
+                            <div>
+                                <h3 className="font-black text-lg text-slate-800 dark:text-white capitalize">{displayDate}</h3>
+                                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Detalle de Actividades</p>
+                            </div>
+                            <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400"><Icon name="X" size={20} /></button>
+                        </div>
+                        <div className="p-6 overflow-y-auto custom-scroll space-y-3">
+                            {dayActivities.length === 0 ? (
+                                <EmptyState icon="Inbox" text="No hay actividades este día" />
+                            ) : (
+                                dayActivities.map(act => (
+                                    <div key={act.id} className={`p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 shadow-sm flex items-center gap-4`}>
+                                        <div className={`p-3 rounded-xl bg-${act._color}-50 dark:bg-${act._color}-500/20 text-${act._color}-600 dark:text-${act._color}-400 shrink-0`}>
+                                            <Icon name={act._icon} size={20} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-sm text-slate-800 dark:text-white truncate">{act.title}</p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className={`text-[9px] font-black uppercase tracking-wider text-${act._color}-600 dark:text-${act._color}-400`}>{act._label}</span>
+                                                {act.status && <span className="text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded uppercase">{act.status.replace(/_/g, ' ')}</span>}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1 opacity-100 md:opacity-60 md:hover:opacity-100 transition-opacity">
+                                            <button onClick={() => { onClose(); onEdit(act, act.collectionType); }} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Editar"><Icon name="Edit" size={18} /></button>
+                                            <button onClick={() => { onClose(); onDelete(act, act.collectionType); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Eliminar"><Icon name="Trash2" size={18} /></button>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>
@@ -835,7 +939,7 @@
             }
 
             return (
-                <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[90] flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800">
                         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
                             <h3 className="font-bold text-lg text-slate-800 dark:text-white">{isEdit ? 'Editar ' : 'Nuevo '}{titles[type]}</h3>
@@ -885,7 +989,7 @@
         };
 
         const DeleteConfirmModal = ({ config, onClose, onConfirm }) => (
-            <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                 <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
                     <div className="w-16 h-16 bg-red-100 dark:bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-400"><Icon name="AlertTriangle" size={32} /></div>
                     <h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">¿Eliminar {config.title}?</h3>
@@ -895,7 +999,7 @@
             </div>
         );
 
-        const Toast = ({ message, type }) => (<div className={`fixed bottom-6 right-6 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 fade-in z-[70] ${type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 dark:bg-white text-white dark:text-slate-900'}`}><Icon name={type === 'success' ? "CheckCircle2" : "AlertTriangle"} size={20} className={type === 'success' ? "text-green-400" : ""}/><span className="font-bold text-sm">{message}</span></div>);
+        const Toast = ({ message, type }) => (<div className={`fixed bottom-6 right-6 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 fade-in z-[110] ${type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 dark:bg-white text-white dark:text-slate-900'}`}><Icon name={type === 'success' ? "CheckCircle2" : "AlertTriangle"} size={20} className={type === 'success' ? "text-green-400" : ""}/><span className="font-bold text-sm">{message}</span></div>);
         
         const CheckItem = ({ label, checked, onToggle }) => (
             <button onClick={onToggle} className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${checked ? 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30 text-green-800 dark:text-green-400' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600'}`}><span className="font-bold text-sm">{label}</span>{checked ? <Icon name="CheckCircle2" size={20} className="text-green-500" /> : <Icon name="Circle" size={20} />}</button>
