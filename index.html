@@ -74,7 +74,7 @@
             auth = getAuth(app);
             db = getFirestore(app);
         } catch (error) {
-            console.warn("Firebase no conectado (Modo Demo Local)", error);
+            console.warn("Firebase no conectado", error);
         }
 
         const appId = 'cluster-agency-pro-mobile-v6';
@@ -150,8 +150,7 @@
 
         // --- APP PRINCIPAL ---
         function App() {
-            const [user, setUser] = useState(null);
-            const [loading, setLoading] = useState(true);
+            const [loading, setLoading] = useState(false); // Quitamos el loading inicial de Auth
             const [toast, setToast] = useState(null); 
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -190,35 +189,12 @@
                 }
             }, [isDark]);
 
-            // Auth
+            // Carga de Datos (Totalmente libre, sin depender de usuario)
             useEffect(() => {
-                if(!auth) { setLoading(false); return; }
-                const initAuth = async () => {
-                    try {
-                        // Usamos autenticación anónima nativa en tu proyecto.
-                        // IMPORTANTE: Debes habilitar "Anónimo" en Firebase Console -> Authentication -> Sign-in method
-                        await signInAnonymously(auth);
-                    } catch (error) { 
-                        console.error("Error de Autenticación. Asegúrate de habilitar Anónimo en tu consola de Firebase.", error); 
-                    }
-                };
-                initAuth();
-                
-                const unsubscribe = onAuthStateChanged(auth, u => { 
-                    setUser(u); 
-                    setLoading(false); 
-                });
-                return () => unsubscribe();
-            }, []);
-
-            // Carga de Datos
-            useEffect(() => {
-                // Removemos el bloqueo de (!user) para asegurar que lea los datos 
-                // si tus reglas de Firestore están abiertas para todos.
                 if (!db) return;
+                
                 const errHandler = (err) => {
-                    console.error("Error de Firestore (Revisa tus Reglas de Seguridad):", err);
-                    showToast("No se pudieron cargar los datos. Revisa permisos.", "error");
+                    console.error("Error cargando datos:", err);
                 };
 
                 const unsubs = [
@@ -242,7 +218,7 @@
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), s => setAccountTasks(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler)
                 ];
                 return () => unsubs.forEach(u => u());
-            }, []); // Array de dependencias vacío, optimizado.
+            }, []); // Dependencias vacías, carga apenas arranca
 
             // Helpers
             const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
@@ -263,12 +239,12 @@
             const urgentEditions = editingTasks.filter(t => t.priority === 'urgente' && t.status !== 'aprobado').length;
             const pendingAccounts = accountTasks.filter(t => t.status === 'por_disenar').length;
 
-            // --- ACCIONES CRUD (Con Try/Catch obligatorios) ---
+            // --- ACCIONES CRUD (Libres de Auth) ---
             const addClient = async (fd) => {
                 try {
                     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { ...fd, manager: fd.manager || "", status: 'Activo', mood: 'Contento', createdAt: getHondurasTodayStr(), workflow: { week1: false, week2: false, week3: false, week4: false } });
                     showToast('Cliente creado'); closeModal();
-                } catch(e) { console.error(e); showToast('Error al crear. Verifica tus Reglas de Firestore', 'error'); }
+                } catch(e) { console.error(e); showToast('Error al crear', 'error'); }
             };
             const updateClient = async (id, data) => { 
                 try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), data); showToast('Cliente actualizado'); closeModal(); }
@@ -348,7 +324,7 @@
                     if (type === 'accountTask') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id));
                     if (type === 'editingTask') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id));
                     showToast('Eliminado correctamente');
-                } catch(e) { console.error(e); showToast('Error al eliminar. Revisa permisos', 'error'); }
+                } catch(e) { console.error(e); showToast('Error al eliminar', 'error'); }
                 closeDelete();
             };
 
