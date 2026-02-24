@@ -24,6 +24,9 @@
         .dark .custom-scroll::-webkit-scrollbar-thumb { background: #334155; }
         .fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        /* Efectos para Drag & Drop */
+        .dragging { opacity: 0.5; transform: scale(0.95); }
+        .drag-over { background-color: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.5); border-style: dashed; }
     </style>
 
     <!-- Librería para Animación de Confeti -->
@@ -54,7 +57,7 @@
             LayoutDashboard, Users, Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
             CheckCircle2, Circle, ExternalLink, Briefcase, UserCircle2, Loader2, Trash2, 
             Video, ArrowRight, UserPlus, MonitorPlay, Search, Menu, PenTool, LayoutList, CalendarDays,
-            AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree
+            AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown
         } from 'lucide-react';
         import { initializeApp } from 'firebase/app';
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -97,18 +100,13 @@
         };
         const getHondurasTodayStr = () => getHondurasDateString(new Date());
 
-        // --- MAPA DE 40 COLORES DE ALTO CONTRASTE ---
+        // --- MAPA DE COLORES VIBRANTES ---
         const PERSON_COLORS = {
             c1: { bg: 'bg-red-500', text: 'text-white' }, c2: { bg: 'bg-blue-600', text: 'text-white' },
             c3: { bg: 'bg-emerald-600', text: 'text-white' }, c4: { bg: 'bg-amber-500', text: 'text-white' },
             c5: { bg: 'bg-purple-600', text: 'text-white' }, c6: { bg: 'bg-pink-600', text: 'text-white' },
             c7: { bg: 'bg-cyan-600', text: 'text-white' }, c8: { bg: 'bg-orange-600', text: 'text-white' },
             c9: { bg: 'bg-indigo-600', text: 'text-white' }, c10: { bg: 'bg-teal-600', text: 'text-white' },
-            c11: { bg: 'bg-red-900', text: 'text-white' }, c12: { bg: 'bg-blue-900', text: 'text-white' },
-            c13: { bg: 'bg-emerald-900', text: 'text-white' }, c14: { bg: 'bg-amber-900', text: 'text-white' },
-            c15: { bg: 'bg-purple-900', text: 'text-white' }, c16: { bg: 'bg-pink-900', text: 'text-white' },
-            c17: { bg: 'bg-cyan-900', text: 'text-white' }, c18: { bg: 'bg-orange-900', text: 'text-white' },
-            c19: { bg: 'bg-indigo-900', text: 'text-white' }, c20: { bg: 'bg-stone-800', text: 'text-white' },
             
             c21: { bg: 'bg-red-200 dark:bg-red-900', text: 'text-red-900 dark:text-red-100' }, 
             c22: { bg: 'bg-blue-200 dark:bg-blue-900', text: 'text-blue-900 dark:text-blue-100' },
@@ -116,21 +114,7 @@
             c24: { bg: 'bg-yellow-300 dark:bg-yellow-900', text: 'text-yellow-900 dark:text-yellow-100' },
             c25: { bg: 'bg-purple-200 dark:bg-purple-900', text: 'text-purple-900 dark:text-purple-100' }, 
             c26: { bg: 'bg-pink-200 dark:bg-pink-900', text: 'text-pink-900 dark:text-pink-100' },
-            c27: { bg: 'bg-cyan-200 dark:bg-cyan-900', text: 'text-cyan-900 dark:text-cyan-100' }, 
-            c28: { bg: 'bg-orange-200 dark:bg-orange-900', text: 'text-orange-900 dark:text-orange-100' },
-            c29: { bg: 'bg-lime-300 dark:bg-lime-900', text: 'text-lime-900 dark:text-lime-100' }, 
-            c30: { bg: 'bg-indigo-200 dark:bg-indigo-900', text: 'text-indigo-900 dark:text-indigo-100' },
-            c31: { bg: 'bg-rose-300 dark:bg-rose-900', text: 'text-rose-900 dark:text-rose-100' }, 
-            c32: { bg: 'bg-teal-200 dark:bg-teal-900', text: 'text-teal-900 dark:text-teal-100' },
-            c33: { bg: 'bg-fuchsia-300 dark:bg-fuchsia-900', text: 'text-fuchsia-900 dark:text-fuchsia-100' }, 
-            c34: { bg: 'bg-sky-200 dark:bg-sky-900', text: 'text-sky-900 dark:text-sky-100' },
-            c35: { bg: 'bg-green-300 dark:bg-green-900', text: 'text-green-900 dark:text-green-100' }, 
-            c36: { bg: 'bg-rose-500', text: 'text-white' },
-            c37: { bg: 'bg-fuchsia-600', text: 'text-white' }, 
-            c38: { bg: 'bg-sky-500', text: 'text-white' },
-            c39: { bg: 'bg-yellow-500', text: 'text-slate-900' }, 
-            c40: { bg: 'bg-lime-500', text: 'text-slate-900' },
-
+            
             slate: { bg: 'bg-slate-200 dark:bg-slate-700', text: 'text-slate-800 dark:text-slate-100' },
             emerald: { bg: 'bg-emerald-100 dark:bg-emerald-900', text: 'text-emerald-800 dark:text-emerald-100' },
             indigo: { bg: 'bg-indigo-100 dark:bg-indigo-900', text: 'text-indigo-800 dark:text-indigo-100' },
@@ -138,14 +122,15 @@
             amber: { bg: 'bg-amber-100 dark:bg-amber-900', text: 'text-amber-800 dark:text-amber-100' },
         };
 
-        const ACCOUNT_COLORS = Array.from({length: 20}, (_, i) => `c${i+1}`);
-        const EDITOR_COLORS = Array.from({length: 20}, (_, i) => `c${i+21}`);
+        // Colores súper llamativos para Accounts
+        const ACCOUNT_COLORS = ['c1', 'c2', 'c3', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10'];
+        const EDITOR_COLORS = ['c21', 'c22', 'c23', 'c24', 'c25', 'c26'];
 
         const IconsMap = {
             LayoutDashboard, Users, CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
             CheckCircle2, Circle, ExternalLink, Briefcase, UserCircle2, Loader2, Trash2, 
             Video, ArrowRight, UserPlus, MonitorPlay, Search, Menu, PenTool, LayoutList, CalendarDays,
-            AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree
+            AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown
         };
 
         const Icon = ({ name, size = 18, className = "" }) => {
@@ -190,7 +175,6 @@
             const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, type: null, id: null, title: '' });
             const [eventAction, setEventAction] = useState({ isOpen: false, event: null, type: null });
             
-            // Nuevo estado para el modal de Detalles Completos de Tarea (El sistema expandido de Notas)
             const [taskDetailConfig, setTaskDetailConfig] = useState({ isOpen: false, task: null, type: null });
             const [dayDetailsModal, setDayDetailsModal] = useState({ isOpen: false, date: null }); 
             
@@ -250,25 +234,16 @@
             const closeModal = () => setModalConfig({ isOpen: false, type: null, data: null, isEdit: false });
             const closeDelete = () => setDeleteConfirm({ isOpen: false, type: null, id: null });
             
-            // Navegación con Memoria
+            // Navegación
             const handleNavigate = (newView) => { 
                 setView(newView); 
                 localStorage.setItem('cluster_os_view', newView);
                 setIsMobileMenuOpen(false); 
             };
 
-            const handleEventClick = (event, type) => {
-                setEventAction({ isOpen: true, event, type });
-            };
+            const handleEventClick = (event, type) => setEventAction({ isOpen: true, event, type });
+            const triggerConfetti = () => { if (window.confetti) window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#9333ea', '#3b82f6', '#10b981', '#f59e0b'] }); };
 
-            // Efecto Confeti (Micro-animación)
-            const triggerConfetti = () => {
-                if (window.confetti) {
-                    window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#9333ea', '#3b82f6', '#10b981', '#f59e0b'] });
-                }
-            };
-
-            // Notificaciones / Badges
             const urgentEditions = editingTasks.filter(t => t.priority === 'urgente' && t.status !== 'aprobado').length;
             const pendingAccounts = accountTasks.filter(t => t.status === 'por_disenar').length;
 
@@ -280,11 +255,38 @@
 
             // --- ACCIONES CRUD ---
             const addClient = async (fd) => {
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { ...fd, manager: fd.manager || "", status: 'Activo', mood: 'Contento', createdAt: getHondurasTodayStr(), workflow: { week1: false, week2: false, week3: false, week4: false } });
+                const manager = managers.find(m => m.id === fd.managerId);
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { ...fd, manager: manager ? manager.name : "", managerId: fd.managerId || "", status: 'Activo', mood: 'Contento', createdAt: getHondurasTodayStr(), workflow: { week1: false, week2: false, week3: false, week4: false } });
                 showToast('Cliente creado'); closeModal();
             };
-            const updateClient = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), data); showToast('Cliente actualizado'); closeModal(); };
+            const updateClient = async (id, data) => { 
+                const manager = managers.find(m => m.id === data.managerId);
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), { ...data, manager: manager ? manager.name : "" }); 
+                showToast('Cliente actualizado'); closeModal(); 
+            };
             
+            // --- NUEVO: Reasignar Manager a Cliente y a todas sus tareas automáticamente ---
+            const reassignClientManager = async (client, newManagerId) => {
+                if (!newManagerId) return;
+                const newManager = managers.find(m => m.id === newManagerId);
+                if (!newManager) return;
+
+                try {
+                    // Actualiza el perfil del cliente
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', client.id), { manager: newManager.name, managerId: newManager.id });
+                    
+                    // Mueve todas sus tareas al nuevo manager
+                    const tasksToMove = accountTasks.filter(t => t.clientId === client.id);
+                    for (const t of tasksToMove) {
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', t.id), { contextId: newManager.id });
+                    }
+                    showToast(`Cliente mudado a ${newManager.name} y tareas reasignadas`);
+                } catch (e) {
+                    console.error(e);
+                    showToast("Error al reasignar", "error");
+                }
+            };
+
             const addManager = async (fd) => {
                 const color = ACCOUNT_COLORS[managers.length % ACCOUNT_COLORS.length];
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), { ...fd, color });
@@ -301,21 +303,19 @@
 
             const addAccountTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), { ...data, status: 'por_disenar' }); showToast('Tarea agendada'); closeModal(); };
             const updateAccountTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id), data); showToast('Tarea guardada'); closeModal(); };
-            const advanceAccountTask = async (task) => {
-                const next = task.status === 'por_disenar' ? 'aprobacion_interna' : task.status === 'aprobacion_interna' ? 'aprobado_internamente' : task.status === 'aprobado_internamente' ? 'publicado' : null;
-                if (next) {
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', task.id), { status: next });
-                    if (next === 'publicado') triggerConfetti();
+            const changeAccountTaskStatus = async (task, newStatus) => {
+                if (newStatus) {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', task.id), { status: newStatus });
+                    if (newStatus === 'publicado') triggerConfetti();
                 }
             };
 
             const addEditingTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), { ...data, status: 'editar' }); showToast('Tarea agendada'); closeModal(); };
             const updateEditingTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id), data); showToast('Tarea guardada'); closeModal(); };
-            const advanceEditingTask = async (task) => {
-                const next = task.status === 'editar' ? 'correccion' : task.status === 'correccion' ? 'aprobado' : null;
-                if (next) {
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', task.id), { status: next });
-                    if (next === 'aprobado') triggerConfetti();
+            const changeEditingTaskStatus = async (task, newStatus) => {
+                if (newStatus) {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', task.id), { status: newStatus });
+                    if (newStatus === 'aprobado') triggerConfetti();
                 }
             };
 
@@ -395,7 +395,7 @@
                             
                             {/* Clientes */}
                             {view === 'clients' && <ClientsView clients={clients} onAdd={() => setModalConfig({ isOpen: true, type: 'client' })} onSelect={(c) => { setSelectedClient(c); handleNavigate('client-detail'); }} />}
-                            {view === 'client-detail' && selectedClient && <ClientDetail client={selectedClient} onBack={() => handleNavigate('clients')} onUpdate={updateClient} onDelete={() => setDeleteConfirm({ isOpen: true, type: 'client', id: selectedClient.id, title: selectedClient.name })} onEdit={() => setModalConfig({ isOpen: true, type: 'client', data: selectedClient, isEdit: true })} />}
+                            {view === 'client-detail' && selectedClient && <ClientDetail client={selectedClient} managers={managers} onReassignManager={reassignClientManager} onBack={() => handleNavigate('clients')} onUpdate={updateClient} onDelete={() => setDeleteConfirm({ isOpen: true, type: 'client', id: selectedClient.id, title: selectedClient.name })} onEdit={() => setModalConfig({ isOpen: true, type: 'client', data: selectedClient, isEdit: true })} />}
                             
                             {/* Managers */}
                             {view === 'managers' && <TeamView title="Account Managers" team={managers} iconColor="indigo" onAdd={() => setModalConfig({ isOpen: true, type: 'manager' })} onSelect={(m) => { setSelectedManager(m); handleNavigate('manager-detail'); }} onDelete={(m) => setDeleteConfirm({ isOpen: true, type: 'manager', id: m.id, title: m.name })} onEdit={(m) => setModalConfig({ isOpen: true, type: 'manager', data: m, isEdit: true })} />}
@@ -405,9 +405,9 @@
                             {view === 'editors' && <TeamView title="Editores" team={editors} iconColor="rose" onAdd={() => setModalConfig({ isOpen: true, type: 'editor' })} onSelect={(e) => { setSelectedEditor(e); handleNavigate('editor-detail'); }} onDelete={(e) => setDeleteConfirm({ isOpen: true, type: 'editor', id: e.id, title: e.name })} onEdit={(e) => setModalConfig({ isOpen: true, type: 'editor', data: e, isEdit: true })} />}
                             {view === 'editor-detail' && selectedEditor && <PersonCalendarDetail person={selectedEditor} tasks={editingTasks} title="Planificación de Edición" baseColor={selectedEditor.color || 'rose'} onBack={() => handleNavigate('editors')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr, contextId: selectedEditor.id } })} onEventClick={(e) => handleEventClick(e, 'editingTask')} />}
 
-                            {/* Salas de Trabajo (Con sistema de notas expandido y clientes vinculados) */}
-                            {view === 'account-room' && <AccountRoomView tasks={accountTasks} managers={managers} clients={clients} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'accountTask', data: task, isEdit: true })} onAdvance={advanceAccountTask} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'accountTask' })} />}
-                            {view === 'editions' && <EditionsRoomView tasks={editingTasks} editors={editors} clients={clients} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'editingTask', data: task, isEdit: true })} onAdvance={advanceEditingTask} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'editingTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'editingTask' })} />}
+                            {/* Salas de Trabajo (Con Drag & Drop y Back/Next) */}
+                            {view === 'account-room' && <AccountRoomView tasks={accountTasks} managers={managers} clients={clients} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'accountTask', data: task, isEdit: true })} onChangeStatus={changeAccountTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'accountTask' })} />}
+                            {view === 'editions' && <EditionsRoomView tasks={editingTasks} editors={editors} clients={clients} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'editingTask', data: task, isEdit: true })} onChangeStatus={changeEditingTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'editingTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'editingTask' })} />}
 
                             {/* Calendario General Global */}
                             {view === 'general-calendar' && (
@@ -439,13 +439,13 @@
                     {modalConfig.isOpen && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask }} />}
                     {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
                     
-                    {/* Menú de Acción para Tareas en Calendario (Móvil) */}
+                    {/* Menú de Acción para Tareas en Calendario */}
                     <EventActionModal config={eventAction} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
                     
                     {/* Modal de Detalle de Día del Calendario General */}
                     <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
                     
-                    {/* NUEVO: Modal de Notas de Tarea Expandido */}
+                    {/* Modal de Notas de Tarea Expandido */}
                     <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} />
                 </div>
             );
@@ -615,8 +615,7 @@
             );
         };
 
-        // Header de las salas, ahora incluye los Filtros Rápidos
-        const RoomHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, title, onAdd, btnColor, btnIcon, searchTerm, setSearchTerm }) => {
+        const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, title, onAdd, btnColor, btnIcon, searchTerm, setSearchTerm }) => {
             const today = getHondurasTodayStr();
             return (
                 <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -649,10 +648,12 @@
             );
         };
 
-        const AccountRoomView = ({ tasks, managers, clients, onAdd, onEdit, onAdvance, onDelete, onTaskClick }) => {
+        // --- SALAS DE TRABAJO CON DRAG & DROP Y BOTONES BACK/NEXT ---
+        const AccountRoomView = ({ tasks, managers, clients, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
             const [currentDate, setCurrentDate] = useState(getHondurasTodayStr()); 
             const [searchTerm, setSearchTerm] = useState('');
-            const [filterMode, setFilterMode] = useState('date'); // date, overdue, all
+            const [filterMode, setFilterMode] = useState('date');
+            const [draggedTaskId, setDraggedTaskId] = useState(null);
 
             const columns = [
                 { id: 'por_disenar', title: 'Por Diseñar', color: 'slate' },
@@ -665,22 +666,62 @@
                 if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
                 if (filterMode === 'date') return t.date === currentDate;
                 if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'publicado';
-                return true; // filterMode === 'all'
+                return true; 
             });
+
+            const handleDragStart = (e, taskId) => {
+                setDraggedTaskId(taskId);
+                e.dataTransfer.effectAllowed = 'move';
+                // Añadido timeout para que la tarjeta en sí no desaparezca de la vista original instantáneamente
+                setTimeout(() => e.target.classList.add('dragging'), 0);
+            };
+
+            const handleDragEnd = (e) => {
+                e.target.classList.remove('dragging');
+                setDraggedTaskId(null);
+                document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+            };
+
+            const handleDragOver = (e) => {
+                e.preventDefault();
+                e.currentTarget.classList.add('drag-over');
+            };
+
+            const handleDragLeave = (e) => {
+                e.currentTarget.classList.remove('drag-over');
+            };
+
+            const handleDrop = (e, targetStatus) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('drag-over');
+                if (draggedTaskId) {
+                    const task = tasks.find(t => t.id === draggedTaskId);
+                    if (task && task.status !== targetStatus) {
+                        onChangeStatus(task, targetStatus);
+                    }
+                }
+            };
 
             return (
                 <div className="h-full flex flex-col space-y-6 fade-in">
-                    <RoomHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} title="Sala de Accounts" onAdd={onAdd} btnColor="indigo" btnIcon="Plus" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+                    <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} title="Sala de Accounts" onAdd={onAdd} btnColor="indigo" btnIcon="Plus" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+                    
                     <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
-                        {columns.map(col => {
+                        {columns.map((col, colIndex) => {
                             const colTasks = filteredTasks.filter(t => t.status === col.id);
+                            const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
+                            const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
+
                             return (
-                                <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden">
+                                <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden"
+                                     onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(e) => handleDrop(e, col.id)}>
+                                    
                                     <div className={`p-3 font-black text-[11px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
                                         {col.title} <span className="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
                                     </div>
+                                    
                                     <div className="p-3 flex-1 overflow-y-auto space-y-3 custom-scroll">
-                                        {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacío" /> : 
+                                        {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacío (Arrastra tareas aquí)" /> : 
                                         colTasks.map(t => {
                                             const manager = managers.find(m => m.id === t.contextId);
                                             const client = clients.find(c => c.id === t.clientId);
@@ -688,10 +729,12 @@
                                             const isOverdue = t.date < getHondurasTodayStr() && col.id !== 'publicado';
                                             
                                             return (
-                                                <div key={t.id} onClick={() => onTaskClick(t)} className={`bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all group cursor-pointer border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${isOverdue ? 'border-l-red-500 dark:bg-red-950/20' : 'border-l-indigo-500'}`}>
+                                                <div key={t.id} onClick={() => onTaskClick(t)} 
+                                                     draggable="true" onDragStart={(e) => handleDragStart(e, t.id)} onDragEnd={handleDragEnd}
+                                                     className={`bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all group cursor-grab active:cursor-grabbing border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${isOverdue ? 'border-l-red-500 dark:bg-red-950/20' : 'border-l-indigo-500'}`}>
+                                                    
                                                     <div className="flex justify-between items-start mb-2">
                                                         <div className="flex flex-col gap-1.5 items-start">
-                                                            {/* Cliente Vinculado */}
                                                             {client && (
                                                                 <span className="text-[9px] font-black uppercase bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800 flex items-center gap-1 max-w-[140px] truncate">
                                                                     <Icon name="Briefcase" size={10}/> {client.name}
@@ -704,16 +747,28 @@
                                                             <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Trash2" size={16}/></button>
                                                         </div>
                                                     </div>
-                                                    <p className="font-bold text-slate-700 dark:text-slate-200 text-sm mb-3 pr-2">{t.title}</p>
                                                     
-                                                    {/* Indicador de Atraso */}
+                                                    <p className="font-bold text-slate-700 dark:text-slate-200 text-sm mb-3 pr-2 leading-tight">{t.title}</p>
+                                                    
                                                     {isOverdue && (
-                                                        <div className="absolute bottom-2 right-2 flex items-center gap-1 text-[9px] font-black text-red-500 bg-red-50 dark:bg-red-900/50 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800">
+                                                        <div className="absolute bottom-11 right-2 flex items-center gap-1 text-[9px] font-black text-red-500 bg-red-50 dark:bg-red-900/50 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800">
                                                             Atrasado <Icon name="Flame" size={10} className="animate-pulse"/>
                                                         </div>
                                                     )}
 
-                                                    {col.id !== 'publicado' && <button onClick={(e) => { e.stopPropagation(); onAdvance(t); }} className={`w-full flex items-center justify-center gap-1 py-2.5 rounded-lg text-xs font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-${col.color}-100 dark:hover:bg-${col.color}-500/20 hover:text-${col.color}-700 dark:hover:text-${col.color}-300 transition-colors`}>Avanzar <Icon name="ArrowRight" size={12}/></button>}
+                                                    {/* Botones Back / Avanzar */}
+                                                    <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                                        {prevStatus && (
+                                                            <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, prevStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}>
+                                                                <Icon name="ChevronLeft" size={12}/> Atrás
+                                                            </button>
+                                                        )}
+                                                        {nextStatus && (
+                                                            <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, nextStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-${col.color}-50 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-400 hover:bg-${col.color}-100 dark:hover:bg-${col.color}-500/30 transition-colors`}>
+                                                                {nextStatus === 'publicado' ? 'Publicar' : 'Avanzar'} <Icon name={nextStatus === 'publicado' ? "CheckCircle2" : "ChevronRight"} size={12}/>
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             );
                                         })}
@@ -726,10 +781,11 @@
             );
         };
 
-        const EditionsRoomView = ({ tasks, editors, clients, onAdd, onEdit, onAdvance, onDelete, onTaskClick }) => {
+        const EditionsRoomView = ({ tasks, editors, clients, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
             const [currentDate, setCurrentDate] = useState(getHondurasTodayStr());
             const [searchTerm, setSearchTerm] = useState('');
             const [filterMode, setFilterMode] = useState('date');
+            const [draggedTaskId, setDraggedTaskId] = useState(null);
 
             const columns = [
                 { id: 'editar', title: 'Por Editar', color: 'slate' },
@@ -750,31 +806,63 @@
                 return true; 
             });
 
+            const handleDragStart = (e, taskId) => {
+                setDraggedTaskId(taskId);
+                e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => e.target.classList.add('dragging'), 0);
+            };
+
+            const handleDragEnd = (e) => {
+                e.target.classList.remove('dragging');
+                setDraggedTaskId(null);
+                document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+            };
+
+            const handleDragOver = (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
+            const handleDragLeave = (e) => { e.currentTarget.classList.remove('drag-over'); };
+
+            const handleDrop = (e, targetStatus) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('drag-over');
+                if (draggedTaskId) {
+                    const task = tasks.find(t => t.id === draggedTaskId);
+                    if (task && task.status !== targetStatus) onChangeStatus(task, targetStatus);
+                }
+            };
+
             return (
                 <div className="h-full flex flex-col space-y-6 fade-in">
-                    <RoomHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} title="Sala de Edición" onAdd={onAdd} btnColor="amber" btnIcon="Video" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+                    <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} title="Sala de Edición" onAdd={onAdd} btnColor="amber" btnIcon="Video" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+                    
                     <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden">
-                        {columns.map(col => {
+                        {columns.map((col, colIndex) => {
                             const colTasks = filteredTasks.filter(t => t.status === col.id);
+                            const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
+                            const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
+
                             return (
-                                <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden">
+                                <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden"
+                                     onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(e) => handleDrop(e, col.id)}>
+                                    
                                     <div className={`p-4 font-black text-xs uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
                                         {col.title} <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
                                     </div>
+                                    
                                     <div className="p-4 flex-1 overflow-y-auto space-y-3 custom-scroll">
-                                        {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacío" /> : 
+                                        {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacío (Arrastra tareas aquí)" /> : 
                                         colTasks.map(t => {
                                             const editor = editors.find(e => e.id === t.contextId);
                                             const client = clients.find(c => c.id === t.clientId);
                                             const pStyle = priorityStyles[t.priority] || priorityStyles.normal;
                                             const eStyles = PERSON_COLORS[editor?.color] || PERSON_COLORS.slate;
                                             const isOverdue = t.date < getHondurasTodayStr() && col.id !== 'aprobado';
-                                            
-                                            // El borde izquierdo muestra si es urgente o atrasado
                                             const borderLeftColor = isOverdue ? 'border-l-red-600' : (t.priority === 'urgente' ? 'border-l-red-500' : t.priority === 'recurrente' ? 'border-l-emerald-500' : 'border-l-amber-500');
 
                                             return (
-                                                <div key={t.id} onClick={() => onTaskClick(t)} className={`bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all group cursor-pointer border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${borderLeftColor} ${isOverdue ? 'dark:bg-red-950/10' : ''}`}>
+                                                <div key={t.id} onClick={() => onTaskClick(t)} 
+                                                     draggable="true" onDragStart={(e) => handleDragStart(e, t.id)} onDragEnd={handleDragEnd}
+                                                     className={`bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all group cursor-grab active:cursor-grabbing border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${borderLeftColor} ${isOverdue ? 'dark:bg-red-950/10' : ''}`}>
+                                                    
                                                     <div className="flex justify-between items-start mb-2">
                                                         <div className="flex flex-col items-start gap-1.5">
                                                             {client && (
@@ -792,17 +880,29 @@
                                                             <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Trash2" size={16}/></button>
                                                         </div>
                                                     </div>
-                                                    <p className="font-bold text-slate-800 dark:text-slate-100 text-sm mb-1">{t.title}</p>
+                                                    
+                                                    <p className="font-bold text-slate-800 dark:text-slate-100 text-sm mb-1 leading-tight">{t.title}</p>
                                                     {t.notes && <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 truncate max-w-[80%]">{t.notes}</p>}
                                                     
-                                                    {/* Indicador de Atraso */}
                                                     {isOverdue && (
-                                                        <div className="absolute bottom-2 right-2 flex items-center gap-1 text-[9px] font-black text-red-500 bg-red-50 dark:bg-red-900/50 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800">
+                                                        <div className="absolute bottom-12 right-2 flex items-center gap-1 text-[9px] font-black text-red-500 bg-red-50 dark:bg-red-900/50 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800">
                                                             Atrasado <Icon name="Flame" size={10} className="animate-pulse"/>
                                                         </div>
                                                     )}
 
-                                                    {col.id !== 'aprobado' && <button onClick={(e) => { e.stopPropagation(); onAdvance(t); }} className={`w-full mt-2 flex items-center justify-center gap-1 py-2.5 rounded-lg text-xs font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-${col.color}-100 dark:hover:bg-${col.color}-500/20 hover:text-${col.color}-700 dark:hover:text-${col.color}-300 transition-colors`}>Avanzar <Icon name="ArrowRight" size={12}/></button>}
+                                                    {/* Botones Back / Avanzar */}
+                                                    <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                                        {prevStatus && (
+                                                            <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, prevStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}>
+                                                                <Icon name="ChevronLeft" size={12}/> Atrás
+                                                            </button>
+                                                        )}
+                                                        {nextStatus && (
+                                                            <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, nextStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-${col.color}-50 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-400 hover:bg-${col.color}-100 dark:hover:bg-${col.color}-500/30 transition-colors`}>
+                                                                {nextStatus === 'aprobado' ? 'Aprobar' : 'Avanzar'} <Icon name={nextStatus === 'aprobado' ? "CheckCircle2" : "ChevronRight"} size={12}/>
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             );
                                         })}
@@ -851,22 +951,38 @@
             );
         };
 
-        const ClientDetail = ({ client, onBack, onUpdate, onDelete, onEdit }) => (
+        const ClientDetail = ({ client, managers, onReassignManager, onBack, onUpdate, onDelete, onEdit }) => (
             <div className="space-y-6 max-w-5xl mx-auto fade-in">
                 <button onClick={onBack} className="flex items-center gap-2 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 font-bold text-sm uppercase p-2 -ml-2"><Icon name="ChevronLeft" size={16}/> Volver</button>
                 <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
                     <div className="bg-slate-900 dark:bg-slate-950 p-6 md:p-8 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative group border-b border-slate-800">
                         <button onClick={onEdit} className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><Icon name="Edit" size={18}/></button>
-                        <div className="flex items-center gap-6">
-                            <div className="h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl font-black shadow-inner">
+                        
+                        <div className="flex items-start md:items-center gap-6">
+                            <div className="h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl font-black shadow-inner shrink-0">
                                 {client.name ? client.name.charAt(0).toUpperCase() : 'C'}
                             </div>
                             <div>
                                 <h1 className="text-2xl md:text-3xl font-black">{client.name}</h1>
-                                <p className="text-blue-300 text-sm font-bold mt-1">{client.package}</p>
+                                
+                                {/* NUEVO: Selector directo de Account Manager */}
+                                <div className="flex items-center gap-2 mt-2 bg-white/5 px-3 py-1.5 rounded-lg inline-flex border border-white/10 relative transition-all hover:bg-white/10">
+                                    <Icon name="UserCircle2" size={14} className="text-blue-300"/>
+                                    <select 
+                                        value={client.managerId || ""} 
+                                        onChange={(e) => onReassignManager(client, e.target.value)}
+                                        className="bg-transparent text-white font-bold text-xs outline-none cursor-pointer appearance-none pr-6 z-10 w-full"
+                                    >
+                                        <option value="" className="text-slate-800">Asignar Account Manager...</option>
+                                        {managers.map(m => <option key={m.id} value={m.id} className="text-slate-800">{m.name}</option>)}
+                                    </select>
+                                    <Icon name="ChevronDown" size={12} className="text-blue-300 absolute right-3 pointer-events-none"/>
+                                </div>
+
                             </div>
                         </div>
-                        <div className="flex gap-2 bg-white/10 p-1 rounded-xl">{['Contento', 'Neutral', 'En Riesgo'].map(m => <button key={m} onClick={() => onUpdate(client.id, {mood: m})} className={`p-2 rounded-lg ${client.mood === m ? 'bg-white/20' : 'opacity-50 hover:opacity-100'}`}><Icon name={m === 'Contento' ? 'Smile' : m === 'Neutral' ? 'Meh' : 'Frown'} className={m === 'Contento' ? 'text-green-400' : m === 'Neutral' ? 'text-yellow-400' : 'text-red-400'}/></button>)}</div>
+                        
+                        <div className="flex gap-2 bg-white/10 p-1 rounded-xl shrink-0 mt-4 md:mt-0">{['Contento', 'Neutral', 'En Riesgo'].map(m => <button key={m} onClick={() => onUpdate(client.id, {mood: m})} className={`p-2 rounded-lg ${client.mood === m ? 'bg-white/20' : 'opacity-50 hover:opacity-100'}`}><Icon name={m === 'Contento' ? 'Smile' : m === 'Neutral' ? 'Meh' : 'Frown'} className={m === 'Contento' ? 'text-green-400' : m === 'Neutral' ? 'text-yellow-400' : 'text-red-400'}/></button>)}</div>
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-slate-100 dark:divide-slate-800">
                         <div className="lg:col-span-2 p-6 md:p-8 space-y-8">
@@ -879,7 +995,6 @@
             </div>
         );
 
-        // Calendario original (Solo eventos de una persona/producción)
         const CalendarGrid = ({ events, onAdd, onEventClick, baseColor = "emerald" }) => {
             const [date, setDate] = useState(new Date());
             const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -931,7 +1046,6 @@
             );
         };
 
-        // --- NUEVO: Calendario General Global (Da click al día para ver detalles) ---
         const GeneralCalendarGrid = ({ activities, onDayClick }) => {
             const [date, setDate] = useState(new Date());
             const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -975,7 +1089,6 @@
             );
         };
 
-        // --- MENÚ DE ACCIÓN PARA TAREAS INDIVIDUALES (Mobile) ---
         const EventActionModal = ({ config, onClose, onEdit, onDelete }) => {
             if (!config.isOpen) return null;
             return (
@@ -1002,7 +1115,6 @@
             );
         };
 
-        // --- NUEVO: Modal Visualizador Expandido para Tareas y Notas ---
         const TaskDetailModal = ({ config, onClose, clients, managers, editors, onEdit }) => {
             if (!config.isOpen || !config.task) return null;
             const { task, type } = config;
@@ -1015,7 +1127,6 @@
             return (
                 <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
                     <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
-                        {/* Cabecera visual */}
                         <div className={`p-6 bg-${tagColor}-50 dark:bg-${tagColor}-500/10 border-b border-${tagColor}-100 dark:border-${tagColor}-500/20 relative`}>
                             <button onClick={onClose} className={`absolute top-4 right-4 p-2 hover:bg-${tagColor}-100 dark:hover:bg-${tagColor}-500/30 rounded-full text-${tagColor}-600 dark:text-${tagColor}-400 transition-colors`}><Icon name="X" size={20}/></button>
                             <div className="flex items-center gap-2 mb-3">
@@ -1024,8 +1135,6 @@
                             </div>
                             <h2 className="text-2xl font-black text-slate-800 dark:text-white leading-tight">{task.title}</h2>
                         </div>
-                        
-                        {/* Cuerpo del Modal */}
                         <div className="p-6 space-y-6">
                             <div className="flex flex-wrap gap-4">
                                 <div className="flex-1 min-w-[120px]">
@@ -1046,12 +1155,10 @@
                                     <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{task.date}</span>
                                 </div>
                             </div>
-
                             <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 min-h-[100px]">
                                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1"><Icon name="ListTree" size={12}/> Notas y Enlaces</p>
                                 <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{task.notes || <span className="italic text-slate-400">Sin notas adicionales...</span>}</p>
                             </div>
-
                             <Button full onClick={() => onEdit(task, type)} color={tagColor} icon="Edit">Editar Tarea</Button>
                         </div>
                     </div>
@@ -1061,9 +1168,7 @@
 
         const DayDetailsModal = ({ config, onClose, activities, clients, managers, editors, onEdit, onDelete }) => {
             if (!config.isOpen) return null;
-            
             const dayActivities = activities.filter(a => a.date === config.date);
-            
             let displayDate = '';
             if (config.date) {
                 const [y, m, d] = config.date.split('-');
@@ -1143,7 +1248,6 @@
             );
         };
 
-        // --- FORMULARIOS / MODAL ---
         const Modal = ({ config, onClose, clients, managers, editors, actions }) => {
             const { type, data, isEdit } = config;
             
@@ -1193,7 +1297,7 @@
                                     </div>
                                 )}
 
-                                {type === 'client' && <><Input name="name" placeholder="Nombre" defaultValue={data?.name} required /><Input name="niche" placeholder="Rubro" defaultValue={data?.niche} required /><Input name="package" placeholder="Paquete" defaultValue={data?.package} required /><Input name="instagram" placeholder="Link Instagram" defaultValue={data?.instagram} /><select name="manager" defaultValue={data?.manager} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none"><option value="">Asignar Manager (Opcional)</option>{managers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}</select></>}
+                                {type === 'client' && <><Input name="name" placeholder="Nombre" defaultValue={data?.name} required /><Input name="niche" placeholder="Rubro" defaultValue={data?.niche} required /><Input name="package" placeholder="Paquete" defaultValue={data?.package} required /><Input name="instagram" placeholder="Link Instagram" defaultValue={data?.instagram} /><select name="managerId" defaultValue={data?.managerId} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none"><option value="">Asignar Manager (Opcional)</option>{managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></>}
                                 
                                 {type === 'manager' && <><Input name="name" placeholder="Nombre Completo" defaultValue={data?.name} required /><Input name="email" type="email" placeholder="Correo" defaultValue={data?.email} required /></>}
                                 
