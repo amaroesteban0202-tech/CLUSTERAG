@@ -150,6 +150,23 @@
             return LucideIcon ? <LucideIcon size={size} className={className} /> : null;
         };
 
+        // --- COMPONENTE DE LOGO ---
+        const AgencyLogo = ({ className }) => {
+            // 👇 Pega el link de tu logo aquí adentro de las comillas.
+            // Ejemplo: const logoUrl = "https://i.imgur.com/tu-logo.png";
+            const logoUrl = ""; 
+
+            if (logoUrl) {
+                return <img src={logoUrl} alt="Logo" className={`object-contain rounded-lg ${className}`} />;
+            }
+            // Si no hay link, muestra la "C" original de respaldo
+            return (
+                <div className={`bg-purple-600 flex items-center justify-center text-white font-black rounded-lg ${className}`}>
+                    C
+                </div>
+            );
+        };
+
         // --- APP PRINCIPAL ---
         function App() {
             const [user, setUser] = useState(null);
@@ -328,7 +345,7 @@
                     
                     {/* HEADER MÓVIL */}
                     <div className="md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center z-30 shadow-sm shrink-0">
-                        <div className="flex items-center gap-2"><div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white font-black">C</div><span className="font-black text-slate-800 dark:text-white text-lg tracking-tight">CLUSTER</span></div>
+                        <div className="flex items-center gap-2"><AgencyLogo className="w-8 h-8 text-sm" /><span className="font-black text-slate-800 dark:text-white text-lg tracking-tight">CLUSTER</span></div>
                         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><Icon name={isMobileMenuOpen ? "X" : "Menu"} size={24} /></button>
                     </div>
 
@@ -338,7 +355,7 @@
                     {/* SIDEBAR */}
                     <aside className={`fixed md:relative z-50 h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-xl md:shadow-none w-64 shrink-0 transition-transform duration-300 ease-in-out top-0 left-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
                         <div className="p-8 hidden md:block">
-                            <div className="flex items-center gap-3 mb-1"><div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white font-black text-lg shadow-lg shadow-purple-900/20">C</div><h1 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">CLUSTER</h1></div>
+                            <div className="flex items-center gap-3 mb-1"><AgencyLogo className="w-8 h-8 text-lg shadow-lg shadow-purple-900/20" /><h1 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">CLUSTER</h1></div>
                             <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-widest pl-11">Agency OS</p>
                         </div>
                         
@@ -390,11 +407,11 @@
                             {view === 'editors' && <TeamView title="Editores" team={editors} iconColor="rose" onAdd={() => setModalConfig({ isOpen: true, type: 'editor' })} onSelect={(e) => { setSelectedEditor(e); handleNavigate('editor-detail'); }} onDelete={(e) => setDeleteConfirm({ isOpen: true, type: 'editor', id: e.id, title: e.name })} onEdit={(e) => setModalConfig({ isOpen: true, type: 'editor', data: e, isEdit: true })} />}
                             {view === 'editor-detail' && selectedEditor && <PersonCalendarDetail person={selectedEditor} tasks={editingTasks} title="Planificación de Edición" baseColor={selectedEditor.color || 'rose'} onBack={() => handleNavigate('editors')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr, contextId: selectedEditor.id } })} onEventClick={(e) => handleEventClick(e, 'editingTask')} />}
 
-                            {/* Salas de Trabajo (INTACTAS, MISMA CONFIGURACIÓN) */}
+                            {/* Salas de Trabajo */}
                             {view === 'account-room' && <AccountRoomView tasks={accountTasks} managers={managers} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'accountTask', data: task, isEdit: true })} onAdvance={advanceAccountTask} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id, title: 'Tarea' })} />}
                             {view === 'editions' && <EditionsRoomView tasks={editingTasks} editors={editors} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'editingTask', data: task, isEdit: true })} onAdvance={advanceEditingTask} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'editingTask', id, title: 'Tarea' })} />}
 
-                            {/* NUEVO: Calendario General Global */}
+                            {/* Calendario General Global */}
                             {view === 'general-calendar' && (
                                 <div className="h-full flex flex-col space-y-6 fade-in">
                                     <div className="flex justify-between items-center">
@@ -425,7 +442,7 @@
                     {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
                     {/* Menú de Acción para Tareas en Calendario (Móvil) */}
                     <EventActionModal config={eventAction} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
-                    {/* Nuevo Modal de Detalle de Día del Calendario General */}
+                    {/* Modal de Detalle de Día del Calendario General */}
                     <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
                 </div>
             );
@@ -696,7 +713,9 @@
                             {filteredClients.map(c => (
                                 <div key={c.id} onClick={() => onSelect(c)} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-xl hover:border-blue-300 dark:hover:border-blue-600 transition-all cursor-pointer relative">
                                     <div className="flex justify-between mb-4">
-                                        <div className="h-14 w-14 bg-blue-50 dark:bg-blue-500/20 rounded-2xl flex items-center justify-center text-xl font-black text-blue-600 dark:text-blue-400">{c.logo}</div>
+                                        <div className="h-14 w-14 bg-blue-50 dark:bg-blue-500/20 rounded-2xl flex items-center justify-center text-2xl font-black text-blue-600 dark:text-blue-400">
+                                            {c.name ? c.name.charAt(0).toUpperCase() : 'C'}
+                                        </div>
                                         <div className={`w-3 h-3 rounded-full shadow-sm border border-white dark:border-slate-900 ${c.mood === 'En Riesgo' ? 'bg-red-500 animate-pulse' : c.mood === 'Neutral' ? 'bg-amber-400' : 'bg-green-500'}`}></div>
                                     </div>
                                     <h3 className="text-lg font-bold text-slate-800 dark:text-white pr-4 truncate">{c.name}</h3>
@@ -716,7 +735,16 @@
                 <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
                     <div className="bg-slate-900 dark:bg-slate-950 p-6 md:p-8 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative group border-b border-slate-800">
                         <button onClick={onEdit} className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><Icon name="Edit" size={18}/></button>
-                        <div className="flex items-center gap-6"><div className="h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-3xl font-black">{client.logo}</div><div><h1 className="text-2xl md:text-3xl font-black">{client.name}</h1><p className="text-blue-300 text-sm font-bold mt-1">{client.package}</p></div></div><div className="flex gap-2 bg-white/10 p-1 rounded-xl">{['Contento', 'Neutral', 'En Riesgo'].map(m => <button key={m} onClick={() => onUpdate(client.id, {mood: m})} className={`p-2 rounded-lg ${client.mood === m ? 'bg-white/20' : 'opacity-50 hover:opacity-100'}`}><Icon name={m === 'Contento' ? 'Smile' : m === 'Neutral' ? 'Meh' : 'Frown'} className={m === 'Contento' ? 'text-green-400' : m === 'Neutral' ? 'text-yellow-400' : 'text-red-400'}/></button>)}</div>
+                        <div className="flex items-center gap-6">
+                            <div className="h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl font-black shadow-inner">
+                                {client.name ? client.name.charAt(0).toUpperCase() : 'C'}
+                            </div>
+                            <div>
+                                <h1 className="text-2xl md:text-3xl font-black">{client.name}</h1>
+                                <p className="text-blue-300 text-sm font-bold mt-1">{client.package}</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 bg-white/10 p-1 rounded-xl">{['Contento', 'Neutral', 'En Riesgo'].map(m => <button key={m} onClick={() => onUpdate(client.id, {mood: m})} className={`p-2 rounded-lg ${client.mood === m ? 'bg-white/20' : 'opacity-50 hover:opacity-100'}`}><Icon name={m === 'Contento' ? 'Smile' : m === 'Neutral' ? 'Meh' : 'Frown'} className={m === 'Contento' ? 'text-green-400' : m === 'Neutral' ? 'text-yellow-400' : 'text-red-400'}/></button>)}</div>
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-slate-100 dark:divide-slate-800">
                         <div className="lg:col-span-2 p-6 md:p-8 space-y-8">
