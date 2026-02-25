@@ -5,10 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cluster Agency OS</title>
     
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
-            darkMode: 'class',
+            darkMode: 'class', // Habilitar Modo Oscuro por clase
             theme: {
                 extend: {}
             }
@@ -24,6 +25,7 @@
         .fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
+        /* Efectos Mejorados para Drag & Drop */
         .drag-source-hidden { 
             position: absolute !important;
             opacity: 0 !important; 
@@ -39,8 +41,10 @@
         }
     </style>
 
+    <!-- Librería para Animación de Confeti -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 
+    <!-- Librerías React y Firebase -->
     <script type="importmap">
     {
         "imports": {
@@ -71,19 +75,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
         import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 
-        // --- TRUCO PARA TAILWIND CDN: Obligar a compilar estas clases dinámicas ---
-        const TAILWIND_SAFELIST = "bg-purple-50 text-purple-700 border-purple-200 bg-purple-100 dark:bg-purple-500/20 dark:text-purple-400 dark:border-purple-500/30 " +
-        "bg-indigo-50 text-indigo-700 border-indigo-200 bg-indigo-100 dark:bg-indigo-500/20 dark:text-indigo-400 dark:border-indigo-500/30 " +
-        "bg-blue-50 text-blue-700 border-blue-200 bg-blue-100 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30 " +
-        "bg-cyan-50 text-cyan-700 border-cyan-200 bg-cyan-100 dark:bg-cyan-500/20 dark:text-cyan-400 dark:border-cyan-500/30 " +
-        "bg-amber-50 text-amber-700 border-amber-200 bg-amber-100 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30 " +
-        "bg-orange-50 text-orange-700 border-orange-200 bg-orange-100 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30 " +
-        "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 bg-fuchsia-100 dark:bg-fuchsia-500/20 dark:text-fuchsia-400 dark:border-fuchsia-500/30 " +
-        "bg-violet-50 text-violet-700 border-violet-200 bg-violet-100 dark:bg-violet-500/20 dark:text-violet-400 dark:border-violet-500/30 " +
-        "bg-stone-50 text-stone-700 border-stone-200 bg-stone-100 dark:bg-stone-500/20 dark:text-stone-400 dark:border-stone-500/30 " +
-        "bg-emerald-50 text-emerald-700 border-emerald-200 bg-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30 " +
-        "bg-rose-50 text-rose-700 border-rose-200 bg-rose-100 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/30";
-
+        // --- ⚠️ AQUÍ ESTÁ TU CONFIGURACIÓN DE FIREBASE ⚠️ ---
         const firebaseConfig = {
           apiKey: "AIzaSyBAnY2ihWlow17H-TjUKgueWpw2MqYpzUc",
           authDomain: "cluster-41f73.firebaseapp.com",
@@ -100,12 +92,13 @@
             auth = getAuth(app);
             db = getFirestore(app);
         } catch (error) {
-            console.warn("Firebase no conectado", error);
+            console.warn("Firebase no conectado (Modo Demo Local)", error);
         }
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'cluster-agency-pro-mobile-v6';
         const MONTH_NAMES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
         
+        // --- 🕒 MOTOR DE TIEMPO ESTRICTO: ZONA HORARIA HONDURAS (GMT-6) ---
         const getHondurasDateString = (dateObj = new Date()) => {
             const formatter = new Intl.DateTimeFormat('es-HN', {
                 timeZone: 'America/Tegucigalpa',
@@ -119,19 +112,8 @@
         };
         const getHondurasTodayStr = () => getHondurasDateString(new Date());
 
+        // --- MAPA DE COLORES VIBRANTES ---
         const PERSON_COLORS = {
-            purple: { bg: 'bg-purple-100 dark:bg-purple-900', text: 'text-purple-800 dark:text-purple-100' },
-            indigo: { bg: 'bg-indigo-100 dark:bg-indigo-900', text: 'text-indigo-800 dark:text-indigo-100' },
-            blue: { bg: 'bg-blue-100 dark:bg-blue-900', text: 'text-blue-800 dark:text-blue-100' },
-            cyan: { bg: 'bg-cyan-100 dark:bg-cyan-900', text: 'text-cyan-800 dark:text-cyan-100' },
-            amber: { bg: 'bg-amber-100 dark:bg-amber-900', text: 'text-amber-800 dark:text-amber-100' },
-            orange: { bg: 'bg-orange-100 dark:bg-orange-900', text: 'text-orange-800 dark:text-orange-100' },
-            fuchsia: { bg: 'bg-fuchsia-100 dark:bg-fuchsia-900', text: 'text-fuchsia-800 dark:text-fuchsia-100' },
-            violet: { bg: 'bg-violet-100 dark:bg-violet-900', text: 'text-violet-800 dark:text-violet-100' },
-            stone: { bg: 'bg-stone-200 dark:bg-stone-800', text: 'text-stone-800 dark:text-stone-100' },
-            emerald: { bg: 'bg-emerald-100 dark:bg-emerald-900', text: 'text-emerald-800 dark:text-emerald-100' },
-            slate: { bg: 'bg-slate-200 dark:bg-slate-700', text: 'text-slate-800 dark:text-slate-100' },
-            
             c1: { bg: 'bg-red-500', text: 'text-white' }, c2: { bg: 'bg-blue-600', text: 'text-white' },
             c3: { bg: 'bg-emerald-600', text: 'text-white' }, c4: { bg: 'bg-amber-500', text: 'text-white' },
             c5: { bg: 'bg-purple-600', text: 'text-white' }, c6: { bg: 'bg-pink-600', text: 'text-white' },
@@ -143,10 +125,17 @@
             c23: { bg: 'bg-emerald-200 dark:bg-emerald-900', text: 'text-emerald-900 dark:text-emerald-100' }, 
             c24: { bg: 'bg-yellow-300 dark:bg-yellow-900', text: 'text-yellow-900 dark:text-yellow-100' },
             c25: { bg: 'bg-purple-200 dark:bg-purple-900', text: 'text-purple-900 dark:text-purple-100' }, 
-            c26: { bg: 'bg-pink-200 dark:bg-pink-900', text: 'text-pink-900 dark:text-pink-100' }
+            c26: { bg: 'bg-pink-200 dark:bg-pink-900', text: 'text-pink-900 dark:text-pink-100' },
+            
+            slate: { bg: 'bg-slate-200 dark:bg-slate-700', text: 'text-slate-800 dark:text-slate-100' },
+            emerald: { bg: 'bg-emerald-100 dark:bg-emerald-900', text: 'text-emerald-800 dark:text-emerald-100' },
+            indigo: { bg: 'bg-indigo-100 dark:bg-indigo-900', text: 'text-indigo-800 dark:text-indigo-100' },
+            blue: { bg: 'bg-blue-100 dark:bg-blue-900', text: 'text-blue-800 dark:text-blue-100' },
+            amber: { bg: 'bg-amber-100 dark:bg-amber-900', text: 'text-amber-800 dark:text-amber-100' },
         };
 
-        const ACCOUNT_COLORS = ['purple', 'indigo', 'blue', 'cyan', 'amber', 'orange', 'fuchsia', 'violet', 'stone'];
+        // Colores súper llamativos para Accounts
+        const ACCOUNT_COLORS = ['c1', 'c2', 'c3', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10'];
         const EDITOR_COLORS = ['c21', 'c22', 'c23', 'c24', 'c25', 'c26'];
 
         const IconsMap = {
@@ -161,18 +150,27 @@
             return LucideIcon ? <LucideIcon size={size} className={className} /> : null;
         };
 
+        // --- COMPONENTE DE LOGO ---
         const AgencyLogo = ({ className }) => {
+            const logoUrl = ""; 
+            if (logoUrl) return <img src={logoUrl} alt="Logo" className={`object-contain rounded-lg ${className}`} />;
             return <div className={`bg-purple-600 flex items-center justify-center text-white font-black rounded-lg ${className}`}>C</div>;
         };
 
+        // --- APP PRINCIPAL ---
         function App() {
             const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
             const [toast, setToast] = useState(null); 
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+            // MODO OSCURO (PERSISTENCIA)
             const [isDark, setIsDark] = useState(() => localStorage.getItem('cluster_theme') === 'dark');
+
+            // MEMORIA DE PANTALLA (PERSISTENCIA)
             const [view, setView] = useState(() => localStorage.getItem('cluster_os_view') || 'dashboard');
 
+            // Datos
             const [clients, setClients] = useState([]);
             const [events, setEvents] = useState([]); 
             const [managers, setManagers] = useState([]);
@@ -180,6 +178,7 @@
             const [editingTasks, setEditingTasks] = useState([]);
             const [accountTasks, setAccountTasks] = useState([]);
 
+            // UI & Modales
             const [selectedClient, setSelectedClient] = useState(null);
             const [selectedManager, setSelectedManager] = useState(null);
             const [selectedEditor, setSelectedEditor] = useState(null);
@@ -187,9 +186,11 @@
             const [modalConfig, setModalConfig] = useState({ isOpen: false, type: null, data: null, isEdit: false });
             const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, type: null, id: null, title: '' });
             const [eventAction, setEventAction] = useState({ isOpen: false, event: null, type: null });
+            
             const [taskDetailConfig, setTaskDetailConfig] = useState({ isOpen: false, task: null, type: null });
             const [dayDetailsModal, setDayDetailsModal] = useState({ isOpen: false, date: null }); 
             
+            // Efecto Tema Oscuro
             useEffect(() => {
                 const html = document.documentElement;
                 if (isDark) {
@@ -201,19 +202,29 @@
                 }
             }, [isDark]);
 
+            // Auth
             useEffect(() => {
                 if(!auth) { setLoading(false); return; }
                 const initAuth = async () => {
-                    try { await signInAnonymously(auth); } catch (error) { console.error(error); }
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            try { await signInWithCustomToken(auth, __initial_auth_token); } 
+                            catch (tokenError) { await signInAnonymously(auth); }
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) { console.error("Error de Autenticación:", error); }
                 };
                 initAuth();
+                
                 const unsubscribe = onAuthStateChanged(auth, u => { setUser(u); setLoading(false); });
                 return () => unsubscribe();
             }, []);
 
+            // Carga de Datos
             useEffect(() => {
                 if (!user || !db) return;
-                const errHandler = (err) => console.error(err);
+                const errHandler = (err) => console.error("Error de Firestore:", err);
 
                 const unsubs = [
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), s => {
@@ -230,10 +241,12 @@
                 return () => unsubs.forEach(u => u());
             }, [user, selectedClient?.id]);
 
+            // Helpers
             const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
             const closeModal = () => setModalConfig({ isOpen: false, type: null, data: null, isEdit: false });
             const closeDelete = () => setDeleteConfirm({ isOpen: false, type: null, id: null });
             
+            // Navegación
             const handleNavigate = (newView) => { 
                 setView(newView); 
                 localStorage.setItem('cluster_os_view', newView);
@@ -241,24 +254,18 @@
             };
 
             const handleEventClick = (event, type) => setEventAction({ isOpen: true, event, type });
-            const triggerConfetti = () => { if (window.confetti) window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } }); };
+            const triggerConfetti = () => { if (window.confetti) window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#9333ea', '#3b82f6', '#10b981', '#f59e0b'] }); };
 
-            const urgentEditions = editingTasks.filter(t => t.priority === 'urgente' && t.status !== 'aprobado' && t.status !== 'publicado').length;
+            const urgentEditions = editingTasks.filter(t => t.priority === 'urgente' && t.status !== 'aprobado').length;
             const pendingAccounts = accountTasks.filter(t => t.status === 'por_disenar').length;
-
-            const legacyColorMap = { c1: 'purple', c2: 'blue', c3: 'indigo', c4: 'amber', c5: 'fuchsia', c6: 'violet', c7: 'cyan', c8: 'orange', c9: 'indigo', c10: 'stone' };
 
             const allActivities = [
                 ...events.map(e => ({ ...e, collectionType: 'event', _color: 'emerald', _icon: 'CalendarIcon', _label: 'Producción' })),
-                ...accountTasks.map(t => {
-                    const manager = managers.find(m => m.id === t.contextId);
-                    let rawColor = manager?.color || 'indigo';
-                    let mColor = legacyColorMap[rawColor] || rawColor; 
-                    return { ...t, collectionType: 'accountTask', _color: mColor, _icon: 'LayoutList', _label: 'Account' };
-                }),
-                ...editingTasks.map(t => ({ ...t, collectionType: 'editingTask', _color: 'slate', _icon: 'Video', _label: 'Edición' }))
+                ...accountTasks.map(t => ({ ...t, collectionType: 'accountTask', _color: 'indigo', _icon: 'LayoutList', _label: 'Account' })),
+                ...editingTasks.map(t => ({ ...t, collectionType: 'editingTask', _color: 'amber', _icon: 'Video', _label: 'Edición' }))
             ];
 
+            // --- ACCIONES CRUD ---
             const addClient = async (fd) => {
                 const manager = managers.find(m => m.id === fd.managerId);
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { ...fd, manager: manager ? manager.name : "", managerId: fd.managerId || "", status: 'Activo', mood: 'Contento', createdAt: getHondurasTodayStr(), workflow: { week1: false, week2: false, week3: false, week4: false } });
@@ -269,36 +276,45 @@
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), { ...data, manager: manager ? manager.name : "" }); 
                 showToast('Cliente actualizado'); closeModal(); 
             };
+            
+            // --- NUEVO: Reasignar Manager a Cliente y a todas sus tareas automáticamente ---
             const reassignClientManager = async (client, newManagerId) => {
                 if (!newManagerId) return;
                 const newManager = managers.find(m => m.id === newManagerId);
                 if (!newManager) return;
+
                 try {
+                    // Actualiza el perfil del cliente
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', client.id), { manager: newManager.name, managerId: newManager.id });
+                    
+                    // Mueve todas sus tareas al nuevo manager
                     const tasksToMove = accountTasks.filter(t => t.clientId === client.id);
                     for (const t of tasksToMove) {
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', t.id), { contextId: newManager.id });
                     }
-                    showToast(`Cliente mudado a ${newManager.name}`);
-                } catch (e) { showToast("Error al reasignar", "error"); }
+                    showToast(`Cliente mudado a ${newManager.name} y tareas reasignadas`);
+                } catch (e) {
+                    console.error(e);
+                    showToast("Error al reasignar", "error");
+                }
             };
 
             const addManager = async (fd) => {
                 const color = ACCOUNT_COLORS[managers.length % ACCOUNT_COLORS.length];
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), { ...fd, color });
-                showToast('Manager agregado'); closeModal();
+                showToast('Account Manager agregado'); closeModal();
             };
-            const updateManager = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'managers', id), data); showToast('Actualizado'); closeModal(); };
+            const updateManager = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'managers', id), data); showToast('Manager actualizado'); closeModal(); };
 
             const addEditor = async (fd) => {
                 const color = EDITOR_COLORS[editors.length % EDITOR_COLORS.length];
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), { ...fd, color });
                 showToast('Editor agregado'); closeModal();
             };
-            const updateEditor = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editors', id), data); showToast('Actualizado'); closeModal(); };
+            const updateEditor = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editors', id), data); showToast('Editor actualizado'); closeModal(); };
 
-            const addAccountTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), { ...data, status: 'por_disenar' }); showToast('Agendado'); closeModal(); };
-            const updateAccountTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id), data); showToast('Guardado'); closeModal(); };
+            const addAccountTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), { ...data, status: 'por_disenar' }); showToast('Tarea agendada'); closeModal(); };
+            const updateAccountTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id), data); showToast('Tarea guardada'); closeModal(); };
             const changeAccountTaskStatus = async (task, newStatus) => {
                 if (newStatus) {
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', task.id), { status: newStatus });
@@ -306,17 +322,17 @@
                 }
             };
 
-            const addEditingTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), { ...data, status: 'editar' }); showToast('Agendado'); closeModal(); };
-            const updateEditingTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id), data); showToast('Guardado'); closeModal(); };
+            const addEditingTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), { ...data, status: 'editar' }); showToast('Tarea agendada'); closeModal(); };
+            const updateEditingTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id), data); showToast('Tarea guardada'); closeModal(); };
             const changeEditingTaskStatus = async (task, newStatus) => {
                 if (newStatus) {
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', task.id), { status: newStatus });
-                    if (newStatus === 'aprobado' || newStatus === 'publicado') triggerConfetti();
+                    if (newStatus === 'aprobado') triggerConfetti();
                 }
             };
 
-            const addEvent = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data); showToast('Agendado'); closeModal(); };
-            const updateEvent = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id), data); showToast('Guardado'); closeModal(); };
+            const addEvent = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data); showToast('Evento agendado'); closeModal(); };
+            const updateEvent = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id), data); showToast('Evento guardado'); closeModal(); };
 
             const handleDelete = async () => {
                 const { type, id } = deleteConfirm;
@@ -327,190 +343,483 @@
                     if (type === 'event') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id));
                     if (type === 'accountTask') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id));
                     if (type === 'editingTask') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id));
-                    showToast('Eliminado');
-                } catch(e) { showToast('Error', 'error'); }
+                    showToast('Eliminado correctamente');
+                } catch(e) { console.error(e); showToast('Error al eliminar', 'error'); }
                 closeDelete();
             };
 
-            if (loading) return <div className="flex h-screen items-center justify-center"><Icon name="Loader2" className="animate-spin text-purple-600" size={32}/></div>;
+            if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950"><Icon name="Loader2" className="animate-spin text-purple-600" size={32}/></div>;
 
             return (
-                <div className="flex h-screen text-slate-900 dark:text-slate-100 overflow-hidden flex-col md:flex-row font-sans">
+                <div className="flex h-screen text-slate-900 dark:text-slate-100 overflow-hidden flex-col md:flex-row font-sans transition-colors duration-300">
+                    
+                    {/* HEADER MÓVIL */}
                     <div className="md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center z-30 shadow-sm shrink-0">
-                        <div className="flex items-center gap-2"><AgencyLogo className="w-8 h-8 text-sm" /><span className="font-black text-slate-800 dark:text-white text-lg">CLUSTER</span></div>
+                        <div className="flex items-center gap-2"><AgencyLogo className="w-8 h-8 text-sm" /><span className="font-black text-slate-800 dark:text-white text-lg tracking-tight">CLUSTER</span></div>
                         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><Icon name={isMobileMenuOpen ? "X" : "Menu"} size={24} /></button>
                     </div>
 
-                    <div className={`fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm transition-opacity md:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileMenuOpen(false)} />
+                    {/* OVERLAY */}
+                    <div className={`fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm transition-opacity duration-300 md:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileMenuOpen(false)} />
 
-                    <aside className={`fixed md:relative z-50 h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col w-64 shrink-0 transition-transform duration-300 top-0 left-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+                    {/* SIDEBAR */}
+                    <aside className={`fixed md:relative z-50 h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-xl md:shadow-none w-64 shrink-0 transition-transform duration-300 ease-in-out top-0 left-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
                         <div className="p-8 hidden md:block">
-                            <div className="flex items-center gap-3 mb-1"><AgencyLogo className="w-8 h-8 text-lg" /><h1 className="text-2xl font-black text-slate-800 dark:text-white">CLUSTER</h1></div>
-                            <p className="text-[10px] uppercase font-bold text-slate-400 pl-11">Agency OS</p>
+                            <div className="flex items-center gap-3 mb-1"><AgencyLogo className="w-8 h-8 text-lg shadow-lg shadow-purple-900/20" /><h1 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">CLUSTER</h1></div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-widest pl-11">Agency OS</p>
                         </div>
                         
                         <nav className="flex-1 px-4 space-y-1 pt-20 md:pt-4 overflow-y-auto custom-scroll">
                             <SidebarItem active={view === 'dashboard'} onClick={() => handleNavigate('dashboard')} icon="LayoutDashboard" label="Panel Central" color="purple" />
-                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Equipo & Clientes</div>
+                            
+                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-2">Equipo & Clientes</div>
                             <SidebarItem active={view === 'clients' || view === 'client-detail'} onClick={() => handleNavigate('clients')} icon="Briefcase" label="Clientes" color="blue" />
                             <SidebarItem active={view === 'managers' || view === 'manager-detail'} onClick={() => handleNavigate('managers')} icon="Users" label="Account Managers" color="indigo" />
                             <SidebarItem active={view === 'editors' || view === 'editor-detail'} onClick={() => handleNavigate('editors')} icon="PenTool" label="Editores" color="rose" />
                             
-                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Salas de Trabajo</div>
+                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-2">Salas de Trabajo</div>
                             <SidebarItem active={view === 'account-room'} onClick={() => handleNavigate('account-room')} icon="LayoutList" label="Sala de Accounts" color="indigo" badge={pendingAccounts > 0 ? pendingAccounts : null} badgeColor="bg-indigo-500 text-white" />
                             <SidebarItem active={view === 'editions'} onClick={() => handleNavigate('editions')} icon="Video" label="Sala de Edición" color="amber" badge={urgentEditions > 0 ? urgentEditions : null} badgeColor="bg-red-500 text-white animate-pulse" />
                             
-                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Global</div>
+                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-2">Global</div>
                             <SidebarItem active={view === 'general-calendar'} onClick={() => handleNavigate('general-calendar')} icon="CalendarDays" label="Calendario General" color="blue" />
                             <SidebarItem active={view === 'calendar'} onClick={() => handleNavigate('calendar')} icon="CalendarIcon" label="Agenda Producción" color="emerald" />
                         </nav>
 
+                        {/* FOOTER SIDEBAR CON TEMA OSCURO */}
                         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm">GO</div>
-                                <div><p className="text-sm font-bold">Gerente Ops</p><p className="text-[10px] font-bold text-green-500 uppercase flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> Activo</p></div>
+                                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-md">GO</div>
+                                <div><p className="text-sm font-bold text-slate-700 dark:text-slate-200">Gerente Ops</p><p className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Activo</p></div>
                             </div>
-                            <button onClick={() => setIsDark(!isDark)} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300"><Icon name={isDark ? "Sun" : "Moon"} size={16} /></button>
+                            <button onClick={() => setIsDark(!isDark)} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-sm" title={isDark ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}>
+                                <Icon name={isDark ? "Sun" : "Moon"} size={16} />
+                            </button>
                         </div>
                     </aside>
 
-                    <main className="flex-1 overflow-y-auto relative w-full h-full">
+                    {/* CONTENIDO PRINCIPAL */}
+                    <main className="flex-1 overflow-y-auto relative scroll-smooth w-full h-full bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
                         <div className="p-4 md:p-8 max-w-[1600px] mx-auto min-h-full pb-20">
+                            
+                            {/* VISTAS */}
                             {view === 'dashboard' && <DashboardView clients={clients} managers={managers} events={events} tasks={editingTasks} accountTasks={accountTasks} />}
                             
-                            {/* VISTA DE CLIENTES RESTAURADA */}
+                            {/* Clientes */}
                             {view === 'clients' && <ClientsView clients={clients} onAdd={() => setModalConfig({ isOpen: true, type: 'client' })} onSelect={(c) => { setSelectedClient(c); handleNavigate('client-detail'); }} />}
                             {view === 'client-detail' && selectedClient && <ClientDetail client={selectedClient} managers={managers} onReassignManager={reassignClientManager} onBack={() => handleNavigate('clients')} onUpdate={updateClient} onDelete={() => setDeleteConfirm({ isOpen: true, type: 'client', id: selectedClient.id, title: selectedClient.name })} onEdit={() => setModalConfig({ isOpen: true, type: 'client', data: selectedClient, isEdit: true })} />}
                             
+                            {/* Managers */}
                             {view === 'managers' && <TeamView title="Account Managers" team={managers} iconColor="indigo" onAdd={() => setModalConfig({ isOpen: true, type: 'manager' })} onSelect={(m) => { setSelectedManager(m); handleNavigate('manager-detail'); }} onDelete={(m) => setDeleteConfirm({ isOpen: true, type: 'manager', id: m.id, title: m.name })} onEdit={(m) => setModalConfig({ isOpen: true, type: 'manager', data: m, isEdit: true })} />}
-                            {view === 'manager-detail' && selectedManager && <PersonCalendarDetail person={selectedManager} tasks={accountTasks} title="Planificación de Cuentas" baseColor={legacyColorMap[selectedManager.color] || selectedManager.color || 'indigo'} onBack={() => handleNavigate('managers')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr, contextId: selectedManager.id } })} onEventClick={(e) => handleEventClick(e, 'accountTask')} />}
+                            {view === 'manager-detail' && selectedManager && <PersonCalendarDetail person={selectedManager} tasks={accountTasks} title="Planificación de Cuentas" baseColor={selectedManager.color || 'indigo'} onBack={() => handleNavigate('managers')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr, contextId: selectedManager.id } })} onEventClick={(e) => handleEventClick(e, 'accountTask')} />}
+                            
+                            {/* Editores */}
                             {view === 'editors' && <TeamView title="Editores" team={editors} iconColor="rose" onAdd={() => setModalConfig({ isOpen: true, type: 'editor' })} onSelect={(e) => { setSelectedEditor(e); handleNavigate('editor-detail'); }} onDelete={(e) => setDeleteConfirm({ isOpen: true, type: 'editor', id: e.id, title: e.name })} onEdit={(e) => setModalConfig({ isOpen: true, type: 'editor', data: e, isEdit: true })} />}
                             {view === 'editor-detail' && selectedEditor && <PersonCalendarDetail person={selectedEditor} tasks={editingTasks} title="Planificación de Edición" baseColor={selectedEditor.color || 'rose'} onBack={() => handleNavigate('editors')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr, contextId: selectedEditor.id } })} onEventClick={(e) => handleEventClick(e, 'editingTask')} />}
-                            {view === 'account-room' && <AccountRoomView tasks={accountTasks} managers={managers} clients={clients} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'accountTask', data: task, isEdit: true })} onChangeStatus={changeAccountTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'accountTask' })} legacyColorMap={legacyColorMap} />}
+
+                            {/* Salas de Trabajo (Con Drag & Drop y Back/Next) */}
+                            {view === 'account-room' && <AccountRoomView tasks={accountTasks} managers={managers} clients={clients} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'accountTask', data: task, isEdit: true })} onChangeStatus={changeAccountTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'accountTask' })} />}
                             {view === 'editions' && <EditionsRoomView tasks={editingTasks} editors={editors} clients={clients} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'editingTask', data: task, isEdit: true })} onChangeStatus={changeEditingTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'editingTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'editingTask' })} />}
+
+                            {/* Calendario General Global */}
                             {view === 'general-calendar' && (
-                                <div className="h-full flex flex-col space-y-6 fade-in"><h2 className="text-2xl font-black">Calendario General</h2><div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800"><GeneralCalendarGrid activities={allActivities} onDayClick={(dateStr) => setDayDetailsModal({ isOpen: true, date: dateStr })} /></div></div>
+                                <div className="h-full flex flex-col space-y-6 fade-in">
+                                    <div className="flex justify-between items-center">
+                                        <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">Calendario General</h2>
+                                    </div>
+                                    <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden">
+                                        <GeneralCalendarGrid activities={allActivities} onDayClick={(dateStr) => setDayDetailsModal({ isOpen: true, date: dateStr })} />
+                                    </div>
+                                </div>
                             )}
+
+                            {/* Calendario Solo Producción */}
                             {view === 'calendar' && (
-                                <div className="h-full flex flex-col space-y-6 fade-in"><h2 className="text-2xl font-black">Agenda de Producciones</h2><div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800"><CalendarGrid events={events.filter(e => e.type === 'production')} baseColor="emerald" onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'event', data: { date: dateStr, type: 'production' } })} onEventClick={(e) => handleEventClick(e, 'event')} /></div></div>
+                                <div className="h-full flex flex-col space-y-6 fade-in">
+                                    <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">Agenda de Producciones</h2>
+                                    <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden">
+                                        <CalendarGrid events={events.filter(e => e.type === 'production')} baseColor="emerald" onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'event', data: { date: dateStr, type: 'production' } })} onEventClick={(e) => handleEventClick(e, 'event')} />
+                                    </div>
+                                </div>
                             )}
+
                         </div>
                     </main>
 
+                    {/* MODALES FLOTANTES */}
                     {toast && <Toast message={toast.message} type={toast.type} />}
                     {modalConfig.isOpen && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask }} />}
                     {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
+                    
+                    {/* Menú de Acción para Tareas en Calendario */}
                     <EventActionModal config={eventAction} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
+                    
+                    {/* Modal de Detalle de Día del Calendario General */}
                     <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
+                    
+                    {/* Modal de Notas de Tarea Expandido */}
                     <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} />
                 </div>
             );
         }
 
+        // --- SUB-COMPONENTES UI ---
+
         const SidebarItem = ({ active, onClick, icon, label, color, badge, badgeColor }) => (
-            <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 group ${active ? `bg-${color}-50 dark:bg-${color}-500/20 text-${color}-700 dark:text-${color}-300 shadow-sm border-${color}-100 dark:border-${color}-500/30` : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-transparent"}`}>
-                <div className={`${active ? 'scale-110' : 'group-hover:scale-110'} transition-transform`}><Icon name={icon} size={20}/></div>
+            <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 group ${active ? `bg-${color}-50 dark:bg-${color}-500/20 text-${color}-700 dark:text-${color}-300 shadow-sm border-${color}-100 dark:border-${color}-500/30` : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200 border-transparent"}`}>
+                <div className={`transition-transform duration-200 ${active ? 'scale-110' : 'group-hover:scale-110'}`}><Icon name={icon} size={20}/></div>
                 <span className="font-bold text-sm flex-1 text-left">{label}</span>
                 {badge && <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${badgeColor}`}>{badge}</span>}
+                {active && !badge && <Icon name="ChevronRight" size={14} className={`ml-auto text-${color}-400 dark:text-${color}-500`} />}
             </button>
         );
 
         const Button = ({ children, onClick, type = 'button', color = 'purple', full, icon }) => (
-            <button type={type} onClick={onClick} className={`${full ? 'w-full' : ''} bg-${color}-600 hover:bg-${color}-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2`}><Icon name={icon}/> {children}</button>
+            <button type={type} onClick={onClick} className={`${full ? 'w-full' : ''} bg-${color}-600 hover:bg-${color}-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-${color}-500/30 flex items-center justify-center gap-2 transition-all transform active:scale-95`}>{icon && <Icon name={icon}/>} {children}</button>
         );
 
-        const EmptyState = ({ icon, text }) => (<div className="flex flex-col items-center justify-center p-6 text-center h-full opacity-60"><Icon name={icon} size={32} className="text-slate-400 mb-3" /><p className="text-sm font-bold text-slate-500">{text}</p></div>);
-
-        const SearchBar = ({ searchTerm, setSearchTerm, placeholder }) => (
-            <div className="relative w-full md:w-64 shrink-0"><Icon name="Search" className="absolute left-3 top-3 text-slate-400" size={16}/><input type="text" placeholder={placeholder} value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none"/></div>
-        );
-
-        // COMPONENTES DE FORMULARIO RESTAURADOS
-        const Input = ({ label, ...props }) => (<div>{label && <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">{label}</label>}<input className="w-full p-4 md:p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-medium text-slate-700 dark:text-slate-200 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500" {...props} /></div>);
-        
-        const CheckItem = ({ label, checked, onToggle }) => (
-            <button onClick={onToggle} className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${checked ? 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30 text-green-800 dark:text-green-400' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600'}`}><span className="font-bold text-sm">{label}</span>{checked ? <Icon name="CheckCircle2" size={20} className="text-green-500" /> : <Icon name="Circle" size={20} />}</button>
-        );
-
-        const StatCard = ({ title, value, icon, color }) => (
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 flex justify-between">
-                <div><p className="text-xs font-bold text-slate-400 uppercase">{title}</p><p className="text-3xl font-black text-slate-800 dark:text-white">{value}</p></div>
-                <div className={`p-3 rounded-xl bg-${color}-50 text-${color}-600 dark:bg-${color}-500/20 dark:text-${color}-400`}><Icon name={icon} size={24}/></div>
+        const EmptyState = ({ icon, text }) => (
+            <div className="flex flex-col items-center justify-center p-6 text-center h-full opacity-60">
+                <Icon name={icon} size={32} className="text-slate-400 dark:text-slate-500 mb-3" />
+                <p className="text-sm font-bold text-slate-500 dark:text-slate-400">{text}</p>
             </div>
         );
 
+        const SearchBar = ({ searchTerm, setSearchTerm, placeholder }) => (
+            <div className="relative w-full md:w-64 shrink-0">
+                <Icon name="Search" className="absolute left-3 top-3 text-slate-400 dark:text-slate-500" size={16}/>
+                <input type="text" placeholder={placeholder} value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"/>
+            </div>
+        );
+
+        const StatCard = ({ title, value, icon, color }) => (
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+                <div><p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">{title}</p><p className="text-3xl font-black text-slate-800 dark:text-white">{value}</p></div>
+                <div className={`p-3 rounded-xl bg-${color}-50 dark:bg-${color}-500/20 text-${color}-600 dark:text-${color}-400`}><Icon name={icon} size={24}/></div>
+            </div>
+        );
+
+        // --- DASHBOARD MEJORADO (Con Métricas) ---
         const DashboardView = ({ clients, managers, events, tasks, accountTasks }) => {
+            const contentos = clients.filter(c => c.mood === 'Contento').length;
+            const neutrales = clients.filter(c => c.mood === 'Neutral').length;
+            const enRiesgo = clients.filter(c => c.mood === 'En Riesgo').length;
+            const totalClients = clients.length || 1;
+
             const allTasks = [...tasks, ...accountTasks];
-            const compPercent = Math.round((allTasks.filter(t => t.status === 'aprobado' || t.status === 'publicado').length / (allTasks.length || 1)) * 100);
+            const completedTasks = allTasks.filter(t => t.status === 'aprobado' || t.status === 'publicado').length;
+            const totalTasks = allTasks.length || 1;
+            const compPercent = Math.round((completedTasks / totalTasks) * 100);
+
             return (
-                <div className="space-y-8 fade-in">
-                    <h2 className="text-2xl font-black">Resumen Operativo</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"><StatCard title="Clientes Activos" value={clients.length} icon="Briefcase" color="blue" /><StatCard title="Managers" value={managers.length} icon="Users" color="indigo" /><StatCard title="Tareas Accounts" value={accountTasks.length} icon="LayoutList" color="indigo" /><StatCard title="Pendientes Edición" value={tasks.length} icon="Video" color="amber" /></div>
+                <div className="space-y-8 animate-in fade-in duration-500">
+                    <div><h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">Resumen Operativo</h2></div>
+                    
+                    {/* Estadísticas Top */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                        <StatCard title="Clientes Activos" value={clients.length} icon="Briefcase" color="blue" />
+                        <StatCard title="Account Managers" value={managers.length} icon="Users" color="indigo" />
+                        <StatCard title="Tareas Accounts" value={accountTasks.filter(t => t.status !== 'publicado').length} icon="LayoutList" color="indigo" />
+                        <StatCard title="Pendientes Edición" value={tasks.filter(t => t.status !== 'aprobado').length} icon="Video" color="amber" />
+                    </div>
+
+                    {/* Métricas Avanzadas */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                            <div>
+                                <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Salud de la Cartera de Clientes</h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">Distribución según satisfacción actual</p>
+                            </div>
+                            <div className="mt-6">
+                                <div className="flex gap-1 h-6 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-inner">
+                                    <div style={{width: `${(contentos/totalClients)*100}%`}} className="bg-green-500 hover:brightness-110 transition-all cursor-help" title={`Contentos: ${contentos}`}></div>
+                                    <div style={{width: `${(neutrales/totalClients)*100}%`}} className="bg-amber-400 hover:brightness-110 transition-all cursor-help" title={`Neutrales: ${neutrales}`}></div>
+                                    <div style={{width: `${(enRiesgo/totalClients)*100}%`}} className="bg-red-500 hover:brightness-110 transition-all cursor-help animate-pulse" title={`En Riesgo: ${enRiesgo}`}></div>
+                                </div>
+                                <div className="flex justify-between mt-4 text-[10px] font-bold uppercase tracking-wider">
+                                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm"></span> <span className="text-slate-600 dark:text-slate-300">Sanos ({contentos})</span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm"></span> <span className="text-slate-600 dark:text-slate-300">Neutral ({neutrales})</span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"></span> <span className="text-slate-600 dark:text-slate-300">Riesgo ({enRiesgo})</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                            <div>
+                                <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Progreso Global de Tareas</h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">Volumen de pendientes completados vs creados</p>
+                            </div>
+                            <div className="mt-6 flex items-center gap-6">
+                                <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-6 overflow-hidden shadow-inner p-1">
+                                    <div style={{width: `${compPercent}%`}} className="bg-purple-600 h-full rounded-full flex items-center justify-end px-2 transition-all duration-1000 ease-out relative overflow-hidden">
+                                        <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]"></div>
+                                    </div>
+                                </div>
+                                <span className="text-3xl font-black text-purple-600 dark:text-purple-400 w-16 text-right">{compPercent}%</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             );
         };
 
         const TeamView = ({ title, team, iconColor, onAdd, onSelect, onDelete, onEdit }) => {
             const [searchTerm, setSearchTerm] = useState('');
-            const filtered = team.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-            const legacyColorMap = { c1: 'purple', c2: 'blue', c3: 'indigo', c4: 'amber', c5: 'fuchsia', c6: 'violet', c7: 'cyan', c8: 'orange', c9: 'indigo', c10: 'stone' };
-
+            const filteredTeam = team.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+            
             return (
                 <div className="space-y-6 fade-in">
-                    <div className="flex justify-between items-center"><h2 className="text-2xl font-black">{title}</h2><div className="flex gap-3"><SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Buscar..." /><Button onClick={onAdd} icon="UserPlus" color={iconColor}>Agregar</Button></div></div>
-                    {filtered.length === 0 ? <EmptyState icon="Users" text="No hay miembros" /> : <div className="grid grid-cols-3 gap-6">{filtered.map(p => {
-                        let mappedColorName = legacyColorMap[p.color] || p.color;
-                        const style = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
-                        return (<div key={p.id} onClick={() => onSelect(p)} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 cursor-pointer relative group"><div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100"><button onClick={(e)=>{e.stopPropagation();onEdit(p);}} className="text-blue-500 p-2"><Icon name="Edit" size={16}/></button><button onClick={(e)=>{e.stopPropagation();onDelete(p);}} className="text-red-500 p-2"><Icon name="Trash2" size={16}/></button></div><div className="flex items-center gap-4"><div className={`w-14 h-14 rounded-xl flex items-center justify-center font-black text-2xl ${style.bg} ${style.text}`}>{p.name.charAt(0)}</div><div><h3 className="font-bold">{p.name}</h3></div></div></div>);
-                    })}</div>}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">{title}</h2>
+                        <div className="flex flex-col md:flex-row w-full md:w-auto gap-3">
+                            <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Buscar miembro..." />
+                            <Button onClick={onAdd} icon="UserPlus" color={iconColor}>Agregar a {title}</Button>
+                        </div>
+                    </div>
+                    {filteredTeam.length === 0 ? (
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 h-64"><EmptyState icon="Users" text="No hay miembros en este equipo aún." /></div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {filteredTeam.map(person => {
+                                const style = PERSON_COLORS[person.color] || PERSON_COLORS.slate;
+                                return (
+                                    <div key={person.id} onClick={() => onSelect(person)} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-xl hover:border-slate-300 dark:hover:border-slate-600 transition-all cursor-pointer group relative">
+                                        <div className="absolute top-4 right-4 flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                            <button onClick={(e) => { e.stopPropagation(); onEdit(person); }} className="text-slate-400 dark:text-slate-500 hover:text-blue-500 dark:hover:text-blue-400 p-3 md:p-2 bg-slate-50 dark:bg-slate-800 rounded-full hover:bg-blue-50 dark:hover:bg-slate-700"><Icon name="Edit" size={16}/></button>
+                                            <button onClick={(e) => { e.stopPropagation(); onDelete(person); }} className="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 p-3 md:p-2 bg-slate-50 dark:bg-slate-800 rounded-full hover:bg-red-50 dark:hover:bg-slate-700"><Icon name="Trash2" size={16}/></button>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <div className={`h-14 w-14 ${style.bg} rounded-xl flex items-center justify-center text-2xl font-black ${style.text} shadow-sm border border-black/5 dark:border-white/5`}>
+                                                {person.name.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-lg text-slate-800 dark:text-white pr-16 md:pr-12 truncate">{person.name}</h3>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{person.email || 'Miembro del equipo'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             );
         };
 
         const PersonCalendarDetail = ({ person, tasks, title, baseColor, onBack, onAddEvent, onEventClick }) => {
+            const style = PERSON_COLORS[baseColor] || PERSON_COLORS.slate;
             return (
-                <div className="h-full flex flex-col space-y-6 fade-in"><div className="flex items-center gap-4"><button onClick={onBack} className="p-2"><Icon name="ChevronLeft"/></button><h2 className="text-2xl font-black">{person.name}</h2></div><div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl"><CalendarGrid events={tasks.filter(t => t.contextId === person.id)} baseColor={baseColor} onAdd={onAddEvent} onEventClick={onEventClick} /></div></div>
+                <div className="h-full flex flex-col space-y-6 fade-in">
+                    <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                        <button onClick={onBack} className="p-3 md:p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300"><Icon name="ChevronLeft"/></button>
+                        <div>
+                            <h2 className="text-2xl font-black text-slate-800 dark:text-white flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm shadow-sm border border-black/5 dark:border-white/5 ${style.bg} ${style.text}`}>{person.name.charAt(0).toUpperCase()}</div>
+                                {person.name}
+                            </h2>
+                            <span className="text-sm font-bold text-slate-500 dark:text-slate-400">{title}</span>
+                        </div>
+                    </div>
+                    <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden">
+                        <CalendarGrid events={tasks.filter(t => t.contextId === person.id)} baseColor={baseColor} onAdd={onAddEvent} onEventClick={onEventClick} />
+                    </div>
+                </div>
             );
         };
 
         const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, title, onAdd, btnColor, btnIcon, searchTerm, setSearchTerm }) => {
+            const today = getHondurasTodayStr();
             return (
-                <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800"><div className="flex items-center gap-4"><h2 className="text-xl font-black mr-4">{title}</h2><div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl"><button onClick={()=>setFilterMode('date')} className={`px-4 py-2 text-sm font-bold rounded-lg ${filterMode==='date'?'bg-white dark:bg-slate-700':''}`}>Día Específico</button><button onClick={()=>setFilterMode('overdue')} className={`px-4 py-2 text-sm font-bold rounded-lg ${filterMode==='overdue'?'bg-red-500 text-white':''}`}>Atrasadas</button><button onClick={()=>setFilterMode('all')} className={`px-4 py-2 text-sm font-bold rounded-lg ${filterMode==='all'?'bg-white dark:bg-slate-700':''}`}>Ver Todas</button></div>{filterMode === 'date' && <input type="date" value={currentDate} onChange={(e)=>setCurrentDate(e.target.value)} className="text-sm font-bold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2"/>}</div><div className="flex gap-3"><SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Buscar tarea..." /><Button onClick={()=>onAdd(currentDate)} color={btnColor} icon={btnIcon}>Nueva Tarea</Button></div></div>
+                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full xl:w-auto">
+                        <div className="flex items-center gap-3">
+                            <Icon name="LayoutList" className={`text-${btnColor}-500 dark:text-${btnColor}-400 hidden md:block`} size={28}/>
+                            <h2 className="text-xl font-black text-slate-800 dark:text-white mr-4">{title}</h2>
+                        </div>
+                        
+                        {/* Filtros Rápidos */}
+                        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full md:w-auto overflow-x-auto custom-scroll">
+                            <button onClick={() => setFilterMode('date')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'date' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Día Específico</button>
+                            <button onClick={() => setFilterMode('overdue')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${filterMode === 'overdue' ? `bg-red-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-red-500'}`}>Atrasadas <Icon name="Flame" size={14}/></button>
+                            <button onClick={() => setFilterMode('all')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Ver Todas</button>
+                        </div>
+
+                        {filterMode === 'date' && (
+                            <div className="flex items-center gap-2 w-full md:w-auto">
+                                <input type="date" value={currentDate} onChange={(e) => setCurrentDate(e.target.value)} className="w-full md:w-auto text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 outline-none"/>
+                                {currentDate === today && <span className="text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 font-bold px-2 py-1 rounded-full shrink-0">Hoy</span>}
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row w-full xl:w-auto gap-3 items-center">
+                        <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Buscar tarea..." />
+                        <Button onClick={() => onAdd(filterMode === 'date' ? currentDate : today)} color={btnColor} icon={btnIcon} full>Nueva Tarea</Button>
+                    </div>
+                </div>
             );
         };
 
-        const AccountRoomView = ({ tasks, managers, clients, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick, legacyColorMap }) => {
+        // --- SALAS DE TRABAJO CON DRAG & DROP Y BOTONES BACK/NEXT ---
+        const AccountRoomView = ({ tasks, managers, clients, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
             const [currentDate, setCurrentDate] = useState(getHondurasTodayStr()); 
             const [searchTerm, setSearchTerm] = useState('');
             const [filterMode, setFilterMode] = useState('date');
             const [draggedTaskId, setDraggedTaskId] = useState(null);
-            const columns = [{ id: 'por_disenar', title: 'Por Diseñar', color: 'slate' }, { id: 'aprobacion_interna', title: 'Aprobación Interna', color: 'blue' }, { id: 'aprobado_internamente', title: 'Aprobado Interno', color: 'emerald' }, { id: 'publicado', title: 'Publicado', color: 'indigo' }];
-            const filtered = tasks.filter(t => { if(searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase())) return false; if(filterMode === 'date') return t.date === currentDate; if(filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'publicado'; return true; });
-            
-            const handleDragStart = (e, taskId) => { setDraggedTaskId(taskId); setTimeout(()=>e.target.classList.add('opacity-50'),0); };
-            const handleDragEnd = (e) => { e.target.classList.remove('opacity-50'); setDraggedTaskId(null); };
+
+            const columns = [
+                { id: 'por_disenar', title: 'Por Diseñar', color: 'slate' },
+                { id: 'aprobacion_interna', title: 'Aprobación Interna', color: 'blue' },
+                { id: 'aprobado_internamente', title: 'Aprobado Interno', color: 'emerald' },
+                { id: 'publicado', title: 'Publicado', color: 'indigo' }
+            ];
+
+            const filteredTasks = tasks.filter(t => {
+                if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+                if (filterMode === 'date') return t.date === currentDate;
+                if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'publicado';
+                return true; 
+            });
+
+            const handleDragStart = (e, taskId) => {
+                setDraggedTaskId(taskId);
+                e.dataTransfer.effectAllowed = 'move';
+                
+                try {
+                    // Crear un clon exacto para evitar la transparencia por defecto del navegador (Opacidad 100%)
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    const clone = e.currentTarget.cloneNode(true);
+                    clone.id = "custom-drag-ghost-" + taskId;
+                    clone.style.width = `${rect.width}px`;
+                    clone.style.height = `${rect.height}px`;
+                    clone.style.position = 'absolute';
+                    clone.style.top = '-9999px';
+                    clone.style.left = '-9999px';
+                    clone.style.opacity = '1'; 
+                    clone.style.backgroundColor = document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff';
+                    clone.style.borderRadius = '0.75rem';
+                    clone.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.4)';
+                    clone.style.transform = 'rotate(3deg) scale(1.05)'; // Efecto visual 3D al levantar
+                    clone.style.zIndex = '99999';
+                    clone.style.pointerEvents = 'none';
+                    document.body.appendChild(clone);
+                    
+                    e.dataTransfer.setDragImage(clone, x, y);
+                } catch(err) { console.error("Ghost clone error:", err); }
+
+                const target = e.currentTarget;
+                // Oculta la tarjeta original sacándola del flujo para que no ocupe espacio
+                setTimeout(() => target.classList.add('drag-source-hidden'), 0);
+            };
+
+            const handleDragEnd = (e, taskId) => {
+                e.currentTarget.classList.remove('drag-source-hidden');
+                setDraggedTaskId(null);
+                document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+                
+                // Limpiar el clon virtual de arrastre
+                const clone = document.getElementById("custom-drag-ghost-" + taskId);
+                if (clone) clone.remove();
+            };
+
+            const handleDragOver = (e) => {
+                e.preventDefault();
+                e.currentTarget.classList.add('drag-over');
+            };
+
+            const handleDragLeave = (e) => {
+                e.currentTarget.classList.remove('drag-over');
+            };
+
+            const handleDrop = (e, targetStatus) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('drag-over');
+                if (draggedTaskId) {
+                    const task = tasks.find(t => t.id === draggedTaskId);
+                    if (task && task.status !== targetStatus) {
+                        onChangeStatus(task, targetStatus);
+                    }
+                }
+            };
 
             return (
-                <div className="h-full flex flex-col space-y-6 fade-in"><DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} title="Sala de Accounts" onAdd={onAdd} btnColor="indigo" btnIcon="Plus" searchTerm={searchTerm} setSearchTerm={setSearchTerm} /><div className="flex-1 grid grid-cols-4 gap-4">{columns.map((col, idx) => {
-                    const colTasks = filtered.filter(t => t.status === col.id);
-                    return (<div key={col.id} className="bg-slate-100 dark:bg-slate-800/50 rounded-2xl flex flex-col" onDragOver={e=>e.preventDefault()} onDrop={(e)=>{e.preventDefault(); if(draggedTaskId) onChangeStatus(tasks.find(t=>t.id===draggedTaskId), col.id)}}><div className={`p-3 font-black text-[11px] uppercase bg-${col.color}-50 text-${col.color}-700`}>{col.title} ({colTasks.length})</div><div className="p-3 flex-1 overflow-y-auto space-y-3">{colTasks.map(t => {
-                        const manager = managers.find(m => m.id === t.contextId);
-                        let mappedColorName = legacyColorMap[manager?.color] || manager?.color;
-                        const mStyles = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
-                        
-                        return (
-                        <div key={t.id} draggable onDragStart={e=>handleDragStart(e,t.id)} onDragEnd={handleDragEnd} onClick={()=>onTaskClick(t)} className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border-l-4 border-l-indigo-500 cursor-pointer relative group">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="font-bold text-sm truncate">{t.title}</span>
-                                <div className="flex gap-2 opacity-0 group-hover:opacity-100"><button onClick={(e)=>{e.stopPropagation();onEdit(t)}} className="text-blue-500"><Icon name="Edit" size={14}/></button><button onClick={(e)=>{e.stopPropagation();onDelete(t.id)}} className="text-red-500"><Icon name="Trash2" size={14}/></button></div>
-                            </div>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border border-black/5 dark:border-white/5 ${mStyles.bg} ${mStyles.text}`}>{manager ? manager.name : 'Sin asignar'}</span>
-                            <div className="flex gap-1 mt-3">
-                                {idx > 0 && <button onClick={(e)=>{e.stopPropagation(); onChangeStatus(t, columns[idx-1].id)}} className="text-[10px] bg-slate-50 px-2 py-1 rounded">Atrás</button>} 
-                                {idx < 3 && <button onClick={(e)=>{e.stopPropagation(); onChangeStatus(t, columns[idx+1].id)}} className="text-[10px] bg-indigo-50 px-2 py-1 rounded">Avanzar</button>}
-                            </div>
-                        </div>)})}</div></div>);
-                })}</div></div>
+                <div className="h-full flex flex-col space-y-6 fade-in">
+                    <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} title="Sala de Accounts" onAdd={onAdd} btnColor="indigo" btnIcon="Plus" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+                    
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
+                        {columns.map((col, colIndex) => {
+                            const colTasks = filteredTasks.filter(t => t.status === col.id);
+                            const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
+                            const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
+
+                            return (
+                                <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300"
+                                     onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(e) => handleDrop(e, col.id)}>
+                                    
+                                    <div className={`p-3 font-black text-[11px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
+                                        {col.title} <span className="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
+                                    </div>
+                                    
+                                    <div className="p-3 flex-1 overflow-y-auto space-y-3 custom-scroll">
+                                        {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacío (Arrastra tareas aquí)" /> : 
+                                        colTasks.map(t => {
+                                            const manager = managers.find(m => m.id === t.contextId);
+                                            const client = clients.find(c => c.id === t.clientId);
+                                            const mStyles = PERSON_COLORS[manager?.color] || PERSON_COLORS.slate;
+                                            const isOverdue = t.date < getHondurasTodayStr() && col.id !== 'publicado';
+                                            
+                                            return (
+                                                <div key={t.id} onClick={() => onTaskClick(t)} 
+                                                     draggable="true" onDragStart={(e) => handleDragStart(e, t.id)} onDragEnd={(e) => handleDragEnd(e, t.id)}
+                                                     className={`bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all group cursor-grab active:cursor-grabbing border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${isOverdue ? 'border-l-red-500 dark:bg-red-950/20' : 'border-l-indigo-500'}`}>
+                                                    
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div className="flex flex-col gap-1.5 items-start">
+                                                            {client && (
+                                                                <span className="text-[9px] font-black uppercase bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800 flex items-center gap-1 max-w-[140px] truncate">
+                                                                    <Icon name="Briefcase" size={10}/> {client.name}
+                                                                </span>
+                                                            )}
+                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border border-black/5 dark:border-white/5 ${mStyles.bg} ${mStyles.text}`}>{manager ? manager.name : 'Sin asignar'}</span>
+                                                        </div>
+                                                        <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={(e) => { e.stopPropagation(); onEdit(t); }} className="text-slate-400 hover:text-blue-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Edit" size={16}/></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Trash2" size={16}/></button>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <p className="font-bold text-slate-700 dark:text-slate-200 text-sm mb-3 pr-2 leading-tight">{t.title}</p>
+                                                    
+                                                    {isOverdue && (
+                                                        <div className="absolute bottom-11 right-2 flex items-center gap-1 text-[9px] font-black text-red-500 bg-red-50 dark:bg-red-900/50 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800">
+                                                            Atrasado <Icon name="Flame" size={10} className="animate-pulse"/>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Botones Back / Avanzar */}
+                                                    <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                                        {prevStatus && (
+                                                            <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, prevStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}>
+                                                                <Icon name="ChevronLeft" size={12}/> Atrás
+                                                            </button>
+                                                        )}
+                                                        {nextStatus && (
+                                                            <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, nextStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-${col.color}-50 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-400 hover:bg-${col.color}-100 dark:hover:bg-${col.color}-500/30 transition-colors`}>
+                                                                {nextStatus === 'publicado' ? 'Publicar' : 'Avanzar'} <Icon name={nextStatus === 'publicado' ? "CheckCircle2" : "ChevronRight"} size={12}/>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
             );
         };
 
@@ -519,34 +828,168 @@
             const [searchTerm, setSearchTerm] = useState('');
             const [filterMode, setFilterMode] = useState('date');
             const [draggedTaskId, setDraggedTaskId] = useState(null);
-            
+
             const columns = [
-                { id: 'editar', title: 'Por Editar', color: 'slate' }, 
-                { id: 'correccion', title: 'En Corrección', color: 'amber' }, 
-                { id: 'aprobado', title: 'Aprobado', color: 'emerald' }, 
-                { id: 'publicado', title: 'Publicado', color: 'indigo' }
+                { id: 'editar', title: 'Por Editar', color: 'slate' },
+                { id: 'correccion', title: 'En Corrección', color: 'amber' },
+                { id: 'aprobado', title: 'Aprobado', color: 'emerald' }
             ];
             
-            const filtered = tasks.filter(t => { if(searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase())) return false; if(filterMode === 'date') return t.date === currentDate; if(filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'publicado'; return true; });
-            const handleDragStart = (e, taskId) => { setDraggedTaskId(taskId); setTimeout(()=>e.target.classList.add('opacity-50'),0); };
-            const handleDragEnd = (e) => { e.target.classList.remove('opacity-50'); setDraggedTaskId(null); };
+            const priorityStyles = {
+                urgente: 'bg-red-50 dark:bg-red-500/20 border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-400',
+                normal: 'bg-amber-50 dark:bg-amber-500/20 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400',
+                recurrente: 'bg-emerald-50 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
+            };
+
+            const filteredTasks = tasks.filter(t => {
+                if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+                if (filterMode === 'date') return t.date === currentDate;
+                if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'aprobado';
+                return true; 
+            });
+
+            const handleDragStart = (e, taskId) => {
+                setDraggedTaskId(taskId);
+                e.dataTransfer.effectAllowed = 'move';
+                
+                try {
+                    // Crear clon para asegurar 100% de opacidad y efecto 3D al arrastrar
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    const clone = e.currentTarget.cloneNode(true);
+                    clone.id = "custom-drag-ghost-edit-" + taskId;
+                    clone.style.width = `${rect.width}px`;
+                    clone.style.height = `${rect.height}px`;
+                    clone.style.position = 'absolute';
+                    clone.style.top = '-9999px';
+                    clone.style.left = '-9999px';
+                    clone.style.opacity = '1';
+                    clone.style.backgroundColor = document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff';
+                    clone.style.borderRadius = '0.75rem';
+                    clone.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.4)';
+                    clone.style.transform = 'rotate(3deg) scale(1.05)';
+                    clone.style.zIndex = '99999';
+                    clone.style.pointerEvents = 'none';
+                    document.body.appendChild(clone);
+                    
+                    e.dataTransfer.setDragImage(clone, x, y);
+                } catch(err) { console.error("Ghost clone error:", err); }
+
+                const target = e.currentTarget;
+                // Oculta la tarjeta original sacándola del flujo para que no ocupe espacio
+                setTimeout(() => target.classList.add('drag-source-hidden'), 0);
+            };
+
+            const handleDragEnd = (e, taskId) => {
+                e.currentTarget.classList.remove('drag-source-hidden');
+                setDraggedTaskId(null);
+                document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+                
+                const clone = document.getElementById("custom-drag-ghost-edit-" + taskId);
+                if (clone) clone.remove();
+            };
+
+            const handleDragOver = (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
+            const handleDragLeave = (e) => { e.currentTarget.classList.remove('drag-over'); };
+
+            const handleDrop = (e, targetStatus) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('drag-over');
+                if (draggedTaskId) {
+                    const task = tasks.find(t => t.id === draggedTaskId);
+                    if (task && task.status !== targetStatus) onChangeStatus(task, targetStatus);
+                }
+            };
 
             return (
-                <div className="h-full flex flex-col space-y-6 fade-in"><DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} title="Sala de Edición" onAdd={onAdd} btnColor="amber" btnIcon="Video" searchTerm={searchTerm} setSearchTerm={setSearchTerm} /><div className="flex-1 grid grid-cols-4 gap-4">{columns.map((col, idx) => {
-                    const colTasks = filtered.filter(t => t.status === col.id);
-                    return (<div key={col.id} className="bg-slate-100 dark:bg-slate-800/50 rounded-2xl flex flex-col" onDragOver={e=>e.preventDefault()} onDrop={(e)=>{e.preventDefault(); if(draggedTaskId) onChangeStatus(tasks.find(t=>t.id===draggedTaskId), col.id)}}><div className={`p-3 font-black text-[11px] uppercase bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>{col.title} ({colTasks.length})</div><div className="p-3 flex-1 overflow-y-auto space-y-3">{colTasks.map(t => {
-                        const isOverdue = t.date < getHondurasTodayStr() && t.status !== 'publicado';
-                        return (
-                        <div key={t.id} draggable onDragStart={e=>handleDragStart(e,t.id)} onDragEnd={handleDragEnd} onClick={()=>onTaskClick(t)} className={`bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border-l-4 cursor-pointer relative group ${isOverdue ? 'border-l-red-500' : 'border-l-amber-500'}`}><div className="flex justify-between"><span className="font-bold text-sm truncate">{t.title}</span><div className="flex gap-2 opacity-0 group-hover:opacity-100"><button onClick={(e)=>{e.stopPropagation();onEdit(t)}} className="text-blue-500"><Icon name="Edit" size={14}/></button><button onClick={(e)=>{e.stopPropagation();onDelete(t.id)}} className="text-red-500"><Icon name="Trash2" size={14}/></button></div></div>{isOverdue && <div className="text-[9px] text-red-500 font-bold mt-1">Atrasado</div>}<div className="flex gap-1.5 mt-3 pt-3 border-t border-slate-100">{idx > 0 && <button onClick={(e)=>{e.stopPropagation(); onChangeStatus(t, columns[idx-1].id)}} className="flex-1 text-[10px] bg-slate-50 dark:bg-slate-800 py-1.5 rounded font-bold text-center">Atrás</button>} {idx < 3 && <button onClick={(e)=>{e.stopPropagation(); onChangeStatus(t, columns[idx+1].id)}} className={`flex-1 text-[10px] bg-${col.color}-50 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-400 py-1.5 rounded font-bold text-center`}>{idx === 2 ? 'Publicar' : 'Avanzar'}</button>}</div></div>
-                    )})}</div></div>);
-                })}</div></div>
+                <div className="h-full flex flex-col space-y-6 fade-in">
+                    <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} title="Sala de Edición" onAdd={onAdd} btnColor="amber" btnIcon="Video" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+                    
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden">
+                        {columns.map((col, colIndex) => {
+                            const colTasks = filteredTasks.filter(t => t.status === col.id);
+                            const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
+                            const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
+
+                            return (
+                                <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300"
+                                     onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(e) => handleDrop(e, col.id)}>
+                                    
+                                    <div className={`p-4 font-black text-xs uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
+                                        {col.title} <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
+                                    </div>
+                                    
+                                    <div className="p-4 flex-1 overflow-y-auto space-y-3 custom-scroll">
+                                        {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacío (Arrastra tareas aquí)" /> : 
+                                        colTasks.map(t => {
+                                            const editor = editors.find(e => e.id === t.contextId);
+                                            const client = clients.find(c => c.id === t.clientId);
+                                            const pStyle = priorityStyles[t.priority] || priorityStyles.normal;
+                                            const eStyles = PERSON_COLORS[editor?.color] || PERSON_COLORS.slate;
+                                            const isOverdue = t.date < getHondurasTodayStr() && col.id !== 'aprobado';
+                                            const borderLeftColor = isOverdue ? 'border-l-red-600' : (t.priority === 'urgente' ? 'border-l-red-500' : t.priority === 'recurrente' ? 'border-l-emerald-500' : 'border-l-amber-500');
+
+                                            return (
+                                                <div key={t.id} onClick={() => onTaskClick(t)} 
+                                                     draggable="true" onDragStart={(e) => handleDragStart(e, t.id)} onDragEnd={(e) => handleDragEnd(e, t.id)}
+                                                     className={`bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all group cursor-grab active:cursor-grabbing border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${borderLeftColor} ${isOverdue ? 'dark:bg-red-950/10' : ''}`}>
+                                                    
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div className="flex flex-col items-start gap-1.5">
+                                                            {client && (
+                                                                <span className="text-[9px] font-black uppercase bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800 flex items-center gap-1 max-w-[140px] truncate">
+                                                                    <Icon name="Briefcase" size={10}/> {client.name}
+                                                                </span>
+                                                            )}
+                                                            <div className="flex gap-2">
+                                                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase border ${pStyle}`}>{t.priority || 'Normal'}</span>
+                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border border-black/5 dark:border-white/5 ${eStyles.bg} ${eStyles.text}`}>{editor ? editor.name : 'Sin asignar'}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={(e) => { e.stopPropagation(); onEdit(t); }} className="text-slate-400 hover:text-blue-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Edit" size={16}/></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Trash2" size={16}/></button>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <p className="font-bold text-slate-800 dark:text-slate-100 text-sm mb-1 leading-tight">{t.title}</p>
+                                                    {t.notes && <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 truncate max-w-[80%]">{t.notes}</p>}
+                                                    
+                                                    {isOverdue && (
+                                                        <div className="absolute bottom-12 right-2 flex items-center gap-1 text-[9px] font-black text-red-500 bg-red-50 dark:bg-red-900/50 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800">
+                                                            Atrasado <Icon name="Flame" size={10} className="animate-pulse"/>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Botones Back / Avanzar */}
+                                                    <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                                        {prevStatus && (
+                                                            <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, prevStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}>
+                                                                <Icon name="ChevronLeft" size={12}/> Atrás
+                                                            </button>
+                                                        )}
+                                                        {nextStatus && (
+                                                            <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, nextStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-${col.color}-50 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-400 hover:bg-${col.color}-100 dark:hover:bg-${col.color}-500/30 transition-colors`}>
+                                                                {nextStatus === 'aprobado' ? 'Aprobar' : 'Avanzar'} <Icon name={nextStatus === 'aprobado' ? "CheckCircle2" : "ChevronRight"} size={12}/>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
             );
         };
 
-        // --- VISTA DE CLIENTES RESTAURADA ---
         const ClientsView = ({ clients, onAdd, onSelect }) => {
             const [searchTerm, setSearchTerm] = useState('');
-            const filteredClients = clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.niche?.toLowerCase().includes(searchTerm.toLowerCase()));
+            const filteredClients = clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.niche.toLowerCase().includes(searchTerm.toLowerCase()));
 
             return (
                 <div className="space-y-6 fade-in">
@@ -570,7 +1013,7 @@
                                         <div className={`w-3 h-3 rounded-full shadow-sm border border-white dark:border-slate-900 ${c.mood === 'En Riesgo' ? 'bg-red-500 animate-pulse' : c.mood === 'Neutral' ? 'bg-amber-400' : 'bg-green-500'}`}></div>
                                     </div>
                                     <h3 className="text-lg font-bold text-slate-800 dark:text-white pr-4 truncate">{c.name}</h3>
-                                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">{c.niche || 'Sin rubro'}</p>
+                                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">{c.niche}</p>
                                     <div className="pt-4 border-t border-slate-50 dark:border-slate-800 mt-4 flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 truncate"><Icon name="UserCircle2" size={16} className="text-blue-400 dark:text-blue-500 shrink-0"/> {c.manager || 'Sin asignar'}</div>
                                 </div>
                             ))}
@@ -580,7 +1023,6 @@
             );
         };
 
-        // --- DETALLE DE CLIENTE RESTAURADO ---
         const ClientDetail = ({ client, managers, onReassignManager, onBack, onUpdate, onDelete, onEdit }) => (
             <div className="space-y-6 max-w-5xl mx-auto fade-in">
                 <button onClick={onBack} className="flex items-center gap-2 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 font-bold text-sm uppercase p-2 -ml-2"><Icon name="ChevronLeft" size={16}/> Volver</button>
@@ -595,6 +1037,7 @@
                             <div>
                                 <h1 className="text-2xl md:text-3xl font-black">{client.name}</h1>
                                 
+                                {/* NUEVO: Selector directo de Account Manager */}
                                 <div className="flex items-center gap-2 mt-2 bg-white/5 px-3 py-1.5 rounded-lg inline-flex border border-white/10 relative transition-all hover:bg-white/10">
                                     <Icon name="UserCircle2" size={14} className="text-blue-300"/>
                                     <select 
@@ -607,6 +1050,7 @@
                                     </select>
                                     <Icon name="ChevronDown" size={12} className="text-blue-300 absolute right-3 pointer-events-none"/>
                                 </div>
+
                             </div>
                         </div>
                         
@@ -617,50 +1061,267 @@
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800"><h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Icon name="Instagram" size={14}/> Redes</h3><div className="flex flex-col md:flex-row gap-2"><input defaultValue={client.instagram} onBlur={(e) => onUpdate(client.id, {instagram: e.target.value})} placeholder="Link Instagram..." className="flex-1 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-xl text-sm px-4 py-3 border outline-none text-slate-800 dark:text-slate-200"/><a href={client.instagram || '#'} target="_blank" className="bg-pink-50 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400 px-4 py-3 rounded-xl font-bold text-sm hover:bg-pink-100 dark:hover:bg-pink-500/20 flex items-center justify-center gap-2">Ver <Icon name="ExternalLink" size={14}/></a></div></div>
                             <button onClick={onDelete} className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400 text-xs font-bold flex items-center gap-2 p-2 -ml-2"><Icon name="Trash2" size={14}/> ELIMINAR CLIENTE</button>
                         </div>
-                        <div className="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50"><h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2"><Icon name="CheckCircle2" size={14}/> Workflow</h3><div className="space-y-3">{['week1', 'week2', 'week3', 'week4'].map((w, i) => <CheckItem key={w} label={['Estrategia', 'Producción', 'Aprobación', 'Reporte'][i]} checked={client.workflow?.[w]} onToggle={() => onUpdate(client.id, {[`workflow.${w}`]: !client.workflow?.[w]})} />)}</div></div>
+                        <div className="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50"><h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2"><Icon name="CheckCircle2" size={14}/> Workflow</h3><div className="space-y-3">{['week1', 'week2', 'week3', 'week4'].map((w, i) => <CheckItem key={w} label={['Estrategia', 'Producción', 'Aprobación', 'Reporte'][i]} checked={client.workflow[w]} onToggle={() => onUpdate(client.id, {[`workflow.${w}`]: !client.workflow[w]})} />)}</div></div>
                     </div>
                 </div>
-            );
-        };
+            </div>
+        );
 
         const CalendarGrid = ({ events, onAdd, onEventClick, baseColor = "emerald" }) => {
             const [date, setDate] = useState(new Date());
             const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
             const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-            return (<div className="flex-1 p-4"><div className="grid grid-cols-7 gap-1">{Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
-                const dStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                return (<div key={d} onClick={() => onAdd(dStr)} className="border p-2 min-h-[100px] cursor-pointer"><span className="text-xs font-bold">{d}</span>{events.filter(e=>e.date===dStr).map(e=><div key={e.id} onClick={(ev)=>{ev.stopPropagation();onEventClick(e)}} className="text-[10px] bg-emerald-100 p-1 mt-1 rounded truncate font-bold text-emerald-800">{e.title}</div>)}</div>);
-            })}</div></div>);
+            
+            const style = PERSON_COLORS[baseColor] || PERSON_COLORS.slate;
+
+            return (
+                <>
+                <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+                    <div className={`font-bold uppercase text-xs tracking-widest text-slate-500 dark:text-slate-400`}>Vista Mensual</div>
+                    <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800 rounded-lg p-1"><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() - 1, 1))} className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"><Icon name="ChevronLeft" size={16}/></button><span className="font-black text-slate-700 dark:text-slate-200 w-32 text-center text-sm uppercase">{MONTH_NAMES[date.getMonth()]} {date.getFullYear()}</span><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() + 1, 1))} className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"><Icon name="ChevronRight" size={16}/></button></div>
+                </div>
+                <div className="flex-1 overflow-x-auto overflow-y-auto bg-slate-50 dark:bg-slate-950 custom-scroll">
+                    <div className="grid grid-cols-7 auto-rows-fr min-w-[800px] h-full">
+                        {['D','L','M','M','J','V','S'].map(d => <div key={d} className="py-2 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 border-r border-b border-slate-200/50 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">{d}</div>)}
+                        {Array(startDay).fill(null).map((_, i) => <div key={`empty-${i}`} className="border-r border-b border-slate-200/50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30" />)}
+                        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+                            const dStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                            const dayEvents = events.filter(e => e.date === dStr);
+                            
+                            return (
+                                <div key={d} onClick={() => onAdd(dStr)} className="border-r border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 min-h-[120px] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group relative">
+                                    <span className={`text-xs font-bold text-slate-400 dark:text-slate-500 group-hover:text-purple-500 dark:group-hover:text-purple-400`}>{d}</span>
+                                    <div className="mt-2 space-y-1.5">
+                                        {dayEvents.map(e => {
+                                            const isCompleted = e.status === 'publicado' || e.status === 'aprobado';
+                                            const itemBg = isCompleted ? 'bg-emerald-500' : style.bg;
+                                            const itemText = isCompleted ? 'text-white' : style.text;
+                                            const itemBorder = isCompleted ? 'border-emerald-600' : 'border-black/10 dark:border-white/5';
+
+                                            return (
+                                                <div key={e.id} onClick={(ev) => { ev.stopPropagation(); onEventClick(e); }} className={`text-[10px] sm:text-xs font-bold p-2 rounded-lg border shadow-sm relative group/evt cursor-pointer ${itemBg} ${itemText} ${itemBorder} hover:brightness-110 active:scale-95 transition-all flex items-center justify-between`}>
+                                                    <span className="flex items-center gap-1.5 truncate">
+                                                        {isCompleted && <Icon name="CheckCircle2" size={14} />}
+                                                        {e.title}
+                                                    </span>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                    <Icon name="Plus" className={`absolute bottom-2 right-2 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity`} size={16}/>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+                </>
+            );
         };
 
         const GeneralCalendarGrid = ({ activities, onDayClick }) => {
             const [date, setDate] = useState(new Date());
             const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-            return (<div className="flex-1 p-4"><div className="grid grid-cols-7 gap-1">{Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
-                const dStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                return (<div key={d} onClick={() => onDayClick(dStr)} className="border p-2 min-h-[100px] cursor-pointer"><span className="text-xs font-bold">{d}</span>{activities.filter(a=>a.date===dStr).slice(0,3).map((a,i)=><div key={i} className={`text-[10px] bg-${a._color}-100 dark:bg-${a._color}-500/20 text-${a._color}-700 dark:text-${a._color}-400 font-bold border border-${a._color}-200 dark:border-${a._color}-500/30 p-1 mt-1.5 rounded truncate`}>{a.title}</div>)}</div>);
-            })}</div></div>);
+            const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+
+            return (
+                <>
+                <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+                    <div className={`font-bold uppercase text-xs tracking-widest text-slate-500 dark:text-slate-400`}>Mes - Todas las Tareas</div>
+                    <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800 rounded-lg p-1"><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() - 1, 1))} className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"><Icon name="ChevronLeft" size={16}/></button><span className="font-black text-slate-700 dark:text-slate-200 w-32 text-center text-sm uppercase">{MONTH_NAMES[date.getMonth()]} {date.getFullYear()}</span><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() + 1, 1))} className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"><Icon name="ChevronRight" size={16}/></button></div>
+                </div>
+                <div className="flex-1 overflow-x-auto overflow-y-auto bg-slate-50 dark:bg-slate-950 custom-scroll">
+                    <div className="grid grid-cols-7 auto-rows-fr min-w-[800px] h-full">
+                        {['D','L','M','M','J','V','S'].map(d => <div key={d} className="py-2 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 border-r border-b border-slate-200/50 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">{d}</div>)}
+                        {Array(startDay).fill(null).map((_, i) => <div key={`empty-${i}`} className="border-r border-b border-slate-200/50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30" />)}
+                        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+                            const dStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                            const dayActivities = activities.filter(e => e.date === dStr);
+                            
+                            return (
+                                <div key={d} onClick={() => onDayClick(dStr)} className="border-r border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 min-h-[120px] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group relative">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className={`text-xs font-bold text-slate-400 dark:text-slate-500 group-hover:text-blue-500 dark:group-hover:text-blue-400`}>{d}</span>
+                                        {dayActivities.length > 0 && <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full">{dayActivities.length}</span>}
+                                    </div>
+                                    <div className="space-y-1">
+                                        {dayActivities.slice(0, 4).map((act, idx) => (
+                                            <div key={idx} className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate bg-${act._color}-50 dark:bg-${act._color}-500/20 text-${act._color}-700 dark:text-${act._color}-400 border border-${act._color}-200 dark:border-${act._color}-500/30`}>
+                                                {act.title}
+                                            </div>
+                                        ))}
+                                        {dayActivities.length > 4 && <div className="text-[10px] font-bold text-slate-400 text-center mt-1">+{dayActivities.length - 4} más</div>}
+                                    </div>
+                                    <Icon name="ExternalLink" className={`absolute bottom-2 right-2 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity`} size={14}/>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+                </>
+            );
         };
 
         const EventActionModal = ({ config, onClose, onEdit, onDelete }) => {
             if (!config.isOpen) return null;
-            return (<div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4"><div className="bg-white rounded-2xl w-full max-w-xs p-6 text-center"><h3 className="font-bold mb-4">{config.event.title}</h3><button onClick={()=>{onClose();onEdit(config.event, config.type)}} className="w-full py-2 bg-blue-50 text-blue-600 rounded-lg mb-2 font-bold">Editar</button><button onClick={()=>{onClose();onDelete(config.event, config.type)}} className="w-full py-2 bg-red-50 text-red-600 rounded-lg font-bold">Eliminar</button><button onClick={onClose} className="w-full py-2 mt-2 text-slate-500">Cancelar</button></div></div>);
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-xs overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
+                        <div className="p-6 text-center border-b border-slate-100 dark:border-slate-800">
+                            <div className="mx-auto w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 mb-4"><Icon name="MousePointerClick" size={24} /></div>
+                            <h3 className="text-lg font-black text-slate-800 dark:text-white truncate">{config.event.title}</h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">¿Qué deseas hacer?</p>
+                        </div>
+                        <div className="p-4 space-y-3">
+                            <button onClick={() => { onClose(); onEdit(config.event, config.type); }} className="w-full flex items-center justify-center gap-3 py-4 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold rounded-2xl hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors">
+                                <Icon name="Edit" size={20} /> Editar Elemento
+                            </button>
+                            <button onClick={() => { onClose(); onDelete(config.event, config.type); }} className="w-full flex items-center justify-center gap-3 py-4 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 font-bold rounded-2xl hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors">
+                                <Icon name="Trash2" size={20} /> Eliminar
+                            </button>
+                            <button onClick={onClose} className="w-full py-4 text-slate-500 dark:text-slate-400 font-bold rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors mt-2">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
         };
 
-        const TaskDetailModal = ({ config, onClose, onEdit }) => {
+        const TaskDetailModal = ({ config, onClose, clients, managers, editors, onEdit }) => {
             if (!config.isOpen || !config.task) return null;
-            return (<div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4"><div className="bg-white rounded-3xl p-6 w-full max-w-lg"><h2 className="text-xl font-black mb-4">{config.task.title}</h2><p className="text-sm text-slate-600">{config.task.notes || 'Sin notas'}</p><div className="mt-6 flex justify-end gap-3"><button onClick={onClose} className="px-4 py-2 bg-slate-100 rounded-xl font-bold">Cerrar</button><button onClick={()=>{onClose();onEdit(config.task, config.type)}} className="px-4 py-2 bg-purple-600 text-white rounded-xl font-bold">Editar</button></div></div></div>);
+            const { task, type } = config;
+            
+            const client = clients.find(c => c.id === task.clientId);
+            const assignee = type === 'accountTask' ? managers.find(m => m.id === task.contextId) : editors.find(e => e.id === task.contextId);
+            const tagColor = type === 'accountTask' ? 'indigo' : 'amber';
+            const iconName = type === 'accountTask' ? 'LayoutList' : 'Video';
+
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+                        <div className={`p-6 bg-${tagColor}-50 dark:bg-${tagColor}-500/10 border-b border-${tagColor}-100 dark:border-${tagColor}-500/20 relative`}>
+                            <button onClick={onClose} className={`absolute top-4 right-4 p-2 hover:bg-${tagColor}-100 dark:hover:bg-${tagColor}-500/30 rounded-full text-${tagColor}-600 dark:text-${tagColor}-400 transition-colors`}><Icon name="X" size={20}/></button>
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-${tagColor}-100 dark:bg-${tagColor}-500/30 text-${tagColor}-700 dark:text-${tagColor}-300`}><Icon name={iconName} size={12}/> {type === 'accountTask' ? 'Account' : 'Edición'}</span>
+                                {task.priority && <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${task.priority === 'urgente' ? 'border-red-500 text-red-600 bg-red-50' : 'border-slate-300 text-slate-500'}`}>{task.priority}</span>}
+                            </div>
+                            <h2 className="text-2xl font-black text-slate-800 dark:text-white leading-tight">{task.title}</h2>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            <div className="flex flex-wrap gap-4">
+                                <div className="flex-1 min-w-[120px]">
+                                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1"><Icon name="Briefcase" size={12}/> Cliente</p>
+                                    {client ? (
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xs">{client.name.charAt(0)}</div>
+                                            <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{client.name}</span>
+                                        </div>
+                                    ) : <span className="text-sm font-bold text-slate-400">Interno / Sin asignar</span>}
+                                </div>
+                                <div className="flex-1 min-w-[120px]">
+                                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1"><Icon name="UserCircle2" size={12}/> Asignado a</p>
+                                    <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{assignee ? assignee.name : 'Nadie'}</span>
+                                </div>
+                                <div className="flex-1 min-w-[120px]">
+                                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1"><Icon name="CalendarDays" size={12}/> Fecha Límite</p>
+                                    <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{task.date}</span>
+                                </div>
+                            </div>
+                            <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 min-h-[100px]">
+                                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1"><Icon name="ListTree" size={12}/> Notas y Enlaces</p>
+                                <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{task.notes || <span className="italic text-slate-400">Sin notas adicionales...</span>}</p>
+                            </div>
+                            <Button full onClick={() => onEdit(task, type)} color={tagColor} icon="Edit">Editar Tarea</Button>
+                        </div>
+                    </div>
+                </div>
+            );
         };
 
-        const DayDetailsModal = ({ config, onClose }) => {
+        const DayDetailsModal = ({ config, onClose, activities, clients, managers, editors, onEdit, onDelete }) => {
             if (!config.isOpen) return null;
-            return (<div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4"><div className="bg-white rounded-3xl p-6 w-full max-w-lg"><h2 className="text-xl font-black mb-4">Detalles del Día</h2><button onClick={onClose} className="px-4 py-2 bg-slate-100 rounded-xl font-bold">Cerrar</button></div></div>);
+            const dayActivities = activities.filter(a => a.date === config.date);
+            let displayDate = '';
+            if (config.date) {
+                const [y, m, d] = config.date.split('-');
+                displayDate = new Date(y, m - 1, d).toLocaleDateString('es-HN', { weekday: 'long', day: 'numeric', month: 'long' });
+            }
+
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
+                            <div>
+                                <h3 className="font-black text-lg text-slate-800 dark:text-white capitalize">{displayDate}</h3>
+                                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Detalle de Actividades</p>
+                            </div>
+                            <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400"><Icon name="X" size={20} /></button>
+                        </div>
+                        <div className="p-6 overflow-y-auto custom-scroll space-y-3">
+                            {dayActivities.length === 0 ? (
+                                <EmptyState icon="Inbox" text="No hay actividades este día" />
+                            ) : (
+                                dayActivities.map(act => {
+                                    const client = clients?.find(c => c.id === act.clientId);
+                                    let personName = 'Sin asignar';
+                                    
+                                    if (act.collectionType === 'accountTask') {
+                                        const manager = managers?.find(m => m.id === act.contextId);
+                                        if (manager) personName = manager.name;
+                                    } else if (act.collectionType === 'editingTask') {
+                                        const editor = editors?.find(e => e.id === act.contextId);
+                                        if (editor) personName = editor.name;
+                                    }
+
+                                    return (
+                                        <div key={act.id} className={`p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 shadow-sm flex items-center gap-4`}>
+                                            <div className={`p-3 rounded-xl bg-${act._color}-50 dark:bg-${act._color}-500/20 text-${act._color}-600 dark:text-${act._color}-400 shrink-0`}>
+                                                <Icon name={act._icon} size={20} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-bold text-sm text-slate-800 dark:text-white truncate">{act.title}</p>
+                                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                                    <span className={`text-[9px] font-black uppercase tracking-wider text-${act._color}-600 dark:text-${act._color}-400`}>{act._label}</span>
+                                                    
+                                                    {client && (
+                                                        <span className="flex items-center gap-1 text-[9px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800">
+                                                            <Icon name="Briefcase" size={8}/> {client.name}
+                                                        </span>
+                                                    )}
+                                                    
+                                                    {(act.collectionType === 'accountTask' || act.collectionType === 'editingTask') && (
+                                                        <span className="flex items-center gap-1 text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                                                            <Icon name="UserCircle2" size={8}/> {personName}
+                                                        </span>
+                                                    )}
+
+                                                    {act.status && (
+                                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase border ${
+                                                            act.status === 'publicado' || act.status === 'aprobado' 
+                                                            ? 'bg-green-50 text-green-600 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' 
+                                                            : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                                                        }`}>
+                                                            {act.status.replace(/_/g, ' ')}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1 opacity-100 md:opacity-60 md:hover:opacity-100 transition-opacity">
+                                                <button onClick={() => { onClose(); onEdit(act, act.collectionType); }} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Editar"><Icon name="Edit" size={18} /></button>
+                                                <button onClick={() => { onClose(); onDelete(act, act.collectionType); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Eliminar"><Icon name="Trash2" size={18} /></button>
+                                            </div>
+                                        </div>
+                                    )
+                                })
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
         };
 
-        // --- MODAL DE FORMULARIOS RESTAURADO COMPLETAMENTE ---
         const Modal = ({ config, onClose, clients, managers, editors, actions }) => {
             const { type, data, isEdit } = config;
-            if(!config.isOpen) return null;
             
             const onSubmit = (e) => {
                 e.preventDefault();
@@ -718,16 +1379,31 @@
                                 
                                 {type === 'accountTask' && <>
                                     <Input name="title" placeholder="¿Qué hay que hacer/publicar?" defaultValue={data?.title} required autoFocus />
-                                    <select name="clientId" defaultValue={data?.clientId || ""} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none"><option value="">💼 Sin cliente (Tarea interna)</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                                    
+                                    <select name="clientId" defaultValue={data?.clientId || ""} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none">
+                                        <option value="">💼 Sin cliente (Tarea interna)</option>
+                                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+
                                     {!isEdit && <Input name="time" type="time" label="Hora (Opcional)" />}
                                     {(!data?.contextId || isEdit) && <select name="manager" required defaultValue={data?.contextId} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none"><option value="">Selecciona Manager...</option>{managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>}
+                                    
                                     <textarea name="notes" placeholder="Notas, copies, ideas..." defaultValue={data?.notes} className="w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 h-24 text-sm"></textarea>
                                 </>}
                                 
                                 {type === 'editingTask' && <>
                                     <Input name="title" placeholder="Título del Video/Diseño" defaultValue={data?.title} required autoFocus />
-                                    <select name="clientId" defaultValue={data?.clientId || ""} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none"><option value="">💼 Sin cliente (Tarea interna)</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-                                    <select name="priority" required defaultValue={data?.priority || 'normal'} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-700 dark:text-slate-200"><option value="normal" className="text-amber-600 dark:text-amber-400">🟡 Prioridad Normal</option><option value="urgente" className="text-red-600 dark:text-red-400">🔴 URGENTE</option><option value="recurrente" className="text-emerald-600 dark:text-emerald-400">🟢 Recurrente</option></select>
+                                    
+                                    <select name="clientId" defaultValue={data?.clientId || ""} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none">
+                                        <option value="">💼 Sin cliente (Tarea interna)</option>
+                                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+
+                                    <select name="priority" required defaultValue={data?.priority || 'normal'} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-700 dark:text-slate-200">
+                                        <option value="normal" className="text-amber-600 dark:text-amber-400">🟡 Prioridad Normal</option>
+                                        <option value="urgente" className="text-red-600 dark:text-red-400">🔴 URGENTE</option>
+                                        <option value="recurrente" className="text-emerald-600 dark:text-emerald-400">🟢 Recurrente</option>
+                                    </select>
                                     {(!data?.contextId || isEdit) && <select name="editor" required defaultValue={data?.contextId} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none"><option value="">Selecciona Editor...</option>{editors.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select>}
                                     <textarea name="notes" placeholder="Notas, links a drive..." defaultValue={data?.notes} className="w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 h-24 text-sm"></textarea>
                                 </>}
@@ -740,15 +1416,28 @@
             );
         };
 
-        const DeleteConfirmModal = ({ config, onClose, onConfirm }) => {
-            if(!config.isOpen) return null;
-            return (<div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center"><h3 className="text-lg font-black mb-4">¿Eliminar?</h3><div className="flex gap-3"><button onClick={onClose} className="flex-1 py-3 bg-slate-100 font-bold rounded-xl">Cancelar</button><button onClick={onConfirm} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl">Eliminar</button></div></div></div>);
-        };
+        const DeleteConfirmModal = ({ config, onClose, onConfirm }) => (
+            <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
+                    <div className="w-16 h-16 bg-red-100 dark:bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-400"><Icon name="AlertTriangle" size={32} /></div>
+                    <h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">¿Eliminar {config.title}?</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-8">Esta acción es permanente y no se puede deshacer.</p>
+                    <div className="flex gap-3"><button onClick={onClose} className="flex-1 py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Cancelar</button><button onClick={onConfirm} className="flex-1 py-4 bg-red-600 text-white font-bold rounded-2xl hover:bg-red-700 shadow-lg shadow-red-500/30 transition-colors">Confirmar</button></div>
+                </div>
+            </div>
+        );
 
-        const Toast = ({ message, type }) => (<div className="fixed bottom-6 right-6 px-6 py-4 bg-slate-800 text-white rounded-2xl shadow-2xl z-[110] font-bold text-sm">{message}</div>);
+        const Toast = ({ message, type }) => (<div className={`fixed bottom-6 right-6 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 fade-in z-[110] ${type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 dark:bg-white text-white dark:text-slate-900'}`}><Icon name={type === 'success' ? "CheckCircle2" : "AlertTriangle"} size={20} className={type === 'success' ? "text-green-400" : ""}/><span className="font-bold text-sm">{message}</span></div>);
+        
+        const CheckItem = ({ label, checked, onToggle }) => (
+            <button onClick={onToggle} className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${checked ? 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30 text-green-800 dark:text-green-400' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600'}`}><span className="font-bold text-sm">{label}</span>{checked ? <Icon name="CheckCircle2" size={20} className="text-green-500" /> : <Icon name="Circle" size={20} />}</button>
+        );
+        
+        const Input = ({ label, ...props }) => (<div>{label && <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">{label}</label>}<input className="w-full p-4 md:p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-medium text-slate-700 dark:text-slate-200 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500" {...props} /></div>);
 
         const root = createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
 </html>
+
