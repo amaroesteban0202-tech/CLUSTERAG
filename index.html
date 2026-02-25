@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
-            darkMode: 'class', // Habilitar Modo Oscuro por clase
+            darkMode: 'class',
             theme: {
                 extend: {}
             }
@@ -25,7 +25,6 @@
         .fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
-        /* Efectos Mejorados para Drag & Drop */
         .drag-source-hidden { 
             position: absolute !important;
             opacity: 0 !important; 
@@ -41,10 +40,8 @@
         }
     </style>
 
-    <!-- Librería para Animación de Confeti -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 
-    <!-- Librerías React y Firebase -->
     <script type="importmap">
     {
         "imports": {
@@ -75,7 +72,20 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
         import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 
-        // --- ⚠️ AQUÍ ESTÁ TU CONFIGURACIÓN DE FIREBASE ⚠️ ---
+        // --- TRUCO PARA TAILWIND: Obligar a compilar estas clases dinámicas ---
+        const TAILWIND_SAFELIST = "bg-purple-50 text-purple-700 border-purple-200 bg-purple-100 dark:bg-purple-500/20 dark:text-purple-400 dark:border-purple-500/30 " +
+        "bg-indigo-50 text-indigo-700 border-indigo-200 bg-indigo-100 dark:bg-indigo-500/20 dark:text-indigo-400 dark:border-indigo-500/30 " +
+        "bg-blue-50 text-blue-700 border-blue-200 bg-blue-100 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30 " +
+        "bg-cyan-50 text-cyan-700 border-cyan-200 bg-cyan-100 dark:bg-cyan-500/20 dark:text-cyan-400 dark:border-cyan-500/30 " +
+        "bg-amber-50 text-amber-700 border-amber-200 bg-amber-100 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30 " +
+        "bg-orange-50 text-orange-700 border-orange-200 bg-orange-100 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30 " +
+        "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 bg-fuchsia-100 dark:bg-fuchsia-500/20 dark:text-fuchsia-400 dark:border-fuchsia-500/30 " +
+        "bg-violet-50 text-violet-700 border-violet-200 bg-violet-100 dark:bg-violet-500/20 dark:text-violet-400 dark:border-violet-500/30 " +
+        "bg-stone-50 text-stone-700 border-stone-200 bg-stone-100 dark:bg-stone-500/20 dark:text-stone-400 dark:border-stone-500/30 " +
+        "bg-emerald-50 text-emerald-700 border-emerald-200 bg-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30 " +
+        "bg-rose-50 text-rose-700 border-rose-200 bg-rose-100 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/30 " +
+        "bg-slate-50 text-slate-700 border-slate-200 bg-slate-100 dark:bg-slate-500/20 dark:text-slate-400 dark:border-slate-500/30";
+
         const firebaseConfig = {
           apiKey: "AIzaSyBAnY2ihWlow17H-TjUKgueWpw2MqYpzUc",
           authDomain: "cluster-41f73.firebaseapp.com",
@@ -92,13 +102,12 @@
             auth = getAuth(app);
             db = getFirestore(app);
         } catch (error) {
-            console.warn("Firebase no conectado (Modo Demo Local)", error);
+            console.warn("Firebase no conectado", error);
         }
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'cluster-agency-pro-mobile-v6';
         const MONTH_NAMES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
         
-        // --- 🕒 MOTOR DE TIEMPO ESTRICTO: ZONA HORARIA HONDURAS (GMT-6) ---
         const getHondurasDateString = (dateObj = new Date()) => {
             const formatter = new Intl.DateTimeFormat('es-HN', {
                 timeZone: 'America/Tegucigalpa',
@@ -112,8 +121,19 @@
         };
         const getHondurasTodayStr = () => getHondurasDateString(new Date());
 
-        // --- MAPA DE COLORES VIBRANTES ---
         const PERSON_COLORS = {
+            purple: { bg: 'bg-purple-100 dark:bg-purple-900', text: 'text-purple-800 dark:text-purple-100' },
+            indigo: { bg: 'bg-indigo-100 dark:bg-indigo-900', text: 'text-indigo-800 dark:text-indigo-100' },
+            blue: { bg: 'bg-blue-100 dark:bg-blue-900', text: 'text-blue-800 dark:text-blue-100' },
+            cyan: { bg: 'bg-cyan-100 dark:bg-cyan-900', text: 'text-cyan-800 dark:text-cyan-100' },
+            amber: { bg: 'bg-amber-100 dark:bg-amber-900', text: 'text-amber-800 dark:text-amber-100' },
+            orange: { bg: 'bg-orange-100 dark:bg-orange-900', text: 'text-orange-800 dark:text-orange-100' },
+            fuchsia: { bg: 'bg-fuchsia-100 dark:bg-fuchsia-900', text: 'text-fuchsia-800 dark:text-fuchsia-100' },
+            violet: { bg: 'bg-violet-100 dark:bg-violet-900', text: 'text-violet-800 dark:text-violet-100' },
+            stone: { bg: 'bg-stone-200 dark:bg-stone-800', text: 'text-stone-800 dark:text-stone-100' },
+            emerald: { bg: 'bg-emerald-100 dark:bg-emerald-900', text: 'text-emerald-800 dark:text-emerald-100' },
+            slate: { bg: 'bg-slate-200 dark:bg-slate-700', text: 'text-slate-800 dark:text-slate-100' },
+            
             c1: { bg: 'bg-red-500', text: 'text-white' }, c2: { bg: 'bg-blue-600', text: 'text-white' },
             c3: { bg: 'bg-emerald-600', text: 'text-white' }, c4: { bg: 'bg-amber-500', text: 'text-white' },
             c5: { bg: 'bg-purple-600', text: 'text-white' }, c6: { bg: 'bg-pink-600', text: 'text-white' },
@@ -125,18 +145,12 @@
             c23: { bg: 'bg-emerald-200 dark:bg-emerald-900', text: 'text-emerald-900 dark:text-emerald-100' }, 
             c24: { bg: 'bg-yellow-300 dark:bg-yellow-900', text: 'text-yellow-900 dark:text-yellow-100' },
             c25: { bg: 'bg-purple-200 dark:bg-purple-900', text: 'text-purple-900 dark:text-purple-100' }, 
-            c26: { bg: 'bg-pink-200 dark:bg-pink-900', text: 'text-pink-900 dark:text-pink-100' },
-            
-            slate: { bg: 'bg-slate-200 dark:bg-slate-700', text: 'text-slate-800 dark:text-slate-100' },
-            emerald: { bg: 'bg-emerald-100 dark:bg-emerald-900', text: 'text-emerald-800 dark:text-emerald-100' },
-            indigo: { bg: 'bg-indigo-100 dark:bg-indigo-900', text: 'text-indigo-800 dark:text-indigo-100' },
-            blue: { bg: 'bg-blue-100 dark:bg-blue-900', text: 'text-blue-800 dark:text-blue-100' },
-            amber: { bg: 'bg-amber-100 dark:bg-amber-900', text: 'text-amber-800 dark:text-amber-100' },
+            c26: { bg: 'bg-pink-200 dark:bg-pink-900', text: 'text-pink-900 dark:text-pink-100' }
         };
 
-        // Colores súper llamativos para Accounts
-        const ACCOUNT_COLORS = ['c1', 'c2', 'c3', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10'];
+        const ACCOUNT_COLORS = ['purple', 'indigo', 'blue', 'cyan', 'amber', 'orange', 'fuchsia', 'violet', 'stone'];
         const EDITOR_COLORS = ['c21', 'c22', 'c23', 'c24', 'c25', 'c26'];
+        const LEGACY_COLOR_MAP = { c1: 'purple', c2: 'blue', c3: 'indigo', c4: 'amber', c5: 'fuchsia', c6: 'violet', c7: 'cyan', c8: 'orange', c9: 'indigo', c10: 'stone' };
 
         const IconsMap = {
             LayoutDashboard, Users, CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
@@ -150,10 +164,7 @@
             return LucideIcon ? <LucideIcon size={size} className={className} /> : null;
         };
 
-        // --- COMPONENTE DE LOGO ---
         const AgencyLogo = ({ className }) => {
-            const logoUrl = ""; 
-            if (logoUrl) return <img src={logoUrl} alt="Logo" className={`object-contain rounded-lg ${className}`} />;
             return <div className={`bg-purple-600 flex items-center justify-center text-white font-black rounded-lg ${className}`}>C</div>;
         };
 
@@ -164,13 +175,9 @@
             const [toast, setToast] = useState(null); 
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-            // MODO OSCURO (PERSISTENCIA)
             const [isDark, setIsDark] = useState(() => localStorage.getItem('cluster_theme') === 'dark');
-
-            // MEMORIA DE PANTALLA (PERSISTENCIA)
             const [view, setView] = useState(() => localStorage.getItem('cluster_os_view') || 'dashboard');
 
-            // Datos
             const [clients, setClients] = useState([]);
             const [events, setEvents] = useState([]); 
             const [managers, setManagers] = useState([]);
@@ -178,7 +185,6 @@
             const [editingTasks, setEditingTasks] = useState([]);
             const [accountTasks, setAccountTasks] = useState([]);
 
-            // UI & Modales
             const [selectedClient, setSelectedClient] = useState(null);
             const [selectedManager, setSelectedManager] = useState(null);
             const [selectedEditor, setSelectedEditor] = useState(null);
@@ -186,11 +192,9 @@
             const [modalConfig, setModalConfig] = useState({ isOpen: false, type: null, data: null, isEdit: false });
             const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, type: null, id: null, title: '' });
             const [eventAction, setEventAction] = useState({ isOpen: false, event: null, type: null });
-            
             const [taskDetailConfig, setTaskDetailConfig] = useState({ isOpen: false, task: null, type: null });
             const [dayDetailsModal, setDayDetailsModal] = useState({ isOpen: false, date: null }); 
             
-            // Efecto Tema Oscuro
             useEffect(() => {
                 const html = document.documentElement;
                 if (isDark) {
@@ -202,7 +206,6 @@
                 }
             }, [isDark]);
 
-            // Auth
             useEffect(() => {
                 if(!auth) { setLoading(false); return; }
                 const initAuth = async () => {
@@ -221,7 +224,6 @@
                 return () => unsubscribe();
             }, []);
 
-            // Carga de Datos
             useEffect(() => {
                 if (!user || !db) return;
                 const errHandler = (err) => console.error("Error de Firestore:", err);
@@ -241,12 +243,10 @@
                 return () => unsubs.forEach(u => u());
             }, [user, selectedClient?.id]);
 
-            // Helpers
             const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
             const closeModal = () => setModalConfig({ isOpen: false, type: null, data: null, isEdit: false });
             const closeDelete = () => setDeleteConfirm({ isOpen: false, type: null, id: null });
             
-            // Navegación
             const handleNavigate = (newView) => { 
                 setView(newView); 
                 localStorage.setItem('cluster_os_view', newView);
@@ -256,16 +256,21 @@
             const handleEventClick = (event, type) => setEventAction({ isOpen: true, event, type });
             const triggerConfetti = () => { if (window.confetti) window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#9333ea', '#3b82f6', '#10b981', '#f59e0b'] }); };
 
-            const urgentEditions = editingTasks.filter(t => t.priority === 'urgente' && t.status !== 'aprobado').length;
+            const urgentEditions = editingTasks.filter(t => t.priority === 'urgente' && t.status !== 'aprobado' && t.status !== 'publicado').length;
             const pendingAccounts = accountTasks.filter(t => t.status === 'por_disenar').length;
 
             const allActivities = [
                 ...events.map(e => ({ ...e, collectionType: 'event', _color: 'emerald', _icon: 'CalendarIcon', _label: 'Producción' })),
-                ...accountTasks.map(t => ({ ...t, collectionType: 'accountTask', _color: 'indigo', _icon: 'LayoutList', _label: 'Account' })),
-                ...editingTasks.map(t => ({ ...t, collectionType: 'editingTask', _color: 'amber', _icon: 'Video', _label: 'Edición' }))
+                ...accountTasks.map(t => {
+                    const manager = managers.find(m => m.id === t.contextId);
+                    let rawColor = manager?.color || 'indigo';
+                    let mColor = LEGACY_COLOR_MAP[rawColor] || rawColor; 
+                    return { ...t, collectionType: 'accountTask', _color: mColor, _icon: 'LayoutList', _label: 'Account' };
+                }),
+                ...editingTasks.map(t => ({ ...t, collectionType: 'editingTask', _color: 'slate', _icon: 'Video', _label: 'Edición' }))
             ];
 
-            // --- ACCIONES CRUD ---
+            // Acciones Base de Datos
             const addClient = async (fd) => {
                 const manager = managers.find(m => m.id === fd.managerId);
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { ...fd, manager: manager ? manager.name : "", managerId: fd.managerId || "", status: 'Activo', mood: 'Contento', createdAt: getHondurasTodayStr(), workflow: { week1: false, week2: false, week3: false, week4: false } });
@@ -276,45 +281,36 @@
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), { ...data, manager: manager ? manager.name : "" }); 
                 showToast('Cliente actualizado'); closeModal(); 
             };
-            
-            // --- NUEVO: Reasignar Manager a Cliente y a todas sus tareas automáticamente ---
             const reassignClientManager = async (client, newManagerId) => {
                 if (!newManagerId) return;
                 const newManager = managers.find(m => m.id === newManagerId);
                 if (!newManager) return;
-
                 try {
-                    // Actualiza el perfil del cliente
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', client.id), { manager: newManager.name, managerId: newManager.id });
-                    
-                    // Mueve todas sus tareas al nuevo manager
                     const tasksToMove = accountTasks.filter(t => t.clientId === client.id);
                     for (const t of tasksToMove) {
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', t.id), { contextId: newManager.id });
                     }
-                    showToast(`Cliente mudado a ${newManager.name} y tareas reasignadas`);
-                } catch (e) {
-                    console.error(e);
-                    showToast("Error al reasignar", "error");
-                }
+                    showToast(`Cliente mudado a ${newManager.name}`);
+                } catch (e) { showToast("Error al reasignar", "error"); }
             };
 
             const addManager = async (fd) => {
                 const color = ACCOUNT_COLORS[managers.length % ACCOUNT_COLORS.length];
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), { ...fd, color });
-                showToast('Account Manager agregado'); closeModal();
+                showToast('Manager agregado'); closeModal();
             };
-            const updateManager = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'managers', id), data); showToast('Manager actualizado'); closeModal(); };
+            const updateManager = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'managers', id), data); showToast('Actualizado'); closeModal(); };
 
             const addEditor = async (fd) => {
                 const color = EDITOR_COLORS[editors.length % EDITOR_COLORS.length];
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), { ...fd, color });
                 showToast('Editor agregado'); closeModal();
             };
-            const updateEditor = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editors', id), data); showToast('Editor actualizado'); closeModal(); };
+            const updateEditor = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editors', id), data); showToast('Actualizado'); closeModal(); };
 
-            const addAccountTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), { ...data, status: 'por_disenar' }); showToast('Tarea agendada'); closeModal(); };
-            const updateAccountTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id), data); showToast('Tarea guardada'); closeModal(); };
+            const addAccountTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), { ...data, status: 'por_disenar' }); showToast('Agendado'); closeModal(); };
+            const updateAccountTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id), data); showToast('Guardado'); closeModal(); };
             const changeAccountTaskStatus = async (task, newStatus) => {
                 if (newStatus) {
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', task.id), { status: newStatus });
@@ -322,17 +318,17 @@
                 }
             };
 
-            const addEditingTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), { ...data, status: 'editar' }); showToast('Tarea agendada'); closeModal(); };
-            const updateEditingTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id), data); showToast('Tarea guardada'); closeModal(); };
+            const addEditingTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), { ...data, status: 'editar' }); showToast('Agendado'); closeModal(); };
+            const updateEditingTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id), data); showToast('Guardado'); closeModal(); };
             const changeEditingTaskStatus = async (task, newStatus) => {
                 if (newStatus) {
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', task.id), { status: newStatus });
-                    if (newStatus === 'aprobado') triggerConfetti();
+                    if (newStatus === 'aprobado' || newStatus === 'publicado') triggerConfetti();
                 }
             };
 
-            const addEvent = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data); showToast('Evento agendado'); closeModal(); };
-            const updateEvent = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id), data); showToast('Evento guardado'); closeModal(); };
+            const addEvent = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data); showToast('Agendado'); closeModal(); };
+            const updateEvent = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id), data); showToast('Guardado'); closeModal(); };
 
             const handleDelete = async () => {
                 const { type, id } = deleteConfirm;
@@ -343,8 +339,8 @@
                     if (type === 'event') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id));
                     if (type === 'accountTask') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id));
                     if (type === 'editingTask') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id));
-                    showToast('Eliminado correctamente');
-                } catch(e) { console.error(e); showToast('Error al eliminar', 'error'); }
+                    showToast('Eliminado');
+                } catch(e) { showToast('Error', 'error'); }
                 closeDelete();
             };
 
@@ -353,122 +349,82 @@
             return (
                 <div className="flex h-screen text-slate-900 dark:text-slate-100 overflow-hidden flex-col md:flex-row font-sans transition-colors duration-300">
                     
-                    {/* HEADER MÓVIL */}
+                    {/* Header Móvil */}
                     <div className="md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center z-30 shadow-sm shrink-0">
-                        <div className="flex items-center gap-2"><AgencyLogo className="w-8 h-8 text-sm" /><span className="font-black text-slate-800 dark:text-white text-lg tracking-tight">CLUSTER</span></div>
+                        <div className="flex items-center gap-2"><AgencyLogo className="w-8 h-8 text-sm" /><span className="font-black text-slate-800 dark:text-white text-lg">CLUSTER</span></div>
                         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><Icon name={isMobileMenuOpen ? "X" : "Menu"} size={24} /></button>
                     </div>
 
-                    {/* OVERLAY */}
-                    <div className={`fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm transition-opacity duration-300 md:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileMenuOpen(false)} />
+                    <div className={`fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm transition-opacity md:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileMenuOpen(false)} />
 
-                    {/* SIDEBAR */}
-                    <aside className={`fixed md:relative z-50 h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-xl md:shadow-none w-64 shrink-0 transition-transform duration-300 ease-in-out top-0 left-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+                    {/* Sidebar */}
+                    <aside className={`fixed md:relative z-50 h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col w-64 shrink-0 transition-transform duration-300 top-0 left-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
                         <div className="p-8 hidden md:block">
-                            <div className="flex items-center gap-3 mb-1"><AgencyLogo className="w-8 h-8 text-lg shadow-lg shadow-purple-900/20" /><h1 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">CLUSTER</h1></div>
-                            <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-widest pl-11">Agency OS</p>
+                            <div className="flex items-center gap-3 mb-1"><AgencyLogo className="w-8 h-8 text-lg" /><h1 className="text-2xl font-black text-slate-800 dark:text-white">CLUSTER</h1></div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400 pl-11">Agency OS</p>
                         </div>
                         
                         <nav className="flex-1 px-4 space-y-1 pt-20 md:pt-4 overflow-y-auto custom-scroll">
                             <SidebarItem active={view === 'dashboard'} onClick={() => handleNavigate('dashboard')} icon="LayoutDashboard" label="Panel Central" color="purple" />
-                            
-                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-2">Equipo & Clientes</div>
+                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Equipo & Clientes</div>
                             <SidebarItem active={view === 'clients' || view === 'client-detail'} onClick={() => handleNavigate('clients')} icon="Briefcase" label="Clientes" color="blue" />
                             <SidebarItem active={view === 'managers' || view === 'manager-detail'} onClick={() => handleNavigate('managers')} icon="Users" label="Account Managers" color="indigo" />
                             <SidebarItem active={view === 'editors' || view === 'editor-detail'} onClick={() => handleNavigate('editors')} icon="PenTool" label="Editores" color="rose" />
                             
-                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-2">Salas de Trabajo</div>
+                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Salas de Trabajo</div>
                             <SidebarItem active={view === 'account-room'} onClick={() => handleNavigate('account-room')} icon="LayoutList" label="Sala de Accounts" color="indigo" badge={pendingAccounts > 0 ? pendingAccounts : null} badgeColor="bg-indigo-500 text-white" />
                             <SidebarItem active={view === 'editions'} onClick={() => handleNavigate('editions')} icon="Video" label="Sala de Edición" color="amber" badge={urgentEditions > 0 ? urgentEditions : null} badgeColor="bg-red-500 text-white animate-pulse" />
                             
-                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-2">Global</div>
+                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Global</div>
                             <SidebarItem active={view === 'general-calendar'} onClick={() => handleNavigate('general-calendar')} icon="CalendarDays" label="Calendario General" color="blue" />
                             <SidebarItem active={view === 'calendar'} onClick={() => handleNavigate('calendar')} icon="CalendarIcon" label="Agenda Producción" color="emerald" />
                         </nav>
 
-                        {/* FOOTER SIDEBAR CON TEMA OSCURO */}
                         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-md">GO</div>
-                                <div><p className="text-sm font-bold text-slate-700 dark:text-slate-200">Gerente Ops</p><p className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Activo</p></div>
+                                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm">GO</div>
+                                <div><p className="text-sm font-bold text-slate-700 dark:text-slate-200">Gerente Ops</p><p className="text-[10px] font-bold text-green-500 uppercase flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Activo</p></div>
                             </div>
-                            <button onClick={() => setIsDark(!isDark)} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-sm" title={isDark ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}>
-                                <Icon name={isDark ? "Sun" : "Moon"} size={16} />
-                            </button>
+                            <button onClick={() => setIsDark(!isDark)} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300"><Icon name={isDark ? "Sun" : "Moon"} size={16} /></button>
                         </div>
                     </aside>
 
-                    {/* CONTENIDO PRINCIPAL */}
-                    <main className="flex-1 overflow-y-auto relative scroll-smooth w-full h-full bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+                    {/* Vistas Principales */}
+                    <main className="flex-1 overflow-y-auto relative w-full h-full">
                         <div className="p-4 md:p-8 max-w-[1600px] mx-auto min-h-full pb-20">
-                            
-                            {/* VISTAS */}
                             {view === 'dashboard' && <DashboardView clients={clients} managers={managers} events={events} tasks={editingTasks} accountTasks={accountTasks} />}
-                            
-                            {/* Clientes */}
                             {view === 'clients' && <ClientsView clients={clients} onAdd={() => setModalConfig({ isOpen: true, type: 'client' })} onSelect={(c) => { setSelectedClient(c); handleNavigate('client-detail'); }} />}
                             {view === 'client-detail' && selectedClient && <ClientDetail client={selectedClient} managers={managers} onReassignManager={reassignClientManager} onBack={() => handleNavigate('clients')} onUpdate={updateClient} onDelete={() => setDeleteConfirm({ isOpen: true, type: 'client', id: selectedClient.id, title: selectedClient.name })} onEdit={() => setModalConfig({ isOpen: true, type: 'client', data: selectedClient, isEdit: true })} />}
-                            
-                            {/* Managers */}
                             {view === 'managers' && <TeamView title="Account Managers" team={managers} iconColor="indigo" onAdd={() => setModalConfig({ isOpen: true, type: 'manager' })} onSelect={(m) => { setSelectedManager(m); handleNavigate('manager-detail'); }} onDelete={(m) => setDeleteConfirm({ isOpen: true, type: 'manager', id: m.id, title: m.name })} onEdit={(m) => setModalConfig({ isOpen: true, type: 'manager', data: m, isEdit: true })} />}
-                            {view === 'manager-detail' && selectedManager && <PersonCalendarDetail person={selectedManager} tasks={accountTasks} title="Planificación de Cuentas" baseColor={selectedManager.color || 'indigo'} onBack={() => handleNavigate('managers')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr, contextId: selectedManager.id } })} onEventClick={(e) => handleEventClick(e, 'accountTask')} />}
-                            
-                            {/* Editores */}
+                            {view === 'manager-detail' && selectedManager && <PersonCalendarDetail person={selectedManager} tasks={accountTasks} title="Planificación de Cuentas" baseColor={LEGACY_COLOR_MAP[selectedManager.color] || selectedManager.color || 'indigo'} onBack={() => handleNavigate('managers')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr, contextId: selectedManager.id } })} onEventClick={(e) => handleEventClick(e, 'accountTask')} />}
                             {view === 'editors' && <TeamView title="Editores" team={editors} iconColor="rose" onAdd={() => setModalConfig({ isOpen: true, type: 'editor' })} onSelect={(e) => { setSelectedEditor(e); handleNavigate('editor-detail'); }} onDelete={(e) => setDeleteConfirm({ isOpen: true, type: 'editor', id: e.id, title: e.name })} onEdit={(e) => setModalConfig({ isOpen: true, type: 'editor', data: e, isEdit: true })} />}
                             {view === 'editor-detail' && selectedEditor && <PersonCalendarDetail person={selectedEditor} tasks={editingTasks} title="Planificación de Edición" baseColor={selectedEditor.color || 'rose'} onBack={() => handleNavigate('editors')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr, contextId: selectedEditor.id } })} onEventClick={(e) => handleEventClick(e, 'editingTask')} />}
-
-                            {/* Salas de Trabajo (Con Drag & Drop y Back/Next) */}
-                            {view === 'account-room' && <AccountRoomView tasks={accountTasks} managers={managers} clients={clients} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'accountTask', data: task, isEdit: true })} onChangeStatus={changeAccountTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'accountTask' })} />}
+                            {view === 'account-room' && <AccountRoomView tasks={accountTasks} managers={managers} clients={clients} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'accountTask', data: task, isEdit: true })} onChangeStatus={changeAccountTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'accountTask' })} legacyColorMap={LEGACY_COLOR_MAP} />}
                             {view === 'editions' && <EditionsRoomView tasks={editingTasks} editors={editors} clients={clients} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'editingTask', data: task, isEdit: true })} onChangeStatus={changeEditingTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'editingTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'editingTask' })} />}
-
-                            {/* Calendario General Global */}
                             {view === 'general-calendar' && (
-                                <div className="h-full flex flex-col space-y-6 fade-in">
-                                    <div className="flex justify-between items-center">
-                                        <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">Calendario General</h2>
-                                    </div>
-                                    <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden">
-                                        <GeneralCalendarGrid activities={allActivities} onDayClick={(dateStr) => setDayDetailsModal({ isOpen: true, date: dateStr })} />
-                                    </div>
-                                </div>
+                                <div className="h-full flex flex-col space-y-6 fade-in"><h2 className="text-2xl font-black text-slate-800 dark:text-white">Calendario General</h2><div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden"><GeneralCalendarGrid activities={allActivities} onDayClick={(dateStr) => setDayDetailsModal({ isOpen: true, date: dateStr })} /></div></div>
                             )}
-
-                            {/* Calendario Solo Producción */}
                             {view === 'calendar' && (
-                                <div className="h-full flex flex-col space-y-6 fade-in">
-                                    <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">Agenda de Producciones</h2>
-                                    <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden">
-                                        <CalendarGrid events={events.filter(e => e.type === 'production')} baseColor="emerald" onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'event', data: { date: dateStr, type: 'production' } })} onEventClick={(e) => handleEventClick(e, 'event')} />
-                                    </div>
-                                </div>
+                                <div className="h-full flex flex-col space-y-6 fade-in"><h2 className="text-2xl font-black text-slate-800 dark:text-white">Agenda de Producciones</h2><div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden"><CalendarGrid events={events.filter(e => e.type === 'production')} baseColor="emerald" onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'event', data: { date: dateStr, type: 'production' } })} onEventClick={(e) => handleEventClick(e, 'event')} /></div></div>
                             )}
-
                         </div>
                     </main>
 
-                    {/* MODALES FLOTANTES */}
                     {toast && <Toast message={toast.message} type={toast.type} />}
                     {modalConfig.isOpen && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask }} />}
                     {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
-                    
-                    {/* Menú de Acción para Tareas en Calendario */}
                     <EventActionModal config={eventAction} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
-                    
-                    {/* Modal de Detalle de Día del Calendario General */}
                     <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
-                    
-                    {/* Modal de Notas de Tarea Expandido */}
                     <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} />
                 </div>
             );
         }
 
-        // --- SUB-COMPONENTES UI ---
-
+        // --- SUBCOMPONENTES ---
         const SidebarItem = ({ active, onClick, icon, label, color, badge, badgeColor }) => (
             <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 group ${active ? `bg-${color}-50 dark:bg-${color}-500/20 text-${color}-700 dark:text-${color}-300 shadow-sm border-${color}-100 dark:border-${color}-500/30` : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200 border-transparent"}`}>
-                <div className={`transition-transform duration-200 ${active ? 'scale-110' : 'group-hover:scale-110'}`}><Icon name={icon} size={20}/></div>
-                <span className="font-bold text-sm flex-1 text-left">{label}</span>
+                <div className={`transition-transform duration-200 ${active ? 'scale-110' : 'group-hover:scale-110'} text-[inherit]`}><Icon name={icon} size={20}/></div>
+                <span className="font-bold text-sm flex-1 text-left text-[inherit]">{label}</span>
                 {badge && <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${badgeColor}`}>{badge}</span>}
                 {active && !badge && <Icon name="ChevronRight" size={14} className={`ml-auto text-${color}-400 dark:text-${color}-500`} />}
             </button>
@@ -499,7 +455,13 @@
             </div>
         );
 
-        // --- DASHBOARD MEJORADO (Con Métricas) ---
+        const Input = ({ label, ...props }) => (<div>{label && <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">{label}</label>}<input className="w-full p-4 md:p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-medium text-slate-700 dark:text-slate-200 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500" {...props} /></div>);
+        
+        const CheckItem = ({ label, checked, onToggle }) => (
+            <button onClick={onToggle} className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${checked ? 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30 text-green-800 dark:text-green-400' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600'}`}><span className="font-bold text-sm">{label}</span>{checked ? <Icon name="CheckCircle2" size={20} className="text-green-500" /> : <Icon name="Circle" size={20} />}</button>
+        );
+
+        // --- VISTAS ---
         const DashboardView = ({ clients, managers, events, tasks, accountTasks }) => {
             const contentos = clients.filter(c => c.mood === 'Contento').length;
             const neutrales = clients.filter(c => c.mood === 'Neutral').length;
@@ -513,28 +475,23 @@
 
             return (
                 <div className="space-y-8 animate-in fade-in duration-500">
-                    <div><h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">Resumen Operativo</h2></div>
-                    
-                    {/* Estadísticas Top */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                         <StatCard title="Clientes Activos" value={clients.length} icon="Briefcase" color="blue" />
                         <StatCard title="Account Managers" value={managers.length} icon="Users" color="indigo" />
                         <StatCard title="Tareas Accounts" value={accountTasks.filter(t => t.status !== 'publicado').length} icon="LayoutList" color="indigo" />
-                        <StatCard title="Pendientes Edición" value={tasks.filter(t => t.status !== 'aprobado').length} icon="Video" color="amber" />
+                        <StatCard title="Pendientes Edición" value={tasks.filter(t => t.status !== 'aprobado' && t.status !== 'publicado').length} icon="Video" color="amber" />
                     </div>
-
-                    {/* Métricas Avanzadas */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
                             <div>
-                                <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Salud de la Cartera de Clientes</h3>
+                                <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Salud de la Cartera</h3>
                                 <p className="text-xs text-slate-500 dark:text-slate-400">Distribución según satisfacción actual</p>
                             </div>
                             <div className="mt-6">
                                 <div className="flex gap-1 h-6 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-inner">
-                                    <div style={{width: `${(contentos/totalClients)*100}%`}} className="bg-green-500 hover:brightness-110 transition-all cursor-help" title={`Contentos: ${contentos}`}></div>
-                                    <div style={{width: `${(neutrales/totalClients)*100}%`}} className="bg-amber-400 hover:brightness-110 transition-all cursor-help" title={`Neutrales: ${neutrales}`}></div>
-                                    <div style={{width: `${(enRiesgo/totalClients)*100}%`}} className="bg-red-500 hover:brightness-110 transition-all cursor-help animate-pulse" title={`En Riesgo: ${enRiesgo}`}></div>
+                                    <div style={{width: `${(contentos/totalClients)*100}%`}} className="bg-green-500" title={`Contentos: ${contentos}`}></div>
+                                    <div style={{width: `${(neutrales/totalClients)*100}%`}} className="bg-amber-400" title={`Neutrales: ${neutrales}`}></div>
+                                    <div style={{width: `${(enRiesgo/totalClients)*100}%`}} className="bg-red-500 animate-pulse" title={`En Riesgo: ${enRiesgo}`}></div>
                                 </div>
                                 <div className="flex justify-between mt-4 text-[10px] font-bold uppercase tracking-wider">
                                     <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm"></span> <span className="text-slate-600 dark:text-slate-300">Sanos ({contentos})</span></div>
@@ -543,17 +500,14 @@
                                 </div>
                             </div>
                         </div>
-
                         <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
                             <div>
-                                <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Progreso Global de Tareas</h3>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">Volumen de pendientes completados vs creados</p>
+                                <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Progreso Global</h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">Volumen completado vs general</p>
                             </div>
                             <div className="mt-6 flex items-center gap-6">
                                 <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-6 overflow-hidden shadow-inner p-1">
-                                    <div style={{width: `${compPercent}%`}} className="bg-purple-600 h-full rounded-full flex items-center justify-end px-2 transition-all duration-1000 ease-out relative overflow-hidden">
-                                        <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]"></div>
-                                    </div>
+                                    <div style={{width: `${compPercent}%`}} className="bg-purple-600 h-full rounded-full flex items-center justify-end px-2 transition-all duration-1000 ease-out relative overflow-hidden"></div>
                                 </div>
                                 <span className="text-3xl font-black text-purple-600 dark:text-purple-400 w-16 text-right">{compPercent}%</span>
                             </div>
@@ -566,7 +520,7 @@
         const TeamView = ({ title, team, iconColor, onAdd, onSelect, onDelete, onEdit }) => {
             const [searchTerm, setSearchTerm] = useState('');
             const filteredTeam = team.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-            
+
             return (
                 <div className="space-y-6 fade-in">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -581,7 +535,8 @@
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {filteredTeam.map(person => {
-                                const style = PERSON_COLORS[person.color] || PERSON_COLORS.slate;
+                                let mappedColorName = LEGACY_COLOR_MAP[person.color] || person.color || 'slate';
+                                const style = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
                                 return (
                                     <div key={person.id} onClick={() => onSelect(person)} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-xl hover:border-slate-300 dark:hover:border-slate-600 transition-all cursor-pointer group relative">
                                         <div className="absolute top-4 right-4 flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
@@ -607,7 +562,8 @@
         };
 
         const PersonCalendarDetail = ({ person, tasks, title, baseColor, onBack, onAddEvent, onEventClick }) => {
-            const style = PERSON_COLORS[baseColor] || PERSON_COLORS.slate;
+            let mappedColorName = LEGACY_COLOR_MAP[baseColor] || baseColor;
+            const style = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
             return (
                 <div className="h-full flex flex-col space-y-6 fade-in">
                     <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
@@ -621,7 +577,7 @@
                         </div>
                     </div>
                     <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden">
-                        <CalendarGrid events={tasks.filter(t => t.contextId === person.id)} baseColor={baseColor} onAdd={onAddEvent} onEventClick={onEventClick} />
+                        <CalendarGrid events={tasks.filter(t => t.contextId === person.id)} baseColor={mappedColorName} onAdd={onAddEvent} onEventClick={onEventClick} />
                     </div>
                 </div>
             );
@@ -636,14 +592,11 @@
                             <Icon name="LayoutList" className={`text-${btnColor}-500 dark:text-${btnColor}-400 hidden md:block`} size={28}/>
                             <h2 className="text-xl font-black text-slate-800 dark:text-white mr-4">{title}</h2>
                         </div>
-                        
-                        {/* Filtros Rápidos */}
                         <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full md:w-auto overflow-x-auto custom-scroll">
                             <button onClick={() => setFilterMode('date')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'date' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Día Específico</button>
                             <button onClick={() => setFilterMode('overdue')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${filterMode === 'overdue' ? `bg-red-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-red-500'}`}>Atrasadas <Icon name="Flame" size={14}/></button>
                             <button onClick={() => setFilterMode('all')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Ver Todas</button>
                         </div>
-
                         {filterMode === 'date' && (
                             <div className="flex items-center gap-2 w-full md:w-auto">
                                 <input type="date" value={currentDate} onChange={(e) => setCurrentDate(e.target.value)} className="w-full md:w-auto text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 outline-none"/>
@@ -651,7 +604,6 @@
                             </div>
                         )}
                     </div>
-                    
                     <div className="flex flex-col sm:flex-row w-full xl:w-auto gap-3 items-center">
                         <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Buscar tarea..." />
                         <Button onClick={() => onAdd(filterMode === 'date' ? currentDate : today)} color={btnColor} icon={btnIcon} full>Nueva Tarea</Button>
@@ -660,8 +612,7 @@
             );
         };
 
-        // --- SALAS DE TRABAJO CON DRAG & DROP Y BOTONES BACK/NEXT ---
-        const AccountRoomView = ({ tasks, managers, clients, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
+        const AccountRoomView = ({ tasks, managers, clients, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick, legacyColorMap }) => {
             const [currentDate, setCurrentDate] = useState(getHondurasTodayStr()); 
             const [searchTerm, setSearchTerm] = useState('');
             const [filterMode, setFilterMode] = useState('date');
@@ -684,9 +635,7 @@
             const handleDragStart = (e, taskId) => {
                 setDraggedTaskId(taskId);
                 e.dataTransfer.effectAllowed = 'move';
-                
                 try {
-                    // Crear un clon exacto para evitar la transparencia por defecto del navegador (Opacidad 100%)
                     const rect = e.currentTarget.getBoundingClientRect();
                     const x = e.clientX - rect.left;
                     const y = e.clientY - rect.top;
@@ -701,53 +650,37 @@
                     clone.style.backgroundColor = document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff';
                     clone.style.borderRadius = '0.75rem';
                     clone.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.4)';
-                    clone.style.transform = 'rotate(3deg) scale(1.05)'; // Efecto visual 3D al levantar
+                    clone.style.transform = 'rotate(3deg) scale(1.05)';
                     clone.style.zIndex = '99999';
                     clone.style.pointerEvents = 'none';
                     document.body.appendChild(clone);
-                    
                     e.dataTransfer.setDragImage(clone, x, y);
-                } catch(err) { console.error("Ghost clone error:", err); }
-
-                const target = e.currentTarget;
-                // Oculta la tarjeta original sacándola del flujo para que no ocupe espacio
-                setTimeout(() => target.classList.add('drag-source-hidden'), 0);
+                } catch(err) {}
+                setTimeout(() => e.target.classList.add('drag-source-hidden'), 0);
             };
 
             const handleDragEnd = (e, taskId) => {
                 e.currentTarget.classList.remove('drag-source-hidden');
                 setDraggedTaskId(null);
                 document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-                
-                // Limpiar el clon virtual de arrastre
                 const clone = document.getElementById("custom-drag-ghost-" + taskId);
                 if (clone) clone.remove();
             };
 
-            const handleDragOver = (e) => {
-                e.preventDefault();
-                e.currentTarget.classList.add('drag-over');
-            };
-
-            const handleDragLeave = (e) => {
-                e.currentTarget.classList.remove('drag-over');
-            };
-
+            const handleDragOver = (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
+            const handleDragLeave = (e) => { e.currentTarget.classList.remove('drag-over'); };
             const handleDrop = (e, targetStatus) => {
                 e.preventDefault();
                 e.currentTarget.classList.remove('drag-over');
                 if (draggedTaskId) {
                     const task = tasks.find(t => t.id === draggedTaskId);
-                    if (task && task.status !== targetStatus) {
-                        onChangeStatus(task, targetStatus);
-                    }
+                    if (task && task.status !== targetStatus) onChangeStatus(task, targetStatus);
                 }
             };
 
             return (
                 <div className="h-full flex flex-col space-y-6 fade-in">
                     <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} title="Sala de Accounts" onAdd={onAdd} btnColor="indigo" btnIcon="Plus" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-                    
                     <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
                         {columns.map((col, colIndex) => {
                             const colTasks = filteredTasks.filter(t => t.status === col.id);
@@ -763,11 +696,12 @@
                                     </div>
                                     
                                     <div className="p-3 flex-1 overflow-y-auto space-y-3 custom-scroll">
-                                        {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacío (Arrastra tareas aquí)" /> : 
+                                        {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacío" /> : 
                                         colTasks.map(t => {
                                             const manager = managers.find(m => m.id === t.contextId);
                                             const client = clients.find(c => c.id === t.clientId);
-                                            const mStyles = PERSON_COLORS[manager?.color] || PERSON_COLORS.slate;
+                                            let mappedColorName = legacyColorMap[manager?.color] || manager?.color;
+                                            const mStyles = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
                                             const isOverdue = t.date < getHondurasTodayStr() && col.id !== 'publicado';
                                             
                                             return (
@@ -798,7 +732,6 @@
                                                         </div>
                                                     )}
 
-                                                    {/* Botones Back / Avanzar */}
                                                     <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                                                         {prevStatus && (
                                                             <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, prevStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}>
@@ -832,7 +765,8 @@
             const columns = [
                 { id: 'editar', title: 'Por Editar', color: 'slate' },
                 { id: 'correccion', title: 'En Corrección', color: 'amber' },
-                { id: 'aprobado', title: 'Aprobado', color: 'emerald' }
+                { id: 'aprobado', title: 'Aprobado', color: 'emerald' },
+                { id: 'publicado', title: 'Publicado', color: 'indigo' } 
             ];
             
             const priorityStyles = {
@@ -844,16 +778,14 @@
             const filteredTasks = tasks.filter(t => {
                 if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
                 if (filterMode === 'date') return t.date === currentDate;
-                if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'aprobado';
+                if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'publicado';
                 return true; 
             });
 
             const handleDragStart = (e, taskId) => {
                 setDraggedTaskId(taskId);
                 e.dataTransfer.effectAllowed = 'move';
-                
                 try {
-                    // Crear clon para asegurar 100% de opacidad y efecto 3D al arrastrar
                     const rect = e.currentTarget.getBoundingClientRect();
                     const x = e.clientX - rect.left;
                     const y = e.clientY - rect.top;
@@ -872,27 +804,21 @@
                     clone.style.zIndex = '99999';
                     clone.style.pointerEvents = 'none';
                     document.body.appendChild(clone);
-                    
                     e.dataTransfer.setDragImage(clone, x, y);
-                } catch(err) { console.error("Ghost clone error:", err); }
-
-                const target = e.currentTarget;
-                // Oculta la tarjeta original sacándola del flujo para que no ocupe espacio
-                setTimeout(() => target.classList.add('drag-source-hidden'), 0);
+                } catch(err) {}
+                setTimeout(() => e.target.classList.add('drag-source-hidden'), 0);
             };
 
             const handleDragEnd = (e, taskId) => {
                 e.currentTarget.classList.remove('drag-source-hidden');
                 setDraggedTaskId(null);
                 document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-                
                 const clone = document.getElementById("custom-drag-ghost-edit-" + taskId);
                 if (clone) clone.remove();
             };
 
             const handleDragOver = (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
             const handleDragLeave = (e) => { e.currentTarget.classList.remove('drag-over'); };
-
             const handleDrop = (e, targetStatus) => {
                 e.preventDefault();
                 e.currentTarget.classList.remove('drag-over');
@@ -905,8 +831,7 @@
             return (
                 <div className="h-full flex flex-col space-y-6 fade-in">
                     <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} title="Sala de Edición" onAdd={onAdd} btnColor="amber" btnIcon="Video" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-                    
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden">
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
                         {columns.map((col, colIndex) => {
                             const colTasks = filteredTasks.filter(t => t.status === col.id);
                             const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
@@ -916,18 +841,18 @@
                                 <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300"
                                      onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(e) => handleDrop(e, col.id)}>
                                     
-                                    <div className={`p-4 font-black text-xs uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
-                                        {col.title} <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
+                                    <div className={`p-3 font-black text-[11px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
+                                        {col.title} <span className="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
                                     </div>
                                     
-                                    <div className="p-4 flex-1 overflow-y-auto space-y-3 custom-scroll">
-                                        {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacío (Arrastra tareas aquí)" /> : 
+                                    <div className="p-3 flex-1 overflow-y-auto space-y-3 custom-scroll">
+                                        {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacío" /> : 
                                         colTasks.map(t => {
                                             const editor = editors.find(e => e.id === t.contextId);
                                             const client = clients.find(c => c.id === t.clientId);
                                             const pStyle = priorityStyles[t.priority] || priorityStyles.normal;
                                             const eStyles = PERSON_COLORS[editor?.color] || PERSON_COLORS.slate;
-                                            const isOverdue = t.date < getHondurasTodayStr() && col.id !== 'aprobado';
+                                            const isOverdue = t.date < getHondurasTodayStr() && col.id !== 'publicado';
                                             const borderLeftColor = isOverdue ? 'border-l-red-600' : (t.priority === 'urgente' ? 'border-l-red-500' : t.priority === 'recurrente' ? 'border-l-emerald-500' : 'border-l-amber-500');
 
                                             return (
@@ -962,7 +887,6 @@
                                                         </div>
                                                     )}
 
-                                                    {/* Botones Back / Avanzar */}
                                                     <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                                                         {prevStatus && (
                                                             <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, prevStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}>
@@ -971,7 +895,7 @@
                                                         )}
                                                         {nextStatus && (
                                                             <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, nextStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-${col.color}-50 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-400 hover:bg-${col.color}-100 dark:hover:bg-${col.color}-500/30 transition-colors`}>
-                                                                {nextStatus === 'aprobado' ? 'Aprobar' : 'Avanzar'} <Icon name={nextStatus === 'aprobado' ? "CheckCircle2" : "ChevronRight"} size={12}/>
+                                                                {nextStatus === 'publicado' ? 'Publicar' : 'Avanzar'} <Icon name={nextStatus === 'publicado' ? "CheckCircle2" : "ChevronRight"} size={12}/>
                                                             </button>
                                                         )}
                                                     </div>
@@ -989,7 +913,7 @@
 
         const ClientsView = ({ clients, onAdd, onSelect }) => {
             const [searchTerm, setSearchTerm] = useState('');
-            const filteredClients = clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.niche.toLowerCase().includes(searchTerm.toLowerCase()));
+            const filteredClients = clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.niche?.toLowerCase().includes(searchTerm.toLowerCase()));
 
             return (
                 <div className="space-y-6 fade-in">
@@ -1013,7 +937,7 @@
                                         <div className={`w-3 h-3 rounded-full shadow-sm border border-white dark:border-slate-900 ${c.mood === 'En Riesgo' ? 'bg-red-500 animate-pulse' : c.mood === 'Neutral' ? 'bg-amber-400' : 'bg-green-500'}`}></div>
                                     </div>
                                     <h3 className="text-lg font-bold text-slate-800 dark:text-white pr-4 truncate">{c.name}</h3>
-                                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">{c.niche}</p>
+                                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">{c.niche || 'Sin rubro'}</p>
                                     <div className="pt-4 border-t border-slate-50 dark:border-slate-800 mt-4 flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 truncate"><Icon name="UserCircle2" size={16} className="text-blue-400 dark:text-blue-500 shrink-0"/> {c.manager || 'Sin asignar'}</div>
                                 </div>
                             ))}
@@ -1036,8 +960,6 @@
                             </div>
                             <div>
                                 <h1 className="text-2xl md:text-3xl font-black">{client.name}</h1>
-                                
-                                {/* NUEVO: Selector directo de Account Manager */}
                                 <div className="flex items-center gap-2 mt-2 bg-white/5 px-3 py-1.5 rounded-lg inline-flex border border-white/10 relative transition-all hover:bg-white/10">
                                     <Icon name="UserCircle2" size={14} className="text-blue-300"/>
                                     <select 
@@ -1050,7 +972,6 @@
                                     </select>
                                     <Icon name="ChevronDown" size={12} className="text-blue-300 absolute right-3 pointer-events-none"/>
                                 </div>
-
                             </div>
                         </div>
                         
@@ -1061,7 +982,7 @@
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800"><h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Icon name="Instagram" size={14}/> Redes</h3><div className="flex flex-col md:flex-row gap-2"><input defaultValue={client.instagram} onBlur={(e) => onUpdate(client.id, {instagram: e.target.value})} placeholder="Link Instagram..." className="flex-1 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-xl text-sm px-4 py-3 border outline-none text-slate-800 dark:text-slate-200"/><a href={client.instagram || '#'} target="_blank" className="bg-pink-50 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400 px-4 py-3 rounded-xl font-bold text-sm hover:bg-pink-100 dark:hover:bg-pink-500/20 flex items-center justify-center gap-2">Ver <Icon name="ExternalLink" size={14}/></a></div></div>
                             <button onClick={onDelete} className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400 text-xs font-bold flex items-center gap-2 p-2 -ml-2"><Icon name="Trash2" size={14}/> ELIMINAR CLIENTE</button>
                         </div>
-                        <div className="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50"><h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2"><Icon name="CheckCircle2" size={14}/> Workflow</h3><div className="space-y-3">{['week1', 'week2', 'week3', 'week4'].map((w, i) => <CheckItem key={w} label={['Estrategia', 'Producción', 'Aprobación', 'Reporte'][i]} checked={client.workflow[w]} onToggle={() => onUpdate(client.id, {[`workflow.${w}`]: !client.workflow[w]})} />)}</div></div>
+                        <div className="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50"><h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2"><Icon name="CheckCircle2" size={14}/> Workflow</h3><div className="space-y-3">{['week1', 'week2', 'week3', 'week4'].map((w, i) => <CheckItem key={w} label={['Estrategia', 'Producción', 'Aprobación', 'Reporte'][i]} checked={client.workflow?.[w] || false} onToggle={() => onUpdate(client.id, {[`workflow.${w}`]: !client.workflow?.[w]})} />)}</div></div>
                     </div>
                 </div>
             </div>
@@ -1072,7 +993,8 @@
             const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
             const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
             
-            const style = PERSON_COLORS[baseColor] || PERSON_COLORS.slate;
+            let mappedColorName = LEGACY_COLOR_MAP[baseColor] || baseColor;
+            const style = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
 
             return (
                 <>
@@ -1145,7 +1067,7 @@
                                     </div>
                                     <div className="space-y-1">
                                         {dayActivities.slice(0, 4).map((act, idx) => (
-                                            <div key={idx} className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate bg-${act._color}-50 dark:bg-${act._color}-500/20 text-${act._color}-700 dark:text-${act._color}-400 border border-${act._color}-200 dark:border-${act._color}-500/30`}>
+                                            <div key={idx} className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate bg-${act._color}-100 dark:bg-${act._color}-500/20 text-${act._color}-800 dark:text-${act._color}-400 border border-${act._color}-200 dark:border-${act._color}-500/30`}>
                                                 {act.title}
                                             </div>
                                         ))}
@@ -1322,25 +1244,27 @@
 
         const Modal = ({ config, onClose, clients, managers, editors, actions }) => {
             const { type, data, isEdit } = config;
+            if(!config.isOpen) return null;
             
             const onSubmit = (e) => {
                 e.preventDefault();
                 const fd = Object.fromEntries(new FormData(e.target));
                 
+                // Corrección Crítica: Añadir "|| """ a todos los valores para evitar "undefined" en Firestore
                 if (isEdit) {
-                    if (type === 'client') actions.updateClient(data.id, fd);
-                    if (type === 'manager') actions.updateManager(data.id, { name: fd.name, email: fd.email });
-                    if (type === 'editor') actions.updateEditor(data.id, { name: fd.name, email: fd.email });
-                    if (type === 'event') actions.updateEvent(data.id, { title: fd.time ? `${fd.time} - ${fd.title}` : fd.title });
-                    if (type === 'accountTask') actions.updateAccountTask(data.id, { title: fd.title, time: fd.time, contextId: fd.manager || data.contextId, clientId: fd.clientId || "", notes: fd.notes });
-                    if (type === 'editingTask') actions.updateEditingTask(data.id, { title: fd.title, priority: fd.priority, notes: fd.notes, contextId: fd.editor || data.contextId, clientId: fd.clientId || "" });
+                    if (type === 'client') actions.updateClient(data.id, { name: fd.name || "", niche: fd.niche || "", package: fd.package || "", instagram: fd.instagram || "", managerId: fd.managerId || "" });
+                    if (type === 'manager') actions.updateManager(data.id, { name: fd.name || "", email: fd.email || "" });
+                    if (type === 'editor') actions.updateEditor(data.id, { name: fd.name || "", email: fd.email || "" });
+                    if (type === 'event') actions.updateEvent(data.id, { title: fd.time ? `${fd.time} - ${fd.title}` : (fd.title || "") });
+                    if (type === 'accountTask') actions.updateAccountTask(data.id, { title: fd.title || "", time: fd.time || data.time || "", contextId: fd.manager || data.contextId || "", clientId: fd.clientId || "", notes: fd.notes || "" });
+                    if (type === 'editingTask') actions.updateEditingTask(data.id, { title: fd.title || "", priority: fd.priority || "normal", notes: fd.notes || "", contextId: fd.editor || data.contextId || "", clientId: fd.clientId || "" });
                 } else {
-                    if (type === 'client') actions.addClient(fd);
-                    if (type === 'manager') actions.addManager({ name: fd.name, email: fd.email, assignedAccounts: [] });
-                    if (type === 'editor') actions.addEditor(fd);
-                    if (type === 'event') actions.addEvent({ date: data.date, title: fd.time ? `${fd.time} - ${fd.title}` : fd.title, type: data.type });
-                    if (type === 'accountTask') actions.addAccountTask({ date: data.date, title: fd.title, time: fd.time, contextId: data.contextId || fd.manager, clientId: fd.clientId || "", notes: fd.notes });
-                    if (type === 'editingTask') actions.addEditingTask({ date: data.date, title: fd.title, priority: fd.priority, notes: fd.notes, contextId: data.contextId || fd.editor, clientId: fd.clientId || "" });
+                    if (type === 'client') actions.addClient({ name: fd.name || "", niche: fd.niche || "", package: fd.package || "", instagram: fd.instagram || "", managerId: fd.managerId || "" });
+                    if (type === 'manager') actions.addManager({ name: fd.name || "", email: fd.email || "", assignedAccounts: [] });
+                    if (type === 'editor') actions.addEditor({ name: fd.name || "", email: fd.email || "" });
+                    if (type === 'event') actions.addEvent({ date: data.date, title: fd.time ? `${fd.time} - ${fd.title}` : (fd.title || ""), type: data.type });
+                    if (type === 'accountTask') actions.addAccountTask({ date: data.date, title: fd.title || "", time: fd.time || "", contextId: fd.manager || data.contextId || "", clientId: fd.clientId || "", notes: fd.notes || "" });
+                    if (type === 'editingTask') actions.addEditingTask({ date: data.date, title: fd.title || "", priority: fd.priority || "normal", notes: fd.notes || "", contextId: fd.editor || data.contextId || "", clientId: fd.clientId || "" });
                 }
             };
 
@@ -1385,8 +1309,12 @@
                                         {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                     </select>
 
-                                    {!isEdit && <Input name="time" type="time" label="Hora (Opcional)" />}
-                                    {(!data?.contextId || isEdit) && <select name="manager" required defaultValue={data?.contextId} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none"><option value="">Selecciona Manager...</option>{managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>}
+                                    <Input name="time" type="time" label="Hora (Opcional)" defaultValue={data?.time || ""} />
+                                    
+                                    <select name="manager" required defaultValue={data?.contextId || ""} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none">
+                                        <option value="">Selecciona Manager...</option>
+                                        {managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                    </select>
                                     
                                     <textarea name="notes" placeholder="Notas, copies, ideas..." defaultValue={data?.notes} className="w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 h-24 text-sm"></textarea>
                                 </>}
@@ -1404,7 +1332,12 @@
                                         <option value="urgente" className="text-red-600 dark:text-red-400">🔴 URGENTE</option>
                                         <option value="recurrente" className="text-emerald-600 dark:text-emerald-400">🟢 Recurrente</option>
                                     </select>
-                                    {(!data?.contextId || isEdit) && <select name="editor" required defaultValue={data?.contextId} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none"><option value="">Selecciona Editor...</option>{editors.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select>}
+                                    
+                                    <select name="editor" required defaultValue={data?.contextId || ""} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none">
+                                        <option value="">Selecciona Editor...</option>
+                                        {editors.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                    </select>
+                                    
                                     <textarea name="notes" placeholder="Notas, links a drive..." defaultValue={data?.notes} className="w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 h-24 text-sm"></textarea>
                                 </>}
 
@@ -1428,16 +1361,9 @@
         );
 
         const Toast = ({ message, type }) => (<div className={`fixed bottom-6 right-6 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 fade-in z-[110] ${type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 dark:bg-white text-white dark:text-slate-900'}`}><Icon name={type === 'success' ? "CheckCircle2" : "AlertTriangle"} size={20} className={type === 'success' ? "text-green-400" : ""}/><span className="font-bold text-sm">{message}</span></div>);
-        
-        const CheckItem = ({ label, checked, onToggle }) => (
-            <button onClick={onToggle} className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${checked ? 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30 text-green-800 dark:text-green-400' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600'}`}><span className="font-bold text-sm">{label}</span>{checked ? <Icon name="CheckCircle2" size={20} className="text-green-500" /> : <Icon name="Circle" size={20} />}</button>
-        );
-        
-        const Input = ({ label, ...props }) => (<div>{label && <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">{label}</label>}<input className="w-full p-4 md:p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-medium text-slate-700 dark:text-slate-200 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500" {...props} /></div>);
 
         const root = createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
 </html>
-
