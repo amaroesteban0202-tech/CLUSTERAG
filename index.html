@@ -149,6 +149,7 @@
 
         const ACCOUNT_COLORS = ['purple', 'indigo', 'blue', 'cyan', 'amber', 'orange', 'fuchsia', 'violet', 'stone'];
         const EDITOR_COLORS = ['c21', 'c22', 'c23', 'c24', 'c25', 'c26'];
+        const LEGACY_COLOR_MAP = { c1: 'purple', c2: 'blue', c3: 'indigo', c4: 'amber', c5: 'fuchsia', c6: 'violet', c7: 'cyan', c8: 'orange', c9: 'indigo', c10: 'stone' };
 
         const IconsMap = {
             LayoutDashboard, Users, CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
@@ -269,7 +270,6 @@
         const TeamView = ({ title, team, iconColor, onAdd, onSelect, onDelete, onEdit }) => {
             const [searchTerm, setSearchTerm] = useState('');
             const filteredTeam = team.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-            const legacyColorMap = { c1: 'purple', c2: 'blue', c3: 'indigo', c4: 'amber', c5: 'fuchsia', c6: 'violet', c7: 'cyan', c8: 'orange', c9: 'indigo', c10: 'stone' };
 
             return (
                 <div className="space-y-6 fade-in">
@@ -285,7 +285,7 @@
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {filteredTeam.map(person => {
-                                let mappedColorName = legacyColorMap[person.color] || person.color;
+                                let mappedColorName = LEGACY_COLOR_MAP[person.color] || person.color;
                                 const style = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
                                 return (
                                     <div key={person.id} onClick={() => onSelect(person)} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-xl hover:border-slate-300 dark:hover:border-slate-600 transition-all cursor-pointer group relative">
@@ -312,7 +312,8 @@
         };
 
         const PersonCalendarDetail = ({ person, tasks, title, baseColor, onBack, onAddEvent, onEventClick }) => {
-            const style = PERSON_COLORS[baseColor] || PERSON_COLORS.slate;
+            let mappedColorName = LEGACY_COLOR_MAP[baseColor] || baseColor;
+            const style = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
             return (
                 <div className="h-full flex flex-col space-y-6 fade-in">
                     <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
@@ -326,7 +327,7 @@
                         </div>
                     </div>
                     <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden">
-                        <CalendarGrid events={tasks.filter(t => t.contextId === person.id)} baseColor={baseColor} onAdd={onAddEvent} onEventClick={onEventClick} />
+                        <CalendarGrid events={tasks.filter(t => t.contextId === person.id)} baseColor={mappedColorName} onAdd={onAddEvent} onEventClick={onEventClick} />
                     </div>
                 </div>
             );
@@ -361,7 +362,7 @@
             );
         };
 
-        const AccountRoomView = ({ tasks, managers, clients, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick, legacyColorMap }) => {
+        const AccountRoomView = ({ tasks, managers, clients, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
             const [currentDate, setCurrentDate] = useState(getHondurasTodayStr()); 
             const [searchTerm, setSearchTerm] = useState('');
             const [filterMode, setFilterMode] = useState('date');
@@ -449,7 +450,7 @@
                                         colTasks.map(t => {
                                             const manager = managers.find(m => m.id === t.contextId);
                                             const client = clients.find(c => c.id === t.clientId);
-                                            let mappedColorName = legacyColorMap[manager?.color] || manager?.color;
+                                            let mappedColorName = LEGACY_COLOR_MAP[manager?.color] || manager?.color;
                                             const mStyles = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
                                             const isOverdue = t.date < getHondurasTodayStr() && col.id !== 'publicado';
                                             
@@ -710,6 +711,7 @@
                             </div>
                             <div>
                                 <h1 className="text-2xl md:text-3xl font-black">{client.name}</h1>
+                                
                                 <div className="flex items-center gap-2 mt-2 bg-white/5 px-3 py-1.5 rounded-lg inline-flex border border-white/10 relative transition-all hover:bg-white/10">
                                     <Icon name="UserCircle2" size={14} className="text-blue-300"/>
                                     <select 
@@ -724,6 +726,7 @@
                                 </div>
                             </div>
                         </div>
+                        
                         <div className="flex gap-2 bg-white/10 p-1 rounded-xl shrink-0 mt-4 md:mt-0">{['Contento', 'Neutral', 'En Riesgo'].map(m => <button key={m} onClick={() => onUpdate(client.id, {mood: m})} className={`p-2 rounded-lg ${client.mood === m ? 'bg-white/20' : 'opacity-50 hover:opacity-100'}`}><Icon name={m === 'Contento' ? 'Smile' : m === 'Neutral' ? 'Meh' : 'Frown'} className={m === 'Contento' ? 'text-green-400' : m === 'Neutral' ? 'text-yellow-400' : 'text-red-400'}/></button>)}</div>
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-slate-100 dark:divide-slate-800">
@@ -731,7 +734,7 @@
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800"><h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Icon name="Instagram" size={14}/> Redes</h3><div className="flex flex-col md:flex-row gap-2"><input defaultValue={client.instagram} onBlur={(e) => onUpdate(client.id, {instagram: e.target.value})} placeholder="Link Instagram..." className="flex-1 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-xl text-sm px-4 py-3 border outline-none text-slate-800 dark:text-slate-200"/><a href={client.instagram || '#'} target="_blank" className="bg-pink-50 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400 px-4 py-3 rounded-xl font-bold text-sm hover:bg-pink-100 dark:hover:bg-pink-500/20 flex items-center justify-center gap-2">Ver <Icon name="ExternalLink" size={14}/></a></div></div>
                             <button onClick={onDelete} className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400 text-xs font-bold flex items-center gap-2 p-2 -ml-2"><Icon name="Trash2" size={14}/> ELIMINAR CLIENTE</button>
                         </div>
-                        <div className="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50"><h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2"><Icon name="CheckCircle2" size={14}/> Workflow</h3><div className="space-y-3">{['week1', 'week2', 'week3', 'week4'].map((w, i) => <CheckItem key={w} label={['Estrategia', 'Producción', 'Aprobación', 'Reporte'][i]} checked={client.workflow?.[w]} onToggle={() => onUpdate(client.id, {[`workflow.${w}`]: !client.workflow?.[w]})} />)}</div></div>
+                        <div className="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50"><h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2"><Icon name="CheckCircle2" size={14}/> Workflow</h3><div className="space-y-3">{['week1', 'week2', 'week3', 'week4'].map((w, i) => <CheckItem key={w} label={['Estrategia', 'Producción', 'Aprobación', 'Reporte'][i]} checked={client.workflow?.[w] || false} onToggle={() => onUpdate(client.id, {[`workflow.${w}`]: !client.workflow?.[w]})} />)}</div></div>
                     </div>
                 </div>
             </div>
@@ -741,7 +744,9 @@
             const [date, setDate] = useState(new Date());
             const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
             const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-            const style = PERSON_COLORS[baseColor] || PERSON_COLORS.slate;
+            
+            const mappedColorName = LEGACY_COLOR_MAP[baseColor] || baseColor;
+            const style = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
 
             return (
                 <>
