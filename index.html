@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cluster Agency OS</title>
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -41,10 +40,8 @@
         }
     </style>
 
-    <!-- Librería para Animación de Confeti -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 
-    <!-- Librerías React y Firebase -->
     <script type="importmap">
     {
         "imports": {
@@ -256,7 +253,7 @@
             const handleEventClick = (event, type) => setEventAction({ isOpen: true, event, type });
             const triggerConfetti = () => { if (window.confetti) window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#9333ea', '#3b82f6', '#10b981', '#f59e0b'] }); };
 
-            const urgentEditions = editingTasks.filter(t => t.priority === 'urgente' && t.status !== 'aprobado').length;
+            const urgentEditions = editingTasks.filter(t => t.priority === 'urgente' && t.status !== 'aprobado' && t.status !== 'publicado').length;
             const pendingAccounts = accountTasks.filter(t => t.status === 'por_disenar').length;
 
             const allActivities = [
@@ -327,7 +324,7 @@
             const changeEditingTaskStatus = async (task, newStatus) => {
                 if (newStatus) {
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', task.id), { status: newStatus });
-                    if (newStatus === 'aprobado') triggerConfetti();
+                    if (newStatus === 'aprobado' || newStatus === 'publicado') triggerConfetti();
                 }
             };
 
@@ -520,7 +517,7 @@
                         <StatCard title="Clientes Activos" value={clients.length} icon="Briefcase" color="blue" />
                         <StatCard title="Account Managers" value={managers.length} icon="Users" color="indigo" />
                         <StatCard title="Tareas Accounts" value={accountTasks.filter(t => t.status !== 'publicado').length} icon="LayoutList" color="indigo" />
-                        <StatCard title="Pendientes Edición" value={tasks.filter(t => t.status !== 'aprobado').length} icon="Video" color="amber" />
+                        <StatCard title="Pendientes Edición" value={tasks.filter(t => t.status !== 'aprobado' && t.status !== 'publicado').length} icon="Video" color="amber" />
                     </div>
 
                     {/* Métricas Avanzadas */}
@@ -832,7 +829,8 @@
             const columns = [
                 { id: 'editar', title: 'Por Editar', color: 'slate' },
                 { id: 'correccion', title: 'En Corrección', color: 'amber' },
-                { id: 'aprobado', title: 'Aprobado', color: 'emerald' }
+                { id: 'aprobado', title: 'Aprobado', color: 'emerald' },
+                { id: 'publicado', title: 'Publicado', color: 'indigo' } 
             ];
             
             const priorityStyles = {
@@ -844,7 +842,7 @@
             const filteredTasks = tasks.filter(t => {
                 if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
                 if (filterMode === 'date') return t.date === currentDate;
-                if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'aprobado';
+                if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'publicado';
                 return true; 
             });
 
@@ -853,7 +851,6 @@
                 e.dataTransfer.effectAllowed = 'move';
                 
                 try {
-                    // Crear clon para asegurar 100% de opacidad y efecto 3D al arrastrar
                     const rect = e.currentTarget.getBoundingClientRect();
                     const x = e.clientX - rect.left;
                     const y = e.clientY - rect.top;
@@ -877,7 +874,6 @@
                 } catch(err) { console.error("Ghost clone error:", err); }
 
                 const target = e.currentTarget;
-                // Oculta la tarjeta original sacándola del flujo para que no ocupe espacio
                 setTimeout(() => target.classList.add('drag-source-hidden'), 0);
             };
 
@@ -906,7 +902,7 @@
                 <div className="h-full flex flex-col space-y-6 fade-in">
                     <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} title="Sala de Edición" onAdd={onAdd} btnColor="amber" btnIcon="Video" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
                     
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden">
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
                         {columns.map((col, colIndex) => {
                             const colTasks = filteredTasks.filter(t => t.status === col.id);
                             const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
@@ -916,18 +912,18 @@
                                 <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300"
                                      onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(e) => handleDrop(e, col.id)}>
                                     
-                                    <div className={`p-4 font-black text-xs uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
-                                        {col.title} <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
+                                    <div className={`p-3 font-black text-[11px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
+                                        {col.title} <span className="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
                                     </div>
                                     
-                                    <div className="p-4 flex-1 overflow-y-auto space-y-3 custom-scroll">
+                                    <div className="p-3 flex-1 overflow-y-auto space-y-3 custom-scroll">
                                         {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacío (Arrastra tareas aquí)" /> : 
                                         colTasks.map(t => {
                                             const editor = editors.find(e => e.id === t.contextId);
                                             const client = clients.find(c => c.id === t.clientId);
                                             const pStyle = priorityStyles[t.priority] || priorityStyles.normal;
                                             const eStyles = PERSON_COLORS[editor?.color] || PERSON_COLORS.slate;
-                                            const isOverdue = t.date < getHondurasTodayStr() && col.id !== 'aprobado';
+                                            const isOverdue = t.date < getHondurasTodayStr() && col.id !== 'publicado';
                                             const borderLeftColor = isOverdue ? 'border-l-red-600' : (t.priority === 'urgente' ? 'border-l-red-500' : t.priority === 'recurrente' ? 'border-l-emerald-500' : 'border-l-amber-500');
 
                                             return (
@@ -962,7 +958,6 @@
                                                         </div>
                                                     )}
 
-                                                    {/* Botones Back / Avanzar */}
                                                     <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                                                         {prevStatus && (
                                                             <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, prevStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}>
@@ -971,7 +966,8 @@
                                                         )}
                                                         {nextStatus && (
                                                             <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, nextStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-${col.color}-50 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-400 hover:bg-${col.color}-100 dark:hover:bg-${col.color}-500/30 transition-colors`}>
-                                                                {nextStatus === 'aprobado' ? 'Aprobar' : 'Avanzar'} <Icon name={nextStatus === 'aprobado' ? "CheckCircle2" : "ChevronRight"} size={12}/>
+                                                                {nextStatus === 'publicado' ? 'Publicar' : nextStatus === 'aprobado' ? 'Aprobar' : 'Avanzar'} 
+                                                                <Icon name={nextStatus === 'publicado' ? "CheckCircle2" : "ChevronRight"} size={12}/>
                                                             </button>
                                                         )}
                                                     </div>
@@ -1064,8 +1060,8 @@
                         <div className="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50"><h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2"><Icon name="CheckCircle2" size={14}/> Workflow</h3><div className="space-y-3">{['week1', 'week2', 'week3', 'week4'].map((w, i) => <CheckItem key={w} label={['Estrategia', 'Producción', 'Aprobación', 'Reporte'][i]} checked={client.workflow[w]} onToggle={() => onUpdate(client.id, {[`workflow.${w}`]: !client.workflow[w]})} />)}</div></div>
                     </div>
                 </div>
-            </div>
-        );
+            );
+        };
 
         const CalendarGrid = ({ events, onAdd, onEventClick, baseColor = "emerald" }) => {
             const [date, setDate] = useState(new Date());
