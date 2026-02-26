@@ -66,7 +66,7 @@
             LayoutDashboard, Users, Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
             CheckCircle2, Circle, ExternalLink, Briefcase, UserCircle2, Loader2, Trash2, 
             Video, ArrowRight, UserPlus, MonitorPlay, Search, Menu, PenTool, LayoutList, CalendarDays,
-            AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown
+            AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles
         } from 'lucide-react';
         import { initializeApp } from 'firebase/app';
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -156,7 +156,7 @@
             LayoutDashboard, Users, CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
             CheckCircle2, Circle, ExternalLink, Briefcase, UserCircle2, Loader2, Trash2, 
             Video, ArrowRight, UserPlus, MonitorPlay, Search, Menu, PenTool, LayoutList, CalendarDays,
-            AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown
+            AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles
         };
 
         const Icon = ({ name, size = 18, className = "" }) => {
@@ -473,45 +473,113 @@
             const totalTasks = allTasks.length || 1;
             const compPercent = Math.round((completedTasks / totalTasks) * 100);
 
+            const todayStr = getHondurasTodayStr();
+            
+            // Recolectar tareas urgentes o atrasadas automáticamente
+            const urgentTasks = [
+                ...tasks.filter(t => (t.priority === 'urgente' || t.date < todayStr) && t.status !== 'aprobado' && t.status !== 'publicado').map(t => ({...t, _type: 'Edición'})),
+                ...accountTasks.filter(t => t.date < todayStr && t.status !== 'publicado').map(t => ({...t, _type: 'Account'}))
+            ].sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 6);
+
+            const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const formattedDate = new Date().toLocaleDateString('es-HN', dateOptions);
+
             return (
-                <div className="space-y-8 animate-in fade-in duration-500">
+                <div className="space-y-6 animate-in fade-in duration-500">
+                    
+                    {/* 1. Hero Banner de Bienvenida */}
+                    <div className="bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-700 rounded-3xl p-8 md:p-10 text-white shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
+                        <div className="absolute bottom-0 right-1/4 w-40 h-40 bg-purple-400 opacity-20 rounded-full blur-2xl translate-y-1/3"></div>
+                        <div className="relative z-10">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="px-3 py-1 bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md border border-white/10">Resumen Operativo</span>
+                            </div>
+                            <h2 className="text-3xl md:text-4xl font-black mb-2 tracking-tight">¡Hola, Equipo Cluster! 👋</h2>
+                            <p className="text-purple-100 font-medium text-sm md:text-base max-w-xl leading-relaxed">
+                                Hoy es <span className="capitalize">{formattedDate}</span>. 
+                                Tienes <strong className="text-white">{urgentTasks.length}</strong> tareas que requieren atención prioritaria. Mantén el ritmo, ya han completado {completedTasks} asignaciones en total.
+                            </p>
+                        </div>
+                        <Icon name="Sparkles" size={140} className="absolute -right-8 -top-8 text-white opacity-10 rotate-12" />
+                    </div>
+
+                    {/* 2. Top Stats */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                         <StatCard title="Clientes Activos" value={clients.length} icon="Briefcase" color="blue" />
                         <StatCard title="Account Managers" value={managers.length} icon="Users" color="indigo" />
                         <StatCard title="Tareas Accounts" value={accountTasks.filter(t => t.status !== 'publicado').length} icon="LayoutList" color="indigo" />
                         <StatCard title="Pendientes Edición" value={tasks.filter(t => t.status !== 'aprobado' && t.status !== 'publicado').length} icon="Video" color="amber" />
                     </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
-                            <div>
-                                <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Salud de la Cartera</h3>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">Distribución según satisfacción actual</p>
-                            </div>
-                            <div className="mt-6">
-                                <div className="flex gap-1 h-6 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-inner">
-                                    <div style={{width: `${(contentos/totalClients)*100}%`}} className="bg-green-500" title={`Contentos: ${contentos}`}></div>
-                                    <div style={{width: `${(neutrales/totalClients)*100}%`}} className="bg-amber-400" title={`Neutrales: ${neutrales}`}></div>
-                                    <div style={{width: `${(enRiesgo/totalClients)*100}%`}} className="bg-red-500 animate-pulse" title={`En Riesgo: ${enRiesgo}`}></div>
+
+                    {/* 3. Sección Inferior (Métricas y Urgencias) */}
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                        
+                        {/* Columna Izquierda: Gráficos */}
+                        <div className="xl:col-span-2 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+                                <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                                    <div>
+                                        <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Salud de la Cartera</h3>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">Distribución según satisfacción actual</p>
+                                    </div>
+                                    <div className="mt-6">
+                                        <div className="flex gap-1 h-6 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-inner">
+                                            <div style={{width: `${(contentos/totalClients)*100}%`}} className="bg-green-500 transition-all cursor-help" title={`Contentos: ${contentos}`}></div>
+                                            <div style={{width: `${(neutrales/totalClients)*100}%`}} className="bg-amber-400 transition-all cursor-help" title={`Neutrales: ${neutrales}`}></div>
+                                            <div style={{width: `${(enRiesgo/totalClients)*100}%`}} className="bg-red-500 animate-pulse transition-all cursor-help" title={`En Riesgo: ${enRiesgo}`}></div>
+                                        </div>
+                                        <div className="flex justify-between mt-4 text-[10px] font-bold uppercase tracking-wider">
+                                            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm"></span> <span className="text-slate-600 dark:text-slate-300">Sanos ({contentos})</span></div>
+                                            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm"></span> <span className="text-slate-600 dark:text-slate-300">Neutral ({neutrales})</span></div>
+                                            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"></span> <span className="text-slate-600 dark:text-slate-300">Riesgo ({enRiesgo})</span></div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between mt-4 text-[10px] font-bold uppercase tracking-wider">
-                                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm"></span> <span className="text-slate-600 dark:text-slate-300">Sanos ({contentos})</span></div>
-                                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm"></span> <span className="text-slate-600 dark:text-slate-300">Neutral ({neutrales})</span></div>
-                                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"></span> <span className="text-slate-600 dark:text-slate-300">Riesgo ({enRiesgo})</span></div>
+                                <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                                    <div>
+                                        <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Progreso Global</h3>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">Volumen completado vs general</p>
+                                    </div>
+                                    <div className="mt-6 flex items-center gap-6">
+                                        <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-6 overflow-hidden shadow-inner p-1">
+                                            <div style={{width: `${compPercent}%`}} className="bg-purple-600 h-full rounded-full flex items-center justify-end px-2 transition-all duration-1000 ease-out relative overflow-hidden"></div>
+                                        </div>
+                                        <span className="text-3xl font-black text-purple-600 dark:text-purple-400 w-16 text-right">{compPercent}%</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
-                            <div>
-                                <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Progreso Global</h3>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">Volumen completado vs general</p>
-                            </div>
-                            <div className="mt-6 flex items-center gap-6">
-                                <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-6 overflow-hidden shadow-inner p-1">
-                                    <div style={{width: `${compPercent}%`}} className="bg-purple-600 h-full rounded-full flex items-center justify-end px-2 transition-all duration-1000 ease-out relative overflow-hidden"></div>
+
+                        {/* Columna Derecha: Tareas Urgentes (Nuevo) */}
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col min-h-[300px]">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Atención Requerida</h3>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">Urgentes y atrasadas</p>
                                 </div>
-                                <span className="text-3xl font-black text-purple-600 dark:text-purple-400 w-16 text-right">{compPercent}%</span>
+                                <div className="p-2.5 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl"><Icon name="Flame" size={18} className="animate-pulse"/></div>
+                            </div>
+                            <div className="flex-1 overflow-y-auto space-y-2 custom-scroll pr-2">
+                                {urgentTasks.length === 0 ? (
+                                    <EmptyState icon="Smile" text="¡Todo al día! No hay urgencias." />
+                                ) : (
+                                    urgentTasks.map(t => (
+                                        <div key={t.id} className="p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-start gap-3 group cursor-pointer">
+                                            <div className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${t.date < todayStr ? 'bg-red-500' : 'bg-amber-500'}`}></div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-purple-600 transition-colors">{t.title}</p>
+                                                <div className="flex items-center gap-2 mt-1.5">
+                                                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-wide">{t._type}</span>
+                                                    <span className={`text-[9px] font-bold ${t.date < todayStr ? 'text-red-500' : 'text-slate-400'}`}>Vence: {t.date}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
+
                     </div>
                 </div>
             );
