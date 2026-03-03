@@ -66,25 +66,26 @@
             LayoutDashboard, Users, Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
             CheckCircle2, Circle, ExternalLink, Briefcase, UserCircle2, Loader2, Trash2, 
             Video, ArrowRight, UserPlus, MonitorPlay, Search, Menu, PenTool, LayoutList, CalendarDays,
-            AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles
+            AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles, Trophy, Medal, BarChart3
         } from 'lucide-react';
         import { initializeApp } from 'firebase/app';
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
         import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 
         // --- TRUCO PARA TAILWIND: Obligar a compilar estas clases dinámicas ---
-        const TAILWIND_SAFELIST = "bg-purple-50 text-purple-700 border-purple-200 bg-purple-100 dark:bg-purple-500/20 dark:text-purple-400 dark:border-purple-500/30 " +
-        "bg-indigo-50 text-indigo-700 border-indigo-200 bg-indigo-100 dark:bg-indigo-500/20 dark:text-indigo-400 dark:border-indigo-500/30 " +
-        "bg-blue-50 text-blue-700 border-blue-200 bg-blue-100 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30 " +
-        "bg-cyan-50 text-cyan-700 border-cyan-200 bg-cyan-100 dark:bg-cyan-500/20 dark:text-cyan-400 dark:border-cyan-500/30 " +
-        "bg-amber-50 text-amber-700 border-amber-200 bg-amber-100 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30 " +
-        "bg-orange-50 text-orange-700 border-orange-200 bg-orange-100 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30 " +
-        "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 bg-fuchsia-100 dark:bg-fuchsia-500/20 dark:text-fuchsia-400 dark:border-fuchsia-500/30 " +
-        "bg-violet-50 text-violet-700 border-violet-200 bg-violet-100 dark:bg-violet-500/20 dark:text-violet-400 dark:border-violet-500/30 " +
-        "bg-stone-50 text-stone-700 border-stone-200 bg-stone-100 dark:bg-stone-500/20 dark:text-stone-400 dark:border-stone-500/30 " +
-        "bg-emerald-50 text-emerald-700 border-emerald-200 bg-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30 " +
-        "bg-rose-50 text-rose-700 border-rose-200 bg-rose-100 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/30 " +
-        "bg-slate-50 text-slate-700 border-slate-200 bg-slate-100 dark:bg-slate-500/20 dark:text-slate-400 dark:border-slate-500/30";
+        const TAILWIND_SAFELIST = "bg-purple-50 text-purple-700 border-purple-200 bg-purple-100 dark:bg-purple-500/20 dark:text-purple-400 dark:border-purple-500/30 bg-purple-500 text-purple-600 " +
+        "bg-indigo-50 text-indigo-700 border-indigo-200 bg-indigo-100 dark:bg-indigo-500/20 dark:text-indigo-400 dark:border-indigo-500/30 bg-indigo-500 text-indigo-600 " +
+        "bg-blue-50 text-blue-700 border-blue-200 bg-blue-100 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30 bg-blue-500 text-blue-600 " +
+        "bg-cyan-50 text-cyan-700 border-cyan-200 bg-cyan-100 dark:bg-cyan-500/20 dark:text-cyan-400 dark:border-cyan-500/30 bg-cyan-500 text-cyan-600 " +
+        "bg-amber-50 text-amber-700 border-amber-200 bg-amber-100 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30 bg-amber-500 text-amber-600 " +
+        "bg-orange-50 text-orange-700 border-orange-200 bg-orange-100 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30 bg-orange-500 text-orange-600 " +
+        "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 bg-fuchsia-100 dark:bg-fuchsia-500/20 dark:text-fuchsia-400 dark:border-fuchsia-500/30 bg-fuchsia-500 text-fuchsia-600 " +
+        "bg-violet-50 text-violet-700 border-violet-200 bg-violet-100 dark:bg-violet-500/20 dark:text-violet-400 dark:border-violet-500/30 bg-violet-500 text-violet-600 " +
+        "bg-stone-50 text-stone-700 border-stone-200 bg-stone-100 dark:bg-stone-500/20 dark:text-stone-400 dark:border-stone-500/30 bg-stone-500 text-stone-600 " +
+        "bg-emerald-50 text-emerald-700 border-emerald-200 bg-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30 bg-emerald-500 text-emerald-600 " +
+        "bg-rose-50 text-rose-700 border-rose-200 bg-rose-100 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/30 bg-rose-500 text-rose-600 " +
+        "bg-slate-50 text-slate-700 border-slate-200 bg-slate-100 dark:bg-slate-500/20 dark:text-slate-400 dark:border-slate-500/30 bg-slate-500 text-slate-600 " + 
+        "ring-amber-600/50 bg-amber-600/10";
 
         const firebaseConfig = {
           apiKey: "AIzaSyBAnY2ihWlow17H-TjUKgueWpw2MqYpzUc",
@@ -156,7 +157,7 @@
             LayoutDashboard, Users, CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
             CheckCircle2, Circle, ExternalLink, Briefcase, UserCircle2, Loader2, Trash2, 
             Video, ArrowRight, UserPlus, MonitorPlay, Search, Menu, PenTool, LayoutList, CalendarDays,
-            AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles
+            AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles, Trophy, Medal, BarChart3
         };
 
         const Icon = ({ name, size = 18, className = "" }) => {
@@ -461,7 +462,7 @@
             <button onClick={onToggle} className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${checked ? 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30 text-green-800 dark:text-green-400' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600'}`}><span className="font-bold text-sm">{label}</span>{checked ? <Icon name="CheckCircle2" size={20} className="text-green-500" /> : <Icon name="Circle" size={20} />}</button>
         );
 
-        // --- VISTAS ---
+        // --- DASHBOARD PRINCIPAL CON RANKING ---
         const DashboardView = ({ clients, managers, events, tasks, accountTasks }) => {
             const contentos = clients.filter(c => c.mood === 'Contento').length;
             const neutrales = clients.filter(c => c.mood === 'Neutral').length;
@@ -475,7 +476,7 @@
 
             const todayStr = getHondurasTodayStr();
             
-            // Recolectar tareas urgentes o atrasadas automáticamente
+            // Recolectar tareas urgentes o atrasadas
             const urgentTasks = [
                 ...tasks.filter(t => (t.priority === 'urgente' || t.date < todayStr) && t.status !== 'aprobado' && t.status !== 'publicado').map(t => ({...t, _type: 'Edición'})),
                 ...accountTasks.filter(t => t.date < todayStr && t.status !== 'publicado').map(t => ({...t, _type: 'Account'}))
@@ -484,10 +485,47 @@
             const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
             const formattedDate = new Date().toLocaleDateString('es-HN', dateOptions);
 
+            // LOGICA DEL RANKING DE ACCOUNT MANAGERS
+            const managerStats = managers.map(m => {
+                // Tareas
+                const mTasks = accountTasks.filter(t => t.contextId === m.id);
+                const mCompletedTasks = mTasks.filter(t => t.status === 'aprobado_internamente' || t.status === 'publicado').length;
+                const taskScore = mTasks.length > 0 ? (mCompletedTasks / mTasks.length) * 100 : 0;
+
+                // Clientes
+                const mClients = clients.filter(c => c.managerId === m.id);
+                let workflowTotal = mClients.length * 4;
+                let workflowCompleted = 0;
+                mClients.forEach(c => {
+                    if(c.workflow?.week1) workflowCompleted++;
+                    if(c.workflow?.week2) workflowCompleted++;
+                    if(c.workflow?.week3) workflowCompleted++;
+                    if(c.workflow?.week4) workflowCompleted++;
+                });
+                const clientScore = workflowTotal > 0 ? (workflowCompleted / workflowTotal) * 100 : 0;
+
+                // Puntuación Combinada
+                let finalScore = 0;
+                if (mTasks.length > 0 && mClients.length > 0) finalScore = (taskScore * 0.6) + (clientScore * 0.4);
+                else if (mTasks.length > 0) finalScore = taskScore;
+                else if (mClients.length > 0) finalScore = clientScore;
+
+                let mappedColorName = LEGACY_COLOR_MAP[m.color] || m.color || 'slate';
+
+                return {
+                    ...m,
+                    mappedColor: mappedColorName,
+                    totalTasks: mTasks.length,
+                    completedTasks: mCompletedTasks,
+                    totalClients: mClients.length,
+                    score: Math.round(finalScore)
+                };
+            }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+
             return (
                 <div className="space-y-6 animate-in fade-in duration-500">
                     
-                    {/* 1. Hero Banner de Bienvenida */}
+                    {/* Hero Banner */}
                     <div className="bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-700 rounded-3xl p-8 md:p-10 text-white shadow-xl relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
                         <div className="absolute bottom-0 right-1/4 w-40 h-40 bg-purple-400 opacity-20 rounded-full blur-2xl translate-y-1/3"></div>
@@ -504,7 +542,7 @@
                         <Icon name="Sparkles" size={140} className="absolute -right-8 -top-8 text-white opacity-10 rotate-12" />
                     </div>
 
-                    {/* 2. Top Stats */}
+                    {/* Stats Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                         <StatCard title="Clientes Activos" value={clients.length} icon="Briefcase" color="blue" />
                         <StatCard title="Account Managers" value={managers.length} icon="Users" color="indigo" />
@@ -512,10 +550,8 @@
                         <StatCard title="Pendientes Edición" value={tasks.filter(t => t.status !== 'aprobado' && t.status !== 'publicado').length} icon="Video" color="amber" />
                     </div>
 
-                    {/* 3. Sección Inferior (Métricas y Urgencias) */}
+                    {/* Paneles Inferiores */}
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                        
-                        {/* Columna Izquierda: Gráficos */}
                         <div className="xl:col-span-2 space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
                                 <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
@@ -551,7 +587,7 @@
                             </div>
                         </div>
 
-                        {/* Columna Derecha: Tareas Urgentes (Nuevo) */}
+                        {/* Tareas Urgentes */}
                         <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col min-h-[300px]">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
@@ -579,7 +615,66 @@
                                 )}
                             </div>
                         </div>
+                    </div>
 
+                    {/* Ranking Account Managers */}
+                    <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm mt-6">
+                        <div className="mb-6 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-800 dark:text-white mb-1 flex items-center gap-2">
+                                    <Icon name="Trophy" size={20} className="text-yellow-500" /> Ranking de Productividad por Account
+                                </h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">Rendimiento basado en tareas resueltas y avance en workflows.</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            {managerStats.length === 0 ? (
+                                <div className="col-span-full"><EmptyState icon="Users" text="No hay Accounts para evaluar aún." /></div>
+                            ) : (
+                                managerStats.map((ms, index) => {
+                                    const isTop = index === 0;
+                                    const isSecond = index === 1;
+                                    const isThird = index === 2;
+                                    
+                                    let medalColor = 'text-slate-400';
+                                    let medalBg = 'bg-slate-100 dark:bg-slate-800';
+                                    if (isTop) { medalColor = 'text-yellow-500'; medalBg = 'bg-yellow-50 dark:bg-yellow-500/10 ring-2 ring-yellow-400/50'; }
+                                    else if (isSecond) { medalColor = 'text-slate-400'; medalBg = 'bg-slate-50 dark:bg-slate-500/10 ring-2 ring-slate-300/50'; }
+                                    else if (isThird) { medalColor = 'text-amber-600'; medalBg = 'bg-amber-50 dark:bg-amber-600/10 ring-2 ring-amber-600/50'; }
+
+                                    return (
+                                        <div key={ms.id} className="p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/20 flex flex-col gap-3 hover:bg-white dark:hover:bg-slate-800 transition-colors shadow-sm relative overflow-hidden">
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-8 h-8 shrink-0 flex items-center justify-center font-black rounded-full shadow-sm text-sm ${medalBg} ${medalColor}`}>
+                                                        #{index + 1}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate max-w-[140px] flex items-center gap-1.5">
+                                                            {ms.name} {isTop && <Icon name="Sparkles" size={14} className="text-yellow-500"/>}
+                                                        </h4>
+                                                        <p className="text-[10px] text-slate-500 font-medium">
+                                                            {ms.completedTasks}/{ms.totalTasks} Tareas | {ms.totalClients} Clientes
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className={`text-lg font-black text-${ms.mappedColor}-600 dark:text-${ms.mappedColor}-400`}>{ms.score}%</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="h-2.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden shadow-inner">
+                                                <div 
+                                                    style={{width: `${ms.score}%`}} 
+                                                    className={`h-full rounded-full transition-all duration-1000 ease-out bg-${ms.mappedColor}-500 ${ms.score > 0 ? 'min-w-[0.5rem]' : ''}`}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                    )
+                                })
+                            )}
+                        </div>
                     </div>
                 </div>
             );
@@ -1028,6 +1123,7 @@
                             </div>
                             <div>
                                 <h1 className="text-2xl md:text-3xl font-black">{client.name}</h1>
+                                
                                 <div className="flex items-center gap-2 mt-2 bg-white/5 px-3 py-1.5 rounded-lg inline-flex border border-white/10 relative transition-all hover:bg-white/10">
                                     <Icon name="UserCircle2" size={14} className="text-blue-300"/>
                                     <select 
@@ -1318,7 +1414,6 @@
                 e.preventDefault();
                 const fd = Object.fromEntries(new FormData(e.target));
                 
-                // Corrección Crítica: Añadir "|| """ a todos los valores para evitar "undefined" en Firestore
                 if (isEdit) {
                     if (type === 'client') actions.updateClient(data.id, { name: fd.name || "", niche: fd.niche || "", package: fd.package || "", instagram: fd.instagram || "", managerId: fd.managerId || "" });
                     if (type === 'manager') actions.updateManager(data.id, { name: fd.name || "", email: fd.email || "" });
