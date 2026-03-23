@@ -1,0 +1,127 @@
+﻿REPORTE DE BUGS Y ERRORES (AUDITORIA ACTUAL)
+Fecha: 2026-03-05
+Proyecto: CLUSTERAG
+
+Metodo usado:
+- Revision estatica del codigo fuente.
+- Busqueda de patrones de fallo (runtime, UI y consistencia de datos).
+- No se ejecuto prueba E2E en navegador en esta auditoria.
+
+============================================================
+1) [ALTO] Texto UI con codificacion rota (mojibake)
+============================================================
+Estado: Corregido
+
+Evidencia:
+- src/app/main.jsx:403
+- src/app/main.jsx:406
+- src/app/main.jsx:1125
+- src/app/main.jsx:1301
+- src/app/main.jsx:1386
+
+Descripcion:
+Hay muchas cadenas en espanol con caracteres corruptos (ej: "Ã‚Â¿", "ProducciÃƒÂ³n", "EdiciÃƒÂ³n").
+Esto afecta textos visibles de botones, titulos y mensajes.
+
+Impacto:
+- Deteriora la UX y profesionalismo.
+- Puede causar confusiones operativas (labels ilegibles).
+
+Reproduccion:
+1. Abrir la app.
+2. Navegar entre Dashboard, modales y salas.
+3. Ver texto con simbolos corruptos en distintos componentes.
+
+============================================================
+2) [ALTO] Edicion de evento mezcla o duplica hora y titulo
+============================================================
+Estado: Corregido
+
+Evidencia:
+- src/app/main.jsx:1288
+- src/app/main.jsx:1332
+
+Descripcion:
+La hora se concatena dentro del campo "title" ("HH:mm - titulo").
+Al editar, el formulario vuelve a usar el mismo esquema, lo que puede:
+- Duplicar prefijos de hora.
+- Perder estructura limpia de datos (hora separada vs titulo).
+
+Impacto:
+- Datos inconsistentes en eventos.
+- Ediciones repetidas degradan el formato del titulo.
+
+Reproduccion:
+1. Crear evento con hora (ej: 09:00 - Reunion).
+2. Editar el evento y volver a guardar con hora.
+3. Ver titulo con prefijo duplicado o inconsistente.
+
+============================================================
+3) [MEDIO] Drag & Drop usa e.target en vez de e.currentTarget
+============================================================
+Estado: Corregido
+
+Evidencia:
+- src/app/main.jsx:689
+- src/app/main.jsx:839
+
+Descripcion:
+En dragStart se aplica clase CSS a e.target (elemento interno donde inicio el drag),
+pero en dragEnd se limpia sobre e.currentTarget (contenedor draggable).
+Si no coinciden, el elemento ocultado puede ser incorrecto.
+
+Impacto:
+- Artefactos visuales al arrastrar.
+- Comportamiento inconsistente segun donde se inicia el drag.
+
+Reproduccion:
+1. Arrastrar tareas desde diferentes sub-elementos (texto, icono, borde).
+2. Notar diferencias en ocultamiento/restauracion del item.
+
+============================================================
+4) [MEDIO] Key de React potencialmente no unica en lista mixta
+============================================================
+Estado: Corregido
+
+Evidencia:
+- src/app/main.jsx:1230
+
+Descripcion:
+En DayDetailsModal se usa key={act.id} para actividades de colecciones distintas.
+Si dos colecciones generan el mismo id, React puede reciclar nodos de forma incorrecta.
+
+Impacto:
+- Render incorrecto/intermitente en lista de actividades del dia.
+
+Reproduccion:
+1. Tener actividades de distintos tipos con id coincidente.
+2. Abrir detalle del dia y observar filas mezcladas o updates raros.
+
+============================================================
+5) [BAJO] Riesgo de crash por uso directo de charAt en datos incompletos
+============================================================
+Estado: Corregido
+
+Evidencia:
+- src/app/main.jsx:578
+- src/app/main.jsx:603
+- src/app/main.jsx:1169
+
+Descripcion:
+Se usa person.name.charAt(0) / client.name.charAt(0) sin fallback en algunos puntos.
+Si llega un documento sin "name", el render puede lanzar error.
+
+Impacto:
+- Caida parcial de componentes con datos inconsistentes.
+
+Reproduccion:
+1. Tener registro sin campo name en Firestore.
+2. Abrir vista donde ese registro se renderiza.
+
+============================================================
+Resumen
+============================================================
+Total hallazgos: 5
+- Alto: 2
+- Medio: 2
+- Bajo: 1
