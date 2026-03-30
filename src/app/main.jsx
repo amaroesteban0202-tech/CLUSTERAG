@@ -7,7 +7,7 @@ import {
     AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles, Trophy, Medal, BarChart3,
     ShieldCheck, LogIn, LogOut, ClipboardList, Lock, Mail
 } from 'lucide-react';
-import { signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
+import { signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, isSignInWithEmailLink, sendSignInLinkToEmail, signInWithEmailLink, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
 import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, limit, writeBatch, setDoc, getDocs } from 'firebase/firestore';
 import { auth, db, appId } from '/src/app/config/firebase.js';
 import {
@@ -64,6 +64,7 @@ const VIEW_PERMISSIONS = {
 const normalizeEmail = (value = '') => String(value || '').trim().toLowerCase();
 const normalizeNameKey = (value = '') => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 const nowIso = () => new Date().toISOString();
+const EMAIL_LINK_STORAGE_KEY = 'cluster_email_link_for_sign_in';
 const MANAGEMENT_DIRECTORY = DEFAULT_MANAGEMENT_TEAM.map((member) => ({
     ...member,
     directoryKey: normalizeNameKey(member.name)
@@ -196,6 +197,70 @@ const getGoogleAuthErrorMessage = (error) => {
     if (code === 'auth/cancelled-popup-request') return 'Ya habia un popup de autenticacion abierto.';
     return `No se pudo iniciar sesion con Google${code ? ` (${code})` : ''}.`;
 };
+const getEmailLinkAuthErrorMessage = (error, phase = 'send') => {
+    const code = String(error?.code || '').trim();
+    if (code === 'auth/unauthorized-domain' || code === 'auth/unauthorized-continue-uri' || code === 'auth/invalid-continue-uri') {
+        return 'Firebase bloqueo el enlace: agrega este dominio en Authorized domains de Firebase Authentication.';
+    }
+    if (code === 'auth/operation-not-allowed') {
+        return 'Email link no esta habilitado en Firebase Authentication.';
+    }
+    if (code === 'auth/invalid-email') {
+        return 'El correo no es valido.';
+    }
+    if (phase === 'complete' && (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code')) {
+        return 'El enlace ya no es valido o vencio.';
+    }
+    if (phase === 'complete' && code === 'auth/user-disabled') {
+        return 'La cuenta asociada esta deshabilitada.';
+    }
+    if (phase === 'complete' && code === 'auth/user-not-found') {
+        return 'No existe una cuenta de Firebase para ese correo.';
+    }
+    return phase === 'complete'
+        ? `No se pudo completar el acceso por correo${code ? ` (${code})` : ''}.`
+        : `No se pudo enviar el correo de acceso${code ? ` (${code})` : ''}.`;
+};
+const buildEmailLinkActionUrl = () => {
+    if (typeof window === 'undefined') return '';
+    const currentUrl = new URL(window.location.href);
+    const target = new URL(window.location.origin + window.location.pathname);
+    const firestoreTarget = currentUrl.searchParams.get('firestore');
+    if (firestoreTarget) target.searchParams.set('firestore', firestoreTarget);
+    target.searchParams.set('email_link', 'pending');
+    return target.toString();
+};
+const buildEmailLinkActionCodeSettings = () => ({
+    url: buildEmailLinkActionUrl(),
+    handleCodeInApp: true
+});
+const buildEmailLinkReturnUrl = (href = '') => {
+    if (typeof window === 'undefined') return null;
+    const currentUrl = new URL(href || window.location.href);
+    const continueUrl = currentUrl.searchParams.get('continueUrl');
+    let nextUrl = new URL(window.location.origin + window.location.pathname);
+
+    if (continueUrl) {
+        try {
+            nextUrl = new URL(continueUrl);
+        } catch (error) {
+            console.warn('No se pudo leer continueUrl del email link:', error);
+        }
+    } else {
+        const firestoreTarget = currentUrl.searchParams.get('firestore');
+        if (firestoreTarget) nextUrl.searchParams.set('firestore', firestoreTarget);
+    }
+
+    ['email_link', 'mode', 'oobCode', 'apiKey', 'lang', 'continueUrl'].forEach((param) => nextUrl.searchParams.delete(param));
+    return nextUrl;
+};
+const getAuthSource = (authUser = null) => {
+    const providerIds = (authUser?.providerData || []).map((provider) => provider?.providerId).filter(Boolean);
+    if (providerIds.includes('google.com')) return 'google';
+    if (providerIds.includes('password')) return 'email_link';
+    if (authUser?.isAnonymous) return 'anonymous';
+    return 'auth';
+};
 const userHasPermission = (profile, permission) => {
     if (!permission) return true;
     if (!profile || profile.isActive === false) return false;
@@ -294,6 +359,68 @@ function App() {
     const privilegedUsers = appUsers.filter((item) => item.isActive !== false && ['super_admin', 'operations'].includes(item.role));
     const dataCollection = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
     const dataDoc = (name, id) => doc(db, 'artifacts', appId, 'public', 'data', name, id);
+    const sendUserEmailLink = async ({ userId, email, userRecord = {}, reason = 'manual_resend' }) => {
+        if (!auth) {
+            const unavailableError = new Error('Firebase Authentication no esta disponible.');
+            unavailableError.friendlyMessage = 'Firebase Authentication no esta disponible.';
+            throw unavailableError;
+        }
+
+        const normalizedEmail = normalizeEmail(email || userRecord?.email);
+        if (!userId || !normalizedEmail) {
+            const invalidUserError = new Error('El usuario necesita un correo valido.');
+            invalidUserError.friendlyMessage = 'El usuario necesita un correo valido.';
+            throw invalidUserError;
+        }
+
+        const verificationState = userRecord?.emailVerification || {};
+        const requestedAt = nowIso();
+
+        try {
+            auth.languageCode = 'es';
+            await sendSignInLinkToEmail(auth, normalizedEmail, buildEmailLinkActionCodeSettings());
+            await updateDoc(dataDoc('users', userId), {
+                emailVerified: false,
+                emailVerification: {
+                    ...verificationState,
+                    status: 'sent',
+                    source: 'email_link',
+                    requestedAt: verificationState.requestedAt || requestedAt,
+                    sentAt: requestedAt,
+                    resendRequestedAt: reason === 'manual_resend' ? requestedAt : (verificationState.resendRequestedAt || ''),
+                    requestedBy: currentUserProfile?.id || '',
+                    lastSentReason: reason,
+                    lastRecipient: normalizedEmail,
+                    lastError: ''
+                },
+                updatedAt: requestedAt
+            });
+            return { sentAt: requestedAt, email: normalizedEmail };
+        } catch (error) {
+            const failedAt = nowIso();
+            const friendlyMessage = getEmailLinkAuthErrorMessage(error, 'send');
+            error.friendlyMessage = friendlyMessage;
+
+            await updateDoc(dataDoc('users', userId), {
+                emailVerified: false,
+                emailVerification: {
+                    ...verificationState,
+                    status: 'error',
+                    source: 'email_link',
+                    requestedAt: verificationState.requestedAt || requestedAt,
+                    requestedBy: currentUserProfile?.id || '',
+                    resendRequestedAt: reason === 'manual_resend' ? requestedAt : (verificationState.resendRequestedAt || ''),
+                    failedAt,
+                    lastSentReason: reason,
+                    lastRecipient: normalizedEmail,
+                    lastError: friendlyMessage
+                },
+                updatedAt: failedAt
+            });
+
+            throw error;
+        }
+    };
     
     useEffect(() => {
         const html = document.documentElement;
@@ -310,13 +437,46 @@ function App() {
         if(!auth) { setLoading(false); return; }
         const initAuth = async () => {
             try {
+                if (isSignInWithEmailLink(auth, window.location.href)) {
+                    const storedEmail = normalizeEmail(window.localStorage.getItem(EMAIL_LINK_STORAGE_KEY) || '');
+                    const emailForLink = storedEmail || normalizeEmail(window.prompt('Escribe tu correo para completar el acceso enviado por email.') || '');
+                    const cleanUrl = buildEmailLinkReturnUrl(window.location.href);
+
+                    if (!emailForLink) {
+                        if (cleanUrl) window.history.replaceState({}, document.title, cleanUrl.toString());
+                        showToast('Necesitas confirmar el correo para completar el acceso.', 'error');
+                        await signInAnonymously(auth);
+                        return;
+                    }
+
+                    await signInWithEmailLink(auth, emailForLink, window.location.href);
+                    window.localStorage.removeItem(EMAIL_LINK_STORAGE_KEY);
+                    if (cleanUrl) window.history.replaceState({}, document.title, cleanUrl.toString());
+                    showToast('Acceso por correo completado.');
+                    return;
+                }
+
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     try { await signInWithCustomToken(auth, __initial_auth_token); } 
                     catch (tokenError) { await signInAnonymously(auth); }
                 } else {
                     await signInAnonymously(auth);
                 }
-            } catch (error) { console.error("Error de Autenticación:", error); }
+            } catch (error) {
+                console.error("Error de Autenticación:", error);
+                if (isSignInWithEmailLink(auth, window.location.href)) {
+                    const cleanUrl = buildEmailLinkReturnUrl(window.location.href);
+                    if (cleanUrl) window.history.replaceState({}, document.title, cleanUrl.toString());
+                    showToast(getEmailLinkAuthErrorMessage(error, 'complete'), 'error');
+                }
+                if (!auth.currentUser) {
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (anonymousError) {
+                        console.error('No se pudo iniciar sesion anonima:', anonymousError);
+                    }
+                }
+            }
         };
         initAuth();
         
@@ -397,6 +557,9 @@ function App() {
         const targetId = existing?.id || `auth_${user.uid || normalizeNameKey(authEmail).replace(/[^a-z0-9]+/g, '_')}`;
         const existingRole = existing?.role || (privilegedUsers.length === 0 ? 'super_admin' : 'viewer');
         const nextRole = privilegedUsers.length === 0 && !['super_admin', 'operations'].includes(existingRole) ? 'super_admin' : existingRole;
+        const authSource = getAuthSource(user);
+        const emailVerifiedByAuth = Boolean(user.emailVerified) || authSource === 'google' || authSource === 'email_link';
+        const verificationState = existing?.emailVerification || {};
         const basePayload = {
             name: existing?.name || user.displayName || authEmail.split('@')[0],
             email: authEmail,
@@ -404,12 +567,19 @@ function App() {
             lastSeenAt: nowIso(),
             isActive: true,
             authUid: user.uid || '',
-            emailVerified: true,
-            emailVerification: {
-                status: 'verified',
-                source: 'google',
-                verifiedAt: nowIso()
-            },
+            emailVerified: emailVerifiedByAuth,
+            emailVerification: emailVerifiedByAuth
+                ? {
+                    ...verificationState,
+                    status: 'verified',
+                    source: authSource,
+                    verifiedAt: verificationState.verifiedAt || nowIso(),
+                    lastError: ''
+                }
+                : (Object.keys(verificationState).length > 0 ? verificationState : {
+                    status: 'pending',
+                    requestedAt: nowIso()
+                }),
             linkedManagerId: existing?.linkedManagerId || '',
             linkedEditorId: existing?.linkedEditorId || '',
             managementKey: nextRole === 'management' ? (existing?.managementKey || getManagementDirectoryKey(existing) || '') : (existing?.managementKey || '')
@@ -764,10 +934,14 @@ function App() {
         };
     };
 
-    const requestUserVerification = async (userRecord, successMessage = 'Se programo el envio del correo de verificacion') => {
+    const requestUserVerification = async (userRecord, successMessage = 'Se envio el correo de acceso') => {
         const email = normalizeEmail(userRecord?.email);
         if (!email || !userRecord?.id) {
             showToast('El usuario necesita un correo valido', 'error');
+            return null;
+        }
+        if (userRecord?.isActive === false) {
+            showToast('Activa el usuario antes de enviar el correo de acceso.', 'error');
             return null;
         }
         if (userRecord.emailVerified === true || userRecord.emailVerification?.status === 'verified') {
@@ -779,43 +953,18 @@ function App() {
             action: 'request_verification',
             entityType: 'user',
             entityId: userRecord.id,
-            description: `Solicita verificacion para ${email}`,
-            changes: { email },
+            description: `Envia acceso por correo para ${email}`,
+            changes: { email, channel: 'firebase_auth_email_link' },
             successMessage,
-            execute: () => updateDoc(dataDoc('users', userRecord.id), {
-                emailVerified: false,
-                emailVerification: {
-                    ...(userRecord.emailVerification || {}),
-                    status: 'pending',
-                    resendRequestedAt: nowIso(),
-                    requestedBy: currentUserProfile?.id || ''
-                },
-                updatedAt: nowIso()
+            errorMessage: 'No se pudo enviar el correo de acceso',
+            execute: () => sendUserEmailLink({
+                userId: userRecord.id,
+                email,
+                userRecord,
+                reason: 'manual_resend'
             })
         });
     };
-
-    useEffect(() => {
-        const url = new URL(window.location.href);
-        const status = url.searchParams.get('email_verification');
-        if (!status) return;
-
-        if (status === 'success') {
-            showToast('Correo verificado correctamente');
-        } else if (status === 'expired') {
-            showToast('El enlace de verificacion ya vencio', 'error');
-        } else if (status === 'invalid') {
-            showToast('El enlace de verificacion no es valido', 'error');
-        } else if (status === 'mismatch') {
-            showToast('El correo ya no coincide con el usuario vinculado', 'error');
-        } else {
-            showToast('No se pudo completar la verificacion', 'error');
-        }
-
-        url.searchParams.delete('email_verification');
-        url.searchParams.delete('verified_email');
-        window.history.replaceState({}, document.title, url.toString());
-    }, []);
 
     const duplicateUserSignature = buildDuplicateUserGroups(appUsers)
         .map((group) => group.map((item) => item.id).sort().join(','))
@@ -1206,6 +1355,7 @@ function App() {
     const addUserRecord = async (data) => {
         const email = normalizeEmail(data.email);
         const requestedRole = data.role || 'viewer';
+        const nextActive = data.isActive !== false;
         const managementKey = requestedRole === 'management' ? getManagementDirectoryKey(data.name) : '';
         const existingManagementUser = managementKey
             ? chooseCanonicalUserRecord(appUsers.filter((item) => item.role === 'management' && (item.managementKey || getManagementDirectoryKey(item)) === managementKey))
@@ -1222,33 +1372,62 @@ function App() {
             showToast('Ese correo ya existe', 'error');
             return;
         }
+        const requestedAt = nowIso();
+        const pendingVerification = {
+            status: 'pending',
+            source: 'email_link',
+            requestedAt,
+            lastError: ''
+        };
         const result = await runMutation({
             permission: 'manage_users',
             action: 'create',
             entityType: 'user',
             description: `Crea usuario ${email}`,
             changes: { name: data.name, email, role: requestedRole, isActive: data.isActive },
-            successMessage: 'Usuario creado. Se programo la verificacion por correo.',
+            successMessage: null,
             execute: () => addDoc(dataCollection('users'), {
                 name: data.name,
                 email,
                 role: requestedRole,
-                isActive: data.isActive !== false,
-                createdAt: nowIso(),
-                updatedAt: nowIso(),
+                isActive: nextActive,
+                createdAt: requestedAt,
+                updatedAt: requestedAt,
                 lastSeenAt: '',
                 emailVerified: false,
-                emailVerification: {
-                    status: 'pending',
-                    requestedAt: nowIso()
-                },
+                emailVerification: pendingVerification,
                 managementKey: requestedRole === 'management' ? managementKey : '',
                 linkedManagerId: '',
                 linkedEditorId: ''
             }),
             afterSuccess: closeModal
         });
-        if (result?.id) await syncIdentityLinks({ email, userId: result.id, silent: true });
+        if (!result?.id) return;
+
+        if (nextActive) {
+            try {
+                await sendUserEmailLink({
+                    userId: result.id,
+                    email,
+                    userRecord: {
+                        name: data.name,
+                        email,
+                        role: requestedRole,
+                        isActive: nextActive,
+                        emailVerification: pendingVerification
+                    },
+                    reason: 'user_created'
+                });
+                showToast('Usuario creado y correo de acceso enviado.');
+            } catch (error) {
+                console.error(error);
+                showToast('Usuario creado, pero no se pudo enviar el correo de acceso.', 'error');
+            }
+        } else {
+            showToast('Usuario creado');
+        }
+
+        await syncIdentityLinks({ email, userId: result.id, silent: true });
     };
 
     const updateUserRecord = async (id, data) => {
@@ -1272,8 +1451,15 @@ function App() {
         }
         const nextVerification = emailChanged
             ? {
+                ...(current?.emailVerification || {}),
                 status: 'pending',
-                requestedAt: nowIso()
+                source: 'email_link',
+                requestedAt: nowIso(),
+                sentAt: '',
+                failedAt: '',
+                verifiedAt: '',
+                lastRecipient: email,
+                lastError: ''
             }
             : (current?.emailVerification || {});
         const nextEmailVerified = emailChanged ? false : current?.emailVerified === true;
@@ -1284,7 +1470,7 @@ function App() {
             entityId: id,
             description: `Actualiza usuario ${email}`,
             changes: { name: data.name, email, role: nextRole, isActive: nextActive, emailChanged },
-            successMessage: emailChanged ? 'Usuario actualizado. Se programo una nueva verificacion.' : 'Usuario actualizado',
+            successMessage: emailChanged ? null : 'Usuario actualizado',
             execute: () => updateDoc(dataDoc('users', id), {
                 name: data.name,
                 email,
@@ -1297,7 +1483,36 @@ function App() {
             }),
             afterSuccess: closeModal
         });
-        if (result !== null) await syncIdentityLinks({ email, userId: id, silent: true });
+        if (result === null) return;
+
+        await syncIdentityLinks({ email, userId: id, silent: true });
+
+        if (!emailChanged) return;
+
+        if (!nextActive) {
+            showToast('Usuario actualizado');
+            return;
+        }
+
+        try {
+            await sendUserEmailLink({
+                userId: id,
+                email,
+                userRecord: {
+                    ...(current || {}),
+                    name: data.name,
+                    email,
+                    role: nextRole,
+                    isActive: nextActive,
+                    emailVerification: nextVerification
+                },
+                reason: 'email_changed'
+            });
+            showToast('Usuario actualizado y correo de acceso enviado.');
+        } catch (error) {
+            console.error(error);
+            showToast('Usuario actualizado, pero no se pudo enviar el correo de acceso.', 'error');
+        }
     };
 
     const handleDelete = async () => {
@@ -2576,7 +2791,7 @@ const UsersAccessView = ({ users, managers, editors, auditLogs, currentUserProfi
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">Usuarios y Accesos</h2>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Permisos por rol, correos autorizados, verificacion y bitacora de actividad.</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Permisos por rol, accesos por correo y bitacora de actividad.</p>
                 </div>
                 <div className="flex flex-col md:flex-row w-full md:w-auto gap-3">
                     <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Buscar usuario..." />
@@ -2643,7 +2858,7 @@ const UsersAccessView = ({ users, managers, editors, auditLogs, currentUserProfi
                                     </div>
                                     <div className="flex flex-col gap-2">
                                         {normalizeEmail(record.email) && !verificationMeta.isVerified && (
-                                            <button onClick={() => onResendVerification(record)} className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Reenviar verificacion">
+                                            <button onClick={() => onResendVerification(record)} className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Reenviar acceso por correo">
                                                 <Icon name="Mail" size={18} />
                                             </button>
                                         )}

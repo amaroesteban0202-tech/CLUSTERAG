@@ -15,12 +15,6 @@
       "**/.*",
       "**/node_modules/**",
       "functions/**"
-    ],
-    "rewrites": [
-      {
-        "source": "/api/verify-email",
-        "function": "verifyUserEmail"
-      }
     ]
   },
   "emulators": {
