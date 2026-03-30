@@ -50,3 +50,93 @@ export const PERSON_COLORS = {
 export const ACCOUNT_COLORS = ['purple', 'indigo', 'blue', 'cyan', 'amber', 'orange', 'fuchsia', 'violet', 'stone'];
 export const EDITOR_COLORS = ['c21', 'c22', 'c23', 'c24', 'c25', 'c26'];
 export const LEGACY_COLOR_MAP = { c1: 'purple', c2: 'blue', c3: 'indigo', c4: 'amber', c5: 'fuchsia', c6: 'violet', c7: 'cyan', c8: 'orange', c9: 'indigo', c10: 'stone' };
+
+export const ROLE_DEFINITIONS = {
+    super_admin: {
+        label: 'Super Admin',
+        color: 'purple',
+        permissions: ['*']
+    },
+    operations: {
+        label: 'Operaciones',
+        color: 'indigo',
+        permissions: [
+            'view_dashboard',
+            'view_clients',
+            'manage_clients',
+            'view_managers',
+            'manage_managers',
+            'view_editors',
+            'manage_editors',
+            'view_account_room',
+            'manage_account_tasks',
+            'view_editions_room',
+            'manage_editing_tasks',
+            'view_management_room',
+            'manage_management_tasks',
+            'view_general_calendar',
+            'view_calendar',
+            'manage_calendar',
+            'view_users',
+            'manage_users',
+            'view_audit_logs'
+        ]
+    },
+    management: {
+        label: 'Gestion',
+        color: 'violet',
+        permissions: [
+            'view_dashboard',
+            'view_clients',
+            'view_management_room',
+            'manage_management_tasks',
+            'view_general_calendar',
+            'view_calendar'
+        ]
+    },
+    manager: {
+        label: 'Account Manager',
+        color: 'blue',
+        permissions: [
+            'view_dashboard',
+            'view_clients',
+            'manage_clients',
+            'view_managers',
+            'view_account_room',
+            'manage_account_tasks',
+            'view_general_calendar',
+            'view_calendar'
+        ]
+    },
+    editor: {
+        label: 'Editor',
+        color: 'rose',
+        permissions: [
+            'view_dashboard',
+            'view_editors',
+            'view_editions_room',
+            'manage_editing_tasks',
+            'view_general_calendar'
+        ]
+    },
+    viewer: {
+        label: 'Viewer',
+        color: 'slate',
+        permissions: ['view_dashboard']
+    }
+};
+
+export const DEFAULT_MANAGEMENT_TEAM = [
+    { name: 'Aiskel', email: 'maycolljaramillo01+aiskel@gmail.com' },
+    { name: 'Maycoll', email: 'maycolljaramillo01@gmail.com' },
+    { name: 'Esteban', email: 'maycolljaramillo01+esteban@gmail.com' },
+    { name: 'Maria', email: 'maycolljaramillo01+maria@gmail.com' },
+    { name: 'Orlando', email: 'maycolljaramillo01+orlando@gmail.com' }
+];
+
+export const EDITING_HIERARCHY_OPTIONS = [
+    { id: 'p1', label: 'P1 Critico', color: 'red' },
+    { id: 'p2', label: 'P2 Alto Impacto', color: 'amber' },
+    { id: 'p3', label: 'P3 Operativo', color: 'emerald' },
+    { id: 'p4', label: 'P4 Backlog', color: 'slate' }
+];
