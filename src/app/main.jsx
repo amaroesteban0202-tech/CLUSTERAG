@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
     LayoutDashboard, Users, Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X,
     CheckCircle2, Circle, ExternalLink, Briefcase, UserCircle2, Loader2, Trash2,
     Video, ArrowRight, UserPlus, MonitorPlay, Search, Menu, PenTool, LayoutList, CalendarDays,
-    AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles, Trophy, Medal, BarChart3
+    AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles, Trophy, Medal, BarChart3,
+    ShieldCheck, LogIn, LogOut, ClipboardList, Lock, Mail
 } from 'lucide-react';
-import { signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
+import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, limit, writeBatch, setDoc, getDocs } from 'firebase/firestore';
 import { auth, db, appId } from '/src/app/config/firebase.js';
 import {
     TAILWIND_SAFELIST,
@@ -15,7 +16,10 @@ import {
     PERSON_COLORS,
     ACCOUNT_COLORS,
     EDITOR_COLORS,
-    LEGACY_COLOR_MAP
+    LEGACY_COLOR_MAP,
+    ROLE_DEFINITIONS,
+    DEFAULT_MANAGEMENT_TEAM,
+    EDITING_HIERARCHY_OPTIONS
 } from '/src/app/constants/app.constants.js';
 import { getHondurasTodayStr } from '/src/app/utils/date.js';
 
@@ -25,7 +29,8 @@ const IconsMap = {
     LayoutDashboard, Users, CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
     CheckCircle2, Circle, ExternalLink, Briefcase, UserCircle2, Loader2, Trash2, 
     Video, ArrowRight, UserPlus, MonitorPlay, Search, Menu, PenTool, LayoutList, CalendarDays,
-    AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles, Trophy, Medal, BarChart3
+    AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles, Trophy, Medal, BarChart3,
+    ShieldCheck, LogIn, LogOut, ClipboardList, Lock, Mail
 };
 
 const Icon = ({ name, size = 18, className = "" }) => {
@@ -37,6 +42,181 @@ const AgencyLogo = ({ className }) => {
     return <div className={`bg-purple-600 flex items-center justify-center text-white font-black rounded-lg ${className}`}>C</div>;
 };
 
+const GOOGLE_PROVIDER = auth ? new GoogleAuthProvider() : null;
+if (GOOGLE_PROVIDER) GOOGLE_PROVIDER.setCustomParameters({ prompt: 'select_account' });
+
+const VIEW_PERMISSIONS = {
+    dashboard: 'view_dashboard',
+    clients: 'view_clients',
+    'client-detail': 'view_clients',
+    managers: 'view_managers',
+    'manager-detail': 'view_managers',
+    editors: 'view_editors',
+    'editor-detail': 'view_editors',
+    'account-room': 'view_account_room',
+    editions: 'view_editions_room',
+    'management-room': 'view_management_room',
+    'general-calendar': 'view_general_calendar',
+    calendar: 'view_calendar',
+    'control-center': 'view_users'
+};
+
+const normalizeEmail = (value = '') => String(value || '').trim().toLowerCase();
+const normalizeNameKey = (value = '') => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+const nowIso = () => new Date().toISOString();
+const MANAGEMENT_DIRECTORY = DEFAULT_MANAGEMENT_TEAM.map((member) => ({
+    ...member,
+    directoryKey: normalizeNameKey(member.name)
+}));
+const getManagementDirectoryKey = (value = '') => {
+    const sourceName = typeof value === 'string' ? value : value?.name || '';
+    const normalized = normalizeNameKey(sourceName);
+    if (!normalized) return '';
+    const exactMatch = MANAGEMENT_DIRECTORY.find((member) => normalized === member.directoryKey);
+    if (exactMatch) return exactMatch.directoryKey;
+    const aliasMatch = MANAGEMENT_DIRECTORY.find((member) => normalized.startsWith(`${member.directoryKey} `));
+    return aliasMatch?.directoryKey || '';
+};
+const getManagementDirectoryMeta = (value = '') => {
+    const key = getManagementDirectoryKey(value);
+    return MANAGEMENT_DIRECTORY.find((member) => member.directoryKey === key) || null;
+};
+const getUserRolePriority = (role = '') => {
+    const priorities = {
+        super_admin: 500,
+        operations: 400,
+        management: 350,
+        editor: 300,
+        viewer: 100
+    };
+    return priorities[role] || 200;
+};
+const getVerificationPriority = (record = {}) => {
+    if (record.emailVerified === true || record.emailVerification?.status === 'verified') return 5;
+    if (record.emailVerification?.status === 'sent') return 4;
+    if (record.emailVerification?.status === 'pending') return 3;
+    if (record.emailVerification?.status === 'error') return 2;
+    if (normalizeEmail(record.email)) return 1;
+    return 0;
+};
+const getUserRecordScore = (record = {}, referenceCount = 0) => (
+    referenceCount * 1000 +
+    (normalizeEmail(record.email) ? 220 : 0) +
+    (record.authUid ? 180 : 0) +
+    (record.isActive === false ? 0 : 20) +
+    (record.seeded ? 5 : 10) +
+    getVerificationPriority(record) * 25 +
+    getUserRolePriority(record.role)
+);
+const buildDuplicateUserGroups = (users = []) => {
+    const userById = new Map(users.map((item) => [item.id, item]));
+    const adjacency = new Map(users.map((item) => [item.id, new Set()]));
+    const buckets = new Map();
+
+    const addToken = (token, userId) => {
+        if (!token) return;
+        if (!buckets.has(token)) buckets.set(token, []);
+        buckets.get(token).push(userId);
+    };
+
+    users.forEach((item) => {
+        const email = normalizeEmail(item.email);
+        if (email) addToken(`email:${email}`, item.id);
+        if (item.role === 'management') {
+            const managementKey = item.managementKey || getManagementDirectoryKey(item);
+            if (managementKey) addToken(`management:${managementKey}`, item.id);
+        }
+    });
+
+    buckets.forEach((ids) => {
+        if (ids.length < 2) return;
+        const [firstId, ...restIds] = ids;
+        restIds.forEach((otherId) => {
+            adjacency.get(firstId)?.add(otherId);
+            adjacency.get(otherId)?.add(firstId);
+        });
+    });
+
+    const visited = new Set();
+    const groups = [];
+    users.forEach((item) => {
+        if (visited.has(item.id)) return;
+        const stack = [item.id];
+        const component = [];
+        while (stack.length > 0) {
+            const currentId = stack.pop();
+            if (!currentId || visited.has(currentId)) continue;
+            visited.add(currentId);
+            component.push(userById.get(currentId));
+            adjacency.get(currentId)?.forEach((nextId) => {
+                if (!visited.has(nextId)) stack.push(nextId);
+            });
+        }
+        if (component.length > 1) groups.push(component.filter(Boolean));
+    });
+
+    return groups;
+};
+const chooseCanonicalUserRecord = (group = [], referenceCounts = new Map()) => (
+    [...group]
+        .sort((left, right) => {
+            const scoreDelta = getUserRecordScore(right, referenceCounts.get(right.id) || 0) - getUserRecordScore(left, referenceCounts.get(left.id) || 0);
+            if (scoreDelta !== 0) return scoreDelta;
+            const leftCreatedAt = String(left.createdAt || '');
+            const rightCreatedAt = String(right.createdAt || '');
+            const createdAtDelta = leftCreatedAt.localeCompare(rightCreatedAt);
+            if (createdAtDelta !== 0) return createdAtDelta;
+            return String(left.id || '').localeCompare(String(right.id || ''));
+        })[0] || null
+);
+const getRoleMeta = (role) => ROLE_DEFINITIONS[role] || ROLE_DEFINITIONS.viewer;
+const getVerificationMeta = (record) => {
+    const safeRecord = record || {};
+    if (!normalizeEmail(safeRecord.email)) return { label: 'Sin correo', color: 'slate', isVerified: false };
+    if (safeRecord.emailVerified === true || safeRecord.emailVerification?.status === 'verified') return { label: 'Verificado', color: 'emerald', isVerified: true };
+    if (safeRecord.emailVerification?.status === 'error') return { label: 'Error de envio', color: 'red', isVerified: false };
+    if (safeRecord.emailVerification?.status === 'sent') return { label: 'Verificacion enviada', color: 'amber', isVerified: false };
+    if (safeRecord.emailVerification?.status === 'pending') return { label: 'Pendiente verificar', color: 'amber', isVerified: false };
+    return { label: 'Con correo', color: 'blue', isVerified: false };
+};
+const getLinkedProfileLabels = (record) => {
+    const safeRecord = record || {};
+    const labels = [];
+    if (safeRecord.linkedManagerId) labels.push('Manager');
+    if (safeRecord.linkedEditorId) labels.push('Editor');
+    if (safeRecord.role === 'management') labels.push('Gestion');
+    return labels;
+};
+const getGoogleAuthErrorMessage = (error) => {
+    const code = String(error?.code || '').trim();
+    if (code === 'auth/unauthorized-domain') return 'Google bloqueado: agrega 127.0.0.1 en Firebase Authorized domains o entra por http://localhost:5000.';
+    if (code === 'auth/operation-not-allowed') return 'Google Sign-In no esta habilitado en Firebase Authentication.';
+    if (code === 'auth/popup-blocked') return 'El navegador bloqueo el popup de Google.';
+    if (code === 'auth/popup-closed-by-user') return 'El popup de Google se cerro antes de completar el login.';
+    if (code === 'auth/cancelled-popup-request') return 'Ya habia un popup de autenticacion abierto.';
+    return `No se pudo iniciar sesion con Google${code ? ` (${code})` : ''}.`;
+};
+const userHasPermission = (profile, permission) => {
+    if (!permission) return true;
+    if (!profile || profile.isActive === false) return false;
+    const permissions = getRoleMeta(profile.role).permissions || [];
+    return permissions.includes('*') || permissions.includes(permission);
+};
+const canAccessView = (profile, view) => userHasPermission(profile, VIEW_PERMISSIONS[view]);
+const isCompletedStatus = (status) => ['publicado', 'aprobado', 'cerrado'].includes(status);
+const getEditingHierarchyId = (task = {}) => {
+    if (task.hierarchy) return task.hierarchy;
+    if (task.priority === 'urgente') return 'p1';
+    if (task.priority === 'recurrente') return 'p3';
+    return 'p2';
+};
+const isTaskAssignedToProfile = (task, profile, contextIds = []) => {
+    const profileId = profile?.id;
+    if (!profileId) return false;
+    if (task?.assigneeUserId && task.assigneeUserId === profileId) return true;
+    return contextIds.filter(Boolean).includes(task?.contextId);
+};
+
 // --- APP PRINCIPAL ---
 function App() {
     const [user, setUser] = useState(null);
@@ -46,6 +226,12 @@ function App() {
 
     const [isDark, setIsDark] = useState(() => localStorage.getItem('cluster_theme') === 'dark');
     const [view, setView] = useState(() => localStorage.getItem('cluster_os_view') || 'dashboard');
+    const [isSigningIn, setIsSigningIn] = useState(false);
+    const [hasSeededManagementDirectory, setHasSeededManagementDirectory] = useState(false);
+    const [hasBackfilledIdentityLinks, setHasBackfilledIdentityLinks] = useState(false);
+    const [usersLoaded, setUsersLoaded] = useState(false);
+    const isReconcilingUsersRef = useRef(false);
+    const lastReconciledDuplicateSignatureRef = useRef('');
 
     const [clients, setClients] = useState([]);
     const [events, setEvents] = useState([]); 
@@ -53,6 +239,9 @@ function App() {
     const [editors, setEditors] = useState([]);
     const [editingTasks, setEditingTasks] = useState([]);
     const [accountTasks, setAccountTasks] = useState([]);
+    const [managementTasks, setManagementTasks] = useState([]);
+    const [appUsers, setAppUsers] = useState([]);
+    const [auditLogs, setAuditLogs] = useState([]);
 
     const [selectedClient, setSelectedClient] = useState(null);
     const [selectedManager, setSelectedManager] = useState(null);
@@ -63,6 +252,48 @@ function App() {
     const [eventAction, setEventAction] = useState({ isOpen: false, event: null, type: null });
     const [taskDetailConfig, setTaskDetailConfig] = useState({ isOpen: false, task: null, type: null });
     const [dayDetailsModal, setDayDetailsModal] = useState({ isOpen: false, date: null }); 
+
+    const authEmail = normalizeEmail(user?.email);
+    const authEmailMatches = authEmail ? appUsers.filter((item) => normalizeEmail(item.email) === authEmail) : [];
+    const resolvedAuthProfile = authEmailMatches.length > 0 ? chooseCanonicalUserRecord(authEmailMatches) : null;
+    const currentUserProfile = !user
+        ? null
+        : authEmail
+          ? resolvedAuthProfile || {
+                id: 'pending-user',
+                name: user.displayName || authEmail.split('@')[0],
+                email: authEmail,
+                role: 'viewer',
+                isActive: true,
+                pending: true
+            }
+          : {
+                id: 'anonymous',
+                name: 'Invitado',
+                email: '',
+                role: 'viewer',
+                isActive: true,
+                isAnonymous: true
+            };
+    const currentRoleMeta = getRoleMeta(currentUserProfile?.role);
+    const currentVerificationMeta = getVerificationMeta(currentUserProfile);
+    const profileBlocked = Boolean(currentUserProfile && currentUserProfile.isActive === false);
+    const managementUsers = Array.from(
+        appUsers
+            .filter((item) => item.role === 'management')
+            .reduce((accumulator, item) => {
+                const managementKey = item.managementKey || getManagementDirectoryKey(item) || `management:${item.id}`;
+                const current = accumulator.get(managementKey);
+                if (!current || getUserRecordScore(item) > getUserRecordScore(current)) {
+                    accumulator.set(managementKey, item);
+                }
+                return accumulator;
+            }, new Map())
+            .values()
+    ).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
+    const privilegedUsers = appUsers.filter((item) => item.isActive !== false && ['super_admin', 'operations'].includes(item.role));
+    const dataCollection = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
+    const dataDoc = (name, id) => doc(db, 'artifacts', appId, 'public', 'data', name, id);
     
     useEffect(() => {
         const html = document.documentElement;
@@ -95,40 +326,595 @@ function App() {
 
     useEffect(() => {
         if (!user || !db) return;
-        const errHandler = (err) => console.error("Error de Firestore:", err);
+        const errHandler = (err) => console.error('Error de Firestore:', err);
 
         const unsubs = [
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), s => {
-                const list = s.docs.map(d => ({id: d.id, ...d.data()}));
+            onSnapshot(dataCollection('clients'), (snapshot) => {
+                const list = snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
                 setClients(list);
-                if (selectedClient) setSelectedClient(list.find(c => c.id === selectedClient.id));
+                setSelectedClient((current) => (current ? list.find((item) => item.id === current.id) || null : null));
             }, errHandler),
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), s => setEvents(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), s => setManagers(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), s => setEditors(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), s => setEditingTasks(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler),
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), s => setAccountTasks(s.docs.map(d => ({id: d.id, ...d.data()}))), errHandler)
+            onSnapshot(dataCollection('events'), (snapshot) => setEvents(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }))), errHandler),
+            onSnapshot(dataCollection('managers'), (snapshot) => {
+                const list = snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+                setManagers(list);
+                setSelectedManager((current) => (current ? list.find((item) => item.id === current.id) || null : null));
+            }, errHandler),
+            onSnapshot(dataCollection('editors'), (snapshot) => {
+                const list = snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+                setEditors(list);
+                setSelectedEditor((current) => (current ? list.find((item) => item.id === current.id) || null : null));
+            }, errHandler),
+            onSnapshot(dataCollection('editing'), (snapshot) => setEditingTasks(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }))), errHandler),
+            onSnapshot(dataCollection('account_tasks'), (snapshot) => setAccountTasks(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }))), errHandler),
+            onSnapshot(dataCollection('management_tasks'), (snapshot) => setManagementTasks(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }))), errHandler),
+            onSnapshot(dataCollection('users'), (snapshot) => {
+                setAppUsers(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+                setUsersLoaded(true);
+            }, errHandler),
+            onSnapshot(query(dataCollection('audit_logs'), orderBy('createdAt', 'desc'), limit(120)), (snapshot) => setAuditLogs(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }))), errHandler)
         ];
-        return () => unsubs.forEach(u => u());
-    }, [user, selectedClient?.id]);
+
+        return () => unsubs.forEach((unsubscribe) => unsubscribe());
+    }, [user]);
+
+    useEffect(() => {
+        if (!db || !user || !usersLoaded || hasSeededManagementDirectory) return;
+        const existingKeys = new Set(
+            appUsers
+                .filter((item) => item.role === 'management')
+                .map((item) => item.managementKey || getManagementDirectoryKey(item))
+                .filter(Boolean)
+        );
+        const missingMembers = MANAGEMENT_DIRECTORY.filter((member) => !existingKeys.has(member.directoryKey));
+        if (missingMembers.length === 0) {
+            setHasSeededManagementDirectory(true);
+            return;
+        }
+        Promise.all(
+            missingMembers.map((member) => setDoc(dataDoc('users', `management_${member.directoryKey}`), {
+                name: member.name,
+                email: normalizeEmail(member.email),
+                role: 'management',
+                managementKey: member.directoryKey,
+                isActive: true,
+                createdAt: nowIso(),
+                updatedAt: nowIso(),
+                lastSeenAt: '',
+                seeded: true,
+                linkedManagerId: '',
+                linkedEditorId: ''
+            }, { merge: true }))
+        ).finally(() => setHasSeededManagementDirectory(true));
+    }, [db, user, usersLoaded, appUsers, hasSeededManagementDirectory]);
+
+    useEffect(() => {
+        if (!db || !user || !authEmail || !usersLoaded) return;
+        const existingByUid = appUsers.find((item) => item.authUid && item.authUid === user.uid);
+        const existingByEmail = chooseCanonicalUserRecord(appUsers.filter((item) => normalizeEmail(item.email) === authEmail));
+        const matchByName = appUsers.find((item) => !normalizeEmail(item.email) && normalizeNameKey(item.name) === normalizeNameKey(user.displayName || authEmail));
+        const existing = existingByUid || existingByEmail || matchByName;
+        const targetId = existing?.id || `auth_${user.uid || normalizeNameKey(authEmail).replace(/[^a-z0-9]+/g, '_')}`;
+        const existingRole = existing?.role || (privilegedUsers.length === 0 ? 'super_admin' : 'viewer');
+        const nextRole = privilegedUsers.length === 0 && !['super_admin', 'operations'].includes(existingRole) ? 'super_admin' : existingRole;
+        const basePayload = {
+            name: existing?.name || user.displayName || authEmail.split('@')[0],
+            email: authEmail,
+            updatedAt: nowIso(),
+            lastSeenAt: nowIso(),
+            isActive: true,
+            authUid: user.uid || '',
+            emailVerified: true,
+            emailVerification: {
+                status: 'verified',
+                source: 'google',
+                verifiedAt: nowIso()
+            },
+            linkedManagerId: existing?.linkedManagerId || '',
+            linkedEditorId: existing?.linkedEditorId || '',
+            managementKey: nextRole === 'management' ? (existing?.managementKey || getManagementDirectoryKey(existing) || '') : (existing?.managementKey || '')
+        };
+        if (existing) {
+            updateDoc(dataDoc('users', existing.id), { ...basePayload, role: nextRole }).catch(() => {});
+            return;
+        }
+        setDoc(dataDoc('users', targetId), { ...basePayload, role: nextRole, createdAt: nowIso() }, { merge: true }).catch(() => {});
+    }, [db, user, authEmail, usersLoaded, appUsers, privilegedUsers.length]);
+
+    useEffect(() => {
+        if (!currentUserProfile) return;
+        if (profileBlocked || !canAccessView(currentUserProfile, view)) {
+            setView('dashboard');
+            localStorage.setItem('cluster_os_view', 'dashboard');
+        }
+    }, [currentUserProfile, profileBlocked, view]);
 
     const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
     const closeModal = () => setModalConfig({ isOpen: false, type: null, data: null, isEdit: false });
-    const closeDelete = () => setDeleteConfirm({ isOpen: false, type: null, id: null });
-    
-    const handleNavigate = (newView) => { 
-        setView(newView); 
+    const closeDelete = () => setDeleteConfirm({ isOpen: false, type: null, id: null, title: '' });
+
+    const auditAction = async ({ action, entityType, entityId = '', description = '', status = 'success', changes = null }) => {
+        if (!db || !user) return;
+        try {
+            await addDoc(dataCollection('audit_logs'), {
+                action,
+                entityType,
+                entityId,
+                description,
+                status,
+                changes,
+                createdAt: nowIso(),
+                view,
+                actor: {
+                    uid: user.uid || '',
+                    email: authEmail || '',
+                    name: currentUserProfile?.name || user.displayName || 'Invitado',
+                    role: currentUserProfile?.role || 'viewer'
+                }
+            });
+        } catch (error) {
+            console.error('No se pudo registrar auditoria:', error);
+        }
+    };
+
+    const ensurePermission = async (permission, description) => {
+        if (profileBlocked) {
+            showToast('Tu usuario esta inactivo', 'error');
+            return false;
+        }
+        if (userHasPermission(currentUserProfile, permission)) return true;
+        showToast('No tienes permisos para esta accion', 'error');
+        await auditAction({ action: 'permission_denied', entityType: 'security', description, status: 'denied', changes: { permission } });
+        return false;
+    };
+
+    const runMutation = async ({ permission, action, entityType, entityId = '', description, changes = null, successMessage, errorMessage = 'No se pudo completar la accion', execute, afterSuccess }) => {
+        if (!(await ensurePermission(permission, description))) return null;
+        try {
+            const result = await execute();
+            await auditAction({ action, entityType, entityId: entityId || result?.id || '', description, changes });
+            if (successMessage) showToast(successMessage);
+            if (afterSuccess) afterSuccess(result);
+            return result;
+        } catch (error) {
+            console.error(error);
+            showToast(errorMessage, 'error');
+            await auditAction({ action: `${action}_failed`, entityType, entityId, description, status: 'error', changes: { ...(changes || {}), error: error.message } });
+            return null;
+        }
+    };
+
+    const getPreferredUserRole = (records = []) => (
+        [...records].sort((left, right) => getUserRolePriority(right.role) - getUserRolePriority(left.role))[0]?.role || 'viewer'
+    );
+
+    const mergeEmailVerificationPayload = (records = [], mergedEmail = '', mergedVerified = false) => {
+        if (!mergedEmail) return {};
+        const bestRecord = [...records].sort((left, right) => getVerificationPriority(right) - getVerificationPriority(left))[0] || {};
+        const currentPayload = bestRecord.emailVerification || {};
+        if (mergedVerified) {
+            return {
+                ...currentPayload,
+                status: 'verified',
+                source: currentPayload.source || (bestRecord.authUid ? 'google' : 'merged'),
+                verifiedAt: currentPayload.verifiedAt || bestRecord.updatedAt || nowIso()
+            };
+        }
+        if (Object.keys(currentPayload).length > 0) return currentPayload;
+        return {
+            status: 'pending',
+            requestedAt: nowIso()
+        };
+    };
+
+    const reconcileUserDirectory = async ({ silent = false } = {}) => {
+        if (!db) return { changed: false, removedCount: 0, signature: '' };
+
+        const [
+            usersSnapshot,
+            managersSnapshot,
+            editorsSnapshot,
+            clientsSnapshot,
+            accountTasksSnapshot,
+            editingTasksSnapshot,
+            managementTasksSnapshot
+        ] = await Promise.all([
+            getDocs(dataCollection('users')),
+            getDocs(dataCollection('managers')),
+            getDocs(dataCollection('editors')),
+            getDocs(dataCollection('clients')),
+            getDocs(dataCollection('account_tasks')),
+            getDocs(dataCollection('editing')),
+            getDocs(dataCollection('management_tasks'))
+        ]);
+
+        const usersList = usersSnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+        const managersList = managersSnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+        const editorsList = editorsSnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+        const clientsList = clientsSnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+        const accountTasksList = accountTasksSnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+        const editingTasksList = editingTasksSnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+        const managementTasksList = managementTasksSnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+
+        const duplicateGroups = buildDuplicateUserGroups(usersList);
+        const signature = duplicateGroups
+            .map((group) => group.map((item) => item.id).sort().join(','))
+            .sort()
+            .join('|');
+
+        if (duplicateGroups.length === 0) {
+            return { changed: false, removedCount: 0, signature };
+        }
+
+        const referenceCounts = new Map();
+        const increaseReference = (userId) => {
+            if (!userId) return;
+            referenceCounts.set(userId, (referenceCounts.get(userId) || 0) + 1);
+        };
+
+        managersList.forEach((item) => increaseReference(item.userId));
+        editorsList.forEach((item) => increaseReference(item.userId));
+        clientsList.forEach((item) => increaseReference(item.managerUserId));
+        accountTasksList.forEach((item) => increaseReference(item.assigneeUserId));
+        editingTasksList.forEach((item) => increaseReference(item.assigneeUserId));
+        managementTasksList.forEach((item) => {
+            increaseReference(item.assigneeUserId);
+            increaseReference(item.contextId);
+        });
+
+        let batch = writeBatch(db);
+        let operations = 0;
+        const commits = [];
+        const commitLimit = 350;
+        const stamp = nowIso();
+        let removedCount = 0;
+
+        const queueUpdate = (collectionName, id, payload) => {
+            if (!id) return;
+            if (operations >= commitLimit) {
+                commits.push(batch.commit());
+                batch = writeBatch(db);
+                operations = 0;
+            }
+            batch.update(dataDoc(collectionName, id), payload);
+            operations += 1;
+        };
+
+        const queueDelete = (collectionName, id) => {
+            if (!id) return;
+            if (operations >= commitLimit) {
+                commits.push(batch.commit());
+                batch = writeBatch(db);
+                operations = 0;
+            }
+            batch.delete(dataDoc(collectionName, id));
+            operations += 1;
+        };
+
+        duplicateGroups.forEach((group) => {
+            const canonicalUser = chooseCanonicalUserRecord(group, referenceCounts);
+            if (!canonicalUser) return;
+
+            const duplicateUsers = group.filter((item) => item.id !== canonicalUser.id);
+            if (duplicateUsers.length === 0) return;
+
+            const managementMeta = group
+                .filter((item) => item.role === 'management')
+                .map((item) => getManagementDirectoryMeta(item))
+                .find(Boolean) || null;
+            const mergedEmail = group.map((item) => normalizeEmail(item.email)).find(Boolean) || '';
+            const mergedVerified = mergedEmail ? group.some((item) => item.emailVerified === true || item.emailVerification?.status === 'verified') : false;
+            const mergedVerification = mergeEmailVerificationPayload(group, mergedEmail, mergedVerified);
+            const canonicalPatch = {
+                name: managementMeta?.name || canonicalUser.name || group[0]?.name || '',
+                email: mergedEmail,
+                role: managementMeta ? 'management' : getPreferredUserRole(group),
+                isActive: group.some((item) => item.isActive !== false),
+                seeded: group.some((item) => item.seeded === true),
+                authUid: canonicalUser.authUid || group.find((item) => item.authUid)?.authUid || '',
+                emailVerified: mergedVerified,
+                emailVerification: mergedVerification,
+                linkedManagerId: canonicalUser.linkedManagerId || group.find((item) => item.linkedManagerId)?.linkedManagerId || '',
+                linkedEditorId: canonicalUser.linkedEditorId || group.find((item) => item.linkedEditorId)?.linkedEditorId || '',
+                managementKey: managementMeta?.directoryKey || canonicalUser.managementKey || '',
+                updatedAt: stamp
+            };
+
+            queueUpdate('users', canonicalUser.id, canonicalPatch);
+
+            duplicateUsers.forEach((duplicateUser) => {
+                managersList
+                    .filter((item) => item.userId === duplicateUser.id)
+                    .forEach((item) => queueUpdate('managers', item.id, { userId: canonicalUser.id, updatedAt: stamp }));
+
+                editorsList
+                    .filter((item) => item.userId === duplicateUser.id)
+                    .forEach((item) => queueUpdate('editors', item.id, { userId: canonicalUser.id, updatedAt: stamp }));
+
+                clientsList
+                    .filter((item) => item.managerUserId === duplicateUser.id)
+                    .forEach((item) => queueUpdate('clients', item.id, { managerUserId: canonicalUser.id, updatedAt: stamp }));
+
+                accountTasksList
+                    .filter((item) => item.assigneeUserId === duplicateUser.id)
+                    .forEach((item) => queueUpdate('account_tasks', item.id, { assigneeUserId: canonicalUser.id, updatedAt: stamp }));
+
+                editingTasksList
+                    .filter((item) => item.assigneeUserId === duplicateUser.id)
+                    .forEach((item) => queueUpdate('editing', item.id, { assigneeUserId: canonicalUser.id, updatedAt: stamp }));
+
+                managementTasksList
+                    .filter((item) => item.assigneeUserId === duplicateUser.id || item.contextId === duplicateUser.id)
+                    .forEach((item) => {
+                        const taskPatch = { updatedAt: stamp };
+                        if (item.assigneeUserId === duplicateUser.id) taskPatch.assigneeUserId = canonicalUser.id;
+                        if (item.contextId === duplicateUser.id) taskPatch.contextId = canonicalUser.id;
+                        queueUpdate('management_tasks', item.id, taskPatch);
+                    });
+
+                queueDelete('users', duplicateUser.id);
+                removedCount += 1;
+            });
+        });
+
+        if (operations > 0) commits.push(batch.commit());
+        await Promise.all(commits);
+
+        if (!silent && removedCount > 0) {
+            showToast(`Directorio corregido: ${removedCount} usuarios duplicados consolidados.`);
+        }
+
+        return { changed: removedCount > 0, removedCount, signature };
+    };
+
+    const syncIdentityLinks = async ({ email, userId = '', managerId = '', editorId = '', silent = true }) => {
+        const normalizedEmail = normalizeEmail(email);
+        if (!db || !normalizedEmail) return { changed: false, migratedAccountTasks: 0, migratedEditingTasks: 0, linkedClients: 0 };
+
+        const linkedUser = userId ? appUsers.find((item) => item.id === userId) : appUsers.find((item) => normalizeEmail(item.email) === normalizedEmail);
+        const linkedManager = managerId ? managers.find((item) => item.id === managerId) : managers.find((item) => normalizeEmail(item.email) === normalizedEmail);
+        const linkedEditor = editorId ? editors.find((item) => item.id === editorId) : editors.find((item) => normalizeEmail(item.email) === normalizedEmail);
+
+        if (!linkedUser && !linkedManager && !linkedEditor) {
+            return { changed: false, migratedAccountTasks: 0, migratedEditingTasks: 0, linkedClients: 0 };
+        }
+
+        let batch = writeBatch(db);
+        let operations = 0;
+        const commits = [];
+        const commitLimit = 400;
+        const queueUpdate = (collectionName, id, payload) => {
+            if (!id) return;
+            if (operations >= commitLimit) {
+                commits.push(batch.commit());
+                batch = writeBatch(db);
+                operations = 0;
+            }
+            batch.update(dataDoc(collectionName, id), payload);
+            operations += 1;
+        };
+
+        let migratedAccountTasks = 0;
+        let migratedEditingTasks = 0;
+        let linkedClients = 0;
+        let identityMutations = 0;
+        const stamp = nowIso();
+
+        if (linkedUser) {
+            const userPatch = {};
+            if (linkedManager && linkedUser.linkedManagerId !== linkedManager.id) userPatch.linkedManagerId = linkedManager.id;
+            if (linkedEditor && linkedUser.linkedEditorId !== linkedEditor.id) userPatch.linkedEditorId = linkedEditor.id;
+            if (Object.keys(userPatch).length > 0) {
+                queueUpdate('users', linkedUser.id, { ...userPatch, updatedAt: stamp });
+                identityMutations += 1;
+            }
+        }
+
+        if (linkedManager && linkedUser && linkedManager.userId !== linkedUser.id) {
+            queueUpdate('managers', linkedManager.id, { userId: linkedUser.id, updatedAt: stamp });
+            identityMutations += 1;
+        }
+
+        if (linkedEditor && linkedUser && linkedEditor.userId !== linkedUser.id) {
+            queueUpdate('editors', linkedEditor.id, { userId: linkedUser.id, updatedAt: stamp });
+            identityMutations += 1;
+        }
+
+        if (linkedManager && linkedUser) {
+            clients
+                .filter((client) => client.managerId === linkedManager.id && client.managerUserId !== linkedUser.id)
+                .forEach((client) => {
+                    queueUpdate('clients', client.id, { managerUserId: linkedUser.id, updatedAt: stamp });
+                    linkedClients += 1;
+                });
+
+            accountTasks
+                .filter((task) => task.contextId === linkedManager.id && task.assigneeUserId !== linkedUser.id)
+                .forEach((task) => {
+                    queueUpdate('account_tasks', task.id, { assigneeUserId: linkedUser.id, updatedAt: stamp });
+                    migratedAccountTasks += 1;
+                });
+        }
+
+        if (linkedEditor && linkedUser) {
+            editingTasks
+                .filter((task) => task.contextId === linkedEditor.id && task.assigneeUserId !== linkedUser.id)
+                .forEach((task) => {
+                    queueUpdate('editing', task.id, { assigneeUserId: linkedUser.id, updatedAt: stamp });
+                    migratedEditingTasks += 1;
+                });
+        }
+
+        if (operations > 0) commits.push(batch.commit());
+        if (commits.length === 0) {
+            return { changed: false, migratedAccountTasks, migratedEditingTasks, linkedClients };
+        }
+
+        await Promise.all(commits);
+
+        if (!silent) {
+            showToast(`Vinculacion completada: ${migratedAccountTasks} tareas de account y ${migratedEditingTasks} de edicion sincronizadas.`);
+        }
+
+        return {
+            changed: identityMutations > 0 || linkedClients > 0 || migratedAccountTasks > 0 || migratedEditingTasks > 0,
+            migratedAccountTasks,
+            migratedEditingTasks,
+            linkedClients
+        };
+    };
+
+    const requestUserVerification = async (userRecord, successMessage = 'Se programo el envio del correo de verificacion') => {
+        const email = normalizeEmail(userRecord?.email);
+        if (!email || !userRecord?.id) {
+            showToast('El usuario necesita un correo valido', 'error');
+            return null;
+        }
+        if (userRecord.emailVerified === true || userRecord.emailVerification?.status === 'verified') {
+            showToast('Ese correo ya esta verificado');
+            return null;
+        }
+        return runMutation({
+            permission: 'manage_users',
+            action: 'request_verification',
+            entityType: 'user',
+            entityId: userRecord.id,
+            description: `Solicita verificacion para ${email}`,
+            changes: { email },
+            successMessage,
+            execute: () => updateDoc(dataDoc('users', userRecord.id), {
+                emailVerified: false,
+                emailVerification: {
+                    ...(userRecord.emailVerification || {}),
+                    status: 'pending',
+                    resendRequestedAt: nowIso(),
+                    requestedBy: currentUserProfile?.id || ''
+                },
+                updatedAt: nowIso()
+            })
+        });
+    };
+
+    useEffect(() => {
+        const url = new URL(window.location.href);
+        const status = url.searchParams.get('email_verification');
+        if (!status) return;
+
+        if (status === 'success') {
+            showToast('Correo verificado correctamente');
+        } else if (status === 'expired') {
+            showToast('El enlace de verificacion ya vencio', 'error');
+        } else if (status === 'invalid') {
+            showToast('El enlace de verificacion no es valido', 'error');
+        } else if (status === 'mismatch') {
+            showToast('El correo ya no coincide con el usuario vinculado', 'error');
+        } else {
+            showToast('No se pudo completar la verificacion', 'error');
+        }
+
+        url.searchParams.delete('email_verification');
+        url.searchParams.delete('verified_email');
+        window.history.replaceState({}, document.title, url.toString());
+    }, []);
+
+    const duplicateUserSignature = buildDuplicateUserGroups(appUsers)
+        .map((group) => group.map((item) => item.id).sort().join(','))
+        .sort()
+        .join('|');
+
+    useEffect(() => {
+        if (!db || !user || !usersLoaded || !duplicateUserSignature) return;
+        if (isReconcilingUsersRef.current || lastReconciledDuplicateSignatureRef.current === duplicateUserSignature) return;
+
+        let isCancelled = false;
+        isReconcilingUsersRef.current = true;
+
+        reconcileUserDirectory()
+            .then((result) => {
+                if (!isCancelled) {
+                    lastReconciledDuplicateSignatureRef.current = result?.signature || duplicateUserSignature;
+                }
+            })
+            .catch((error) => {
+                console.error('No se pudo reconciliar el directorio de usuarios:', error);
+            })
+            .finally(() => {
+                isReconcilingUsersRef.current = false;
+            });
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [db, user, usersLoaded, duplicateUserSignature]);
+
+    useEffect(() => {
+        if (!db || !usersLoaded || duplicateUserSignature || hasBackfilledIdentityLinks || !userHasPermission(currentUserProfile, 'manage_users')) return;
+        const candidates = appUsers.filter((item) => normalizeEmail(item.email));
+        if (candidates.length === 0) {
+            setHasBackfilledIdentityLinks(true);
+            return;
+        }
+        let isCancelled = false;
+        Promise.all(candidates.map((item) => syncIdentityLinks({ email: item.email, userId: item.id, silent: true })))
+            .finally(() => {
+                if (!isCancelled) setHasBackfilledIdentityLinks(true);
+            });
+        return () => {
+            isCancelled = true;
+        };
+    }, [db, usersLoaded, duplicateUserSignature, hasBackfilledIdentityLinks, currentUserProfile, appUsers, managers, editors, clients, accountTasks, editingTasks]);
+
+    useEffect(() => {
+        if (!db || !usersLoaded || duplicateUserSignature || !currentUserProfile?.id || !authEmail) return;
+        syncIdentityLinks({ email: authEmail, userId: currentUserProfile.id, silent: true }).catch(() => {});
+    }, [db, usersLoaded, duplicateUserSignature, currentUserProfile?.id, authEmail, managers, editors, clients, accountTasks, editingTasks]);
+
+    const handleNavigate = (newView) => {
+        if (!canAccessView(currentUserProfile, newView) || profileBlocked) {
+            ensurePermission(VIEW_PERMISSIONS[newView], `Intento de acceso a ${newView}`);
+            return;
+        }
+        setView(newView);
         localStorage.setItem('cluster_os_view', newView);
-        setIsMobileMenuOpen(false); 
+        setIsMobileMenuOpen(false);
+        auditAction({ action: 'navigate', entityType: 'navigation', entityId: newView, description: `Abre la vista ${newView}` });
     };
 
     const handleEventClick = (event, type) => setEventAction({ isOpen: true, event, type });
     const triggerConfetti = () => { if (window.confetti) window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#9333ea', '#3b82f6', '#10b981', '#f59e0b'] }); };
 
-    const urgentEditions = editingTasks.filter(t => t.priority === 'urgente' && t.status !== 'aprobado' && t.status !== 'publicado').length;
-    const pendingAccounts = accountTasks.filter(t => t.status === 'por_disenar').length;
+    const handleGoogleSignIn = async () => {
+        if (!auth || !GOOGLE_PROVIDER) return;
+        setIsSigningIn(true);
+        try {
+            await signInWithPopup(auth, GOOGLE_PROVIDER);
+            showToast('Sesion iniciada con Google');
+        } catch (error) {
+            console.error(error);
+            showToast(getGoogleAuthErrorMessage(error), 'error');
+        } finally {
+            setIsSigningIn(false);
+        }
+    };
 
-    const allActivities = [
+    const handleLogout = async () => {
+        if (!auth) return;
+        try {
+            await auditAction({ action: 'logout', entityType: 'session', description: 'Cierre de sesion' });
+            await firebaseSignOut(auth);
+            await signInAnonymously(auth);
+            showToast('Sesion cerrada');
+        } catch (error) {
+            console.error(error);
+            showToast('No se pudo cerrar la sesion', 'error');
+        }
+    };
+
+    const urgentEditions = editingTasks.filter((task) => getEditingHierarchyId(task) === 'p1' && task.status !== 'aprobado' && task.status !== 'publicado').length;
+    const pendingAccounts = accountTasks.filter(t => t.status === 'por_disenar').length;
+    const pendingManagement = managementTasks.filter((task) => task.status !== 'cerrado').length;
+
+    let allActivities = [
         ...events.map(e => ({ ...e, collectionType: 'event', _color: 'emerald', _icon: 'CalendarIcon', _label: 'Producción' })),
         ...accountTasks.map(t => {
             const manager = managers.find(m => m.id === t.contextId);
@@ -138,79 +924,419 @@ function App() {
         }),
         ...editingTasks.map(t => ({ ...t, collectionType: 'editingTask', _color: 'slate', _icon: 'Video', _label: 'Edición' }))
     ];
+    allActivities = [
+        ...events.map((event) => ({ ...event, collectionType: 'event', _color: 'emerald', _icon: 'CalendarIcon', _label: 'Produccion' })),
+        ...accountTasks.map((task) => {
+            const manager = managers.find((item) => item.id === task.contextId);
+            const rawColor = manager?.color || 'indigo';
+            const mappedColor = LEGACY_COLOR_MAP[rawColor] || rawColor;
+            return { ...task, collectionType: 'accountTask', _color: mappedColor, _icon: 'LayoutList', _label: 'Account' };
+        }),
+        ...editingTasks.map((task) => ({ ...task, collectionType: 'editingTask', _color: 'slate', _icon: 'Video', _label: 'Edicion' })),
+        ...managementTasks.map((task) => ({ ...task, collectionType: 'managementTask', _color: 'violet', _icon: 'ShieldCheck', _label: 'Gestion' }))
+    ];
 
     // Acciones Base de Datos
     const addClient = async (fd) => {
         const manager = managers.find(m => m.id === fd.managerId);
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { ...fd, manager: manager ? manager.name : "", managerId: fd.managerId || "", status: 'Activo', mood: 'Contento', createdAt: getHondurasTodayStr(), workflow: { week1: false, week2: false, week3: false, week4: false } });
-        showToast('Cliente creado'); closeModal();
+        await runMutation({
+            permission: 'manage_clients',
+            action: 'create',
+            entityType: 'client',
+            description: `Crea el cliente ${fd.name}`,
+            changes: { name: fd.name, managerId: fd.managerId || '' },
+            successMessage: 'Cliente creado',
+            execute: () => addDoc(dataCollection('clients'), { ...fd, manager: manager ? manager.name : '', managerId: fd.managerId || '', managerUserId: manager?.userId || '', status: 'Activo', mood: 'Contento', createdAt: getHondurasTodayStr(), updatedAt: nowIso(), workflow: { week1: false, week2: false, week3: false, week4: false } }),
+            afterSuccess: closeModal
+        });
     };
     const updateClient = async (id, data) => { 
-        const manager = managers.find(m => m.id === data.managerId);
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), { ...data, manager: manager ? manager.name : "" }); 
-        showToast('Cliente actualizado'); closeModal(); 
+        const nextData = { ...data };
+        if (Object.prototype.hasOwnProperty.call(nextData, 'managerId')) {
+            const manager = managers.find((item) => item.id === nextData.managerId);
+            nextData.manager = manager ? manager.name : '';
+            nextData.managerUserId = manager?.userId || '';
+        }
+        await runMutation({
+            permission: 'manage_clients',
+            action: 'update',
+            entityType: 'client',
+            entityId: id,
+            description: `Actualiza el cliente ${id}`,
+            changes: nextData,
+            successMessage: 'Cliente actualizado',
+            execute: () => updateDoc(dataDoc('clients', id), { ...nextData, updatedAt: nowIso() }),
+            afterSuccess: closeModal
+        });
     };
     const reassignClientManager = async (client, newManagerId) => {
         if (!newManagerId) return;
         const newManager = managers.find(m => m.id === newManagerId);
         if (!newManager) return;
-        try {
-            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', client.id), { manager: newManager.name, managerId: newManager.id });
-            const tasksToMove = accountTasks.filter(t => t.clientId === client.id);
-            for (const t of tasksToMove) {
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', t.id), { contextId: newManager.id });
-            }
-            showToast(`Cliente mudado a ${newManager.name}`);
-        } catch (e) { showToast("Error al reasignar", "error"); }
+        await runMutation({
+            permission: 'manage_clients',
+            action: 'reassign',
+            entityType: 'client',
+            entityId: client.id,
+            description: `Reasigna ${client.name} a ${newManager.name}`,
+            changes: { from: client.managerId || '', to: newManagerId },
+            successMessage: `Cliente mudado a ${newManager.name}`,
+            execute: async () => {
+                await updateDoc(dataDoc('clients', client.id), { manager: newManager.name, managerId: newManager.id, updatedAt: nowIso() });
+                const tasksToMove = accountTasks.filter((task) => task.clientId === client.id);
+                await Promise.all(tasksToMove.map((task) => updateDoc(dataDoc('account_tasks', task.id), { contextId: newManager.id, assigneeUserId: newManager.userId || '', updatedAt: nowIso() })));
+            },
+            errorMessage: 'Error al reasignar'
+        });
     };
 
     const addManager = async (fd) => {
         const color = ACCOUNT_COLORS[managers.length % ACCOUNT_COLORS.length];
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'managers'), { ...fd, color });
-        showToast('Manager agregado'); closeModal();
+        const normalizedEmail = normalizeEmail(fd.email);
+        const result = await runMutation({
+            permission: 'manage_managers',
+            action: 'create',
+            entityType: 'manager',
+            description: `Crea manager ${fd.name}`,
+            changes: { name: fd.name, email: normalizedEmail },
+            successMessage: 'Manager agregado',
+            execute: () => addDoc(dataCollection('managers'), { ...fd, email: normalizedEmail, color, createdAt: nowIso(), updatedAt: nowIso(), userId: '' }),
+            afterSuccess: closeModal
+        });
+        if (result?.id && normalizedEmail) await syncIdentityLinks({ email: normalizedEmail, managerId: result.id, silent: true });
     };
-    const updateManager = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'managers', id), data); showToast('Actualizado'); closeModal(); };
+    const updateManager = async (id, data) => {
+        const normalizedEmail = normalizeEmail(data.email);
+        const result = await runMutation({
+            permission: 'manage_managers',
+            action: 'update',
+            entityType: 'manager',
+            entityId: id,
+            description: `Actualiza manager ${id}`,
+            changes: data,
+            successMessage: 'Actualizado',
+            execute: () => updateDoc(dataDoc('managers', id), { ...data, email: normalizedEmail, updatedAt: nowIso() }),
+            afterSuccess: closeModal
+        });
+        if (result !== null && normalizedEmail) await syncIdentityLinks({ email: normalizedEmail, managerId: id, silent: true });
+    };
 
     const addEditor = async (fd) => {
         const color = EDITOR_COLORS[editors.length % EDITOR_COLORS.length];
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editors'), { ...fd, color });
-        showToast('Editor agregado'); closeModal();
+        const normalizedEmail = normalizeEmail(fd.email);
+        const result = await runMutation({
+            permission: 'manage_editors',
+            action: 'create',
+            entityType: 'editor',
+            description: `Crea editor ${fd.name}`,
+            changes: { name: fd.name, email: normalizedEmail },
+            successMessage: 'Editor agregado',
+            execute: () => addDoc(dataCollection('editors'), { ...fd, email: normalizedEmail, color, createdAt: nowIso(), updatedAt: nowIso(), userId: '' }),
+            afterSuccess: closeModal
+        });
+        if (result?.id && normalizedEmail) await syncIdentityLinks({ email: normalizedEmail, editorId: result.id, silent: true });
     };
-    const updateEditor = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editors', id), data); showToast('Actualizado'); closeModal(); };
+    const updateEditor = async (id, data) => {
+        const normalizedEmail = normalizeEmail(data.email);
+        const result = await runMutation({
+            permission: 'manage_editors',
+            action: 'update',
+            entityType: 'editor',
+            entityId: id,
+            description: `Actualiza editor ${id}`,
+            changes: data,
+            successMessage: 'Actualizado',
+            execute: () => updateDoc(dataDoc('editors', id), { ...data, email: normalizedEmail, updatedAt: nowIso() }),
+            afterSuccess: closeModal
+        });
+        if (result !== null && normalizedEmail) await syncIdentityLinks({ email: normalizedEmail, editorId: id, silent: true });
+    };
 
-    const addAccountTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'account_tasks'), { ...data, status: 'por_disenar' }); showToast('Agendado'); closeModal(); };
-    const updateAccountTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id), data); showToast('Guardado'); closeModal(); };
+    const addAccountTask = async (data) => {
+        const manager = managers.find((item) => item.id === data.contextId);
+        await runMutation({
+            permission: 'manage_account_tasks',
+            action: 'create',
+            entityType: 'accountTask',
+            description: `Crea tarea de account ${data.title}`,
+            changes: data,
+            successMessage: 'Agendado',
+            execute: () => addDoc(dataCollection('account_tasks'), { ...data, assigneeUserId: manager?.userId || '', status: 'por_disenar', createdAt: nowIso(), updatedAt: nowIso() }),
+            afterSuccess: closeModal
+        });
+    };
+    const updateAccountTask = async (id, data) => {
+        const manager = managers.find((item) => item.id === data.contextId);
+        await runMutation({
+            permission: 'manage_account_tasks',
+            action: 'update',
+            entityType: 'accountTask',
+            entityId: id,
+            description: `Actualiza tarea de account ${id}`,
+            changes: data,
+            successMessage: 'Guardado',
+            execute: () => updateDoc(dataDoc('account_tasks', id), { ...data, assigneeUserId: manager?.userId || '', updatedAt: nowIso() }),
+            afterSuccess: closeModal
+        });
+    };
     const changeAccountTaskStatus = async (task, newStatus) => {
         if (newStatus) {
-            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', task.id), { status: newStatus });
-            if (newStatus === 'publicado') triggerConfetti();
+            await runMutation({
+                permission: 'manage_account_tasks',
+                action: 'status_change',
+                entityType: 'accountTask',
+                entityId: task.id,
+                description: `Mueve task ${task.title} a ${newStatus}`,
+                changes: { previousStatus: task.status, nextStatus: newStatus },
+                execute: () => updateDoc(dataDoc('account_tasks', task.id), { status: newStatus, updatedAt: nowIso() }),
+                afterSuccess: () => { if (newStatus === 'publicado') triggerConfetti(); }
+            });
         }
     };
 
-    const addEditingTask = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'editing'), { ...data, status: 'editar' }); showToast('Agendado'); closeModal(); };
-    const updateEditingTask = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id), data); showToast('Guardado'); closeModal(); };
+    const addEditingTask = async (data) => {
+        const editor = editors.find((item) => item.id === data.contextId);
+        await runMutation({
+            permission: 'manage_editing_tasks',
+            action: 'create',
+            entityType: 'editingTask',
+            description: `Crea video ${data.title}`,
+            changes: { ...data, hierarchy: data.hierarchy || getEditingHierarchyId(data) },
+            successMessage: 'Agendado',
+            execute: () => addDoc(dataCollection('editing'), { ...data, hierarchy: data.hierarchy || getEditingHierarchyId(data), assigneeUserId: editor?.userId || '', status: 'editar', createdAt: nowIso(), updatedAt: nowIso() }),
+            afterSuccess: closeModal
+        });
+    };
+    const updateEditingTask = async (id, data) => {
+        const editor = editors.find((item) => item.id === data.contextId);
+        await runMutation({
+            permission: 'manage_editing_tasks',
+            action: 'update',
+            entityType: 'editingTask',
+            entityId: id,
+            description: `Actualiza video ${id}`,
+            changes: data,
+            successMessage: 'Guardado',
+            execute: () => updateDoc(dataDoc('editing', id), { ...data, hierarchy: data.hierarchy || getEditingHierarchyId(data), assigneeUserId: editor?.userId || '', updatedAt: nowIso() }),
+            afterSuccess: closeModal
+        });
+    };
     const changeEditingTaskStatus = async (task, newStatus) => {
         if (newStatus) {
-            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', task.id), { status: newStatus });
-            if (newStatus === 'aprobado' || newStatus === 'publicado') triggerConfetti();
+            await runMutation({
+                permission: 'manage_editing_tasks',
+                action: 'status_change',
+                entityType: 'editingTask',
+                entityId: task.id,
+                description: `Mueve video ${task.title} a ${newStatus}`,
+                changes: { previousStatus: task.status, nextStatus: newStatus, hierarchy: getEditingHierarchyId(task) },
+                execute: () => updateDoc(dataDoc('editing', task.id), { status: newStatus, updatedAt: nowIso() }),
+                afterSuccess: () => { if (newStatus === 'aprobado' || newStatus === 'publicado') triggerConfetti(); }
+            });
         }
     };
 
-    const addEvent = async (data) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data); showToast('Agendado'); closeModal(); };
-    const updateEvent = async (id, data) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id), data); showToast('Guardado'); closeModal(); };
+    const addManagementTask = async (data) => {
+        const member = managementUsers.find((item) => item.id === data.contextId);
+        await runMutation({
+            permission: 'manage_management_tasks',
+            action: 'create',
+            entityType: 'managementTask',
+            description: `Crea tarea de gestion ${data.title}`,
+            changes: data,
+            successMessage: 'Agendado',
+            execute: () => addDoc(dataCollection('management_tasks'), { ...data, assigneeUserId: member?.id || '', status: 'pendiente', createdAt: nowIso(), updatedAt: nowIso() }),
+            afterSuccess: closeModal
+        });
+    };
+    const updateManagementTask = async (id, data) => {
+        const member = managementUsers.find((item) => item.id === data.contextId);
+        await runMutation({
+            permission: 'manage_management_tasks',
+            action: 'update',
+            entityType: 'managementTask',
+            entityId: id,
+            description: `Actualiza tarea de gestion ${id}`,
+            changes: data,
+            successMessage: 'Guardado',
+            execute: () => updateDoc(dataDoc('management_tasks', id), { ...data, assigneeUserId: member?.id || '', updatedAt: nowIso() }),
+            afterSuccess: closeModal
+        });
+    };
+    const changeManagementTaskStatus = async (task, newStatus) => {
+        if (newStatus) {
+            await runMutation({
+                permission: 'manage_management_tasks',
+                action: 'status_change',
+                entityType: 'managementTask',
+                entityId: task.id,
+                description: `Mueve tarea de gestion ${task.title} a ${newStatus}`,
+                changes: { previousStatus: task.status, nextStatus: newStatus },
+                execute: () => updateDoc(dataDoc('management_tasks', task.id), { status: newStatus, updatedAt: nowIso() })
+            });
+        }
+    };
+
+    const addEvent = async (data) => {
+        await runMutation({
+            permission: 'manage_calendar',
+            action: 'create',
+            entityType: 'event',
+            description: `Crea evento ${data.title}`,
+            changes: data,
+            successMessage: 'Agendado',
+            execute: () => addDoc(dataCollection('events'), { ...data, createdAt: nowIso(), updatedAt: nowIso() }),
+            afterSuccess: closeModal
+        });
+    };
+    const updateEvent = async (id, data) => {
+        await runMutation({
+            permission: 'manage_calendar',
+            action: 'update',
+            entityType: 'event',
+            entityId: id,
+            description: `Actualiza evento ${id}`,
+            changes: data,
+            successMessage: 'Guardado',
+            execute: () => updateDoc(dataDoc('events', id), { ...data, updatedAt: nowIso() }),
+            afterSuccess: closeModal
+        });
+    };
+
+    const addUserRecord = async (data) => {
+        const email = normalizeEmail(data.email);
+        const requestedRole = data.role || 'viewer';
+        const managementKey = requestedRole === 'management' ? getManagementDirectoryKey(data.name) : '';
+        const existingManagementUser = managementKey
+            ? chooseCanonicalUserRecord(appUsers.filter((item) => item.role === 'management' && (item.managementKey || getManagementDirectoryKey(item)) === managementKey))
+            : null;
+        if (!email) {
+            showToast('El correo es obligatorio', 'error');
+            return;
+        }
+        if (existingManagementUser) {
+            await updateUserRecord(existingManagementUser.id, { ...data, role: 'management' });
+            return;
+        }
+        if (appUsers.some((item) => normalizeEmail(item.email) === email)) {
+            showToast('Ese correo ya existe', 'error');
+            return;
+        }
+        const result = await runMutation({
+            permission: 'manage_users',
+            action: 'create',
+            entityType: 'user',
+            description: `Crea usuario ${email}`,
+            changes: { name: data.name, email, role: requestedRole, isActive: data.isActive },
+            successMessage: 'Usuario creado. Se programo la verificacion por correo.',
+            execute: () => addDoc(dataCollection('users'), {
+                name: data.name,
+                email,
+                role: requestedRole,
+                isActive: data.isActive !== false,
+                createdAt: nowIso(),
+                updatedAt: nowIso(),
+                lastSeenAt: '',
+                emailVerified: false,
+                emailVerification: {
+                    status: 'pending',
+                    requestedAt: nowIso()
+                },
+                managementKey: requestedRole === 'management' ? managementKey : '',
+                linkedManagerId: '',
+                linkedEditorId: ''
+            }),
+            afterSuccess: closeModal
+        });
+        if (result?.id) await syncIdentityLinks({ email, userId: result.id, silent: true });
+    };
+
+    const updateUserRecord = async (id, data) => {
+        const email = normalizeEmail(data.email);
+        if (!email) {
+            showToast('El correo es obligatorio', 'error');
+            return;
+        }
+        if (appUsers.some((item) => item.id !== id && normalizeEmail(item.email) === email)) {
+            showToast('Ese correo ya esta en uso', 'error');
+            return;
+        }
+        const current = appUsers.find((item) => item.id === id);
+        const nextRole = data.role || current?.role || 'viewer';
+        const nextManagementKey = nextRole === 'management' ? getManagementDirectoryKey(data.name || current?.name || '') : '';
+        const nextActive = data.isActive !== false;
+        const emailChanged = email !== normalizeEmail(current?.email);
+        if (privilegedUsers.length === 1 && privilegedUsers[0].id === id && (!['super_admin', 'operations'].includes(nextRole) || !nextActive)) {
+            showToast('Debe existir al menos un usuario administrador activo', 'error');
+            return;
+        }
+        const nextVerification = emailChanged
+            ? {
+                status: 'pending',
+                requestedAt: nowIso()
+            }
+            : (current?.emailVerification || {});
+        const nextEmailVerified = emailChanged ? false : current?.emailVerified === true;
+        const result = await runMutation({
+            permission: 'manage_users',
+            action: 'update',
+            entityType: 'user',
+            entityId: id,
+            description: `Actualiza usuario ${email}`,
+            changes: { name: data.name, email, role: nextRole, isActive: nextActive, emailChanged },
+            successMessage: emailChanged ? 'Usuario actualizado. Se programo una nueva verificacion.' : 'Usuario actualizado',
+            execute: () => updateDoc(dataDoc('users', id), {
+                name: data.name,
+                email,
+                role: nextRole,
+                managementKey: nextManagementKey,
+                isActive: nextActive,
+                emailVerified: nextEmailVerified,
+                emailVerification: nextVerification,
+                updatedAt: nowIso()
+            }),
+            afterSuccess: closeModal
+        });
+        if (result !== null) await syncIdentityLinks({ email, userId: id, silent: true });
+    };
 
     const handleDelete = async () => {
         const { type, id } = deleteConfirm;
-        try {
-            if (type === 'client') { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id)); setView('clients'); setSelectedClient(null); }
-            if (type === 'manager') { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'managers', id)); setView('managers'); setSelectedManager(null); }
-            if (type === 'editor') { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editors', id)); setView('editors'); setSelectedEditor(null); }
-            if (type === 'event') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id));
-            if (type === 'accountTask') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'account_tasks', id));
-            if (type === 'editingTask') await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'editing', id));
-            showToast('Eliminado');
-        } catch(e) { showToast('Error', 'error'); }
-        closeDelete();
+        const map = {
+            client: { collection: 'clients', permission: 'manage_clients', entityType: 'client', after: () => { setView('clients'); setSelectedClient(null); } },
+            manager: { collection: 'managers', permission: 'manage_managers', entityType: 'manager', after: () => { setView('managers'); setSelectedManager(null); } },
+            editor: { collection: 'editors', permission: 'manage_editors', entityType: 'editor', after: () => { setView('editors'); setSelectedEditor(null); } },
+            event: { collection: 'events', permission: 'manage_calendar', entityType: 'event' },
+            accountTask: { collection: 'account_tasks', permission: 'manage_account_tasks', entityType: 'accountTask' },
+            editingTask: { collection: 'editing', permission: 'manage_editing_tasks', entityType: 'editingTask' },
+            managementTask: { collection: 'management_tasks', permission: 'manage_management_tasks', entityType: 'managementTask' }
+        };
+        const current = map[type];
+        if (!current) {
+            closeDelete();
+            return;
+        }
+        await runMutation({
+            permission: current.permission,
+            action: 'delete',
+            entityType: current.entityType,
+            entityId: id,
+            description: `Elimina ${current.entityType} ${id}`,
+            successMessage: 'Eliminado',
+            execute: () => deleteDoc(dataDoc(current.collection, id)),
+            afterSuccess: () => {
+                if (current.after) current.after();
+                closeDelete();
+            }
+        });
+    };
+
+    const canEditActivity = (collectionType) => {
+        if (collectionType === 'accountTask') return userHasPermission(currentUserProfile, 'manage_account_tasks');
+        if (collectionType === 'editingTask') return userHasPermission(currentUserProfile, 'manage_editing_tasks');
+        if (collectionType === 'managementTask') return userHasPermission(currentUserProfile, 'manage_management_tasks');
+        if (collectionType === 'event') return userHasPermission(currentUserProfile, 'manage_calendar');
+        return false;
     };
 
     if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950"><Icon name="Loader2" className="animate-spin text-purple-600" size={32}/></div>;
@@ -242,34 +1368,63 @@ function App() {
                     
                     <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Salas de Trabajo</div>
                     <SidebarItem active={view === 'account-room'} onClick={() => handleNavigate('account-room')} icon="LayoutList" label="Sala de Accounts" color="indigo" badge={pendingAccounts > 0 ? pendingAccounts : null} badgeColor="bg-indigo-500 text-white" />
+                    <SidebarItem active={view === 'management-room'} onClick={() => handleNavigate('management-room')} icon="ShieldCheck" label="Sala de Gestion" color="violet" badge={pendingManagement > 0 ? pendingManagement : null} badgeColor="bg-violet-500 text-white" />
                     <SidebarItem active={view === 'editions'} onClick={() => handleNavigate('editions')} icon="Video" label="Sala de Edición" color="amber" badge={urgentEditions > 0 ? urgentEditions : null} badgeColor="bg-red-500 text-white animate-pulse" />
                     
-                    <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Global</div>
+                    <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Control & Global</div>
+                    <SidebarItem active={view === 'control-center'} onClick={() => handleNavigate('control-center')} icon="ClipboardList" label="Usuarios y Accesos" color="purple" />
                     <SidebarItem active={view === 'general-calendar'} onClick={() => handleNavigate('general-calendar')} icon="CalendarDays" label="Calendario General" color="blue" />
                     <SidebarItem active={view === 'calendar'} onClick={() => handleNavigate('calendar')} icon="CalendarIcon" label="Agenda Producción" color="emerald" />
                 </nav>
 
-                <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
+                <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
                     <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm">GO</div>
-                        <div><p className="text-sm font-bold text-slate-700 dark:text-slate-200">Gerente Ops</p><p className="text-[10px] font-bold text-green-500 uppercase flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Activo</p></div>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${profileBlocked ? 'bg-red-500' : authEmail ? 'bg-gradient-to-tr from-purple-500 to-indigo-500' : 'bg-slate-500'}`}>
+                            {(currentUserProfile?.name || 'IN').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{currentUserProfile?.name || 'Invitado'}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase truncate">{currentRoleMeta.label}{authEmail ? ` · ${authEmail}` : ' · Sin correo'}</p>
+                        </div>
                     </div>
-                    <button onClick={() => setIsDark(!isDark)} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300"><Icon name={isDark ? "Sun" : "Moon"} size={16} /></button>
+                    <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${
+                            profileBlocked
+                                ? 'bg-red-50 text-red-600 dark:bg-red-500/20 dark:text-red-400'
+                                : currentVerificationMeta.color === 'emerald'
+                                  ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
+                                  : currentVerificationMeta.color === 'amber'
+                                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                                    : currentVerificationMeta.color === 'blue'
+                                      ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'
+                                      : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'
+                        }`}>
+                            {profileBlocked ? 'Bloqueado' : authEmail ? currentVerificationMeta.label : 'Invitado'}
+                        </span>
+                        <button onClick={() => setIsDark(!isDark)} className="ml-auto p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300"><Icon name={isDark ? 'Sun' : 'Moon'} size={16} /></button>
+                        {authEmail ? (
+                            <button onClick={handleLogout} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300"><Icon name="LogOut" size={16} /></button>
+                        ) : (
+                            <button onClick={handleGoogleSignIn} disabled={isSigningIn} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300 disabled:opacity-60"><Icon name={isSigningIn ? 'Loader2' : 'LogIn'} size={16} className={isSigningIn ? 'animate-spin' : ''} /></button>
+                        )}
+                    </div>
                 </div>
             </aside>
 
             {/* Vistas Principales */}
             <main className="flex-1 overflow-y-auto relative w-full h-full">
                 <div className="p-4 md:p-8 max-w-[1600px] mx-auto min-h-full pb-20">
-                    {view === 'dashboard' && <DashboardView clients={clients} managers={managers} events={events} tasks={editingTasks} accountTasks={accountTasks} />}
+                    {view === 'dashboard' && <DashboardView clients={clients} managers={managers} events={events} tasks={editingTasks} accountTasks={accountTasks} managementTasks={managementTasks} currentUserProfile={currentUserProfile} onSignIn={handleGoogleSignIn} />}
                     {view === 'clients' && <ClientsView clients={clients} onAdd={() => setModalConfig({ isOpen: true, type: 'client' })} onSelect={(c) => { setSelectedClient(c); handleNavigate('client-detail'); }} />}
                     {view === 'client-detail' && selectedClient && <ClientDetail client={selectedClient} managers={managers} onReassignManager={reassignClientManager} onBack={() => handleNavigate('clients')} onUpdate={updateClient} onDelete={() => setDeleteConfirm({ isOpen: true, type: 'client', id: selectedClient.id, title: selectedClient.name })} onEdit={() => setModalConfig({ isOpen: true, type: 'client', data: selectedClient, isEdit: true })} />}
                     {view === 'managers' && <TeamView title="Account Managers" team={managers} iconColor="indigo" onAdd={() => setModalConfig({ isOpen: true, type: 'manager' })} onSelect={(m) => { setSelectedManager(m); handleNavigate('manager-detail'); }} onDelete={(m) => setDeleteConfirm({ isOpen: true, type: 'manager', id: m.id, title: m.name })} onEdit={(m) => setModalConfig({ isOpen: true, type: 'manager', data: m, isEdit: true })} />}
                     {view === 'manager-detail' && selectedManager && <PersonCalendarDetail person={selectedManager} tasks={accountTasks} title="Planificación de Cuentas" baseColor={LEGACY_COLOR_MAP[selectedManager.color] || selectedManager.color || 'indigo'} onBack={() => handleNavigate('managers')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr, contextId: selectedManager.id } })} onEventClick={(e) => handleEventClick(e, 'accountTask')} />}
                     {view === 'editors' && <TeamView title="Editores" team={editors} iconColor="rose" onAdd={() => setModalConfig({ isOpen: true, type: 'editor' })} onSelect={(e) => { setSelectedEditor(e); handleNavigate('editor-detail'); }} onDelete={(e) => setDeleteConfirm({ isOpen: true, type: 'editor', id: e.id, title: e.name })} onEdit={(e) => setModalConfig({ isOpen: true, type: 'editor', data: e, isEdit: true })} />}
                     {view === 'editor-detail' && selectedEditor && <PersonCalendarDetail person={selectedEditor} tasks={editingTasks} title="Planificación de Edición" baseColor={selectedEditor.color || 'rose'} onBack={() => handleNavigate('editors')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr, contextId: selectedEditor.id } })} onEventClick={(e) => handleEventClick(e, 'editingTask')} />}
-                    {view === 'account-room' && <AccountRoomView tasks={accountTasks} managers={managers} clients={clients} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'accountTask', data: task, isEdit: true })} onChangeStatus={changeAccountTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'accountTask' })} legacyColorMap={LEGACY_COLOR_MAP} />}
-                    {view === 'editions' && <EditionsRoomView tasks={editingTasks} editors={editors} clients={clients} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'editingTask', data: task, isEdit: true })} onChangeStatus={changeEditingTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'editingTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'editingTask' })} />}
+                    {view === 'account-room' && <AccountRoomView tasks={accountTasks} managers={managers} clients={clients} currentUserProfile={currentUserProfile} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'accountTask', data: task, isEdit: true })} onChangeStatus={changeAccountTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'accountTask' })} legacyColorMap={LEGACY_COLOR_MAP} />}
+                    {view === 'editions' && <EditionsRoomView tasks={editingTasks} editors={editors} clients={clients} currentUserProfile={currentUserProfile} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'editingTask', data: task, isEdit: true })} onChangeStatus={changeEditingTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'editingTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'editingTask' })} />}
+                    {view === 'management-room' && <ManagementRoomView tasks={managementTasks} members={managementUsers} clients={clients} currentUserProfile={currentUserProfile} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'managementTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'managementTask', data: task, isEdit: true })} onChangeStatus={changeManagementTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'managementTask', id, title: 'Tarea de gestion' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'managementTask' })} />}
+                    {view === 'control-center' && <UsersAccessView users={appUsers} managers={managers} editors={editors} auditLogs={auditLogs} currentUserProfile={currentUserProfile} onAdd={() => setModalConfig({ isOpen: true, type: 'user' })} onEdit={(userRecord) => setModalConfig({ isOpen: true, type: 'user', data: userRecord, isEdit: true })} onResendVerification={requestUserVerification} />}
                     {view === 'general-calendar' && (
                         <div className="h-full flex flex-col space-y-6 fade-in"><h2 className="text-2xl font-black text-slate-800 dark:text-white">Calendario General</h2><div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden"><GeneralCalendarGrid activities={allActivities} onDayClick={(dateStr) => setDayDetailsModal({ isOpen: true, date: dateStr })} /></div></div>
                     )}
@@ -280,11 +1435,11 @@ function App() {
             </main>
 
             {toast && <Toast message={toast.message} type={toast.type} />}
-            {modalConfig.isOpen && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask }} />}
+            {modalConfig.isOpen && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} managementUsers={managementUsers} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask, addManagementTask, updateManagementTask, addUserRecord, updateUserRecord }} />}
             {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
-            <EventActionModal config={eventAction} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
-            <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
-            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} />
+            <EventActionModal config={eventAction} canEdit={canEditActivity(eventAction.type)} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
+            <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} users={managementUsers} canEditActivity={canEditActivity} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
+            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} />
         </div>
     );
 }
@@ -330,17 +1485,250 @@ const CheckItem = ({ label, checked, onToggle }) => (
     <button onClick={onToggle} className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${checked ? 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30 text-green-800 dark:text-green-400' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600'}`}><span className="font-bold text-sm">{label}</span>{checked ? <Icon name="CheckCircle2" size={20} className="text-green-500" /> : <Icon name="Circle" size={20} />}</button>
 );
 
+const clampPercent = (value = 0) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 0;
+    return Math.max(0, Math.min(100, numeric));
+};
+
+const DASHBOARD_PALETTE = {
+    emerald: { solid: '#22c55e', strong: '#15803d' },
+    amber: { solid: '#f59e0b', strong: '#b45309' },
+    red: { solid: '#ef4444', strong: '#b91c1c' },
+    purple: { solid: '#9333ea', strong: '#6b21a8' },
+    violet: { solid: '#8b5cf6', strong: '#6d28d9' },
+    indigo: { solid: '#6366f1', strong: '#4338ca' },
+    blue: { solid: '#3b82f6', strong: '#1d4ed8' },
+    cyan: { solid: '#06b6d4', strong: '#0e7490' },
+    orange: { solid: '#f97316', strong: '#c2410c' },
+    fuchsia: { solid: '#d946ef', strong: '#a21caf' },
+    stone: { solid: '#78716c', strong: '#44403c' },
+    slate: { solid: '#64748b', strong: '#334155' }
+};
+
+const getDashboardPalette = (name = 'slate') => DASHBOARD_PALETTE[name] || DASHBOARD_PALETTE.slate;
+
+const polarToCartesian = (centerX, centerY, radius, angleInDegrees) => {
+    const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0;
+    return {
+        x: centerX + (radius * Math.cos(angleInRadians)),
+        y: centerY + (radius * Math.sin(angleInRadians))
+    };
+};
+
+const describeArc = (centerX, centerY, radius, startAngle, endAngle) => {
+    const start = polarToCartesian(centerX, centerY, radius, endAngle);
+    const end = polarToCartesian(centerX, centerY, radius, startAngle);
+    const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+    return ['M', start.x, start.y, 'A', radius, radius, 0, largeArcFlag, 0, end.x, end.y].join(' ');
+};
+
+const buildRingSegments = (segments, startAngle = -90, totalAngle = 360, gapAngle = 6) => {
+    const activeSegments = segments.filter((segment) => segment.value > 0);
+    if (activeSegments.length === 0) return [];
+
+    const normalizedGap = activeSegments.length === 1 ? 0 : gapAngle;
+    const gapCount = Math.max(activeSegments.length - 1, 0);
+    const availableAngle = Math.max(totalAngle - (normalizedGap * gapCount), 0);
+    const totalValue = activeSegments.reduce((sum, segment) => sum + segment.value, 0) || 1;
+    let cursor = startAngle;
+
+    return activeSegments.map((segment, index) => {
+        const sweepAngle = Math.min((segment.value / totalValue) * availableAngle, 359.999);
+        const segmentStart = cursor;
+        const segmentEnd = cursor + sweepAngle;
+        cursor = segmentEnd + (index < activeSegments.length - 1 ? normalizedGap : 0);
+        return { ...segment, startAngle: segmentStart, endAngle: segmentEnd };
+    });
+};
+
+const CompactMetricBar = ({ label, value, color = 'slate', meta, helper }) => {
+    const palette = getDashboardPalette(color);
+    const safeValue = clampPercent(value);
+
+    return (
+        <div className="min-w-0">
+            <div className="mb-1.5 flex items-start justify-between gap-3">
+                <span className="min-w-0 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{label}</span>
+                <span className="shrink-0 text-[11px] font-bold" style={{ color: palette.strong }}>{meta || `${Math.round(safeValue)}%`}</span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800">
+                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${safeValue}%`, background: `linear-gradient(90deg, ${palette.solid}, ${palette.strong})` }} />
+            </div>
+            {helper ? <p className="mt-1.5 break-words text-[10px] leading-relaxed font-medium text-slate-500 dark:text-slate-400">{helper}</p> : null}
+        </div>
+    );
+};
+
+const PortfolioHealthChart = ({ totalClients, contentos, neutrales, enRiesgo }) => {
+    const segments = [
+        { key: 'healthy', label: 'Sanos', value: contentos, color: '#22c55e', strong: '#15803d' },
+        { key: 'neutral', label: 'Neutral', value: neutrales, color: '#f59e0b', strong: '#b45309' },
+        { key: 'risk', label: 'Riesgo', value: enRiesgo, color: '#ef4444', strong: '#b91c1c' }
+    ];
+    const ringSegments = buildRingSegments(segments);
+    const healthScore = totalClients > 0 ? Math.round((((contentos * 1) + (neutrales * 0.55) + (enRiesgo * 0.15)) / totalClients) * 100) : 0;
+    const attentionCount = neutrales + enRiesgo;
+    const dominantSegment = [...segments].sort((left, right) => right.value - left.value)[0];
+    const healthLabel = totalClients === 0 ? 'Sin datos' : (healthScore >= 75 ? 'Estable' : (healthScore >= 45 ? 'Mixta' : 'Fragil'));
+
+    return (
+        <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[190px_minmax(0,1fr)] xl:items-center">
+            <div className="relative mx-auto h-48 w-48 xl:mx-0">
+                <svg viewBox="0 0 220 220" className="h-full w-full">
+                    <circle cx="110" cy="110" r="70" fill="none" stroke="rgba(148,163,184,0.16)" strokeWidth="20" />
+                    {ringSegments.map((segment) => (
+                        <path key={segment.key} d={describeArc(110, 110, 70, segment.startAngle, segment.endAngle)} fill="none" stroke={segment.color} strokeWidth="20" strokeLinecap="round" />
+                    ))}
+                    <circle cx="110" cy="110" r="86" fill="none" stroke="rgba(148,163,184,0.08)" strokeWidth="1.5" strokeDasharray="4 8" />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="h-24 w-24 rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col items-center justify-center text-center">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Indice</span>
+                        <span className="mt-1 text-3xl font-black leading-none text-slate-900 dark:text-white">{healthScore}</span>
+                        <span className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">{healthLabel}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="min-w-0 space-y-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-950/50">
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Pulso actual</p>
+                        <p className="mt-1 break-words text-lg font-black leading-tight text-slate-900 dark:text-white">{dominantSegment?.label || 'Sin datos'}</p>
+                        <p className="break-words text-xs leading-relaxed font-medium text-slate-500 dark:text-slate-400">{totalClients > 0 ? Math.round(((dominantSegment?.value || 0) / totalClients) * 100) : 0}% de la cartera</p>
+                    </div>
+                    <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-950/50">
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">En foco</p>
+                        <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">{attentionCount}</p>
+                        <p className="break-words text-xs leading-relaxed font-medium text-slate-500 dark:text-slate-400">{totalClients > 0 ? Math.round((attentionCount / totalClients) * 100) : 0}% con seguimiento cercano</p>
+                    </div>
+                </div>
+
+                {segments.map((segment) => {
+                    const percent = totalClients > 0 ? Math.round((segment.value / totalClients) * 100) : 0;
+                    return (
+                        <div key={segment.key} className="min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0 flex items-center gap-2">
+                                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: segment.color }} />
+                                    <span className="truncate text-sm font-bold text-slate-700 dark:text-slate-200">{segment.label}</span>
+                                </div>
+                                <div className="shrink-0 text-right">
+                                    <span className="text-sm font-black text-slate-900 dark:text-white">{segment.value}</span>
+                                    <span className="ml-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">{percent}%</span>
+                                </div>
+                            </div>
+                            <div className="mt-2 h-2.5 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800">
+                                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${percent}%`, background: `linear-gradient(90deg, ${segment.color}, ${segment.strong})` }} />
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+const ProgressOverviewChart = ({ completionPercent, completedTasks, totalTasks, groups }) => {
+    const safePercent = clampPercent(completionPercent);
+    const pendingTasks = Math.max(totalTasks - completedTasks, 0);
+    const radius = 72;
+    const circumference = 2 * Math.PI * radius;
+    const strokeOffset = circumference * (1 - (safePercent / 100));
+
+    return (
+        <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[180px_minmax(0,1fr)] xl:items-center">
+            <div className="relative mx-auto h-44 w-44 xl:mx-0">
+                <svg viewBox="0 0 220 220" className="h-full w-full -rotate-90">
+                    <defs>
+                        <linearGradient id="dashboard-progress-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#8b5cf6" />
+                            <stop offset="55%" stopColor="#3b82f6" />
+                            <stop offset="100%" stopColor="#06b6d4" />
+                        </linearGradient>
+                    </defs>
+                    <circle cx="110" cy="110" r={radius} fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth="18" />
+                    <circle cx="110" cy="110" r={radius} fill="none" stroke="url(#dashboard-progress-gradient)" strokeWidth="18" strokeLinecap="round" strokeDasharray={`${circumference} ${circumference}`} strokeDashoffset={strokeOffset} />
+                    <circle cx="110" cy="110" r="86" fill="none" stroke="rgba(148,163,184,0.08)" strokeWidth="1.5" strokeDasharray="4 8" />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="h-24 w-24 rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col items-center justify-center text-center">
+                        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Avance</span>
+                        <span className="mt-1 text-3xl font-black leading-none text-slate-900 dark:text-white">{Math.round(safePercent)}%</span>
+                        <span className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">{completedTasks}/{totalTasks}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="min-w-0 space-y-3">
+                {groups.map((group) => {
+                    const palette = getDashboardPalette(group.color);
+                    return (
+                        <div key={group.key} className="min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: palette.solid }} />
+                                        <span className="break-words text-sm font-bold leading-tight text-slate-800 dark:text-slate-100">{group.label}</span>
+                                    </div>
+                                    <p className="mt-1 break-words pr-2 text-xs leading-relaxed font-medium text-slate-500 dark:text-slate-400">{group.note}</p>
+                                </div>
+                                <div className="w-16 shrink-0 text-right">
+                                    <p className="text-lg font-black" style={{ color: palette.strong }}>{group.percent}%</p>
+                                    <p className="break-words text-[10px] leading-tight font-semibold text-slate-500 dark:text-slate-400">{group.completed}/{group.total}</p>
+                                </div>
+                            </div>
+                            <div className="mt-2.5 h-3 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800">
+                                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${group.percent}%`, background: `linear-gradient(90deg, ${palette.solid}, ${palette.strong})` }} />
+                            </div>
+                        </div>
+                    );
+                })}
+
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-2.5 text-center dark:border-slate-800 dark:bg-slate-950/50">
+                        <p className="break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Total</p>
+                        <p className="mt-1 text-lg font-black leading-none text-slate-900 dark:text-white">{totalTasks}</p>
+                    </div>
+                    <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-2.5 text-center dark:border-slate-800 dark:bg-slate-950/50">
+                        <p className="break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Hechas</p>
+                        <p className="mt-1 text-lg font-black leading-none text-slate-900 dark:text-white">{completedTasks}</p>
+                    </div>
+                    <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-2.5 text-center dark:border-slate-800 dark:bg-slate-950/50">
+                        <p className="break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Abiertas</p>
+                        <p className="mt-1 text-lg font-black leading-none text-slate-900 dark:text-white">{pendingTasks}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // --- DASHBOARD PRINCIPAL CON RANKING ---
-const DashboardView = ({ clients, managers, events, tasks, accountTasks }) => {
+const DashboardView = ({ clients, managers, events, tasks, accountTasks, managementTasks = [], currentUserProfile, onSignIn }) => {
     const contentos = clients.filter(c => c.mood === 'Contento').length;
     const neutrales = clients.filter(c => c.mood === 'Neutral').length;
     const enRiesgo = clients.filter(c => c.mood === 'En Riesgo').length;
-    const totalClients = clients.length || 1;
+    const realTotalClients = clients.length;
+    const totalClients = realTotalClients || 1;
 
-    const allTasks = [...tasks, ...accountTasks];
-    const completedTasks = allTasks.filter(t => t.status === 'aprobado' || t.status === 'publicado').length;
-    const totalTasks = allTasks.length || 1;
-    const compPercent = Math.round((completedTasks / totalTasks) * 100);
+    const completedEditingTasks = tasks.filter((task) => isCompletedStatus(task.status)).length;
+    const completedAccountTasks = accountTasks.filter((task) => task.status === 'aprobado_internamente' || task.status === 'publicado').length;
+    const completedManagementTasks = managementTasks.filter((task) => task.status === 'cerrado').length;
+
+    const progressGroups = [
+        { key: 'editing', label: 'Edicion', note: 'Produccion audiovisual', total: tasks.length, completed: completedEditingTasks, color: 'amber' },
+        { key: 'account', label: 'Accounts', note: 'Seguimiento comercial', total: accountTasks.length, completed: completedAccountTasks, color: 'indigo' },
+        { key: 'management', label: 'Gestion', note: 'Operacion interna', total: managementTasks.length, completed: completedManagementTasks, color: 'cyan' }
+    ].map((group) => ({
+        ...group,
+        percent: group.total > 0 ? Math.round((group.completed / group.total) * 100) : 0
+    }));
+
+    const completedTasks = progressGroups.reduce((sum, group) => sum + group.completed, 0);
+    const totalTasks = progressGroups.reduce((sum, group) => sum + group.total, 0);
+    const compPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
     const todayStr = getHondurasTodayStr();
     
@@ -357,8 +1745,15 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks }) => {
     const managerStats = managers.map(m => {
         // Tareas
         const mTasks = accountTasks.filter(t => t.contextId === m.id);
-        const mCompletedTasks = mTasks.filter(t => t.status === 'aprobado_internamente' || t.status === 'publicado').length;
-        const taskScore = mTasks.length > 0 ? (mCompletedTasks / mTasks.length) * 100 : 0;
+        const mCompletedTasksArr = mTasks.filter(t => t.status === 'aprobado_internamente' || t.status === 'publicado');
+        const mCompletedTasks = mCompletedTasksArr.length;
+        let taskScore = 0;
+        mCompletedTasksArr.forEach(t => {
+            const h = t.hierarchy || (t.priority === 'urgente' ? 'p1' : (t.priority === 'recurrente' ? 'p3' : 'p2'));
+            if (h === 'p1') taskScore += 10;
+            else if (h === 'p2') taskScore += 5;
+            else taskScore += 2;
+        });
 
         // Clientes
         const mClients = clients.filter(c => c.managerId === m.id);
@@ -370,13 +1765,10 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks }) => {
             if(c.workflow?.week3) workflowCompleted++;
             if(c.workflow?.week4) workflowCompleted++;
         });
-        const clientScore = workflowTotal > 0 ? (workflowCompleted / workflowTotal) * 100 : 0;
+        const clientScore = workflowCompleted * 3;
 
         // Puntuación Combinada
-        let finalScore = 0;
-        if (mTasks.length > 0 && mClients.length > 0) finalScore = (taskScore * 0.6) + (clientScore * 0.4);
-        else if (mTasks.length > 0) finalScore = taskScore;
-        else if (mClients.length > 0) finalScore = clientScore;
+        const finalScore = taskScore + clientScore;
 
         let mappedColorName = LEGACY_COLOR_MAP[m.color] || m.color || 'slate';
 
@@ -386,9 +1778,17 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks }) => {
             totalTasks: mTasks.length,
             completedTasks: mCompletedTasks,
             totalClients: mClients.length,
-            score: Math.round(finalScore)
+            workflowTotal,
+            workflowCompleted,
+            taskScore,
+            clientScore,
+            score: finalScore
         };
     }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+
+    const maxTaskScore = Math.max(...managerStats.map(s => s.taskScore), 1);
+    const maxClientScore = Math.max(...managerStats.map(s => s.clientScore), 1);
+    const maxOverallScore = Math.max(...managerStats.map(s => s.score), 1);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -422,12 +1822,13 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks }) => {
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 <div className="xl:col-span-2 space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
-                        <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                        <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start">
                             <div>
                                 <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Salud de la Cartera</h3>
                                 <p className="text-xs text-slate-500 dark:text-slate-400">Distribución según satisfacción actual</p>
                             </div>
-                            <div className="mt-6">
+                            <PortfolioHealthChart totalClients={realTotalClients} contentos={contentos} neutrales={neutrales} enRiesgo={enRiesgo} />
+                            <div className="hidden">
                                 <div className="flex gap-1 h-6 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-inner">
                                     <div style={{width: `${(contentos/totalClients)*100}%`}} className="bg-green-500 transition-all cursor-help" title={`Contentos: ${contentos}`}></div>
                                     <div style={{width: `${(neutrales/totalClients)*100}%`}} className="bg-amber-400 transition-all cursor-help" title={`Neutrales: ${neutrales}`}></div>
@@ -440,12 +1841,13 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks }) => {
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                        <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start">
                             <div>
                                 <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Progreso Global</h3>
                                 <p className="text-xs text-slate-500 dark:text-slate-400">Volumen completado vs general</p>
                             </div>
-                            <div className="mt-6 flex items-center gap-6">
+                            <ProgressOverviewChart completionPercent={compPercent} completedTasks={completedTasks} totalTasks={totalTasks} groups={progressGroups} />
+                            <div className="hidden">
                                 <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-6 overflow-hidden shadow-inner p-1">
                                     <div style={{width: `${compPercent}%`}} className="bg-purple-600 h-full rounded-full flex items-center justify-end px-2 transition-all duration-1000 ease-out relative overflow-hidden"></div>
                                 </div>
@@ -462,20 +1864,23 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks }) => {
                             <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">Atención Requerida</h3>
                             <p className="text-xs text-slate-500 dark:text-slate-400">Urgentes y atrasadas</p>
                         </div>
-                        <div className="p-2.5 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl"><Icon name="Flame" size={18} className="animate-pulse"/></div>
+                        <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-black tracking-[0.12em] uppercase text-slate-500 dark:text-slate-400">{urgentTasks.length}</span>
+                            <div className="p-2.5 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl"><Icon name="Flame" size={18} className="animate-pulse"/></div>
+                        </div>
                     </div>
                     <div className="flex-1 overflow-y-auto space-y-2 custom-scroll pr-2">
                         {urgentTasks.length === 0 ? (
                             <EmptyState icon="Smile" text="¡Todo al día! No hay urgencias." />
                         ) : (
                             urgentTasks.map(t => (
-                                <div key={t.id} className="p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-start gap-3 group cursor-pointer">
+                                <div key={t.id} className="p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-start gap-3 group cursor-pointer min-w-0">
                                     <div className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${t.date < todayStr ? 'bg-red-500' : 'bg-amber-500'}`}></div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-purple-600 transition-colors">{t.title}</p>
-                                        <div className="flex items-center gap-2 mt-1.5">
-                                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-wide">{t._type}</span>
-                                            <span className={`text-[9px] font-bold ${t.date < todayStr ? 'text-red-500' : 'text-slate-400'}`}>Vence: {t.date}</span>
+                                        <p className="break-words text-sm font-bold leading-tight text-slate-800 dark:text-slate-100 group-hover:text-purple-600 transition-colors">{t.title}</p>
+                                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-[0.14em]">{t._type}</span>
+                                            <span className={`text-[9px] font-bold break-words ${t.date < todayStr ? 'text-red-500' : 'text-slate-400'}`}>Vence: {t.date}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -504,6 +1909,7 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks }) => {
                             const isTop = index === 0;
                             const isSecond = index === 1;
                             const isThird = index === 2;
+                            const palette = getDashboardPalette(ms.mappedColor);
                             
                             let medalColor = 'text-slate-400';
                             let medalBg = 'bg-slate-100 dark:bg-slate-800';
@@ -512,29 +1918,62 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks }) => {
                             else if (isThird) { medalColor = 'text-amber-600'; medalBg = 'bg-amber-50 dark:bg-amber-600/10 ring-2 ring-amber-600/50'; }
 
                             return (
-                                <div key={ms.id} className="p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/20 flex flex-col gap-3 hover:bg-white dark:hover:bg-slate-800 transition-colors shadow-sm relative overflow-hidden">
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex items-center gap-3">
+                                <div key={ms.id} className="p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/20 flex flex-col gap-4 hover:bg-white dark:hover:bg-slate-800 transition-colors shadow-sm relative overflow-hidden min-w-0">
+                                    <div className="absolute inset-x-0 top-0 h-1.5" style={{ background: `linear-gradient(90deg, ${palette.solid}, ${palette.strong})` }} />
+                                    <div className="flex justify-between items-start gap-3 min-w-0">
+                                        <div className="flex min-w-0 flex-1 items-center gap-3">
                                             <div className={`w-8 h-8 shrink-0 flex items-center justify-center font-black rounded-full shadow-sm text-sm ${medalBg} ${medalColor}`}>
                                                 #{index + 1}
                                             </div>
-                                            <div>
-                                                <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate max-w-[140px] flex items-center gap-1.5">
-                                                    {ms.name} {isTop && <Icon name="Sparkles" size={14} className="text-yellow-500"/>}
+                                            <div className="min-w-0 flex-1">
+                                                <h4 className="min-w-0 font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight flex items-center gap-1.5">
+                                                    <span className="truncate">{ms.name}</span>
+                                                    {isTop && <Icon name="Sparkles" size={14} className="text-yellow-500"/>}
                                                 </h4>
-                                                <p className="text-[10px] text-slate-500 font-medium">
+                                                <p className="break-words text-[10px] leading-relaxed text-slate-500 font-medium">
                                                     {ms.completedTasks}/{ms.totalTasks} Tareas | {ms.totalClients} Clientes
                                                 </p>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <span className={`text-lg font-black text-${ms.mappedColor}-600 dark:text-${ms.mappedColor}-400`}>{ms.score}%</span>
+                                        <div className="text-right shrink-0">
+                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Score</p>
+                                            <span className="text-2xl font-black" style={{ color: palette.strong }}>{ms.score} pts</span>
                                         </div>
                                     </div>
                                     
-                                    <div className="h-2.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden shadow-inner">
+                                    <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800/80 dark:bg-slate-900/40">
+                                        <div className="min-w-0">
+                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Tareas</p>
+                                            <p className="mt-1 text-base font-black text-slate-900 dark:text-white">{ms.completedTasks}/{ms.totalTasks}</p>
+                                            <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">resueltas</p>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Workflow</p>
+                                            <p className="mt-1 text-base font-black text-slate-900 dark:text-white">{ms.workflowCompleted}/{ms.workflowTotal}</p>
+                                            <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">hitos activos</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <CompactMetricBar
+                                            label="Ejecucion"
+                                            value={(ms.taskScore / maxTaskScore) * 100}
+                                            color={ms.mappedColor}
+                                            meta={`${ms.taskScore} pts`}
+                                            helper={ms.totalTasks > 0 ? `${ms.completedTasks} de ${ms.totalTasks} tareas cerradas` : 'Sin tareas asignadas'}
+                                        />
+                                        <CompactMetricBar
+                                            label="Workflow"
+                                            value={(ms.clientScore / maxClientScore) * 100}
+                                            color={ms.mappedColor}
+                                            meta={`${ms.clientScore} pts`}
+                                            helper={ms.workflowTotal > 0 ? `${ms.workflowCompleted} de ${ms.workflowTotal} hitos completados` : 'Sin workflow activo'}
+                                        />
+                                    </div>
+
+                                    <div className="hidden">
                                         <div 
-                                            style={{width: `${ms.score}%`}} 
+                                            style={{width: `${(ms.score / maxOverallScore) * 100}%`}} 
                                             className={`h-full rounded-full transition-all duration-1000 ease-out bg-${ms.mappedColor}-500 ${ms.score > 0 ? 'min-w-[0.5rem]' : ''}`}
                                         ></div>
                                     </div>
@@ -614,7 +2053,7 @@ const PersonCalendarDetail = ({ person, tasks, title, baseColor, onBack, onAddEv
     );
 };
 
-const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, title, onAdd, btnColor, btnIcon, searchTerm, setSearchTerm }) => {
+const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, ownershipFilter = 'all', setOwnershipFilter, title, onAdd, btnColor, btnIcon, searchTerm, setSearchTerm }) => {
     const today = getHondurasTodayStr();
     return (
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -623,10 +2062,18 @@ const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, ti
                     <Icon name="LayoutList" className={`text-${btnColor}-500 dark:text-${btnColor}-400 hidden md:block`} size={28}/>
                     <h2 className="text-xl font-black text-slate-800 dark:text-white mr-4">{title}</h2>
                 </div>
-                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full md:w-auto overflow-x-auto custom-scroll">
+                <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                    <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full md:w-auto overflow-x-auto custom-scroll">
                     <button onClick={() => setFilterMode('date')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'date' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Día Específico</button>
                     <button onClick={() => setFilterMode('overdue')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${filterMode === 'overdue' ? `bg-red-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-red-500'}`}>Atrasadas <Icon name="Flame" size={14}/></button>
                     <button onClick={() => setFilterMode('all')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Ver Todas</button>
+                    </div>
+                    {setOwnershipFilter && (
+                        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full md:w-auto overflow-x-auto custom-scroll">
+                            <button onClick={() => setOwnershipFilter('all')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Todas</button>
+                            <button onClick={() => setOwnershipFilter('mine')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === 'mine' ? `bg-${btnColor}-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Asignadas a mi</button>
+                        </div>
+                    )}
                 </div>
                 {filterMode === 'date' && (
                     <div className="flex items-center gap-2 w-full md:w-auto">
@@ -643,10 +2090,11 @@ const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, ti
     );
 };
 
-const AccountRoomView = ({ tasks, managers, clients, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick, legacyColorMap }) => {
+const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick, legacyColorMap }) => {
     const [currentDate, setCurrentDate] = useState(getHondurasTodayStr()); 
     const [searchTerm, setSearchTerm] = useState('');
     const [filterMode, setFilterMode] = useState('date');
+    const [ownershipFilter, setOwnershipFilter] = useState('all');
     const [draggedTaskId, setDraggedTaskId] = useState(null);
 
     const columns = [
@@ -658,6 +2106,7 @@ const AccountRoomView = ({ tasks, managers, clients, onAdd, onEdit, onChangeStat
 
     const filteredTasks = tasks.filter(t => {
         if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+        if (ownershipFilter === 'mine' && !isTaskAssignedToProfile(t, currentUserProfile, [currentUserProfile?.linkedManagerId])) return false;
         if (filterMode === 'date') return t.date === currentDate;
         if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'publicado';
         return true; 
@@ -711,7 +2160,39 @@ const AccountRoomView = ({ tasks, managers, clients, onAdd, onEdit, onChangeStat
 
     return (
         <div className="h-full flex flex-col space-y-6 fade-in">
-            <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} title="Sala de Accounts" onAdd={onAdd} btnColor="indigo" btnIcon="Plus" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+            <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Accounts" onAdd={onAdd} btnColor="indigo" btnIcon="Plus" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+            {false && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Jerarquizacion</p>
+                    <h3 className="text-lg font-black text-slate-800 dark:text-white mb-4">Prioridad de videos en sala</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {EDITING_HIERARCHY_OPTIONS.map((option) => (
+                            <div key={option.id} className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">{option.label}</p>
+                                <p className="text-2xl font-black text-slate-800 dark:text-white mt-2">{rankedTasks.filter((task) => task.hierarchy === option.id).length}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Top ranking</p>
+                    <h3 className="text-lg font-black text-slate-800 dark:text-white mb-4">Orden sugerido de salida</h3>
+                    <div className="space-y-3">
+                        {rankedTasks.slice(0, 4).map((task, index) => (
+                            <div key={task.id} className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-black">#{index + 1}</div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{task.title}</p>
+                                    <p className="text-[10px] text-slate-500 dark:text-slate-400">{task.date} · {task.hierarchy?.toUpperCase()}</p>
+                                </div>
+                            </div>
+                        ))}
+                        {rankedTasks.length === 0 && <EmptyState icon="Video" text="No hay videos en este filtro." />}
+                    </div>
+                </div>
+            </div>
+            )}
             <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
                 {columns.map((col, colIndex) => {
                     const colTasks = filteredTasks.filter(t => t.status === col.id);
@@ -787,10 +2268,11 @@ const AccountRoomView = ({ tasks, managers, clients, onAdd, onEdit, onChangeStat
     );
 };
 
-const EditionsRoomView = ({ tasks, editors, clients, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
+const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
     const [currentDate, setCurrentDate] = useState(getHondurasTodayStr());
     const [searchTerm, setSearchTerm] = useState('');
     const [filterMode, setFilterMode] = useState('date');
+    const [ownershipFilter, setOwnershipFilter] = useState('all');
     const [draggedTaskId, setDraggedTaskId] = useState(null);
 
     const columns = [
@@ -805,13 +2287,32 @@ const EditionsRoomView = ({ tasks, editors, clients, onAdd, onEdit, onChangeStat
         normal: 'bg-amber-50 dark:bg-amber-500/20 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400',
         recurrente: 'bg-emerald-50 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
     };
+    const hierarchyStyles = {
+        p1: 'bg-red-50 dark:bg-red-500/20 border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-400',
+        p2: 'bg-amber-50 dark:bg-amber-500/20 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400',
+        p3: 'bg-emerald-50 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400',
+        p4: 'bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
+    };
 
     const filteredTasks = tasks.filter(t => {
         if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+        if (ownershipFilter === 'mine' && !isTaskAssignedToProfile(t, currentUserProfile, [currentUserProfile?.linkedEditorId])) return false;
         if (filterMode === 'date') return t.date === currentDate;
         if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'publicado';
         return true; 
     });
+    const rankedTasks = filteredTasks
+        .map((task) => {
+            const hierarchy = getEditingHierarchyId(task);
+            const delta = task.date ? Math.round((new Date(`${task.date}T00:00:00`) - new Date(`${getHondurasTodayStr()}T00:00:00`)) / 86400000) : 99;
+            const hierarchyScore = hierarchy === 'p1' ? 400 : hierarchy === 'p2' ? 280 : hierarchy === 'p3' ? 170 : 90;
+            const priorityBonus = task.priority === 'urgente' ? 130 : task.priority === 'recurrente' ? 30 : 70;
+            const dateBonus = delta < 0 ? 180 : delta === 0 ? 120 : delta === 1 ? 70 : delta <= 3 ? 30 : 0;
+            const statusPenalty = task.status === 'publicado' ? -250 : task.status === 'aprobado' ? -150 : 0;
+            return { ...task, hierarchy, rankScore: hierarchyScore + priorityBonus + dateBonus + statusPenalty };
+        })
+        .sort((a, b) => b.rankScore - a.rankScore || (a.date || '').localeCompare(b.date || '') || a.title.localeCompare(b.title));
+    const rankingMap = rankedTasks.reduce((acc, task, index) => ({ ...acc, [task.id]: index + 1 }), {});
 
     const handleDragStart = (e, taskId) => {
         setDraggedTaskId(taskId);
@@ -861,7 +2362,7 @@ const EditionsRoomView = ({ tasks, editors, clients, onAdd, onEdit, onChangeStat
 
     return (
         <div className="h-full flex flex-col space-y-6 fade-in">
-            <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} title="Sala de Edición" onAdd={onAdd} btnColor="amber" btnIcon="Video" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+            <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Edición" onAdd={onAdd} btnColor="amber" btnIcon="Video" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
             <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
                 {columns.map((col, colIndex) => {
                     const colTasks = filteredTasks.filter(t => t.status === col.id);
@@ -882,16 +2383,22 @@ const EditionsRoomView = ({ tasks, editors, clients, onAdd, onEdit, onChangeStat
                                     const editor = editors.find(e => e.id === t.contextId);
                                     const client = clients.find(c => c.id === t.clientId);
                                     const pStyle = priorityStyles[t.priority] || priorityStyles.normal;
+                                    const hStyle = hierarchyStyles[t.hierarchy] || hierarchyStyles[getEditingHierarchyId(t)] || hierarchyStyles.p2;
                                     const eStyles = PERSON_COLORS[editor?.color] || PERSON_COLORS.slate;
                                     const isOverdue = t.date < getHondurasTodayStr() && col.id !== 'publicado';
-                                    const borderLeftColor = isOverdue ? 'border-l-red-600' : (t.priority === 'urgente' ? 'border-l-red-500' : t.priority === 'recurrente' ? 'border-l-emerald-500' : 'border-l-amber-500');
+                                    const hierarchyId = t.hierarchy || getEditingHierarchyId(t);
+                                    const borderLeftColor = isOverdue ? 'border-l-red-600' : (hierarchyId === 'p1' ? 'border-l-red-500' : hierarchyId === 'p2' ? 'border-l-amber-500' : hierarchyId === 'p3' ? 'border-l-emerald-500' : 'border-l-slate-400');
 
                                     return (
                                         <div key={t.id} onClick={() => onTaskClick(t)} 
                                              draggable="true" onDragStart={(e) => handleDragStart(e, t.id)} onDragEnd={(e) => handleDragEnd(e, t.id)}
                                              className={`bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all group cursor-grab active:cursor-grabbing border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${borderLeftColor} ${isOverdue ? 'dark:bg-red-950/10' : ''}`}>
                                             
-                                            <div className="flex justify-between items-start mb-2">
+                                            <div className="absolute top-3 right-3 text-[10px] font-black px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300">
+                                                #{rankingMap[t.id]}
+                                            </div>
+                                            
+                                            <div className="flex justify-between items-start mb-2 pr-12">
                                                 <div className="flex flex-col items-start gap-1.5">
                                                     {client && (
                                                         <span className="text-[9px] font-black uppercase bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800 flex items-center gap-1 max-w-[140px] truncate">
@@ -899,6 +2406,7 @@ const EditionsRoomView = ({ tasks, editors, clients, onAdd, onEdit, onChangeStat
                                                         </span>
                                                     )}
                                                     <div className="flex gap-2">
+                                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase border ${hStyle}`}>{hierarchyId.toUpperCase()}</span>
                                                         <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase border ${pStyle}`}>{t.priority || 'Normal'}</span>
                                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border border-black/5 dark:border-white/5 ${eStyles.bg} ${eStyles.text}`}>{editor ? editor.name : 'Sin asignar'}</span>
                                                     </div>
@@ -937,6 +2445,244 @@ const EditionsRoomView = ({ tasks, editors, clients, onAdd, onEdit, onChangeStat
                         </div>
                     )
                 })}
+            </div>
+        </div>
+    );
+};
+
+const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
+    const [currentDate, setCurrentDate] = useState(getHondurasTodayStr());
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterMode, setFilterMode] = useState('date');
+    const [ownershipFilter, setOwnershipFilter] = useState('all');
+    const [draggedTaskId, setDraggedTaskId] = useState(null);
+
+    const columns = [
+        { id: 'pendiente', title: 'Pendiente', color: 'slate' },
+        { id: 'en_proceso', title: 'En Proceso', color: 'violet' },
+        { id: 'en_espera', title: 'En Espera', color: 'amber' },
+        { id: 'cerrado', title: 'Cerrado', color: 'emerald' }
+    ];
+
+    const filteredTasks = tasks.filter((task) => {
+        if (searchTerm && !task.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+        if (ownershipFilter === 'mine' && !isTaskAssignedToProfile(task, currentUserProfile, [currentUserProfile?.id])) return false;
+        if (filterMode === 'date') return task.date === currentDate;
+        if (filterMode === 'overdue') return task.date < getHondurasTodayStr() && task.status !== 'cerrado';
+        return true;
+    });
+
+    const handleDragStart = (e, taskId) => {
+        setDraggedTaskId(taskId);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+    const handleDragEnd = () => setDraggedTaskId(null);
+    const handleDragOver = (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
+    const handleDragLeave = (e) => { e.currentTarget.classList.remove('drag-over'); };
+    const handleDrop = (e, targetStatus) => {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+        if (draggedTaskId) {
+            const task = tasks.find((item) => item.id === draggedTaskId);
+            if (task && task.status !== targetStatus) onChangeStatus(task, targetStatus);
+        }
+    };
+
+    return (
+        <div className="h-full flex flex-col space-y-6 fade-in">
+            <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Gestion" onAdd={onAdd} btnColor="violet" btnIcon="ShieldCheck" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Equipo vinculado</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {members.map((member) => (
+                            <div key={member.id} className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                                <p className="font-bold text-slate-800 dark:text-white">{member.name}</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{member.email || 'Correo pendiente de asignar'}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Alertas de acceso</p>
+                    <div className="space-y-3">
+                        {members.filter((member) => !normalizeEmail(member.email)).length === 0 ? (
+                            <EmptyState icon="Mail" text="Todos los perfiles de gestion ya tienen correo." />
+                        ) : (
+                            members.filter((member) => !normalizeEmail(member.email)).map((member) => (
+                                <div key={member.id} className="p-3 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10">
+                                    <p className="font-bold text-amber-700 dark:text-amber-300">{member.name}</p>
+                                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Asignale correo desde Usuarios y Accesos para habilitar su entrada real.</p>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
+                {columns.map((col, colIndex) => {
+                    const colTasks = filteredTasks.filter((task) => task.status === col.id);
+                    const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
+                    const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
+                    return (
+                        <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(e) => handleDrop(e, col.id)}>
+                            <div className={`p-3 font-black text-[11px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
+                                {col.title} <span className="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
+                            </div>
+                            <div className="p-3 flex-1 overflow-y-auto space-y-3 custom-scroll">
+                                {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacio" /> :
+                                    colTasks.map((task) => {
+                                        const member = members.find((item) => item.id === task.contextId);
+                                        const client = clients.find((item) => item.id === task.clientId);
+                                        const isOverdue = task.date < getHondurasTodayStr() && col.id !== 'cerrado';
+                                        return (
+                                            <div key={task.id} onClick={() => onTaskClick(task)} draggable="true" onDragStart={(e) => handleDragStart(e, task.id)} onDragEnd={handleDragEnd} className={`bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all group cursor-grab active:cursor-grabbing border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${isOverdue ? 'border-l-red-500 dark:bg-red-950/20' : 'border-l-violet-500'}`}>
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="flex flex-col gap-1.5 items-start">
+                                                        {client && <span className="text-[9px] font-black uppercase bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800 flex items-center gap-1 max-w-[140px] truncate"><Icon name="Briefcase" size={10}/> {client.name}</span>}
+                                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border border-black/5 dark:border-white/5 bg-violet-100 dark:bg-violet-900 text-violet-800 dark:text-violet-100">{member ? member.name : 'Sin asignar'}</span>
+                                                    </div>
+                                                    <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                                        <button onClick={(e) => { e.stopPropagation(); onEdit(task); }} className="text-slate-400 hover:text-blue-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Edit" size={16}/></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onDelete(task.id); }} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Trash2" size={16}/></button>
+                                                    </div>
+                                                </div>
+                                                <p className="font-bold text-slate-700 dark:text-slate-200 text-sm mb-2 leading-tight">{task.title}</p>
+                                                {task.notes && <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 truncate max-w-[80%]">{task.notes}</p>}
+                                                <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                                    {prevStatus && <button onClick={(e) => { e.stopPropagation(); onChangeStatus(task, prevStatus); }} className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Icon name="ChevronLeft" size={12}/> Atras</button>}
+                                                    {nextStatus && <button onClick={(e) => { e.stopPropagation(); onChangeStatus(task, nextStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-${col.color}-50 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-400 hover:bg-${col.color}-100 dark:hover:bg-${col.color}-500/30 transition-colors`}>{nextStatus === 'cerrado' ? 'Cerrar' : 'Avanzar'} <Icon name={nextStatus === 'cerrado' ? 'CheckCircle2' : 'ChevronRight'} size={12}/></button>}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+const UsersAccessView = ({ users, managers, editors, auditLogs, currentUserProfile, onAdd, onEdit, onResendVerification }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const filteredUsers = users.filter((item) => `${item.name || ''} ${item.email || ''} ${item.role || ''}`.toLowerCase().includes(searchTerm.toLowerCase()));
+    const verifiedUsers = users.filter((item) => getVerificationMeta(item).isVerified).length;
+    const pendingVerificationUsers = users.filter((item) => normalizeEmail(item.email) && !getVerificationMeta(item).isVerified).length;
+
+    return (
+        <div className="space-y-6 fade-in">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">Usuarios y Accesos</h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Permisos por rol, correos autorizados, verificacion y bitacora de actividad.</p>
+                </div>
+                <div className="flex flex-col md:flex-row w-full md:w-auto gap-3">
+                    <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Buscar usuario..." />
+                    <Button onClick={onAdd} color="purple" icon="UserPlus">Nuevo Usuario</Button>
+                </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <StatCard title="Usuarios Activos" value={users.filter((item) => item.isActive !== false).length} icon="Users" color="purple" />
+                <StatCard title="Correos Verificados" value={verifiedUsers} icon="ShieldCheck" color="emerald" />
+                <StatCard title="Pendientes Verificar" value={pendingVerificationUsers} icon="Mail" color="amber" />
+                <StatCard title="Admins" value={users.filter((item) => item.isActive !== false && ['super_admin', 'operations'].includes(item.role)).length} icon="ClipboardList" color="indigo" />
+            </div>
+            <div className="grid grid-cols-1 xl:grid-cols-[1.05fr,1.3fr] gap-6">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-black text-slate-800 dark:text-white">Directorio</h3>
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-400">{getRoleMeta(currentUserProfile?.role).label}</span>
+                    </div>
+                    <div className="space-y-3 max-h-[540px] overflow-y-auto custom-scroll pr-2">
+                        {filteredUsers.length === 0 ? <EmptyState icon="Users" text="No hay usuarios para este filtro." /> : filteredUsers.map((record) => {
+                            const verificationMeta = getVerificationMeta(record);
+                            const linkedManager = managers.find((item) => item.id === record.linkedManagerId);
+                            const linkedEditor = editors.find((item) => item.id === record.linkedEditorId);
+                            const linkedLabels = getLinkedProfileLabels(record);
+
+                            return (
+                                <div key={record.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-start gap-4">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-black ${record.isActive === false ? 'bg-red-500' : 'bg-slate-900 dark:bg-slate-700'}`}>{(record.name || '??').slice(0, 2).toUpperCase()}</div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex flex-wrap gap-2 items-center">
+                                            <p className="font-bold text-slate-800 dark:text-white truncate">{record.name}</p>
+                                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300">{getRoleMeta(record.role).label}</span>
+                                            <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${
+                                                verificationMeta.color === 'emerald'
+                                                    ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
+                                                    : verificationMeta.color === 'amber'
+                                                      ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                                                      : verificationMeta.color === 'red'
+                                                        ? 'bg-red-50 text-red-600 dark:bg-red-500/20 dark:text-red-400'
+                                                        : verificationMeta.color === 'blue'
+                                                          ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'
+                                                          : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'
+                                            }`}>
+                                                {verificationMeta.label}
+                                            </span>
+                                            {record.isActive === false && <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-red-50 text-red-600 dark:bg-red-500/20 dark:text-red-400">Inactivo</span>}
+                                        </div>
+                                        <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-2">{record.email || 'Correo pendiente'}</p>
+                                        {record.emailVerification?.lastError && (
+                                            <p className="text-xs text-red-600 dark:text-red-400 mt-1 break-words">
+                                                {record.emailVerification.lastError}
+                                            </p>
+                                        )}
+                                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Ultimo acceso: {record.lastSeenAt || 'Sin registro'}</p>
+                                        <div className="flex flex-wrap gap-2 mt-3">
+                                            {linkedLabels.map((label) => (
+                                                <span key={`${record.id}-${label}`} className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-violet-50 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
+                                                    {label}
+                                                </span>
+                                            ))}
+                                            {linkedManager && <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">AM: {linkedManager.name}</span>}
+                                            {linkedEditor && <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-rose-50 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">ED: {linkedEditor.name}</span>}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        {normalizeEmail(record.email) && !verificationMeta.isVerified && (
+                                            <button onClick={() => onResendVerification(record)} className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Reenviar verificacion">
+                                                <Icon name="Mail" size={18} />
+                                            </button>
+                                        )}
+                                        <button onClick={() => onEdit(record)} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Editar usuario">
+                                            <Icon name="Edit" size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-black text-slate-800 dark:text-white">Bitacora de Acciones</h3>
+                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{auditLogs.length} registros</span>
+                    </div>
+                    <div className="space-y-3 max-h-[540px] overflow-y-auto custom-scroll pr-2">
+                        {auditLogs.length === 0 ? <EmptyState icon="ClipboardList" text="Aun no hay actividad registrada." /> : auditLogs.map((log) => (
+                            <div key={log.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{log.description || `${log.action} · ${log.entityType}`}</p>
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300">{log.action}</span>
+                                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-blue-50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400">{log.entityType}</span>
+                                            {log.status === 'error' && <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-red-50 text-red-600 dark:bg-red-500/20 dark:text-red-400">Error</span>}
+                                            {log.status === 'denied' && <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">Denegado</span>}
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{log.actor?.name || 'Sistema'}</p>
+                                        <p className="text-[10px] text-slate-400 dark:text-slate-500">{log.createdAt || ''}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -1115,25 +2861,38 @@ const GeneralCalendarGrid = ({ activities, onDayClick }) => {
     );
 };
 
-const EventActionModal = ({ config, onClose, onEdit, onDelete }) => {
-    if (!config.isOpen) return null;
+const EventActionModal = ({ config, canEdit = true, onClose, onEdit, onDelete }) => {
+    if (!config.isOpen || !config.event) return null;
     return (
         <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-in fade-in duration-200">
             <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-xs overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
                 <div className="p-6 text-center border-b border-slate-100 dark:border-slate-800">
                     <div className="mx-auto w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 mb-4"><Icon name="MousePointerClick" size={24} /></div>
-                    <h3 className="text-lg font-black text-slate-800 dark:text-white truncate">{config.event.title}</h3>
+                    <h3 className="text-lg font-black text-slate-800 dark:text-white truncate">{config.event.title || 'Elemento'}</h3>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">¿Qué deseas hacer?</p>
                 </div>
                 <div className="p-4 space-y-3">
-                    <button onClick={() => { onClose(); onEdit(config.event, config.type); }} className="w-full flex items-center justify-center gap-3 py-4 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold rounded-2xl hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors">
-                        <Icon name="Edit" size={20} /> Editar Elemento
-                    </button>
-                    <button onClick={() => { onClose(); onDelete(config.event, config.type); }} className="w-full flex items-center justify-center gap-3 py-4 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 font-bold rounded-2xl hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors">
-                        <Icon name="Trash2" size={20} /> Eliminar
-                    </button>
+                    {canEdit ? (
+                        <>
+                            <button onClick={() => { onClose(); onEdit(config.event, config.type); }} className="w-full flex items-center justify-center gap-3 py-4 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold rounded-2xl hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors">
+                                <Icon name="Edit" size={20} /> Editar elemento
+                            </button>
+                            <button onClick={() => { onClose(); onDelete(config.event, config.type); }} className="w-full flex items-center justify-center gap-3 py-4 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 font-bold rounded-2xl hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors">
+                                <Icon name="Trash2" size={20} /> Eliminar
+                            </button>
+                        </>
+                    ) : (
+                        <div className="rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-4 text-left">
+                            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 font-bold text-sm">
+                                <Icon name="Lock" size={16} /> Acceso de solo lectura
+                            </div>
+                            <p className="text-xs text-amber-700/80 dark:text-amber-300/80 mt-2">
+                                No tienes permisos para editar o eliminar este elemento.
+                            </p>
+                        </div>
+                    )}
                     <button onClick={onClose} className="w-full py-4 text-slate-500 dark:text-slate-400 font-bold rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors mt-2">
-                        Cancelar
+                        {canEdit ? 'Cancelar' : 'Cerrar'}
                     </button>
                 </div>
             </div>
@@ -1141,14 +2900,18 @@ const EventActionModal = ({ config, onClose, onEdit, onDelete }) => {
     );
 };
 
-const TaskDetailModal = ({ config, onClose, clients, managers, editors, onEdit }) => {
+const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit }) => {
     if (!config.isOpen || !config.task) return null;
     const { task, type } = config;
     
     const client = clients.find(c => c.id === task.clientId);
-    const assignee = type === 'accountTask' ? managers.find(m => m.id === task.contextId) : editors.find(e => e.id === task.contextId);
-    const tagColor = type === 'accountTask' ? 'indigo' : 'amber';
-    const iconName = type === 'accountTask' ? 'LayoutList' : 'Video';
+    const assignee = type === 'accountTask'
+        ? managers.find(m => m.id === task.contextId)
+        : type === 'managementTask'
+          ? users.find(u => u.id === task.contextId)
+          : editors.find(e => e.id === task.contextId);
+    const tagColor = type === 'accountTask' ? 'indigo' : type === 'managementTask' ? 'violet' : 'amber';
+    const iconName = type === 'accountTask' ? 'LayoutList' : type === 'managementTask' ? 'ShieldCheck' : 'Video';
 
     return (
         <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
@@ -1158,6 +2921,8 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, onEdit }
                     <div className="flex items-center gap-2 mb-3">
                         <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-${tagColor}-100 dark:bg-${tagColor}-500/30 text-${tagColor}-700 dark:text-${tagColor}-300`}><Icon name={iconName} size={12}/> {type === 'accountTask' ? 'Account' : 'Edición'}</span>
                         {task.priority && <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${task.priority === 'urgente' ? 'border-red-500 text-red-600 bg-red-50' : 'border-slate-300 text-slate-500'}`}>{task.priority}</span>}
+                        {type === 'editingTask' && <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-slate-300 text-slate-500 bg-white/70 dark:bg-slate-900/40">{getEditingHierarchyId(task).toUpperCase()}</span>}
+                        {type === 'managementTask' && task.category && <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300 bg-violet-100/80 dark:bg-violet-500/20">{task.category}</span>}
                     </div>
                     <h2 className="text-2xl font-black text-slate-800 dark:text-white leading-tight">{task.title}</h2>
                 </div>
@@ -1185,16 +2950,18 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, onEdit }
                         <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1"><Icon name="ListTree" size={12}/> Notas y Enlaces</p>
                         <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{task.notes || <span className="italic text-slate-400">Sin notas adicionales...</span>}</p>
                     </div>
-                    <Button full onClick={() => onEdit(task, type)} color={tagColor} icon="Edit">Editar Tarea</Button>
+                    {canEdit(type) && <Button full onClick={() => onEdit(task, type)} color={tagColor} icon="Edit">Editar Tarea</Button>}
                 </div>
             </div>
         </div>
     );
 };
 
-const DayDetailsModal = ({ config, onClose, activities, clients, managers, editors, onEdit, onDelete }) => {
+const DayDetailsModal = ({ config, onClose, activities, clients, managers, editors, users, canEditActivity, onEdit, onDelete }) => {
     if (!config.isOpen) return null;
     const dayActivities = activities.filter(a => a.date === config.date);
+    const modalTitles = { client: 'Cliente', manager: 'Account Manager', editor: 'Editor', event: 'Produccion', accountTask: 'Tarea de Account', editingTask: 'Tarea de Edicion', managementTask: 'Tarea de Gestion', user: 'Usuario' };
+
     let displayDate = '';
     if (config.date) {
         const [y, m, d] = config.date.split('-');
@@ -1225,6 +2992,9 @@ const DayDetailsModal = ({ config, onClose, activities, clients, managers, edito
                             } else if (act.collectionType === 'editingTask') {
                                 const editor = editors?.find(e => e.id === act.contextId);
                                 if (editor) personName = editor.name;
+                            } else if (act.collectionType === 'managementTask') {
+                                const managementUser = users?.find(u => u.id === act.contextId);
+                                if (managementUser) personName = managementUser.name;
                             }
 
                             return (
@@ -1243,7 +3013,7 @@ const DayDetailsModal = ({ config, onClose, activities, clients, managers, edito
                                                 </span>
                                             )}
                                             
-                                            {(act.collectionType === 'accountTask' || act.collectionType === 'editingTask') && (
+                                            {(act.collectionType === 'accountTask' || act.collectionType === 'editingTask' || act.collectionType === 'managementTask') && (
                                                 <span className="flex items-center gap-1 text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                                                     <Icon name="UserCircle2" size={8}/> {personName}
                                                 </span>
@@ -1260,10 +3030,10 @@ const DayDetailsModal = ({ config, onClose, activities, clients, managers, edito
                                             )}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-1 opacity-100 md:opacity-60 md:hover:opacity-100 transition-opacity">
+                                    {canEditActivity(act.collectionType) && <div className="flex items-center gap-1 opacity-100 md:opacity-60 md:hover:opacity-100 transition-opacity">
                                         <button onClick={() => { onClose(); onEdit(act, act.collectionType); }} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Editar"><Icon name="Edit" size={18} /></button>
                                         <button onClick={() => { onClose(); onDelete(act, act.collectionType); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Eliminar"><Icon name="Trash2" size={18} /></button>
-                                    </div>
+                                    </div>}
                                 </div>
                             )
                         })
@@ -1274,7 +3044,7 @@ const DayDetailsModal = ({ config, onClose, activities, clients, managers, edito
     );
 };
 
-const Modal = ({ config, onClose, clients, managers, editors, actions }) => {
+const Modal = ({ config, onClose, clients, managers, editors, managementUsers, actions }) => {
     const { type, data, isEdit } = config;
     if(!config.isOpen) return null;
 
@@ -1302,18 +3072,42 @@ const Modal = ({ config, onClose, clients, managers, editors, actions }) => {
             if (type === 'editor') actions.updateEditor(data.id, { name: fd.name || "", email: fd.email || "" });
             if (type === 'event') actions.updateEvent(data.id, { title: buildEventTitle(fd.title, fd.time) });
             if (type === 'accountTask') actions.updateAccountTask(data.id, { title: fd.title || "", time: fd.time || data.time || "", contextId: fd.manager || data.contextId || "", clientId: fd.clientId || "", notes: fd.notes || "" });
-            if (type === 'editingTask') actions.updateEditingTask(data.id, { title: fd.title || "", priority: fd.priority || "normal", notes: fd.notes || "", contextId: fd.editor || data.contextId || "", clientId: fd.clientId || "" });
+            if (type === 'editingTask') actions.updateEditingTask(data.id, { title: fd.title || "", priority: fd.priority || "normal", hierarchy: fd.hierarchy || "p2", notes: fd.notes || "", contextId: fd.editor || data.contextId || "", clientId: fd.clientId || "" });
+            if (type === 'managementTask') actions.updateManagementTask(data.id, { title: fd.title || "", time: fd.time || data.time || "", contextId: fd.member || data.contextId || "", clientId: fd.clientId || "", category: fd.category || "seguimiento", notes: fd.notes || "" });
+            if (type === 'user') actions.updateUserRecord(data.id, { name: fd.name || "", email: fd.email || "", role: fd.role || "viewer", isActive: fd.isActive === 'true' });
         } else {
             if (type === 'client') actions.addClient({ name: fd.name || "", niche: fd.niche || "", package: fd.package || "", instagram: fd.instagram || "", managerId: fd.managerId || "" });
             if (type === 'manager') actions.addManager({ name: fd.name || "", email: fd.email || "", assignedAccounts: [] });
             if (type === 'editor') actions.addEditor({ name: fd.name || "", email: fd.email || "" });
             if (type === 'event') actions.addEvent({ date: data.date, title: buildEventTitle(fd.title, fd.time), type: data.type });
             if (type === 'accountTask') actions.addAccountTask({ date: data.date, title: fd.title || "", time: fd.time || "", contextId: fd.manager || data.contextId || "", clientId: fd.clientId || "", notes: fd.notes || "" });
-            if (type === 'editingTask') actions.addEditingTask({ date: data.date, title: fd.title || "", priority: fd.priority || "normal", notes: fd.notes || "", contextId: fd.editor || data.contextId || "", clientId: fd.clientId || "" });
+            if (type === 'editingTask') actions.addEditingTask({ date: data.date, title: fd.title || "", priority: fd.priority || "normal", hierarchy: fd.hierarchy || "p2", notes: fd.notes || "", contextId: fd.editor || data.contextId || "", clientId: fd.clientId || "" });
+            if (type === 'managementTask') actions.addManagementTask({ date: data.date, title: fd.title || "", time: fd.time || "", contextId: fd.member || data.contextId || "", clientId: fd.clientId || "", category: fd.category || "seguimiento", notes: fd.notes || "" });
+            if (type === 'user') actions.addUserRecord({ name: fd.name || "", email: fd.email || "", role: fd.role || "viewer", isActive: fd.isActive === 'true' });
         }
     };
 
-    const titles = { client: 'Cliente', manager: 'Account Manager', editor: 'Editor', event: 'Producción', accountTask: 'Tarea de Account', editingTask: 'Tarea de Edición' };
+    const titles = {
+        client: 'Cliente',
+        manager: 'Account Manager',
+        editor: 'Editor',
+        event: 'Produccion',
+        accountTask: 'Tarea de Account',
+        editingTask: 'Tarea de Edicion',
+        managementTask: 'Tarea de Gestion',
+        user: 'Usuario'
+    };
+    const selectClassName = 'w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none';
+    const textareaClassName = 'w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 h-24 text-sm';
+    const submitColor = ['editingTask', 'editor'].includes(type)
+        ? 'rose'
+        : type === 'accountTask'
+          ? 'indigo'
+          : type === 'managementTask'
+            ? 'violet'
+            : type === 'manager' || type === 'client'
+              ? 'blue'
+              : 'purple';
 
     let displayDate = '';
     if (data?.date && typeof data.date === 'string') {
@@ -1331,7 +3125,7 @@ const Modal = ({ config, onClose, clients, managers, editors, actions }) => {
                 <div className="p-6 overflow-y-auto custom-scroll">
                     <form onSubmit={onSubmit} className="space-y-4">
                         
-                        {['event', 'accountTask', 'editingTask'].includes(type) && !isEdit && (
+                        {['event', 'accountTask', 'editingTask', 'managementTask'].includes(type) && !isEdit && (
                             <div className="text-center p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 mb-2">
                                 <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">Para el día</p>
                                 <p className="text-lg font-black text-slate-800 dark:text-white capitalize">{displayDate}</p>
@@ -1378,6 +3172,10 @@ const Modal = ({ config, onClose, clients, managers, editors, actions }) => {
                                 <option value="recurrente" className="text-emerald-600 dark:text-emerald-400">🟢 Recurrente</option>
                             </select>
                             
+                            <select name="hierarchy" required defaultValue={data?.hierarchy || getEditingHierarchyId(data || {})} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-700 dark:text-slate-200">
+                                {EDITING_HIERARCHY_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                            </select>
+
                             <select name="editor" required defaultValue={data?.contextId || ""} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none">
                                 <option value="">Selecciona Editor...</option>
                                 {editors.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
@@ -1386,7 +3184,46 @@ const Modal = ({ config, onClose, clients, managers, editors, actions }) => {
                             <textarea name="notes" placeholder="Notas, links a drive..." defaultValue={data?.notes} className="w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 h-24 text-sm"></textarea>
                         </>}
 
-                        <Button type="submit" full color={['editingTask', 'editor'].includes(type) ? 'rose' : type === 'accountTask' ? 'indigo' : 'purple'}>{isEdit ? 'Guardar Cambios' : 'Crear'}</Button>
+                        {type === 'managementTask' && <>
+                            <Input name="title" placeholder="Titulo de la gestion" defaultValue={data?.title} required autoFocus />
+
+                            <select name="clientId" defaultValue={data?.clientId || ""} className={`${selectClassName} font-bold`}>
+                                <option value="">Sin cliente asociado</option>
+                                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+
+                            <Input name="time" type="time" label="Hora (Opcional)" defaultValue={data?.time || ""} />
+
+                            <select name="member" required defaultValue={data?.contextId || ""} className={selectClassName}>
+                                <option value="">Selecciona integrante...</option>
+                                {managementUsers.map((member) => <option key={member.id} value={member.id}>{member.name}{member.email ? ` (${member.email})` : ''}</option>)}
+                            </select>
+
+                            <select name="category" defaultValue={data?.category || 'seguimiento'} className={`${selectClassName} font-bold`}>
+                                <option value="seguimiento">Seguimiento</option>
+                                <option value="coordinacion">Coordinacion</option>
+                                <option value="aprobacion">Aprobacion</option>
+                                <option value="soporte">Soporte</option>
+                            </select>
+
+                            <textarea name="notes" placeholder="Detalle de la gestion, acuerdos o proximos pasos..." defaultValue={data?.notes} className={textareaClassName}></textarea>
+                        </>}
+
+                        {type === 'user' && <>
+                            <Input name="name" placeholder="Nombre completo" defaultValue={data?.name} required autoFocus />
+                            <Input name="email" type="email" placeholder="Correo autorizado" defaultValue={data?.email} required />
+
+                            <select name="role" defaultValue={data?.role || 'viewer'} className={`${selectClassName} font-bold`}>
+                                {Object.entries(ROLE_DEFINITIONS).map(([roleId, roleMeta]) => <option key={roleId} value={roleId}>{roleMeta.label}</option>)}
+                            </select>
+
+                            <select name="isActive" defaultValue={data?.isActive === false ? 'false' : 'true'} className={`${selectClassName} font-bold`}>
+                                <option value="true">Activo</option>
+                                <option value="false">Inactivo</option>
+                            </select>
+                        </>}
+
+                        <Button type="submit" full color={submitColor}>{isEdit ? 'Guardar Cambios' : 'Crear'}</Button>
                     </form>
                 </div>
             </div>
