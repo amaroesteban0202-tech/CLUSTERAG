@@ -95,6 +95,7 @@ export const ROLE_DEFINITIONS = {
             'create_account_tasks',
             'view_editions_room',
             'create_editing_tasks',
+            'manage_editing_tasks',
             'view_management_room',
             'create_management_tasks',
             'manage_management_tasks',
@@ -115,6 +116,7 @@ export const ROLE_DEFINITIONS = {
             'manage_account_tasks',
             'view_editions_room',
             'create_editing_tasks',
+            'manage_editing_tasks',
             'view_management_room',
             'create_management_tasks',
             'view_general_calendar',
@@ -146,6 +148,7 @@ export const ROLE_DEFINITIONS = {
             'create_account_tasks',
             'view_editions_room',
             'create_editing_tasks',
+            'manage_editing_tasks',
             'view_management_room',
             'create_management_tasks'
         ]

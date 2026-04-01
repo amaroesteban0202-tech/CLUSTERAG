@@ -334,6 +334,12 @@ const useTaskRoomState = (storageKey) => {
         }))
     };
 };
+const EDITING_STATUS_OPTIONS = [
+    { id: 'editar', label: 'Por Editar' },
+    { id: 'correccion', label: 'En Correccion' },
+    { id: 'aprobado', label: 'Aprobado' },
+    { id: 'publicado', label: 'Publicado' }
+];
 
 // --- APP PRINCIPAL ---
 function App() {
@@ -1369,7 +1375,7 @@ function App() {
             description: `Crea video ${data.title}`,
             changes: { ...data, hierarchy: data.hierarchy || getEditingHierarchyId(data) },
             successMessage: 'Agendado',
-            execute: () => addDoc(dataCollection('editing'), { ...data, hierarchy: data.hierarchy || getEditingHierarchyId(data), assigneeUserId: editor?.userId || '', status: 'editar', createdAt: nowIso(), updatedAt: nowIso() }),
+            execute: () => addDoc(dataCollection('editing'), { ...data, hierarchy: data.hierarchy || getEditingHierarchyId(data), assigneeUserId: editor?.userId || '', status: data.status || 'editar', createdAt: nowIso(), updatedAt: nowIso() }),
             afterSuccess: closeModal
         });
     };
@@ -2598,7 +2604,7 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
                                                         {nextStatus === 'publicado' ? 'Publicar' : 'Avanzar'} <Icon name={nextStatus === 'publicado' ? "CheckCircle2" : "ChevronRight"} size={12}/>
                                                     </button>
                                                 )}
-                                            </div>
+                                                </div>
                                         </div>
                                     );
                                 })}
@@ -2649,6 +2655,7 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
         if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'publicado';
         return true; 
     });
+    const canManageEditingTasks = userHasPermission(currentUserProfile, 'manage_editing_tasks');
     const handleAddTask = (dateStr) => {
         const nextDate = dateStr || getHondurasTodayStr();
         setCurrentDate(nextDate);
@@ -2765,10 +2772,12 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
                                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border border-black/5 dark:border-white/5 ${eStyles.bg} ${eStyles.text}`}>{editor ? editor.name : 'Sin asignar'}</span>
                                                     </div>
                                                 </div>
-                                                <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={(e) => { e.stopPropagation(); onEdit(t); }} className="text-slate-400 hover:text-blue-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Edit" size={16}/></button>
-                                                    <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Trash2" size={16}/></button>
-                                                </div>
+                                                {canManageEditingTasks && (
+                                                    <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                                        <button onClick={(e) => { e.stopPropagation(); onEdit(t); }} className="text-slate-400 hover:text-blue-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Edit" size={16}/></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Trash2" size={16}/></button>
+                                                    </div>
+                                                )}
                                             </div>
                                             
                                             <p className="font-bold text-slate-800 dark:text-slate-100 text-sm mb-1 leading-tight">{t.title}</p>
@@ -2780,7 +2789,8 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
                                                 </div>
                                             )}
 
-                                            <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                            {canManageEditingTasks && (
+                                                <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                                                 {prevStatus && (
                                                     <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, prevStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}>
                                                         <Icon name="ChevronLeft" size={12}/> Atrás
@@ -2792,6 +2802,7 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
                                                     </button>
                                                 )}
                                             </div>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -3437,7 +3448,7 @@ const Modal = ({ config, onClose, clients, managers, editors, managementUsers, a
             if (type === 'editor') actions.updateEditor(data.id, { name: fd.name || "", email: fd.email || "" });
             if (type === 'event') actions.updateEvent(data.id, { title: buildEventTitle(fd.title, fd.time) });
             if (type === 'accountTask') actions.updateAccountTask(data.id, { title: fd.title || "", time: fd.time || data.time || "", contextId: fd.manager || data.contextId || "", clientId: fd.clientId || "", notes: fd.notes || "" });
-            if (type === 'editingTask') actions.updateEditingTask(data.id, { title: fd.title || "", priority: fd.priority || "normal", hierarchy: fd.hierarchy || "p2", notes: fd.notes || "", contextId: fd.editor || data.contextId || "", clientId: fd.clientId || "" });
+            if (type === 'editingTask') actions.updateEditingTask(data.id, { title: fd.title || "", priority: fd.priority || "normal", hierarchy: fd.hierarchy || "p2", status: fd.status || data.status || "editar", notes: fd.notes || "", contextId: fd.editor || data.contextId || "", clientId: fd.clientId || "" });
             if (type === 'managementTask') actions.updateManagementTask(data.id, { title: fd.title || "", time: fd.time || data.time || "", contextId: fd.member || data.contextId || "", clientId: fd.clientId || "", category: fd.category || "seguimiento", notes: fd.notes || "" });
             if (type === 'user') actions.updateUserRecord(data.id, { name: fd.name || "", email: fd.email || "", role: fd.role || "viewer", isActive: fd.isActive === 'true' });
         } else {
@@ -3446,7 +3457,7 @@ const Modal = ({ config, onClose, clients, managers, editors, managementUsers, a
             if (type === 'editor') actions.addEditor({ name: fd.name || "", email: fd.email || "" });
             if (type === 'event') actions.addEvent({ date: data.date, title: buildEventTitle(fd.title, fd.time), type: data.type });
             if (type === 'accountTask') actions.addAccountTask({ date: data.date, title: fd.title || "", time: fd.time || "", contextId: fd.manager || data.contextId || "", clientId: fd.clientId || "", notes: fd.notes || "" });
-            if (type === 'editingTask') actions.addEditingTask({ date: data.date, title: fd.title || "", priority: fd.priority || "normal", hierarchy: fd.hierarchy || "p2", notes: fd.notes || "", contextId: fd.editor || data.contextId || "", clientId: fd.clientId || "" });
+            if (type === 'editingTask') actions.addEditingTask({ date: data.date, title: fd.title || "", priority: fd.priority || "normal", hierarchy: fd.hierarchy || "p2", status: fd.status || "editar", notes: fd.notes || "", contextId: fd.editor || data.contextId || "", clientId: fd.clientId || "" });
             if (type === 'managementTask') actions.addManagementTask({ date: data.date, title: fd.title || "", time: fd.time || "", contextId: fd.member || data.contextId || "", clientId: fd.clientId || "", category: fd.category || "seguimiento", notes: fd.notes || "" });
             if (type === 'user') actions.addUserRecord({ name: fd.name || "", email: fd.email || "", role: fd.role || "viewer", isActive: fd.isActive === 'true' });
         }
@@ -3539,6 +3550,10 @@ const Modal = ({ config, onClose, clients, managers, editors, managementUsers, a
                             
                             <select name="hierarchy" required defaultValue={data?.hierarchy || getEditingHierarchyId(data || {})} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-700 dark:text-slate-200">
                                 {EDITING_HIERARCHY_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                            </select>
+
+                            <select name="status" required defaultValue={data?.status || 'editar'} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-700 dark:text-slate-200">
+                                {EDITING_STATUS_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                             </select>
 
                             <select name="editor" required defaultValue={data?.contextId || ""} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none">
