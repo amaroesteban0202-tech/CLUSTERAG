@@ -69,10 +69,13 @@ export const ROLE_DEFINITIONS = {
             'view_editors',
             'manage_editors',
             'view_account_room',
+            'create_account_tasks',
             'manage_account_tasks',
             'view_editions_room',
+            'create_editing_tasks',
             'manage_editing_tasks',
             'view_management_room',
+            'create_management_tasks',
             'manage_management_tasks',
             'view_general_calendar',
             'view_calendar',
@@ -88,7 +91,12 @@ export const ROLE_DEFINITIONS = {
         permissions: [
             'view_dashboard',
             'view_clients',
+            'view_account_room',
+            'create_account_tasks',
+            'view_editions_room',
+            'create_editing_tasks',
             'view_management_room',
+            'create_management_tasks',
             'manage_management_tasks',
             'view_general_calendar',
             'view_calendar'
@@ -103,7 +111,12 @@ export const ROLE_DEFINITIONS = {
             'manage_clients',
             'view_managers',
             'view_account_room',
+            'create_account_tasks',
             'manage_account_tasks',
+            'view_editions_room',
+            'create_editing_tasks',
+            'view_management_room',
+            'create_management_tasks',
             'view_general_calendar',
             'view_calendar'
         ]
@@ -113,16 +126,29 @@ export const ROLE_DEFINITIONS = {
         color: 'rose',
         permissions: [
             'view_dashboard',
+            'view_account_room',
+            'create_account_tasks',
             'view_editors',
             'view_editions_room',
+            'create_editing_tasks',
             'manage_editing_tasks',
+            'view_management_room',
+            'create_management_tasks',
             'view_general_calendar'
         ]
     },
     viewer: {
         label: 'Viewer',
         color: 'slate',
-        permissions: ['view_dashboard']
+        permissions: [
+            'view_dashboard',
+            'view_account_room',
+            'create_account_tasks',
+            'view_editions_room',
+            'create_editing_tasks',
+            'view_management_room',
+            'create_management_tasks'
+        ]
     }
 };
 

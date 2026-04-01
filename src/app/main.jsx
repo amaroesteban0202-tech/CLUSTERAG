@@ -435,6 +435,24 @@ function App() {
 
     useEffect(() => {
         if(!auth) { setLoading(false); return; }
+        let isMounted = true;
+        const syncAuthState = (nextUser) => {
+            if (!isMounted) return;
+            setUser(nextUser);
+            setLoading(false);
+        };
+        const waitForAuthState = async () => {
+            if (typeof auth.authStateReady === 'function') {
+                await auth.authStateReady();
+                return;
+            }
+            await new Promise((resolve) => {
+                const stop = onAuthStateChanged(auth, () => {
+                    stop();
+                    resolve();
+                });
+            });
+        };
         const initAuth = async () => {
             try {
                 if (isSignInWithEmailLink(auth, window.location.href)) {
@@ -445,7 +463,8 @@ function App() {
                     if (!emailForLink) {
                         if (cleanUrl) window.history.replaceState({}, document.title, cleanUrl.toString());
                         showToast('Necesitas confirmar el correo para completar el acceso.', 'error');
-                        await signInAnonymously(auth);
+                        await waitForAuthState();
+                        if (!auth.currentUser) await signInAnonymously(auth);
                         return;
                     }
 
@@ -456,12 +475,19 @@ function App() {
                     return;
                 }
 
+                await waitForAuthState();
+                if (auth.currentUser) return;
+
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    try { await signInWithCustomToken(auth, __initial_auth_token); } 
-                    catch (tokenError) { await signInAnonymously(auth); }
-                } else {
-                    await signInAnonymously(auth);
+                    try {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                        return;
+                    } catch (tokenError) {
+                        console.error('No se pudo iniciar sesion con token inicial:', tokenError);
+                    }
                 }
+
+                if (!auth.currentUser) await signInAnonymously(auth);
             } catch (error) {
                 console.error("Error de Autenticación:", error);
                 if (isSignInWithEmailLink(auth, window.location.href)) {
@@ -476,12 +502,17 @@ function App() {
                         console.error('No se pudo iniciar sesion anonima:', anonymousError);
                     }
                 }
+            } finally {
+                syncAuthState(auth.currentUser);
             }
         };
         initAuth();
-        
-        const unsubscribe = onAuthStateChanged(auth, u => { setUser(u); setLoading(false); });
-        return () => unsubscribe();
+
+        const unsubscribe = onAuthStateChanged(auth, syncAuthState);
+        return () => {
+            isMounted = false;
+            unsubscribe();
+        };
     }, []);
 
     useEffect(() => {
@@ -1204,7 +1235,7 @@ function App() {
     const addAccountTask = async (data) => {
         const manager = managers.find((item) => item.id === data.contextId);
         await runMutation({
-            permission: 'manage_account_tasks',
+            permission: 'create_account_tasks',
             action: 'create',
             entityType: 'accountTask',
             description: `Crea tarea de account ${data.title}`,
@@ -1246,7 +1277,7 @@ function App() {
     const addEditingTask = async (data) => {
         const editor = editors.find((item) => item.id === data.contextId);
         await runMutation({
-            permission: 'manage_editing_tasks',
+            permission: 'create_editing_tasks',
             action: 'create',
             entityType: 'editingTask',
             description: `Crea video ${data.title}`,
@@ -1288,7 +1319,7 @@ function App() {
     const addManagementTask = async (data) => {
         const member = managementUsers.find((item) => item.id === data.contextId);
         await runMutation({
-            permission: 'manage_management_tasks',
+            permission: 'create_management_tasks',
             action: 'create',
             entityType: 'managementTask',
             description: `Crea tarea de gestion ${data.title}`,
