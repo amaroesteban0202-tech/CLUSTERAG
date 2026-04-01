@@ -155,6 +155,10 @@ export const ROLE_DEFINITIONS = {
     }
 };
 
+export const SUPER_ADMIN_EMAILS = [
+    'maycolljaramillo01@gmail.com'
+];
+
 export const DEFAULT_MANAGEMENT_TEAM = [
     { name: 'Aiskel', email: 'maycolljaramillo01+aiskel@gmail.com' },
     { name: 'Maycoll', email: 'maycolljaramillo01@gmail.com' },

@@ -18,6 +18,7 @@ import {
     EDITOR_COLORS,
     LEGACY_COLOR_MAP,
     ROLE_DEFINITIONS,
+    SUPER_ADMIN_EMAILS,
     DEFAULT_MANAGEMENT_TEAM,
     EDITING_HIERARCHY_OPTIONS
 } from '/src/app/constants/app.constants.js';
@@ -678,8 +679,11 @@ function App() {
         const matchByName = appUsers.find((item) => !normalizeEmail(item.email) && normalizeNameKey(item.name) === normalizeNameKey(user.displayName || authEmail));
         const existing = existingByUid || existingByEmail || matchByName;
         const targetId = existing?.id || `auth_${user.uid || normalizeNameKey(authEmail).replace(/[^a-z0-9]+/g, '_')}`;
+        const isForcedSuperAdmin = SUPER_ADMIN_EMAILS.includes(authEmail);
         const existingRole = existing?.role || (privilegedUsers.length === 0 ? 'super_admin' : 'viewer');
-        const nextRole = privilegedUsers.length === 0 && !['super_admin', 'operations'].includes(existingRole) ? 'super_admin' : existingRole;
+        const nextRole = isForcedSuperAdmin
+            ? 'super_admin'
+            : (privilegedUsers.length === 0 && !['super_admin', 'operations'].includes(existingRole) ? 'super_admin' : existingRole);
         const authSource = getAuthSource(user);
         const emailVerifiedByAuth = Boolean(user.emailVerified) || authSource === 'google' || authSource === 'email_link';
         const verificationState = existing?.emailVerification || {};
