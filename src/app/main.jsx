@@ -286,6 +286,54 @@ const isTaskAssignedToProfile = (task, profile, contextIds = []) => {
     if (task?.assigneeUserId && task.assigneeUserId === profileId) return true;
     return contextIds.filter(Boolean).includes(task?.contextId);
 };
+const getTaskRoomDefaults = () => ({
+    currentDate: getHondurasTodayStr(),
+    filterMode: 'date',
+    ownershipFilter: 'all'
+});
+const readTaskRoomState = (storageKey) => {
+    const defaults = getTaskRoomDefaults();
+    if (typeof window === 'undefined') return defaults;
+    try {
+        const rawValue = window.localStorage.getItem(storageKey);
+        if (!rawValue) return defaults;
+        const parsedValue = JSON.parse(rawValue);
+        return {
+            currentDate: parsedValue.currentDate || defaults.currentDate,
+            filterMode: ['date', 'overdue', 'all'].includes(parsedValue.filterMode) ? parsedValue.filterMode : defaults.filterMode,
+            ownershipFilter: ['all', 'mine'].includes(parsedValue.ownershipFilter) ? parsedValue.ownershipFilter : defaults.ownershipFilter
+        };
+    } catch (error) {
+        console.warn(`No se pudo leer el estado guardado de ${storageKey}:`, error);
+        return defaults;
+    }
+};
+const useTaskRoomState = (storageKey) => {
+    const [roomState, setRoomState] = useState(() => readTaskRoomState(storageKey));
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(storageKey, JSON.stringify(roomState));
+    }, [storageKey, roomState]);
+
+    return {
+        currentDate: roomState.currentDate,
+        filterMode: roomState.filterMode,
+        ownershipFilter: roomState.ownershipFilter,
+        setCurrentDate: (value) => setRoomState((current) => ({
+            ...current,
+            currentDate: typeof value === 'function' ? value(current.currentDate) : value
+        })),
+        setFilterMode: (value) => setRoomState((current) => ({
+            ...current,
+            filterMode: typeof value === 'function' ? value(current.filterMode) : value
+        })),
+        setOwnershipFilter: (value) => setRoomState((current) => ({
+            ...current,
+            ownershipFilter: typeof value === 'function' ? value(current.ownershipFilter) : value
+        }))
+    };
+};
 
 // --- APP PRINCIPAL ---
 function App() {
@@ -2375,10 +2423,15 @@ const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, ow
 };
 
 const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick, legacyColorMap }) => {
-    const [currentDate, setCurrentDate] = useState(getHondurasTodayStr()); 
+    const {
+        currentDate,
+        setCurrentDate,
+        filterMode,
+        setFilterMode,
+        ownershipFilter,
+        setOwnershipFilter
+    } = useTaskRoomState('cluster_account_room_state');
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterMode, setFilterMode] = useState('date');
-    const [ownershipFilter, setOwnershipFilter] = useState('all');
     const [draggedTaskId, setDraggedTaskId] = useState(null);
 
     const columns = [
@@ -2395,6 +2448,12 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
         if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'publicado';
         return true; 
     });
+    const handleAddTask = (dateStr) => {
+        const nextDate = dateStr || getHondurasTodayStr();
+        setCurrentDate(nextDate);
+        setFilterMode('date');
+        onAdd(nextDate);
+    };
 
     const handleDragStart = (e, taskId) => {
         setDraggedTaskId(taskId);
@@ -2444,7 +2503,7 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
 
     return (
         <div className="h-full flex flex-col space-y-6 fade-in">
-            <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Accounts" onAdd={onAdd} btnColor="indigo" btnIcon="Plus" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+            <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Accounts" onAdd={handleAddTask} btnColor="indigo" btnIcon="Plus" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
             {false && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
@@ -2553,10 +2612,15 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
 };
 
 const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
-    const [currentDate, setCurrentDate] = useState(getHondurasTodayStr());
+    const {
+        currentDate,
+        setCurrentDate,
+        filterMode,
+        setFilterMode,
+        ownershipFilter,
+        setOwnershipFilter
+    } = useTaskRoomState('cluster_editions_room_state');
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterMode, setFilterMode] = useState('date');
-    const [ownershipFilter, setOwnershipFilter] = useState('all');
     const [draggedTaskId, setDraggedTaskId] = useState(null);
 
     const columns = [
@@ -2585,6 +2649,12 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
         if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'publicado';
         return true; 
     });
+    const handleAddTask = (dateStr) => {
+        const nextDate = dateStr || getHondurasTodayStr();
+        setCurrentDate(nextDate);
+        setFilterMode('date');
+        onAdd(nextDate);
+    };
     const rankedTasks = filteredTasks
         .map((task) => {
             const hierarchy = getEditingHierarchyId(task);
@@ -2646,7 +2716,7 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
 
     return (
         <div className="h-full flex flex-col space-y-6 fade-in">
-            <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Edición" onAdd={onAdd} btnColor="amber" btnIcon="Video" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+            <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Edición" onAdd={handleAddTask} btnColor="amber" btnIcon="Video" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
             <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
                 {columns.map((col, colIndex) => {
                     const colTasks = filteredTasks.filter(t => t.status === col.id);
@@ -2735,10 +2805,15 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
 };
 
 const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
-    const [currentDate, setCurrentDate] = useState(getHondurasTodayStr());
+    const {
+        currentDate,
+        setCurrentDate,
+        filterMode,
+        setFilterMode,
+        ownershipFilter,
+        setOwnershipFilter
+    } = useTaskRoomState('cluster_management_room_state');
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterMode, setFilterMode] = useState('date');
-    const [ownershipFilter, setOwnershipFilter] = useState('all');
     const [draggedTaskId, setDraggedTaskId] = useState(null);
 
     const columns = [
@@ -2755,6 +2830,12 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
         if (filterMode === 'overdue') return task.date < getHondurasTodayStr() && task.status !== 'cerrado';
         return true;
     });
+    const handleAddTask = (dateStr) => {
+        const nextDate = dateStr || getHondurasTodayStr();
+        setCurrentDate(nextDate);
+        setFilterMode('date');
+        onAdd(nextDate);
+    };
 
     const handleDragStart = (e, taskId) => {
         setDraggedTaskId(taskId);
@@ -2774,7 +2855,7 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
 
     return (
         <div className="h-full flex flex-col space-y-6 fade-in">
-            <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Gestion" onAdd={onAdd} btnColor="violet" btnIcon="ShieldCheck" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+            <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Gestion" onAdd={handleAddTask} btnColor="violet" btnIcon="ShieldCheck" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
                     <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Equipo vinculado</p>
