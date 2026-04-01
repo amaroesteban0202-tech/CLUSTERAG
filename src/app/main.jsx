@@ -82,6 +82,11 @@ const getManagementDirectoryMeta = (value = '') => {
     const key = getManagementDirectoryKey(value);
     return MANAGEMENT_DIRECTORY.find((member) => member.directoryKey === key) || null;
 };
+const getResolvedManagementEmail = (record = {}) => {
+    const directEmail = normalizeEmail(record.email);
+    if (directEmail) return directEmail;
+    return normalizeEmail(getManagementDirectoryMeta(record)?.email);
+};
 const getUserRolePriority = (role = '') => {
     const priorities = {
         super_admin: 500,
@@ -355,7 +360,16 @@ function App() {
                 return accumulator;
             }, new Map())
             .values()
-    ).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
+    )
+        .map((item) => {
+            const managementMeta = getManagementDirectoryMeta(item);
+            return {
+                ...item,
+                email: getResolvedManagementEmail(item),
+                managementKey: item.managementKey || managementMeta?.directoryKey || ''
+            };
+        })
+        .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
     const privilegedUsers = appUsers.filter((item) => item.isActive !== false && ['super_admin', 'operations'].includes(item.role));
     const dataCollection = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
     const dataDoc = (name, id) => doc(db, 'artifacts', appId, 'public', 'data', name, id);
@@ -578,6 +592,30 @@ function App() {
             }, { merge: true }))
         ).finally(() => setHasSeededManagementDirectory(true));
     }, [db, user, usersLoaded, appUsers, hasSeededManagementDirectory]);
+
+    useEffect(() => {
+        if (!db || !user || !usersLoaded) return;
+        const pendingManagementBackfill = appUsers
+            .filter((item) => item.role === 'management')
+            .map((item) => {
+                const resolvedEmail = getResolvedManagementEmail(item);
+                const managementKey = item.managementKey || getManagementDirectoryKey(item);
+                const needsEmail = Boolean(resolvedEmail) && normalizeEmail(item.email) !== resolvedEmail;
+                const needsKey = Boolean(managementKey) && item.managementKey !== managementKey;
+                if (!needsEmail && !needsKey) return null;
+                return { id: item.id, resolvedEmail, managementKey };
+            })
+            .filter(Boolean);
+        if (pendingManagementBackfill.length === 0) return;
+
+        Promise.all(
+            pendingManagementBackfill.map(({ id, resolvedEmail, managementKey }) => updateDoc(dataDoc('users', id), {
+                ...(resolvedEmail ? { email: resolvedEmail } : {}),
+                ...(managementKey ? { managementKey } : {}),
+                updatedAt: nowIso()
+            }).catch(() => {}))
+        );
+    }, [db, user, usersLoaded, appUsers]);
 
     useEffect(() => {
         if (!db || !user || !authEmail || !usersLoaded) return;
