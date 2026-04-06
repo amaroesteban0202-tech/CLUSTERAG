@@ -356,7 +356,9 @@ function App() {
     const [hasBackfilledIdentityLinks, setHasBackfilledIdentityLinks] = useState(false);
     const [usersLoaded, setUsersLoaded] = useState(false);
     const isReconcilingUsersRef = useRef(false);
+    const isBackfillingIdentityLinksRef = useRef(false);
     const lastReconciledDuplicateSignatureRef = useRef('');
+    const lastIdentityLinkSyncSignatureRef = useRef('');
 
     const [clients, setClients] = useState([]);
     const [events, setEvents] = useState([]); 
@@ -687,35 +689,55 @@ function App() {
         const authSource = getAuthSource(user);
         const emailVerifiedByAuth = Boolean(user.emailVerified) || authSource === 'google' || authSource === 'email_link';
         const verificationState = existing?.emailVerification || {};
+        const resolvedName = existing?.name || user.displayName || authEmail.split('@')[0];
+        const nextManagementKey = nextRole === 'management' ? (existing?.managementKey || getManagementDirectoryKey(existing) || '') : (existing?.managementKey || '');
+        const nextVerification = emailVerifiedByAuth
+            ? {
+                ...verificationState,
+                status: 'verified',
+                source: authSource,
+                verifiedAt: verificationState.verifiedAt || nowIso(),
+                lastError: ''
+            }
+            : (Object.keys(verificationState).length > 0 ? verificationState : {
+                status: 'pending',
+                requestedAt: nowIso()
+            });
         const basePayload = {
-            name: existing?.name || user.displayName || authEmail.split('@')[0],
+            name: resolvedName,
             email: authEmail,
-            updatedAt: nowIso(),
-            lastSeenAt: nowIso(),
             isActive: true,
             authUid: user.uid || '',
             emailVerified: emailVerifiedByAuth,
-            emailVerification: emailVerifiedByAuth
-                ? {
-                    ...verificationState,
-                    status: 'verified',
-                    source: authSource,
-                    verifiedAt: verificationState.verifiedAt || nowIso(),
-                    lastError: ''
-                }
-                : (Object.keys(verificationState).length > 0 ? verificationState : {
-                    status: 'pending',
-                    requestedAt: nowIso()
-                }),
+            emailVerification: nextVerification,
             linkedManagerId: existing?.linkedManagerId || '',
             linkedEditorId: existing?.linkedEditorId || '',
-            managementKey: nextRole === 'management' ? (existing?.managementKey || getManagementDirectoryKey(existing) || '') : (existing?.managementKey || '')
+            managementKey: nextManagementKey
         };
+        const verificationChanged =
+            (verificationState.status || '') !== (nextVerification.status || '') ||
+            (verificationState.source || '') !== (nextVerification.source || '') ||
+            (verificationState.verifiedAt || '') !== (nextVerification.verifiedAt || '') ||
+            (verificationState.requestedAt || '') !== (nextVerification.requestedAt || '') ||
+            (verificationState.lastError || '') !== (nextVerification.lastError || '');
+        const needsBootstrapSync = !existing ||
+            (existing.name || '') !== basePayload.name ||
+            normalizeEmail(existing.email) !== basePayload.email ||
+            existing.isActive !== true ||
+            (existing.authUid || '') !== basePayload.authUid ||
+            Boolean(existing.emailVerified) !== basePayload.emailVerified ||
+            verificationChanged ||
+            (existing.linkedManagerId || '') !== basePayload.linkedManagerId ||
+            (existing.linkedEditorId || '') !== basePayload.linkedEditorId ||
+            (existing.managementKey || '') !== basePayload.managementKey ||
+            (existing.role || '') !== nextRole;
+        if (!needsBootstrapSync) return;
+        const stamp = nowIso();
         if (existing) {
-            updateDoc(dataDoc('users', existing.id), { ...basePayload, role: nextRole }).catch(() => {});
+            updateDoc(dataDoc('users', existing.id), { ...basePayload, role: nextRole, updatedAt: stamp, lastSeenAt: stamp }).catch(() => {});
             return;
         }
-        setDoc(dataDoc('users', targetId), { ...basePayload, role: nextRole, createdAt: nowIso() }, { merge: true }).catch(() => {});
+        setDoc(dataDoc('users', targetId), { ...basePayload, role: nextRole, createdAt: stamp, updatedAt: stamp, lastSeenAt: stamp }, { merge: true }).catch(() => {});
     }, [db, user, authEmail, usersLoaded, appUsers, privilegedUsers.length]);
 
     useEffect(() => {
@@ -1125,25 +1147,41 @@ function App() {
 
     useEffect(() => {
         if (!db || !usersLoaded || duplicateUserSignature || hasBackfilledIdentityLinks || !userHasPermission(currentUserProfile, 'manage_users')) return;
+        if (isBackfillingIdentityLinksRef.current) return;
         const candidates = appUsers.filter((item) => normalizeEmail(item.email));
         if (candidates.length === 0) {
             setHasBackfilledIdentityLinks(true);
             return;
         }
         let isCancelled = false;
+        isBackfillingIdentityLinksRef.current = true;
         Promise.all(candidates.map((item) => syncIdentityLinks({ email: item.email, userId: item.id, silent: true })))
             .finally(() => {
+                isBackfillingIdentityLinksRef.current = false;
                 if (!isCancelled) setHasBackfilledIdentityLinks(true);
             });
         return () => {
             isCancelled = true;
         };
-    }, [db, usersLoaded, duplicateUserSignature, hasBackfilledIdentityLinks, currentUserProfile, appUsers, managers, editors, clients, accountTasks, editingTasks]);
+    }, [db, usersLoaded, duplicateUserSignature, hasBackfilledIdentityLinks, currentUserProfile?.id, appUsers.length, managers.length, editors.length, clients.length, accountTasks.length, editingTasks.length]);
 
     useEffect(() => {
         if (!db || !usersLoaded || duplicateUserSignature || !currentUserProfile?.id || !authEmail) return;
-        syncIdentityLinks({ email: authEmail, userId: currentUserProfile.id, silent: true }).catch(() => {});
-    }, [db, usersLoaded, duplicateUserSignature, currentUserProfile?.id, authEmail, managers, editors, clients, accountTasks, editingTasks]);
+        const syncSignature = [
+            currentUserProfile.id,
+            authEmail,
+            managers.length,
+            editors.length,
+            clients.length,
+            accountTasks.length,
+            editingTasks.length
+        ].join('|');
+        if (lastIdentityLinkSyncSignatureRef.current === syncSignature) return;
+        lastIdentityLinkSyncSignatureRef.current = syncSignature;
+        syncIdentityLinks({ email: authEmail, userId: currentUserProfile.id, silent: true }).catch(() => {
+            lastIdentityLinkSyncSignatureRef.current = '';
+        });
+    }, [db, usersLoaded, duplicateUserSignature, currentUserProfile?.id, authEmail, managers.length, editors.length, clients.length, accountTasks.length, editingTasks.length]);
 
     const handleNavigate = (newView) => {
         if (!canAccessView(currentUserProfile, newView) || profileBlocked) {
