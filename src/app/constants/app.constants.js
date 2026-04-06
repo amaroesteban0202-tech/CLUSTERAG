@@ -167,6 +167,12 @@ export const DEFAULT_MANAGEMENT_TEAM = [
     { name: 'Orlando', email: 'maycolljaramillo01+orlando@gmail.com' }
 ];
 
+// Editores pre-autorizados: al iniciar sesion con estos correos,
+// el sistema les asigna automaticamente el rol 'editor'.
+export const DEFAULT_EDITORS_TEAM = [
+    { name: 'Maria Galicia', email: 'marialaguna2117@gmail.com', color: 'c22' }
+];
+
 export const EDITING_HIERARCHY_OPTIONS = [
     { id: 'p1', label: 'P1 Critico', color: 'red' },
     { id: 'p2', label: 'P2 Alto Impacto', color: 'amber' },

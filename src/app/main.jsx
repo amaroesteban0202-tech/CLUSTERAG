@@ -20,6 +20,7 @@ import {
     ROLE_DEFINITIONS,
     SUPER_ADMIN_EMAILS,
     DEFAULT_MANAGEMENT_TEAM,
+    DEFAULT_EDITORS_TEAM,
     EDITING_HIERARCHY_OPTIONS
 } from '/src/app/constants/app.constants.js';
 import { compareDateOnlyStrings, getDateOnlyDiffDays, getHondurasTodayStr, isDateBeforeDateString, normalizeDateOnlyString, resolveStoredTaskRoomDate } from '/src/app/utils/date.js';
@@ -731,9 +732,11 @@ function App() {
         const existingRole = existing?.role || (privilegedUsers.length === 0 ? 'super_admin' : 'viewer');
         const matchedManager = managers.find((item) => normalizeEmail(item.email) === authEmail) || (existing?.linkedManagerId ? managers.find((item) => item.id === existing.linkedManagerId) : null);
         const matchedEditor = editors.find((item) => normalizeEmail(item.email) === authEmail) || (existing?.linkedEditorId ? editors.find((item) => item.id === existing.linkedEditorId) : null);
+        // Verificar si el correo esta en la lista de editores pre-autorizados
+        const preAuthorizedEditor = !matchedEditor ? DEFAULT_EDITORS_TEAM.find((item) => normalizeEmail(item.email) === authEmail) : null;
         const roleByLink = existing?.managementKey
             ? 'management'
-            : (matchedManager ? 'manager' : (matchedEditor ? 'editor' : 'viewer'));
+            : (matchedManager ? 'manager' : (matchedEditor || preAuthorizedEditor ? 'editor' : 'viewer'));
         const bootstrapRole = isForcedSuperAdmin
             ? 'super_admin'
             : (privilegedUsers.length === 0 && !['super_admin', 'operations'].includes(existingRole)
