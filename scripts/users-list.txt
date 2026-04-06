@@ -1,0 +1,9 @@
+auth_4GJAkDMEdjbxZ4a4ZA90zyILQge2 | Mafer García Gaitán | maferg.designer@gmail.com | super_admin
+auth_5GbMQ3jwOVSXtefnMWRoi9bFplK2 | ACH | achchamorro25@gmail.com | super_admin
+auth_pJHnbc6YPoPS9YtUeFFhFdYjhSI3 | Aiskel Wuerman | aiskel.wuerman82@gmail.com | super_admin
+auth_pP47yhiypsdUOXhaq1St7arNeMC2 | Oriana | orineko.studios@gmail.com | super_admin
+auth_rQSqYtYMVGZMbACqnWMAUaTLFly1 | Maycoll | maycolljaramillo01@gmail.com | management
+management_aiskel | Aiskel | maycolljaramillo01+aiskel@gmail.com | management
+management_esteban | Esteban | maycolljaramillo01+esteban@gmail.com | management
+management_maria | Maria | maycolljaramillo01+maria@gmail.com | management
+management_orlando | Orlando | maycolljaramillo01+orlando@gmail.com | management
