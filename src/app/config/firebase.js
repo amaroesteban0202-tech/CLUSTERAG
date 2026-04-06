@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
+import { connectFirestoreEmulator, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 
 const firebaseConfig = {
     apiKey: 'AIzaSyBAnY2ihWlow17H-TjUKgueWpw2MqYpzUc',
@@ -31,7 +31,15 @@ const shouldUseFirestoreEmulator = () => {
 try {
     const app = initializeApp(firebaseConfig);
     auth = getAuth(app);
-    db = getFirestore(app);
+
+    // Uso de initializeFirestore con persistentLocalCache (API moderna que reemplaza
+    // enableMultiTabIndexedDbPersistence). Esto garantiza que la persistencia
+    // offline queda configurada de forma sincrónica antes del primer write,
+    // evitando el bug donde updateDoc parece exitoso en cache local pero
+    // nunca llega al servidor de Firestore.
+    db = initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+    });
 
     if (db && shouldUseFirestoreEmulator() && !emulatorConnected) {
         connectFirestoreEmulator(db, '127.0.0.1', FIRESTORE_EMULATOR_PORT);

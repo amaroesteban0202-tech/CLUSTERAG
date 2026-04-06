@@ -66,10 +66,51 @@ const normalizeEmail = (value = '') => String(value || '').trim().toLowerCase();
 const normalizeNameKey = (value = '') => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 const nowIso = () => new Date().toISOString();
 const EMAIL_LINK_STORAGE_KEY = 'cluster_email_link_for_sign_in';
+const PENDING_TASK_STATUS_UPDATES_KEY = 'cluster_pending_task_status_updates';
+const RETRYABLE_FIRESTORE_ERROR_CODES = new Set(['aborted', 'cancelled', 'data-loss', 'deadline-exceeded', 'failed-precondition', 'internal', 'resource-exhausted', 'unavailable']);
 const MANAGEMENT_DIRECTORY = DEFAULT_MANAGEMENT_TEAM.map((member) => ({
     ...member,
     directoryKey: normalizeNameKey(member.name)
 }));
+const readPendingTaskStatusUpdates = () => {
+    if (typeof window === 'undefined') return [];
+    try {
+        const rawValue = window.localStorage.getItem(PENDING_TASK_STATUS_UPDATES_KEY);
+        if (!rawValue) return [];
+        const parsedValue = JSON.parse(rawValue);
+        if (!Array.isArray(parsedValue)) return [];
+        return parsedValue.filter((item) => item?.collectionName && item?.taskId && item?.status);
+    } catch (error) {
+        console.warn('No se pudo leer la cola local de cambios de estado:', error);
+        return [];
+    }
+};
+const writePendingTaskStatusUpdates = (items = []) => {
+    if (typeof window === 'undefined') return;
+    if (!Array.isArray(items) || items.length === 0) {
+        window.localStorage.removeItem(PENDING_TASK_STATUS_UPDATES_KEY);
+        return;
+    }
+    window.localStorage.setItem(PENDING_TASK_STATUS_UPDATES_KEY, JSON.stringify(items));
+};
+const queuePendingTaskStatusUpdate = ({ collectionName, taskId, status, updatedAt = nowIso(), mutationId = `${taskId}:${updatedAt}:${status}` }) => {
+    const nextItems = readPendingTaskStatusUpdates()
+        .filter((item) => !(item.collectionName === collectionName && item.taskId === taskId))
+        .concat({ collectionName, taskId, status, updatedAt, mutationId, queuedAt: nowIso() });
+    writePendingTaskStatusUpdates(nextItems);
+    return mutationId;
+};
+const clearPendingTaskStatusUpdate = ({ collectionName, taskId, mutationId = '' }) => {
+    const nextItems = readPendingTaskStatusUpdates()
+        .filter((item) => !(item.collectionName === collectionName && item.taskId === taskId && (!mutationId || item.mutationId === mutationId)));
+    writePendingTaskStatusUpdates(nextItems);
+};
+const getFirestoreErrorCode = (error) => String(error?.code || '').replace(/^firestore\//, '');
+const shouldRetryTaskStatusUpdate = (error) => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+    const code = getFirestoreErrorCode(error);
+    return !code || RETRYABLE_FIRESTORE_ERROR_CODES.has(code);
+};
 const getManagementDirectoryKey = (value = '') => {
     const sourceName = typeof value === 'string' ? value : value?.name || '';
     const normalized = normalizeNameKey(sourceName);
@@ -361,6 +402,7 @@ function App() {
     const [usersLoaded, setUsersLoaded] = useState(false);
     const isReconcilingUsersRef = useRef(false);
     const isBackfillingIdentityLinksRef = useRef(false);
+    const isFlushingPendingTaskStatusesRef = useRef(false);
     const lastReconciledDuplicateSignatureRef = useRef('');
     const lastIdentityLinkSyncSignatureRef = useRef('');
 
@@ -687,9 +729,17 @@ function App() {
         const targetId = existing?.id || `auth_${user.uid || normalizeNameKey(authEmail).replace(/[^a-z0-9]+/g, '_')}`;
         const isForcedSuperAdmin = SUPER_ADMIN_EMAILS.includes(authEmail);
         const existingRole = existing?.role || (privilegedUsers.length === 0 ? 'super_admin' : 'viewer');
-        const nextRole = isForcedSuperAdmin
+        const matchedManager = managers.find((item) => normalizeEmail(item.email) === authEmail) || (existing?.linkedManagerId ? managers.find((item) => item.id === existing.linkedManagerId) : null);
+        const matchedEditor = editors.find((item) => normalizeEmail(item.email) === authEmail) || (existing?.linkedEditorId ? editors.find((item) => item.id === existing.linkedEditorId) : null);
+        const roleByLink = existing?.managementKey
+            ? 'management'
+            : (matchedManager ? 'manager' : (matchedEditor ? 'editor' : 'viewer'));
+        const bootstrapRole = isForcedSuperAdmin
             ? 'super_admin'
-            : (privilegedUsers.length === 0 && !['super_admin', 'operations'].includes(existingRole) ? 'super_admin' : existingRole);
+            : (privilegedUsers.length === 0 && !['super_admin', 'operations'].includes(existingRole)
+                ? 'super_admin'
+                : (getUserRolePriority(roleByLink) > getUserRolePriority(existingRole) ? roleByLink : existingRole));
+        const nextRole = bootstrapRole;
         const authSource = getAuthSource(user);
         const emailVerifiedByAuth = Boolean(user.emailVerified) || authSource === 'google' || authSource === 'email_link';
         const verificationState = existing?.emailVerification || {};
@@ -714,8 +764,8 @@ function App() {
             authUid: user.uid || '',
             emailVerified: emailVerifiedByAuth,
             emailVerification: nextVerification,
-            linkedManagerId: existing?.linkedManagerId || '',
-            linkedEditorId: existing?.linkedEditorId || '',
+            linkedManagerId: existing?.linkedManagerId || matchedManager?.id || '',
+            linkedEditorId: existing?.linkedEditorId || matchedEditor?.id || '',
             managementKey: nextManagementKey
         };
         const verificationChanged =
@@ -742,7 +792,7 @@ function App() {
             return;
         }
         setDoc(dataDoc('users', targetId), { ...basePayload, role: nextRole, createdAt: stamp, updatedAt: stamp, lastSeenAt: stamp }, { merge: true }).catch(() => {});
-    }, [db, user, authEmail, usersLoaded, appUsers, privilegedUsers.length]);
+    }, [db, user, authEmail, usersLoaded, appUsers, privilegedUsers.length, managers, editors]);
 
     useEffect(() => {
         if (!currentUserProfile) return;
@@ -751,6 +801,63 @@ function App() {
             localStorage.setItem('cluster_os_view', 'dashboard');
         }
     }, [currentUserProfile, profileBlocked, view]);
+
+    useEffect(() => {
+        if (!db || !currentUserProfile || profileBlocked || isFlushingPendingTaskStatusesRef.current) return;
+
+        const flushPendingTaskStatusUpdates = async () => {
+            const queuedItems = readPendingTaskStatusUpdates();
+            if (queuedItems.length === 0) return;
+
+            isFlushingPendingTaskStatusesRef.current = true;
+            try {
+                const latestByTask = new Map();
+                queuedItems.forEach((item) => {
+                    latestByTask.set(`${item.collectionName}:${item.taskId}`, item);
+                });
+
+                for (const item of latestByTask.values()) {
+                    const permissionByCollection = {
+                        account_tasks: 'manage_account_tasks',
+                        editing: 'manage_editing_tasks',
+                        management_tasks: 'manage_management_tasks'
+                    };
+                    const requiredPermission = permissionByCollection[item.collectionName];
+                    if (!requiredPermission || !userHasPermission(currentUserProfile, requiredPermission)) continue;
+
+                    try {
+                        await updateDoc(dataDoc(item.collectionName, item.taskId), {
+                            status: item.status,
+                            updatedAt: item.updatedAt || nowIso()
+                        });
+                        clearPendingTaskStatusUpdate({ collectionName: item.collectionName, taskId: item.taskId });
+                    } catch (error) {
+                        console.error('No se pudo sincronizar el cambio de estado pendiente:', error);
+                        if (!shouldRetryTaskStatusUpdate(error)) {
+                            clearPendingTaskStatusUpdate({ collectionName: item.collectionName, taskId: item.taskId });
+                        }
+                    }
+                }
+            } finally {
+                isFlushingPendingTaskStatusesRef.current = false;
+            }
+        };
+
+        flushPendingTaskStatusUpdates().catch((error) => {
+            isFlushingPendingTaskStatusesRef.current = false;
+            console.error('No se pudo vaciar la cola local de estados:', error);
+        });
+
+        if (typeof window === 'undefined') return;
+        const handleOnline = () => {
+            flushPendingTaskStatusUpdates().catch((error) => {
+                isFlushingPendingTaskStatusesRef.current = false;
+                console.error('No se pudo resincronizar la cola local de estados:', error);
+            });
+        };
+        window.addEventListener('online', handleOnline);
+        return () => window.removeEventListener('online', handleOnline);
+    }, [db, currentUserProfile, profileBlocked]);
 
     const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
     const closeModal = () => setModalConfig({ isOpen: false, type: null, data: null, isEdit: false });
@@ -803,6 +910,38 @@ function App() {
             console.error(error);
             showToast(errorMessage, 'error');
             await auditAction({ action: `${action}_failed`, entityType, entityId, description, status: 'error', changes: { ...(changes || {}), error: error.message } });
+            return null;
+        }
+    };
+    const runQueuedTaskStatusMutation = async ({ collectionName, task, newStatus, permission, entityType, description, changes, successMessage = '', errorMessage = 'No se pudo actualizar el estado', afterSuccess }) => {
+        if (!task?.id || !newStatus || !collectionName) return null;
+        if (!(await ensurePermission(permission, description))) return null;
+
+        const stamp = nowIso();
+        const mutationId = queuePendingTaskStatusUpdate({ collectionName, taskId: task.id, status: newStatus, updatedAt: stamp });
+
+        try {
+            await updateDoc(dataDoc(collectionName, task.id), { status: newStatus, updatedAt: stamp });
+            clearPendingTaskStatusUpdate({ collectionName, taskId: task.id, mutationId });
+            await auditAction({ action: 'status_change', entityType, entityId: task.id, description, changes });
+            if (successMessage) showToast(successMessage);
+            if (afterSuccess) afterSuccess();
+            return { id: task.id };
+        } catch (error) {
+            console.error(error);
+            const shouldRetry = shouldRetryTaskStatusUpdate(error);
+            if (!shouldRetry) {
+                clearPendingTaskStatusUpdate({ collectionName, taskId: task.id, mutationId });
+            }
+            showToast(shouldRetry ? 'Cambio pendiente de sincronizar. Se reintentara al recargar.' : errorMessage, 'error');
+            await auditAction({
+                action: shouldRetry ? 'status_change_queued' : 'status_change_failed',
+                entityType,
+                entityId: task.id,
+                description,
+                status: shouldRetry ? 'queued' : 'error',
+                changes: { ...(changes || {}), error: error.message, collectionName, queued: shouldRetry }
+            });
             return null;
         }
     };
@@ -1399,14 +1538,14 @@ function App() {
     };
     const changeAccountTaskStatus = async (task, newStatus) => {
         if (newStatus) {
-            await runMutation({
+            await runQueuedTaskStatusMutation({
+                collectionName: 'account_tasks',
+                task,
+                newStatus,
                 permission: 'manage_account_tasks',
-                action: 'status_change',
                 entityType: 'accountTask',
-                entityId: task.id,
                 description: `Mueve task ${task.title} a ${newStatus}`,
                 changes: { previousStatus: task.status, nextStatus: newStatus },
-                execute: () => updateDoc(dataDoc('account_tasks', task.id), { status: newStatus, updatedAt: nowIso() }),
                 afterSuccess: () => { if (newStatus === 'publicado') triggerConfetti(); }
             });
         }
@@ -1441,14 +1580,14 @@ function App() {
     };
     const changeEditingTaskStatus = async (task, newStatus) => {
         if (newStatus) {
-            await runMutation({
+            await runQueuedTaskStatusMutation({
+                collectionName: 'editing',
+                task,
+                newStatus,
                 permission: 'manage_editing_tasks',
-                action: 'status_change',
                 entityType: 'editingTask',
-                entityId: task.id,
                 description: `Mueve video ${task.title} a ${newStatus}`,
                 changes: { previousStatus: task.status, nextStatus: newStatus, hierarchy: getEditingHierarchyId(task) },
-                execute: () => updateDoc(dataDoc('editing', task.id), { status: newStatus, updatedAt: nowIso() }),
                 afterSuccess: () => { if (newStatus === 'aprobado' || newStatus === 'publicado') triggerConfetti(); }
             });
         }
@@ -1483,14 +1622,14 @@ function App() {
     };
     const changeManagementTaskStatus = async (task, newStatus) => {
         if (newStatus) {
-            await runMutation({
+            await runQueuedTaskStatusMutation({
+                collectionName: 'management_tasks',
+                task,
+                newStatus,
                 permission: 'manage_management_tasks',
-                action: 'status_change',
                 entityType: 'managementTask',
-                entityId: task.id,
                 description: `Mueve tarea de gestion ${task.title} a ${newStatus}`,
-                changes: { previousStatus: task.status, nextStatus: newStatus },
-                execute: () => updateDoc(dataDoc('management_tasks', task.id), { status: newStatus, updatedAt: nowIso() })
+                changes: { previousStatus: task.status, nextStatus: newStatus }
             });
         }
     };
