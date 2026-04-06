@@ -22,7 +22,7 @@ import {
     DEFAULT_MANAGEMENT_TEAM,
     EDITING_HIERARCHY_OPTIONS
 } from '/src/app/constants/app.constants.js';
-import { getHondurasTodayStr } from '/src/app/utils/date.js';
+import { compareDateOnlyStrings, getDateOnlyDiffDays, getHondurasTodayStr, isDateBeforeDateString, normalizeDateOnlyString, resolveStoredTaskRoomDate } from '/src/app/utils/date.js';
 
 void TAILWIND_SAFELIST;
 
@@ -300,7 +300,7 @@ const readTaskRoomState = (storageKey) => {
         if (!rawValue) return defaults;
         const parsedValue = JSON.parse(rawValue);
         return {
-            currentDate: parsedValue.currentDate || defaults.currentDate,
+            currentDate: resolveStoredTaskRoomDate(parsedValue.currentDate, parsedValue.savedAt, defaults.currentDate),
             filterMode: ['date', 'overdue', 'all'].includes(parsedValue.filterMode) ? parsedValue.filterMode : defaults.filterMode,
             ownershipFilter: ['all', 'mine'].includes(parsedValue.ownershipFilter) ? parsedValue.ownershipFilter : defaults.ownershipFilter
         };
@@ -314,7 +314,11 @@ const useTaskRoomState = (storageKey) => {
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        window.localStorage.setItem(storageKey, JSON.stringify(roomState));
+        window.localStorage.setItem(storageKey, JSON.stringify({
+            ...roomState,
+            currentDate: normalizeDateOnlyString(roomState.currentDate) || getHondurasTodayStr(),
+            savedAt: getHondurasTodayStr()
+        }));
     }, [storageKey, roomState]);
 
     return {
@@ -2114,8 +2118,8 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
     
     // Recolectar tareas urgentes o atrasadas
     const urgentTasks = [
-        ...tasks.filter(t => (t.priority === 'urgente' || t.date < todayStr) && t.status !== 'aprobado' && t.status !== 'publicado').map(t => ({...t, _type: 'Edición'})),
-        ...accountTasks.filter(t => t.date < todayStr && t.status !== 'publicado').map(t => ({...t, _type: 'Account'}))
+        ...tasks.filter(t => (t.priority === 'urgente' || isDateBeforeDateString(t.date, todayStr)) && t.status !== 'aprobado' && t.status !== 'publicado').map(t => ({...t, _type: 'Edición'})),
+        ...accountTasks.filter(t => isDateBeforeDateString(t.date, todayStr) && t.status !== 'publicado').map(t => ({...t, _type: 'Account'}))
     ].sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 6);
 
     const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -2255,12 +2259,12 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
                         ) : (
                             urgentTasks.map(t => (
                                 <div key={t.id} className="p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-start gap-3 group cursor-pointer min-w-0">
-                                    <div className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${t.date < todayStr ? 'bg-red-500' : 'bg-amber-500'}`}></div>
+                                    <div className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${isDateBeforeDateString(t.date, todayStr) ? 'bg-red-500' : 'bg-amber-500'}`}></div>
                                     <div className="flex-1 min-w-0">
                                         <p className="break-words text-sm font-bold leading-tight text-slate-800 dark:text-slate-100 group-hover:text-purple-600 transition-colors">{t.title}</p>
                                         <div className="mt-1.5 flex flex-wrap items-center gap-2">
                                             <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-[0.14em]">{t._type}</span>
-                                            <span className={`text-[9px] font-bold break-words ${t.date < todayStr ? 'text-red-500' : 'text-slate-400'}`}>Vence: {t.date}</span>
+                                            <span className={`text-[9px] font-bold break-words ${isDateBeforeDateString(t.date, todayStr) ? 'text-red-500' : 'text-slate-400'}`}>Vence: {t.date}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -2481,6 +2485,7 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
     } = useTaskRoomState('cluster_account_room_state');
     const [searchTerm, setSearchTerm] = useState('');
     const [draggedTaskId, setDraggedTaskId] = useState(null);
+    const todayStr = getHondurasTodayStr();
 
     const columns = [
         { id: 'por_disenar', title: 'Por Diseñar', color: 'slate' },
@@ -2492,12 +2497,12 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
     const filteredTasks = tasks.filter(t => {
         if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
         if (ownershipFilter === 'mine' && !isTaskAssignedToProfile(t, currentUserProfile, [currentUserProfile?.linkedManagerId])) return false;
-        if (filterMode === 'date') return t.date === currentDate;
-        if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'publicado';
-        return true; 
+        if (filterMode === 'date') return compareDateOnlyStrings(t.date, currentDate) === 0;
+        if (filterMode === 'overdue') return isDateBeforeDateString(t.date, todayStr) && t.status !== 'publicado';
+        return true;
     });
     const handleAddTask = (dateStr) => {
-        const nextDate = dateStr || getHondurasTodayStr();
+        const nextDate = normalizeDateOnlyString(dateStr) || todayStr;
         setCurrentDate(nextDate);
         setFilterMode('date');
         onAdd(nextDate);
@@ -2605,7 +2610,7 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
                                     const client = clients.find(c => c.id === t.clientId);
                                     let mappedColorName = legacyColorMap[manager?.color] || manager?.color;
                                     const mStyles = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
-                                    const isOverdue = t.date < getHondurasTodayStr() && col.id !== 'publicado';
+                                    const isOverdue = isDateBeforeDateString(t.date, todayStr) && col.id !== 'publicado';
                                     
                                     return (
                                         <div key={t.id} onClick={() => onTaskClick(t)} 
@@ -2670,6 +2675,7 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
     } = useTaskRoomState('cluster_editions_room_state');
     const [searchTerm, setSearchTerm] = useState('');
     const [draggedTaskId, setDraggedTaskId] = useState(null);
+    const todayStr = getHondurasTodayStr();
 
     const columns = [
         { id: 'editar', title: 'Por Editar', color: 'slate' },
@@ -2693,13 +2699,13 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
     const filteredTasks = tasks.filter(t => {
         if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
         if (ownershipFilter === 'mine' && !isTaskAssignedToProfile(t, currentUserProfile, [currentUserProfile?.linkedEditorId])) return false;
-        if (filterMode === 'date') return t.date === currentDate;
-        if (filterMode === 'overdue') return t.date < getHondurasTodayStr() && t.status !== 'publicado';
+        if (filterMode === 'date') return compareDateOnlyStrings(t.date, currentDate) === 0;
+        if (filterMode === 'overdue') return isDateBeforeDateString(t.date, todayStr) && t.status !== 'publicado';
         return true; 
     });
     const canManageEditingTasks = userHasPermission(currentUserProfile, 'manage_editing_tasks');
     const handleAddTask = (dateStr) => {
-        const nextDate = dateStr || getHondurasTodayStr();
+        const nextDate = normalizeDateOnlyString(dateStr) || todayStr;
         setCurrentDate(nextDate);
         setFilterMode('date');
         onAdd(nextDate);
@@ -2707,7 +2713,7 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
     const rankedTasks = filteredTasks
         .map((task) => {
             const hierarchy = getEditingHierarchyId(task);
-            const delta = task.date ? Math.round((new Date(`${task.date}T00:00:00`) - new Date(`${getHondurasTodayStr()}T00:00:00`)) / 86400000) : 99;
+            const delta = task.date ? getDateOnlyDiffDays(task.date, todayStr) : 99;
             const hierarchyScore = hierarchy === 'p1' ? 400 : hierarchy === 'p2' ? 280 : hierarchy === 'p3' ? 170 : 90;
             const priorityBonus = task.priority === 'urgente' ? 130 : task.priority === 'recurrente' ? 30 : 70;
             const dateBonus = delta < 0 ? 180 : delta === 0 ? 120 : delta === 1 ? 70 : delta <= 3 ? 30 : 0;
@@ -2788,7 +2794,7 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
                                     const pStyle = priorityStyles[t.priority] || priorityStyles.normal;
                                     const hStyle = hierarchyStyles[t.hierarchy] || hierarchyStyles[getEditingHierarchyId(t)] || hierarchyStyles.p2;
                                     const eStyles = PERSON_COLORS[editor?.color] || PERSON_COLORS.slate;
-                                    const isOverdue = t.date < getHondurasTodayStr() && col.id !== 'publicado';
+                                    const isOverdue = isDateBeforeDateString(t.date, todayStr) && col.id !== 'publicado';
                                     const hierarchyId = t.hierarchy || getEditingHierarchyId(t);
                                     const borderLeftColor = isOverdue ? 'border-l-red-600' : (hierarchyId === 'p1' ? 'border-l-red-500' : hierarchyId === 'p2' ? 'border-l-amber-500' : hierarchyId === 'p3' ? 'border-l-emerald-500' : 'border-l-slate-400');
 
@@ -2868,6 +2874,7 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
     } = useTaskRoomState('cluster_management_room_state');
     const [searchTerm, setSearchTerm] = useState('');
     const [draggedTaskId, setDraggedTaskId] = useState(null);
+    const todayStr = getHondurasTodayStr();
 
     const columns = [
         { id: 'pendiente', title: 'Pendiente', color: 'slate' },
@@ -2879,12 +2886,12 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
     const filteredTasks = tasks.filter((task) => {
         if (searchTerm && !task.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
         if (ownershipFilter === 'mine' && !isTaskAssignedToProfile(task, currentUserProfile, [currentUserProfile?.id])) return false;
-        if (filterMode === 'date') return task.date === currentDate;
-        if (filterMode === 'overdue') return task.date < getHondurasTodayStr() && task.status !== 'cerrado';
+        if (filterMode === 'date') return compareDateOnlyStrings(task.date, currentDate) === 0;
+        if (filterMode === 'overdue') return isDateBeforeDateString(task.date, todayStr) && task.status !== 'cerrado';
         return true;
     });
     const handleAddTask = (dateStr) => {
-        const nextDate = dateStr || getHondurasTodayStr();
+        const nextDate = normalizeDateOnlyString(dateStr) || todayStr;
         setCurrentDate(nextDate);
         setFilterMode('date');
         onAdd(nextDate);
@@ -2952,7 +2959,7 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
                                     colTasks.map((task) => {
                                         const member = members.find((item) => item.id === task.contextId);
                                         const client = clients.find((item) => item.id === task.clientId);
-                                        const isOverdue = task.date < getHondurasTodayStr() && col.id !== 'cerrado';
+                                        const isOverdue = isDateBeforeDateString(task.date, todayStr) && col.id !== 'cerrado';
                                         return (
                                             <div key={task.id} onClick={() => onTaskClick(task)} draggable="true" onDragStart={(e) => handleDragStart(e, task.id)} onDragEnd={handleDragEnd} className={`bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all group cursor-grab active:cursor-grabbing border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${isOverdue ? 'border-l-red-500 dark:bg-red-950/20' : 'border-l-violet-500'}`}>
                                                 <div className="flex justify-between items-start mb-2">
