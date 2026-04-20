@@ -2,7 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "functions": {
-    "api/[...path].js": {
+    "api/health.js": {
+      "includeFiles": "server/**"
+    },
+    "api/auth/[...path].js": {
+      "includeFiles": "server/**"
+    },
+    "api/collections/[...path].js": {
       "includeFiles": "server/**"
     }
   },
