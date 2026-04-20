@@ -5,5 +5,15 @@
     "api/[...path].js": {
       "includeFiles": "server/**"
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/:path((?!api/|src/|favicon\\.svg|app-config\\.js).*)",
+      "destination": "/index.html"
+    }
+  ]
 }

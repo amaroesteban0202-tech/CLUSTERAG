@@ -39,6 +39,13 @@ const parseJson = (value, fallback) => {
 };
 
 const defaultFirebaseProjectId = process.env.FIREBASE_PROJECT_ID || 'cluster-41f73';
+const isVercelRuntime = ['1', 'true'].includes(String(process.env.VERCEL || '').toLowerCase());
+const defaultSqliteFilename = isVercelRuntime ? '/tmp/clusterag.sqlite' : '.tmp/clusterag.sqlite';
+const resolveSqliteFilename = (value = defaultSqliteFilename) => (
+    path.isAbsolute(value)
+        ? value
+        : path.resolve(rootDir, value)
+);
 
 export const env = {
     rootDir,
@@ -47,7 +54,7 @@ export const env = {
     appBaseUrl: process.env.APP_BASE_URL || '',
     appId: process.env.APP_ID || 'cluster-agency-pro-mobile-v7',
     databaseClient: process.env.DATABASE_CLIENT === 'mysql2' ? 'mysql2' : 'sqlite3',
-    sqliteFilename: path.resolve(rootDir, process.env.SQLITE_FILENAME || '.tmp/clusterag.sqlite'),
+    sqliteFilename: resolveSqliteFilename(process.env.SQLITE_FILENAME || defaultSqliteFilename),
     mysql: {
         host: process.env.MYSQL_HOST || '127.0.0.1',
         port: parseNumber(process.env.MYSQL_PORT, 3306),
