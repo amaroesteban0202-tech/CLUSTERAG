@@ -29,6 +29,7 @@ const copyIntoPublic = (relativePath) => {
 };
 
 resetDir(publicDir);
+copyIntoPublic('index.html');
 copyIntoPublic('app-config.js');
 copyIntoPublic('favicon.svg');
 copyIntoPublic('src');
