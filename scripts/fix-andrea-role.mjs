@@ -1,12 +1,12 @@
-// Script para asegurar que Maria Galicia tenga acceso como editor en Firestore.
+// Script para asegurar que Andrea Chamorro tenga acceso como editor en Firestore.
 const PROJECT_ID = 'cluster-41f73';
 const APP_ID = 'cluster-agency-pro-mobile-v6';
 const BASE_PATH = `artifacts/${APP_ID}/public/data`;
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 const TARGET_USER = {
-    name: 'Maria Galicia',
-    email: 'marialaguna2117@gmail.com',
-    color: 'c22'
+    name: 'Andrea Chamorro',
+    email: 'achchamorro25@gmail.com',
+    color: 'c3'
 };
 
 const nowIso = () => new Date().toISOString();
@@ -15,15 +15,33 @@ const toBooleanField = (value) => ({ booleanValue: Boolean(value) });
 const toMapField = (fields = {}) => ({ mapValue: { fields } });
 const getDocumentId = (documentName = '') => String(documentName || '').split('/').pop();
 
-async function readCollection(collectionName, pageSize = 500) {
-    const url = `${FIRESTORE_BASE}/${BASE_PATH}/${collectionName}?pageSize=${pageSize}`;
-    const res = await fetch(url);
+async function runQuery(collectionName, fieldName, operator, value) {
+    const url = `${FIRESTORE_BASE}/${BASE_PATH}:runQuery`;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            structuredQuery: {
+                from: [{ collectionId: collectionName }],
+                where: {
+                    fieldFilter: {
+                        field: { fieldPath: fieldName },
+                        op: operator,
+                        value: value
+                    }
+                },
+                limit: 1
+            }
+        })
+    });
     if (!res.ok) {
         const text = await res.text();
-        throw new Error(`Error al leer ${collectionName}: ${res.status} - ${text}`);
+        throw new Error(`Error en runQuery ${collectionName}: ${res.status} - ${text}`);
     }
     const data = await res.json();
-    return data.documents || [];
+    return data
+        .map(item => item.document)
+        .filter(Boolean);
 }
 
 async function createDocument(collectionName, fields) {
@@ -58,22 +76,13 @@ async function updateDocumentFields(documentName, fields) {
 }
 
 async function findUserByEmail(email) {
-    const users = await readCollection('users', 500);
-    return users.find((doc) => {
-        const docEmail = doc.fields?.email?.stringValue || '';
-        return docEmail.toLowerCase() === email.toLowerCase();
-    }) || null;
+    const docs = await runQuery('users', 'email', 'EQUAL', toStringField(email));
+    return docs[0] || null;
 }
 
 async function findEditorProfile() {
-    const editors = await readCollection('editors', 200);
-    return editors.find((doc) => {
-        const editorEmail = (doc.fields?.email?.stringValue || '').toLowerCase();
-        const editorName = (doc.fields?.name?.stringValue || '').toLowerCase();
-        return editorEmail === TARGET_USER.email.toLowerCase() ||
-            editorName.includes('maria galicia') ||
-            editorName.includes('maria laguna');
-    }) || null;
+    const docs = await runQuery('editors', 'email', 'EQUAL', toStringField(TARGET_USER.email));
+    return docs[0] || null;
 }
 
 async function ensureEditorProfile() {
@@ -115,7 +124,15 @@ async function createUserRecord(editorId) {
 }
 
 async function ensureUserRecord(editorId) {
-    const existingUser = await findUserByEmail(TARGET_USER.email);
+    let existingUser = await findUserByEmail(TARGET_USER.email);
+    
+    if (!existingUser) {
+        // Fallback check: check if it's stored with caps or something
+        // Just let's check lowercase too just in case
+        const docs = await runQuery('users', 'email', 'EQUAL', toStringField(TARGET_USER.email.toLowerCase()));
+        existingUser = docs[0] || null;
+    }
+
     if (!existingUser) {
         return await createUserRecord(editorId);
     }

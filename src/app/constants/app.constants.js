@@ -160,11 +160,11 @@ export const SUPER_ADMIN_EMAILS = [
 ];
 
 export const DEFAULT_MANAGEMENT_TEAM = [
-    { name: 'Aiskel', email: 'maycolljaramillo01+aiskel@gmail.com' },
+    { name: 'Aiskel', email: 'aiskel.wuerman82@gmail.com' },
     { name: 'Maycoll', email: 'maycolljaramillo01@gmail.com' },
-    { name: 'Esteban', email: 'maycolljaramillo01+esteban@gmail.com' },
-    { name: 'Maria', email: 'maycolljaramillo01+maria@gmail.com' },
-    { name: 'Orlando', email: 'maycolljaramillo01+orlando@gmail.com' }
+    { name: 'Esteban', email: 'estebanantonio02@gmail.com' },
+    { name: 'Maria', email: 'marialaguna2117@gmail.com' },
+    { name: 'Orlando', email: 'info@cluster.marketing' }
 ];
 
 // Editores pre-autorizados: al iniciar sesion con estos correos,

@@ -256,6 +256,9 @@ const getEmailLinkAuthErrorMessage = (error, phase = 'send') => {
     if (code === 'auth/invalid-email') {
         return 'El correo no es valido.';
     }
+    if (code === 'auth/missing-client-config') {
+        return 'Falta configurar el SDK web de Firebase para enviar accesos por correo.';
+    }
     if (phase === 'complete' && (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code')) {
         return 'El enlace ya no es valido o vencio.';
     }
@@ -329,39 +332,59 @@ const isTaskAssignedToProfile = (task, profile, contextIds = []) => {
     if (task?.assigneeUserId && task.assigneeUserId === profileId) return true;
     return contextIds.filter(Boolean).includes(task?.contextId);
 };
-const getTaskRoomDefaults = () => ({
+const TASK_ROOM_STATE_VERSION = 2;
+const getTaskRoomDefaults = ({ preferMine = false } = {}) => ({
     currentDate: getHondurasTodayStr(),
-    filterMode: 'date',
-    ownershipFilter: 'all'
+    filterMode: preferMine ? 'all' : 'date',
+    ownershipFilter: preferMine ? 'mine' : 'all'
 });
-const readTaskRoomState = (storageKey) => {
-    const defaults = getTaskRoomDefaults();
+const readTaskRoomState = (storageKey, options = {}) => {
+    const defaults = getTaskRoomDefaults(options);
     if (typeof window === 'undefined') return defaults;
     try {
         const rawValue = window.localStorage.getItem(storageKey);
         if (!rawValue) return defaults;
         const parsedValue = JSON.parse(rawValue);
-        return {
+        const parsedState = {
             currentDate: resolveStoredTaskRoomDate(parsedValue.currentDate, parsedValue.savedAt, defaults.currentDate),
             filterMode: ['date', 'overdue', 'all'].includes(parsedValue.filterMode) ? parsedValue.filterMode : defaults.filterMode,
             ownershipFilter: ['all', 'mine'].includes(parsedValue.ownershipFilter) ? parsedValue.ownershipFilter : defaults.ownershipFilter
         };
+        const savedVersion = Number(parsedValue.version || 0);
+        const wasPersonalized = parsedValue.personalized === true;
+        const looksLikeLegacyDefault = (!wasPersonalized || savedVersion < TASK_ROOM_STATE_VERSION) &&
+            parsedState.filterMode === 'date' &&
+            parsedState.ownershipFilter === 'all' &&
+            compareDateOnlyStrings(parsedState.currentDate, defaults.currentDate) === 0;
+        if (options.preferMine && looksLikeLegacyDefault) return defaults;
+        return parsedState;
     } catch (error) {
         console.warn(`No se pudo leer el estado guardado de ${storageKey}:`, error);
         return defaults;
     }
 };
-const useTaskRoomState = (storageKey) => {
-    const [roomState, setRoomState] = useState(() => readTaskRoomState(storageKey));
+const useTaskRoomState = (storageKey, options = {}) => {
+    const [roomState, setRoomState] = useState(() => readTaskRoomState(storageKey, options));
+
+    useEffect(() => {
+        const nextState = readTaskRoomState(storageKey, options);
+        const hasChanges =
+            nextState.currentDate !== roomState.currentDate ||
+            nextState.filterMode !== roomState.filterMode ||
+            nextState.ownershipFilter !== roomState.ownershipFilter;
+        if (hasChanges) setRoomState(nextState);
+    }, [storageKey, options.preferMine, roomState.currentDate, roomState.filterMode, roomState.ownershipFilter]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
         window.localStorage.setItem(storageKey, JSON.stringify({
             ...roomState,
             currentDate: normalizeDateOnlyString(roomState.currentDate) || getHondurasTodayStr(),
-            savedAt: getHondurasTodayStr()
+            savedAt: getHondurasTodayStr(),
+            version: TASK_ROOM_STATE_VERSION,
+            personalized: Boolean(options.preferMine)
         }));
-    }, [storageKey, roomState]);
+    }, [storageKey, roomState, options.preferMine]);
 
     return {
         currentDate: roomState.currentDate,
@@ -430,16 +453,43 @@ function App() {
     const authEmail = normalizeEmail(user?.email);
     const authEmailMatches = authEmail ? appUsers.filter((item) => normalizeEmail(item.email) === authEmail) : [];
     const resolvedAuthProfile = authEmailMatches.length > 0 ? chooseCanonicalUserRecord(authEmailMatches) : null;
+    const pendingManagementMember = authEmail ? MANAGEMENT_DIRECTORY.find((item) => normalizeEmail(item.email) === authEmail) : null;
+    const pendingMatchedManager = authEmail ? managers.find((item) => normalizeEmail(item.email) === authEmail) : null;
+    const pendingMatchedEditor = authEmail ? editors.find((item) => normalizeEmail(item.email) === authEmail) : null;
+    const pendingPreAuthorizedEditor = authEmail && !pendingMatchedEditor
+        ? DEFAULT_EDITORS_TEAM.find((item) => normalizeEmail(item.email) === authEmail)
+        : null;
+    const pendingRole = !authEmail
+        ? 'viewer'
+        : pendingManagementMember
+          ? 'management'
+          : pendingMatchedManager
+            ? 'manager'
+            : (pendingMatchedEditor || pendingPreAuthorizedEditor)
+              ? 'editor'
+              : 'viewer';
+    const effectiveResolvedAuthProfile = resolvedAuthProfile
+        ? {
+            ...resolvedAuthProfile,
+            role: getUserRolePriority(pendingRole) > getUserRolePriority(resolvedAuthProfile.role) ? pendingRole : resolvedAuthProfile.role,
+            managementKey: resolvedAuthProfile.managementKey || pendingManagementMember?.directoryKey || '',
+            linkedManagerId: resolvedAuthProfile.linkedManagerId || pendingMatchedManager?.id || '',
+            linkedEditorId: resolvedAuthProfile.linkedEditorId || pendingMatchedEditor?.id || ''
+        }
+        : null;
     const currentUserProfile = !user
         ? null
         : authEmail
-          ? resolvedAuthProfile || {
+          ? effectiveResolvedAuthProfile || {
                 id: 'pending-user',
                 name: user.displayName || authEmail.split('@')[0],
                 email: authEmail,
-                role: 'viewer',
+                role: pendingRole,
                 isActive: true,
-                pending: true
+                pending: true,
+                managementKey: pendingManagementMember?.directoryKey || '',
+                linkedManagerId: pendingMatchedManager?.id || '',
+                linkedEditorId: pendingMatchedEditor?.id || ''
             }
           : {
                 id: 'anonymous',
@@ -2624,7 +2674,7 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
         setFilterMode,
         ownershipFilter,
         setOwnershipFilter
-    } = useTaskRoomState('cluster_account_room_state');
+    } = useTaskRoomState('cluster_account_room_state', { preferMine: Boolean(currentUserProfile?.linkedManagerId) });
     const [searchTerm, setSearchTerm] = useState('');
     const [draggedTaskId, setDraggedTaskId] = useState(null);
     const todayStr = getHondurasTodayStr();
@@ -2814,7 +2864,7 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
         setFilterMode,
         ownershipFilter,
         setOwnershipFilter
-    } = useTaskRoomState('cluster_editions_room_state');
+    } = useTaskRoomState('cluster_editions_room_state', { preferMine: Boolean(currentUserProfile?.linkedEditorId) });
     const [searchTerm, setSearchTerm] = useState('');
     const [draggedTaskId, setDraggedTaskId] = useState(null);
     const todayStr = getHondurasTodayStr();
@@ -3013,7 +3063,7 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
         setFilterMode,
         ownershipFilter,
         setOwnershipFilter
-    } = useTaskRoomState('cluster_management_room_state');
+    } = useTaskRoomState('cluster_management_room_state', { preferMine: currentUserProfile?.role === 'management' });
     const [searchTerm, setSearchTerm] = useState('');
     const [draggedTaskId, setDraggedTaskId] = useState(null);
     const todayStr = getHondurasTodayStr();

@@ -14,6 +14,12 @@
     <link rel="stylesheet" href="./src/styles/main.css">
 
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+    <script src="/app-config.js"></script>
+    <script>
+        window.__cluster_api_base_url = window.__cluster_api_base_url || '';
+        window.__cluster_app_id = window.__cluster_app_id || 'cluster-agency-pro-mobile-v7';
+        window.__cluster_firebase_config = window.__cluster_firebase_config || null;
+    </script>
 
     <script type="importmap">
     {
@@ -21,9 +27,9 @@
             "react": "https://esm.sh/react@18.2.0",
             "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
             "lucide-react": "https://esm.sh/lucide-react@0.292.0",
-            "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
-            "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js",
-            "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
+            "firebase/app": "./src/app/lib/firebase-app-compat.js",
+            "firebase/auth": "./src/app/lib/firebase-auth-compat.js",
+            "firebase/firestore": "./src/app/lib/firebase-firestore-compat.js"
         }
     }
     </script>
