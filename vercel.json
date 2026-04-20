@@ -14,6 +14,22 @@
   },
   "rewrites": [
     {
+      "source": "/api/auth/google/:path*",
+      "destination": "/api/auth-entry"
+    },
+    {
+      "source": "/api/auth/firebase/:path*",
+      "destination": "/api/auth-entry"
+    },
+    {
+      "source": "/api/auth/email/:path*",
+      "destination": "/api/auth-entry"
+    },
+    {
+      "source": "/api/auth/token/:path*",
+      "destination": "/api/auth-entry"
+    },
+    {
       "source": "/api/auth/:path*",
       "destination": "/api/auth-entry"
     },
