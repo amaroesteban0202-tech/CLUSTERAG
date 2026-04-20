@@ -5,14 +5,22 @@
     "api/health.js": {
       "includeFiles": "server/**"
     },
-    "api/auth/[...path].js": {
+    "api/auth-entry.js": {
       "includeFiles": "server/**"
     },
-    "api/collections/[...path].js": {
+    "api/collections-entry.js": {
       "includeFiles": "server/**"
     }
   },
   "rewrites": [
+    {
+      "source": "/api/auth/:path*",
+      "destination": "/api/auth-entry"
+    },
+    {
+      "source": "/api/collections/:path*",
+      "destination": "/api/collections-entry"
+    },
     {
       "source": "/",
       "destination": "/index.html"
