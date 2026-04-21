@@ -9,6 +9,7 @@ import {
     listRecords,
     upsertRecord
 } from '../lib/records.js';
+import { prepareManagementTaskPayload } from '../lib/management-tasks.js';
 import { requireAuthenticatedUser } from '../lib/sessions.js';
 
 const router = express.Router();
@@ -28,6 +29,18 @@ const ensureCollectionPermission = (req, action) => {
     return { userRecord, collectionName };
 };
 
+const prepareCollectionPayload = ({ collectionName, payload, existing = null, actor = null, isCreate = false }) => {
+    if (collectionName === 'management_tasks') {
+        return prepareManagementTaskPayload({
+            payload,
+            existing,
+            actor,
+            isCreate
+        });
+    }
+    return payload || {};
+};
+
 router.post('/_batch', asyncHandler(async (req, res) => {
     const operations = Array.isArray(req.body?.ops) ? req.body.ops : [];
     if (operations.length === 0) {
@@ -35,7 +48,7 @@ router.post('/_batch', asyncHandler(async (req, res) => {
         return;
     }
 
-    requireAuthenticatedUser(req);
+    const actor = requireAuthenticatedUser(req);
 
     await db.transaction(async (trx) => {
         for (const operation of operations) {
@@ -52,10 +65,19 @@ router.post('/_batch', asyncHandler(async (req, res) => {
             }
 
             if (action === 'update' || action === 'set') {
+                const existing = collectionName === 'management_tasks'
+                    ? await getRecord({ collectionName, recordId: operation.recordId, trx })
+                    : null;
                 await upsertRecord({
                     collectionName,
                     recordId: operation.recordId,
-                    payload: operation.data || {},
+                    payload: prepareCollectionPayload({
+                        collectionName,
+                        payload: operation.data || {},
+                        existing,
+                        actor,
+                        isCreate: false
+                    }),
                     merge: operation.merge !== false,
                     trx
                 });
@@ -75,7 +97,12 @@ router.post('/_batch', asyncHandler(async (req, res) => {
                 await createRecord({
                     collectionName,
                     recordId: operation.recordId,
-                    payload: operation.data || {},
+                    payload: prepareCollectionPayload({
+                        collectionName,
+                        payload: operation.data || {},
+                        actor,
+                        isCreate: true
+                    }),
                     trx
                 });
                 continue;
@@ -110,28 +137,40 @@ router.get('/:collectionName/:recordId', asyncHandler(async (req, res) => {
 }));
 
 router.post('/:collectionName', asyncHandler(async (req, res) => {
-    const { collectionName } = ensureCollectionPermission(req, 'create');
+    const { collectionName, userRecord } = ensureCollectionPermission(req, 'create');
     const record = await createRecord({
         collectionName,
         recordId: req.body?.id,
-        payload: req.body?.data || {}
+        payload: prepareCollectionPayload({
+            collectionName,
+            payload: req.body?.data || {},
+            actor: userRecord,
+            isCreate: true
+        })
     });
     res.status(201).json({ record });
 }));
 
 router.put('/:collectionName/:recordId', asyncHandler(async (req, res) => {
-    const { collectionName } = ensureCollectionPermission(req, 'update');
+    const { collectionName, userRecord } = ensureCollectionPermission(req, 'update');
+    const existing = await getRecord({ collectionName, recordId: req.params.recordId });
     const record = await upsertRecord({
         collectionName,
         recordId: req.params.recordId,
-        payload: req.body?.data || {},
+        payload: prepareCollectionPayload({
+            collectionName,
+            payload: req.body?.data || {},
+            existing,
+            actor: userRecord,
+            isCreate: false
+        }),
         merge: req.body?.merge !== false
     });
     res.json({ record });
 }));
 
 router.patch('/:collectionName/:recordId', asyncHandler(async (req, res) => {
-    const { collectionName } = ensureCollectionPermission(req, 'update');
+    const { collectionName, userRecord } = ensureCollectionPermission(req, 'update');
     const existing = await getRecord({ collectionName, recordId: req.params.recordId });
     if (!existing) {
         throw createHttpError(404, 'El documento no existe.', 'document/not-found');
@@ -139,7 +178,13 @@ router.patch('/:collectionName/:recordId', asyncHandler(async (req, res) => {
     const record = await upsertRecord({
         collectionName,
         recordId: req.params.recordId,
-        payload: req.body?.data || {},
+        payload: prepareCollectionPayload({
+            collectionName,
+            payload: req.body?.data || {},
+            existing,
+            actor: userRecord,
+            isCreate: false
+        }),
         merge: true
     });
     res.json({ record });

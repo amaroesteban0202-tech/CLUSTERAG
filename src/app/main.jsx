@@ -65,6 +65,14 @@ const VIEW_PERMISSIONS = {
 
 const normalizeEmail = (value = '') => String(value || '').trim().toLowerCase();
 const normalizeNameKey = (value = '') => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+const normalizeTimeValue = (value = '') => {
+    const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return '';
+    const [, hours, minutes] = match;
+    const normalizedHours = hours.padStart(2, '0');
+    if (Number(normalizedHours) > 23 || Number(minutes) > 59) return '';
+    return `${normalizedHours}:${minutes}`;
+};
 const nowIso = () => new Date().toISOString();
 const EMAIL_LINK_STORAGE_KEY = 'cluster_email_link_for_sign_in';
 const PENDING_TASK_STATUS_UPDATES_KEY = 'cluster_pending_task_status_updates';
@@ -854,6 +862,99 @@ function App() {
             localStorage.setItem('cluster_os_view', 'dashboard');
         }
     }, [currentUserProfile, profileBlocked, view]);
+
+    // Notificaciones del navegador para tareas de gestion asignadas al usuario.
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
+        if (!currentUserProfile?.id || profileBlocked) return;
+
+        const NOTIF_KEY = 'cluster_browser_task_notifications_v1';
+        const HOUR = 3600000;
+
+        const readState = () => {
+            try { return JSON.parse(localStorage.getItem(NOTIF_KEY) || '{}'); } catch { return {}; }
+        };
+        const writeState = (next) => {
+            try { localStorage.setItem(NOTIF_KEY, JSON.stringify(next)); } catch { void 0; }
+        };
+
+        const tryRequestPermission = () => {
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().catch(() => {});
+            }
+        };
+        tryRequestPermission();
+
+        const fireNotification = (task, stage, dueMs) => {
+            if (Notification.permission !== 'granted') return;
+            const titleMap = {
+                '8h': '⏰ Tarea proxima a vencer (8h)',
+                'overdue': '🔴 Tarea vencida',
+                'nag': '🔴 Tarea vencida hace mas de 24h'
+            };
+            const client = clients.find((c) => c.id === task.clientId);
+            const body = [
+                task.title,
+                task.time ? `Hora limite: ${task.time}` : '',
+                client ? `Cliente: ${client.name}` : ''
+            ].filter(Boolean).join('\n');
+            try {
+                const notif = new Notification(titleMap[stage] || 'Tarea de gestion', {
+                    body,
+                    tag: `cluster-task-${task.id}-${stage}`,
+                    requireInteraction: stage === 'overdue' || stage === 'nag'
+                });
+                notif.onclick = () => {
+                    window.focus();
+                    setView('management-room');
+                    notif.close();
+                };
+            } catch { void 0; }
+            void dueMs;
+        };
+
+        const scan = () => {
+            if (document.hidden && Notification.permission !== 'granted') return;
+            const state = readState();
+            const now = Date.now();
+            const myId = currentUserProfile.id;
+            let mutated = false;
+
+            for (const task of managementTasks) {
+                if (!task || task.status === 'cerrado') continue;
+                if (task.notificationsEnabled === false) continue;
+                const mine = task.contextId === myId || task.assigneeUserId === myId;
+                if (!mine) continue;
+                if (!task.date || !/^\d{2}:\d{2}$/.test(task.time || '')) continue;
+                const dueMs = Date.parse(`${task.date}T${task.time}:00-06:00`);
+                if (!Number.isFinite(dueMs)) continue;
+                const diff = dueMs - now;
+                const seen = state[task.id] || {};
+
+                if (diff > 0 && diff <= 8 * HOUR && !seen['8h']) {
+                    fireNotification(task, '8h', dueMs); seen['8h'] = now; mutated = true;
+                }
+                if (diff <= 0 && !seen.overdue) {
+                    fireNotification(task, 'overdue', dueMs); seen.overdue = now; mutated = true;
+                } else if (diff <= 0 && seen.overdue && now - (seen.nag || seen.overdue) >= 24 * HOUR) {
+                    fireNotification(task, 'nag', dueMs); seen.nag = now; mutated = true;
+                }
+
+                state[task.id] = seen;
+            }
+
+            if (mutated) writeState(state);
+        };
+
+        scan();
+        const interval = window.setInterval(scan, 60000);
+        const onFocus = () => scan();
+        window.addEventListener('focus', onFocus);
+        return () => {
+            window.clearInterval(interval);
+            window.removeEventListener('focus', onFocus);
+        };
+    }, [currentUserProfile?.id, profileBlocked, managementTasks, clients]);
 
     useEffect(() => {
         if (!db || !currentUserProfile || profileBlocked || isFlushingPendingTaskStatusesRef.current) return;
@@ -1648,6 +1749,16 @@ function App() {
 
     const addManagementTask = async (data) => {
         const member = managementUsers.find((item) => item.id === data.contextId);
+        const normalizedDate = normalizeDateOnlyString(data.date);
+        const normalizedTime = normalizeTimeValue(data.time);
+        if (!normalizedDate || !normalizedTime) {
+            showToast('La tarea de gestion requiere fecha y hora limite.', 'error');
+            return;
+        }
+        if (data.notificationsEnabled !== false && !normalizeEmail(member?.email)) {
+            showToast('El integrante asignado necesita un correo para recibir recordatorios automaticos.', 'error');
+            return;
+        }
         await runMutation({
             permission: 'create_management_tasks',
             action: 'create',
@@ -1655,12 +1766,22 @@ function App() {
             description: `Crea tarea de gestion ${data.title}`,
             changes: data,
             successMessage: 'Agendado',
-            execute: () => addDoc(dataCollection('management_tasks'), { ...data, assigneeUserId: member?.id || '', status: 'pendiente', createdAt: nowIso(), updatedAt: nowIso() }),
+            execute: () => addDoc(dataCollection('management_tasks'), { ...data, date: normalizedDate, time: normalizedTime, assigneeUserId: member?.id || '', status: 'pendiente', createdAt: nowIso(), updatedAt: nowIso() }),
             afterSuccess: closeModal
         });
     };
     const updateManagementTask = async (id, data) => {
         const member = managementUsers.find((item) => item.id === data.contextId);
+        const normalizedDate = normalizeDateOnlyString(data.date);
+        const normalizedTime = normalizeTimeValue(data.time);
+        if (!normalizedDate || !normalizedTime) {
+            showToast('La tarea de gestion requiere fecha y hora limite.', 'error');
+            return;
+        }
+        if (data.notificationsEnabled !== false && !normalizeEmail(member?.email)) {
+            showToast('El integrante asignado necesita un correo para recibir recordatorios automaticos.', 'error');
+            return;
+        }
         await runMutation({
             permission: 'manage_management_tasks',
             action: 'update',
@@ -1669,7 +1790,7 @@ function App() {
             description: `Actualiza tarea de gestion ${id}`,
             changes: data,
             successMessage: 'Guardado',
-            execute: () => updateDoc(dataDoc('management_tasks', id), { ...data, assigneeUserId: member?.id || '', updatedAt: nowIso() }),
+            execute: () => updateDoc(dataDoc('management_tasks', id), { ...data, date: normalizedDate, time: normalizedTime, assigneeUserId: member?.id || '', updatedAt: nowIso() }),
             afterSuccess: closeModal
         });
     };
@@ -3055,6 +3176,24 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
     );
 };
 
+const computeManagementDueBadge = (task) => {
+    if (!task?.date || !task?.time || !/^\d{2}:\d{2}$/.test(task.time)) return null;
+    const iso = `${task.date}T${task.time}:00-06:00`;
+    const ms = Date.parse(iso);
+    if (!Number.isFinite(ms)) return null;
+    const diffMs = ms - Date.now();
+    const absHours = Math.abs(diffMs) / 3600000;
+    if (diffMs >= 0) {
+        if (absHours >= 48) return { label: `Vence en ${Math.round(absHours / 24)}d`, tone: 'slate' };
+        if (absHours >= 1) return { label: `Vence en ${Math.round(absHours)}h`, tone: absHours <= 8 ? 'amber' : 'slate' };
+        const mins = Math.max(1, Math.round(diffMs / 60000));
+        return { label: `Vence en ${mins}m`, tone: 'red' };
+    }
+    if (absHours < 1) return { label: `Vencida hace ${Math.max(1, Math.round(-diffMs / 60000))}m`, tone: 'red' };
+    if (absHours < 48) return { label: `Vencida hace ${Math.round(absHours)}h`, tone: 'red' };
+    return { label: `Vencida hace ${Math.round(absHours / 24)}d`, tone: 'red' };
+};
+
 const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
     const {
         currentDate,
@@ -3166,6 +3305,22 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
                                                 </div>
                                                 <p className="font-bold text-slate-700 dark:text-slate-200 text-sm mb-2 leading-tight">{task.title}</p>
                                                 {task.notes && <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 truncate max-w-[80%]">{task.notes}</p>}
+                                                {(() => {
+                                                    const badge = computeManagementDueBadge(task);
+                                                    if (!badge || col.id === 'cerrado') return null;
+                                                    const toneMap = {
+                                                        slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+                                                        amber: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+                                                        red: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                                    };
+                                                    return (
+                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md mb-2 ${toneMap[badge.tone] || toneMap.slate}`}>
+                                                            <Icon name={badge.tone === 'red' ? 'AlertTriangle' : 'Clock'} size={10} />
+                                                            {badge.label}
+                                                            {task.time ? ` · ${task.time}` : ''}
+                                                        </span>
+                                                    );
+                                                })()}
                                                 <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                                                     {prevStatus && <button onClick={(e) => { e.stopPropagation(); onChangeStatus(task, prevStatus); }} className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Icon name="ChevronLeft" size={12}/> Atras</button>}
                                                     {nextStatus && <button onClick={(e) => { e.stopPropagation(); onChangeStatus(task, nextStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-${col.color}-50 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-400 hover:bg-${col.color}-100 dark:hover:bg-${col.color}-500/30 transition-colors`}>{nextStatus === 'cerrado' ? 'Cerrar' : 'Avanzar'} <Icon name={nextStatus === 'cerrado' ? 'CheckCircle2' : 'ChevronRight'} size={12}/></button>}
@@ -3690,7 +3845,7 @@ const Modal = ({ config, onClose, clients, managers, editors, managementUsers, a
             if (type === 'event') actions.updateEvent(data.id, { title: buildEventTitle(fd.title, fd.time) });
             if (type === 'accountTask') actions.updateAccountTask(data.id, { title: fd.title || "", time: fd.time || data.time || "", contextId: fd.manager || data.contextId || "", clientId: fd.clientId || "", notes: fd.notes || "" });
             if (type === 'editingTask') actions.updateEditingTask(data.id, { title: fd.title || "", priority: fd.priority || "normal", hierarchy: fd.hierarchy || "p2", status: fd.status || data.status || "editar", notes: fd.notes || "", contextId: fd.editor || data.contextId || "", clientId: fd.clientId || "" });
-            if (type === 'managementTask') actions.updateManagementTask(data.id, { title: fd.title || "", time: fd.time || data.time || "", contextId: fd.member || data.contextId || "", clientId: fd.clientId || "", category: fd.category || "seguimiento", notes: fd.notes || "" });
+            if (type === 'managementTask') actions.updateManagementTask(data.id, { date: fd.date || data.date || "", title: fd.title || "", time: fd.time || data.time || "", contextId: fd.member || data.contextId || "", clientId: fd.clientId || "", category: fd.category || "seguimiento", notes: fd.notes || "", notificationsEnabled: fd.notificationsEnabled === 'on' });
             if (type === 'user') actions.updateUserRecord(data.id, { name: fd.name || "", email: fd.email || "", role: fd.role || "viewer", isActive: fd.isActive === 'true' });
         } else {
             if (type === 'client') actions.addClient({ name: fd.name || "", niche: fd.niche || "", package: fd.package || "", instagram: fd.instagram || "", managerId: fd.managerId || "" });
@@ -3699,7 +3854,7 @@ const Modal = ({ config, onClose, clients, managers, editors, managementUsers, a
             if (type === 'event') actions.addEvent({ date: data.date, title: buildEventTitle(fd.title, fd.time), type: data.type });
             if (type === 'accountTask') actions.addAccountTask({ date: data.date, title: fd.title || "", time: fd.time || "", contextId: fd.manager || data.contextId || "", clientId: fd.clientId || "", notes: fd.notes || "" });
             if (type === 'editingTask') actions.addEditingTask({ date: data.date, title: fd.title || "", priority: fd.priority || "normal", hierarchy: fd.hierarchy || "p2", status: fd.status || "editar", notes: fd.notes || "", contextId: fd.editor || data.contextId || "", clientId: fd.clientId || "" });
-            if (type === 'managementTask') actions.addManagementTask({ date: data.date, title: fd.title || "", time: fd.time || "", contextId: fd.member || data.contextId || "", clientId: fd.clientId || "", category: fd.category || "seguimiento", notes: fd.notes || "" });
+            if (type === 'managementTask') actions.addManagementTask({ date: fd.date || data.date || "", title: fd.title || "", time: fd.time || "", contextId: fd.member || data.contextId || "", clientId: fd.clientId || "", category: fd.category || "seguimiento", notes: fd.notes || "", notificationsEnabled: fd.notificationsEnabled === 'on' });
             if (type === 'user') actions.addUserRecord({ name: fd.name || "", email: fd.email || "", role: fd.role || "viewer", isActive: fd.isActive === 'true' });
         }
     };
@@ -3808,12 +3963,14 @@ const Modal = ({ config, onClose, clients, managers, editors, managementUsers, a
                         {type === 'managementTask' && <>
                             <Input name="title" placeholder="Titulo de la gestion" defaultValue={data?.title} required autoFocus />
 
+                            <Input name="date" type="date" label="Fecha limite *" defaultValue={data?.date || getHondurasTodayStr()} required />
+
                             <select name="clientId" defaultValue={data?.clientId || ""} className={`${selectClassName} font-bold`}>
                                 <option value="">Sin cliente asociado</option>
                                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
 
-                            <Input name="time" type="time" label="Hora (Opcional)" defaultValue={data?.time || ""} />
+                            <Input name="time" type="time" label="Hora limite *" defaultValue={data?.time || ""} required />
 
                             <select name="member" required defaultValue={data?.contextId || ""} className={selectClassName}>
                                 <option value="">Selecciona integrante...</option>
@@ -3828,6 +3985,20 @@ const Modal = ({ config, onClose, clients, managers, editors, managementUsers, a
                             </select>
 
                             <textarea name="notes" placeholder="Detalle de la gestion, acuerdos o proximos pasos..." defaultValue={data?.notes} className={textareaClassName}></textarea>
+
+                            <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="notificationsEnabled"
+                                    defaultChecked={data?.notificationsEnabled !== false}
+                                    className="w-4 h-4 accent-violet-600"
+                                />
+                                <div className="flex-1">
+                                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Recordar por correo</p>
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Envia avisos al asignado 8 horas antes, al vencer y cada 24 horas si sigue abierta.</p>
+                                </div>
+                            </label>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 -mt-2">El integrante asignado debe tener correo para que esta automatizacion funcione.</p>
                         </>}
 
                         {type === 'user' && <>

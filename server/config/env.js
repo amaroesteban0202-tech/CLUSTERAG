@@ -41,11 +41,14 @@ const parseJson = (value, fallback) => {
 const defaultFirebaseProjectId = process.env.FIREBASE_PROJECT_ID || 'cluster-41f73';
 const isVercelRuntime = ['1', 'true'].includes(String(process.env.VERCEL || '').toLowerCase());
 const defaultSqliteFilename = isVercelRuntime ? '/tmp/clusterag.sqlite' : '.tmp/clusterag.sqlite';
-const resolveSqliteFilename = (value = defaultSqliteFilename) => (
-    path.isAbsolute(value)
-        ? value
-        : path.resolve(rootDir, value)
-);
+const resolveSqliteFilename = (value = defaultSqliteFilename) => {
+    const resolved = path.isAbsolute(value) ? value : path.resolve(rootDir, value);
+    // En Vercel solo /tmp es escribible; cualquier otra ruta provoca ENOENT al hacer mkdir.
+    if (isVercelRuntime && !resolved.startsWith('/tmp/')) {
+        return '/tmp/clusterag.sqlite';
+    }
+    return resolved;
+};
 
 export const env = {
     rootDir,

@@ -10,6 +10,9 @@
     },
     "api/collections-entry.js": {
       "includeFiles": "server/**"
+    },
+    "api/cron-entry.js": {
+      "includeFiles": "server/**"
     }
   },
   "rewrites": [
@@ -38,12 +41,22 @@
       "destination": "/api/collections-entry"
     },
     {
+      "source": "/api/cron/:path*",
+      "destination": "/api/cron-entry"
+    },
+    {
       "source": "/",
       "destination": "/index.html"
     },
     {
       "source": "/:path((?!api/|src/|favicon\\.svg|app-config\\.js).*)",
       "destination": "/index.html"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/management-task-reminders",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

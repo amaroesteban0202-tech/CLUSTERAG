@@ -7,6 +7,7 @@ import { ensureBootstrapData } from './lib/bootstrap.js';
 import { attachSession } from './lib/sessions.js';
 import authRoutes from './routes/auth.js';
 import collectionRoutes from './routes/collections.js';
+import cronRoutes from './routes/cron.js';
 
 export const createApp = async () => {
     await migrateDatabase();
@@ -47,6 +48,7 @@ export const createApp = async () => {
 
     app.use('/api/auth', authRoutes);
     app.use('/api/collections', collectionRoutes);
+    app.use('/api/cron', cronRoutes);
 
     const blockedStaticPrefixes = [
         '/server/',
