@@ -1,16 +1,16 @@
 import { db } from '../db/knex.js';
 import { env } from '../config/env.js';
 import { createHttpError } from './http.js';
-import { randomToken } from './crypto.js';
+import { signPayload, verifySignedPayload } from './crypto.js';
 import { addHoursToIso, isIsoExpired, nowIso } from './time.js';
 import { getRecord, upsertRecord } from './records.js';
 
-const buildCookieOptions = () => ({
+const buildCookieOptions = (expiresAt = addHoursToIso(env.sessionTtlHours)) => ({
     httpOnly: true,
     sameSite: 'lax',
     secure: env.isProduction,
     path: '/',
-    expires: new Date(addHoursToIso(env.sessionTtlHours))
+    expires: new Date(expiresAt)
 });
 
 export const buildAuthUser = ({ userRecord, provider = 'password' }) => ({
@@ -22,20 +22,39 @@ export const buildAuthUser = ({ userRecord, provider = 'password' }) => ({
     providerData: provider ? [{ providerId: provider }] : []
 });
 
-export const createSession = async ({ req, res, userRecord, provider = 'password' }) => {
-    const sessionId = randomToken(32);
-    const stamp = nowIso();
-    const expiresAt = addHoursToIso(env.sessionTtlHours);
+const buildClearCookieOptions = () => ({
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: env.isProduction,
+    path: '/'
+});
 
-    await db('auth_sessions').insert({
-        session_id: sessionId,
-        user_record_id: userRecord.id,
+const buildSessionToken = ({ userRecord, provider = 'password', issuedAt = nowIso(), expiresAt = addHoursToIso(env.sessionTtlHours) }) => signPayload({
+    sub: userRecord.id,
+    provider,
+    iat: issuedAt,
+    exp: expiresAt
+}, env.sessionSecret);
+
+const buildSessionContext = ({ sessionToken = '', provider = 'password', expiresAt = '', userRecord }) => ({
+    sessionId: sessionToken,
+    session: {
         provider,
         expires_at: expiresAt,
-        last_seen_at: stamp,
-        created_at: stamp,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent') || ''
+        stateless: true
+    },
+    userRecord,
+    user: buildAuthUser({ userRecord, provider })
+});
+
+export const createSession = async ({ req, res, userRecord, provider = 'password' }) => {
+    const stamp = nowIso();
+    const expiresAt = addHoursToIso(env.sessionTtlHours);
+    const sessionToken = buildSessionToken({
+        userRecord,
+        provider,
+        issuedAt: stamp,
+        expiresAt
     });
 
     await upsertRecord({
@@ -48,16 +67,16 @@ export const createSession = async ({ req, res, userRecord, provider = 'password
         merge: true
     });
 
-    res.cookie(env.sessionCookieName, sessionId, buildCookieOptions());
-    return sessionId;
+    res.cookie(env.sessionCookieName, sessionToken, buildCookieOptions(expiresAt));
+    return sessionToken;
 };
 
 export const clearSession = async ({ req, res }) => {
     const sessionId = req.cookies?.[env.sessionCookieName];
-    if (sessionId) {
+    if (sessionId && !verifySignedPayload(sessionId, env.sessionSecret)) {
         await db('auth_sessions').where({ session_id: sessionId }).delete();
     }
-    res.clearCookie(env.sessionCookieName, buildCookieOptions());
+    res.clearCookie(env.sessionCookieName, buildClearCookieOptions());
 };
 
 export const attachSession = async (req, res, next) => {
@@ -74,10 +93,29 @@ export const attachSession = async (req, res, next) => {
         return;
     }
 
+    const signedSession = verifySignedPayload(sessionId, env.sessionSecret);
+    if (signedSession && !isIsoExpired(signedSession.exp)) {
+        const userRecord = await getRecord({ collectionName: 'users', recordId: signedSession.sub });
+        if (!userRecord) {
+            res.clearCookie(env.sessionCookieName, buildClearCookieOptions());
+            next();
+            return;
+        }
+
+        req.auth = buildSessionContext({
+            sessionToken: sessionId,
+            provider: signedSession.provider || 'password',
+            expiresAt: signedSession.exp,
+            userRecord
+        });
+        next();
+        return;
+    }
+
     const session = await db('auth_sessions').where({ session_id: sessionId }).first();
     if (!session || isIsoExpired(session.expires_at)) {
         await db('auth_sessions').where({ session_id: sessionId }).delete();
-        res.clearCookie(env.sessionCookieName, buildCookieOptions());
+        res.clearCookie(env.sessionCookieName, buildClearCookieOptions());
         next();
         return;
     }
@@ -85,17 +123,25 @@ export const attachSession = async (req, res, next) => {
     const userRecord = await getRecord({ collectionName: 'users', recordId: session.user_record_id });
     if (!userRecord) {
         await db('auth_sessions').where({ session_id: sessionId }).delete();
-        res.clearCookie(env.sessionCookieName, buildCookieOptions());
+        res.clearCookie(env.sessionCookieName, buildClearCookieOptions());
         next();
         return;
     }
 
-    req.auth = {
-        sessionId,
-        session,
+    const refreshedSessionToken = buildSessionToken({
         userRecord,
-        user: buildAuthUser({ userRecord, provider: session.provider })
-    };
+        provider: session.provider,
+        issuedAt: nowIso(),
+        expiresAt: session.expires_at
+    });
+    res.cookie(env.sessionCookieName, refreshedSessionToken, buildCookieOptions(session.expires_at));
+
+    req.auth = buildSessionContext({
+        sessionToken: refreshedSessionToken,
+        provider: session.provider,
+        expiresAt: session.expires_at,
+        userRecord
+    });
 
     await db('auth_sessions')
         .where({ session_id: sessionId })
