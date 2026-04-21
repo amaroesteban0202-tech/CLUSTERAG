@@ -25,9 +25,11 @@ Si no configuras SMTP, los magic links se imprimen en consola para desarrollo.
 - `DATABASE_CLIENT=sqlite3` para local rapido
 - `DATABASE_CLIENT=mysql2` para MySQL en hosting propio
 - `APP_BASE_URL` debe apuntar a la URL real del backend
+- `CLIENT_API_BASE_URL` permite forzar un API en otro origen; por defecto el frontend usa same-origin para no romper cookies de sesion
 - `SESSION_SECRET` debe cambiarse antes de produccion
 - `SMTP_*` habilita envio real de magic links
 - `GOOGLE_*` habilita login con Google
+- `LEGACY_FIRESTORE_*` permite hidratar automaticamente la base SQL desde Firestore `v6` cuando el backend arranca vacio
 
 ## Arquitectura
 
@@ -35,6 +37,7 @@ Si no configuras SMTP, los magic links se imprimen en consola para desarrollo.
 - `server/routes/collections.js`: CRUD generico para las colecciones actuales
 - `src/app/lib/firebase-*-compat.js`: reemplazo local del SDK de Firebase
 - `src/app/config/firebase.js`: ahora apunta al backend propio
+- `server/lib/legacy-firestore.js`: importador/hidratador desde Firestore legacy
 
 ## Estado de migracion
 

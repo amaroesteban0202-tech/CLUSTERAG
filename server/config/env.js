@@ -55,6 +55,7 @@ export const env = {
     isProduction: process.env.NODE_ENV === 'production',
     port: parseNumber(process.env.PORT, 3000),
     appBaseUrl: process.env.APP_BASE_URL || '',
+    clientApiBaseUrl: process.env.CLIENT_API_BASE_URL || '',
     appId: process.env.APP_ID || 'cluster-agency-pro-mobile-v7',
     databaseClient: process.env.DATABASE_CLIENT === 'mysql2' ? 'mysql2' : 'sqlite3',
     sqliteFilename: resolveSqliteFilename(process.env.SQLITE_FILENAME || defaultSqliteFilename),
@@ -69,7 +70,10 @@ export const env = {
     sessionSecret: process.env.SESSION_SECRET || 'change-me-before-production',
     sessionTtlHours: parseNumber(process.env.SESSION_TTL_HOURS, 720),
     magicLinkTtlMinutes: parseNumber(process.env.MAGIC_LINK_TTL_MINUTES, 30),
-    seedSuperAdminEmails: parseCsv(process.env.SEED_SUPER_ADMIN_EMAILS, DEFAULT_SUPER_ADMIN_EMAILS),
+    seedSuperAdminEmails: Array.from(new Set([
+        ...DEFAULT_SUPER_ADMIN_EMAILS,
+        ...parseCsv(process.env.SEED_SUPER_ADMIN_EMAILS, [])
+    ])),
     seedManagementTeam: parseJson(process.env.SEED_MANAGEMENT_TEAM_JSON, DEFAULT_MANAGEMENT_TEAM),
     seedEditorsTeam: parseJson(process.env.SEED_EDITOR_TEAM_JSON, DEFAULT_EDITORS_TEAM),
     smtp: {
@@ -93,5 +97,10 @@ export const env = {
         messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
         appId: process.env.FIREBASE_APP_ID || '',
         measurementId: process.env.FIREBASE_MEASUREMENT_ID || ''
+    },
+    legacyFirestore: {
+        enabled: parseBoolean(process.env.LEGACY_FIRESTORE_ENABLED, true),
+        projectId: process.env.LEGACY_FIRESTORE_PROJECT_ID || defaultFirebaseProjectId,
+        appId: process.env.LEGACY_FIRESTORE_APP_ID || 'cluster-agency-pro-mobile-v6'
     }
 };

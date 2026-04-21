@@ -1,5 +1,6 @@
 export const DEFAULT_SUPER_ADMIN_EMAILS = [
-    'maycolljaramillo01@gmail.com'
+    'maycolljaramillo01@gmail.com',
+    'maferg.designer@gmail.com'
 ];
 
 export const DEFAULT_MANAGEMENT_TEAM = [
