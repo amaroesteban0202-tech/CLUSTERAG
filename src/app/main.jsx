@@ -372,16 +372,19 @@ const readTaskRoomState = (storageKey, options = {}) => {
     }
 };
 const useTaskRoomState = (storageKey, options = {}) => {
-    const [roomState, setRoomState] = useState(() => readTaskRoomState(storageKey, options));
+    const preferMine = Boolean(options.preferMine);
+    const [roomState, setRoomState] = useState(() => readTaskRoomState(storageKey, { preferMine }));
 
     useEffect(() => {
-        const nextState = readTaskRoomState(storageKey, options);
-        const hasChanges =
-            nextState.currentDate !== roomState.currentDate ||
-            nextState.filterMode !== roomState.filterMode ||
-            nextState.ownershipFilter !== roomState.ownershipFilter;
-        if (hasChanges) setRoomState(nextState);
-    }, [storageKey, options.preferMine, roomState.currentDate, roomState.filterMode, roomState.ownershipFilter]);
+        const nextState = readTaskRoomState(storageKey, { preferMine });
+        setRoomState((current) => {
+            const hasChanges =
+                nextState.currentDate !== current.currentDate ||
+                nextState.filterMode !== current.filterMode ||
+                nextState.ownershipFilter !== current.ownershipFilter;
+            return hasChanges ? nextState : current;
+        });
+    }, [storageKey, preferMine]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -390,9 +393,9 @@ const useTaskRoomState = (storageKey, options = {}) => {
             currentDate: normalizeDateOnlyString(roomState.currentDate) || getHondurasTodayStr(),
             savedAt: getHondurasTodayStr(),
             version: TASK_ROOM_STATE_VERSION,
-            personalized: Boolean(options.preferMine)
+            personalized: preferMine
         }));
-    }, [storageKey, roomState, options.preferMine]);
+    }, [storageKey, roomState, preferMine]);
 
     return {
         currentDate: roomState.currentDate,

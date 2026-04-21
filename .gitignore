@@ -9,3 +9,5 @@ public/
 .env.local
 .tmp/*.sqlite
 .tmp/*.sqlite-*
+
+.vercel

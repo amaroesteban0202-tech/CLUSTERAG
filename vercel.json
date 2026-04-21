@@ -52,11 +52,5 @@
       "source": "/:path((?!api/|src/|favicon\\.svg|app-config\\.js).*)",
       "destination": "/index.html"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/management-task-reminders",
-      "schedule": "*/5 * * * *"
-    }
   ]
 }
