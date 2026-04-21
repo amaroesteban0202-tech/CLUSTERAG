@@ -4,7 +4,6 @@ import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
 import { migrateDatabase } from './db/migrate.js';
 import { ensureBootstrapData } from './lib/bootstrap.js';
-import { hydrateLegacyFirestoreData } from './lib/legacy-firestore.js';
 import { attachSession } from './lib/sessions.js';
 import authRoutes from './routes/auth.js';
 import collectionRoutes from './routes/collections.js';
@@ -13,9 +12,6 @@ import cronRoutes from './routes/cron.js';
 export const createApp = async () => {
     await migrateDatabase();
     await ensureBootstrapData();
-    await hydrateLegacyFirestoreData().catch((error) => {
-        console.error('No se pudo hidratar la base desde Firestore legacy:', error);
-    });
 
     const app = express();
     app.disable('x-powered-by');
@@ -44,7 +40,7 @@ export const createApp = async () => {
         res.type('application/javascript');
         res.set('Cache-Control', 'no-store');
         res.send([
-            `window.__cluster_api_base_url = ${JSON.stringify(env.clientApiBaseUrl || '')};`,
+            `window.__cluster_api_base_url = ${JSON.stringify(env.appBaseUrl || '')};`,
             `window.__cluster_app_id = ${JSON.stringify(env.appId)};`,
             `window.__cluster_firebase_config = ${JSON.stringify(firebaseConfig)};`
         ].join('\n'));
