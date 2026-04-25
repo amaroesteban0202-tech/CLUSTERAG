@@ -2155,7 +2155,7 @@ const SidebarItem = ({ active, onClick, icon, label, color, badge, badgeColor })
 );
 
 const Button = ({ children, onClick, type = 'button', color = 'purple', full, icon }) => (
-    <button type={type} onClick={onClick} className={`${full ? 'w-full' : ''} bg-${color}-600 hover:bg-${color}-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-${color}-500/30 flex items-center justify-center gap-2 transition-all transform active:scale-95`}>{icon && <Icon name={icon}/>} {children}</button>
+    <button type={type} onClick={onClick} className={`${full ? 'w-full' : ''} min-h-[46px] whitespace-nowrap bg-${color}-600 hover:bg-${color}-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-${color}-500/30 flex items-center justify-center gap-2 transition-all transform active:scale-95`}>{icon && <Icon name={icon}/>} {children}</button>
 );
 
 const EmptyState = ({ icon, text }) => (
@@ -2168,7 +2168,7 @@ const EmptyState = ({ icon, text }) => (
 const SearchBar = ({ searchTerm, setSearchTerm, placeholder }) => (
     <div className="relative w-full md:w-64 shrink-0">
         <Icon name="Search" className="absolute left-3 top-3 text-slate-400 dark:text-slate-500" size={16}/>
-        <input type="text" placeholder={placeholder} value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"/>
+        <input type="text" placeholder={placeholder} value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="min-h-[46px] w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"/>
     </div>
 );
 
@@ -2273,8 +2273,8 @@ const PortfolioHealthChart = ({ totalClients, contentos, neutrales, enRiesgo }) 
     const healthLabel = totalClients === 0 ? 'Sin datos' : (healthScore >= 75 ? 'Estable' : (healthScore >= 45 ? 'Mixta' : 'Fragil'));
 
     return (
-        <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[190px_minmax(0,1fr)] xl:items-center">
-            <div className="relative mx-auto h-48 w-48 xl:mx-0">
+        <div className="mt-5 grid grid-cols-1 gap-5">
+            <div className="relative mx-auto h-44 w-44">
                 <svg viewBox="0 0 220 220" className="h-full w-full">
                     <circle cx="110" cy="110" r="70" fill="none" stroke="rgba(148,163,184,0.16)" strokeWidth="20" />
                     {ringSegments.map((segment) => (
@@ -2338,8 +2338,8 @@ const ProgressOverviewChart = ({ completionPercent, completedTasks, totalTasks, 
     const strokeOffset = circumference * (1 - (safePercent / 100));
 
     return (
-        <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[180px_minmax(0,1fr)] xl:items-center">
-            <div className="relative mx-auto h-44 w-44 xl:mx-0">
+        <div className="mt-5 grid grid-cols-1 gap-5">
+            <div className="relative mx-auto h-44 w-44">
                 <svg viewBox="0 0 220 220" className="h-full w-full -rotate-90">
                     <defs>
                         <linearGradient id="dashboard-progress-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -2756,35 +2756,37 @@ const PersonCalendarDetail = ({ person, tasks, title, baseColor, onBack, onAddEv
 const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, ownershipFilter = 'all', setOwnershipFilter, title, onAdd, btnColor, btnIcon, searchTerm, setSearchTerm }) => {
     const today = getHondurasTodayStr();
     return (
-        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full xl:w-auto">
-                <div className="flex items-center gap-3">
+        <div className="flex flex-col 2xl:flex-row justify-between items-start 2xl:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex flex-col lg:flex-row lg:flex-wrap items-start lg:items-center gap-4 w-full min-w-0 2xl:w-auto">
+                <div className="flex items-center gap-3 shrink-0">
                     <Icon name="LayoutList" className={`text-${btnColor}-500 dark:text-${btnColor}-400 hidden md:block`} size={28}/>
-                    <h2 className="text-xl font-black text-slate-800 dark:text-white mr-4">{title}</h2>
+                    <h2 className="text-xl font-black text-slate-800 dark:text-white">{title}</h2>
                 </div>
-                <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-                    <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full md:w-auto overflow-x-auto custom-scroll">
-                    <button onClick={() => setFilterMode('date')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'date' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Día Específico</button>
-                    <button onClick={() => setFilterMode('overdue')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${filterMode === 'overdue' ? `bg-red-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-red-500'}`}>Atrasadas <Icon name="Flame" size={14}/></button>
-                    <button onClick={() => setFilterMode('all')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Ver Todas</button>
+                <div className="flex flex-col lg:flex-row lg:flex-wrap gap-3 w-full min-w-0 lg:w-auto">
+                    <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto max-w-full overflow-x-auto custom-scroll">
+                    <button onClick={() => setFilterMode('date')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'date' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Día Específico</button>
+                    <button onClick={() => setFilterMode('overdue')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${filterMode === 'overdue' ? `bg-red-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-red-500'}`}>Atrasadas <Icon name="Flame" size={14}/></button>
+                    <button onClick={() => setFilterMode('all')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Ver Todas</button>
                     </div>
                     {setOwnershipFilter && (
-                        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full md:w-auto overflow-x-auto custom-scroll">
-                            <button onClick={() => setOwnershipFilter('all')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Todas</button>
-                            <button onClick={() => setOwnershipFilter('mine')} className={`flex-1 md:flex-none px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === 'mine' ? `bg-${btnColor}-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Asignadas a mi</button>
+                        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto max-w-full overflow-x-auto custom-scroll">
+                            <button onClick={() => setOwnershipFilter('all')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Todas</button>
+                            <button onClick={() => setOwnershipFilter('mine')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === 'mine' ? `bg-${btnColor}-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Asignadas a mi</button>
                         </div>
                     )}
                 </div>
                 {filterMode === 'date' && (
-                    <div className="flex items-center gap-2 w-full md:w-auto">
-                        <input type="date" value={currentDate} onChange={(e) => setCurrentDate(e.target.value)} className="w-full md:w-auto text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 outline-none"/>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <input type="date" value={currentDate} onChange={(e) => setCurrentDate(e.target.value)} className="min-h-[46px] w-full sm:w-auto text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 outline-none"/>
                         {currentDate === today && <span className="text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 font-bold px-2 py-1 rounded-full shrink-0">Hoy</span>}
                     </div>
                 )}
             </div>
-            <div className="flex flex-col sm:flex-row w-full xl:w-auto gap-3 items-center">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap w-full 2xl:w-auto gap-3 items-stretch sm:items-center">
                 <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Buscar tarea..." />
-                <Button onClick={() => onAdd(filterMode === 'date' ? currentDate : today)} color={btnColor} icon={btnIcon} full>Nueva Tarea</Button>
+                <div className="w-full sm:w-auto shrink-0">
+                    <Button onClick={() => onAdd(filterMode === 'date' ? currentDate : today)} color={btnColor} icon={btnIcon} full>Nueva Tarea</Button>
+                </div>
             </div>
         </div>
     );
