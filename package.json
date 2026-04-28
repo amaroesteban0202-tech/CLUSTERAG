@@ -5,7 +5,10 @@
   "scripts": {
     "build": "node scripts/prepare-public.mjs",
     "dev": "node server/index.js",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "mobile:sync": "npm run build && cap sync",
+    "mobile:android": "npm run mobile:sync && cap open android",
+    "mobile:ios": "npm run mobile:sync && cap open ios"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",
@@ -16,5 +19,12 @@
     "mysql2": "^3.14.1",
     "nodemailer": "^6.10.1",
     "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
+    "@capacitor/ios": "^8.3.1"
   }
 }

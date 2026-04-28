@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
+import { App as CapacitorApp } from '@capacitor/app';
 import {
     LayoutDashboard, Users, Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X,
     CheckCircle2, Circle, ExternalLink, Briefcase, UserCircle2, Loader2, Trash2,
@@ -7,7 +8,7 @@ import {
     AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles, Trophy, Medal, BarChart3,
     ShieldCheck, LogIn, LogOut, ClipboardList, Lock, Mail
 } from 'lucide-react';
-import { signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, isSignInWithEmailLink, sendSignInLinkToEmail, signInWithEmailLink, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
+import { signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, isSignInWithEmailLink, sendSignInLinkToEmail, signInWithEmailLink, signInWithPopup, completeGoogleRedirectIfNeeded, signOut as firebaseSignOut } from 'firebase/auth';
 import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, limit, writeBatch, setDoc, getDocs } from 'firebase/firestore';
 import { auth, db, appId } from '/src/app/config/firebase.js';
 import {
@@ -46,6 +47,7 @@ const AgencyLogo = ({ className }) => {
 
 const GOOGLE_PROVIDER = auth ? new GoogleAuthProvider() : null;
 if (GOOGLE_PROVIDER) GOOGLE_PROVIDER.setCustomParameters({ prompt: 'select_account' });
+const NATIVE_GOOGLE_TOKEN_STORAGE_KEY = 'cluster_native_google_token';
 
 const VIEW_PERMISSIONS = {
     dashboard: 'view_dashboard',
@@ -432,6 +434,8 @@ function App() {
     const [isDark, setIsDark] = useState(() => localStorage.getItem('cluster_theme') === 'dark');
     const [view, setView] = useState(() => localStorage.getItem('cluster_os_view') || 'dashboard');
     const [isSigningIn, setIsSigningIn] = useState(false);
+    const [loginEmail, setLoginEmail] = useState('');
+    const [isSendingLoginLink, setIsSendingLoginLink] = useState(false);
     const [hasSeededManagementDirectory, setHasSeededManagementDirectory] = useState(false);
     const [hasBackfilledIdentityLinks, setHasBackfilledIdentityLinks] = useState(false);
     const [usersLoaded, setUsersLoaded] = useState(false);
@@ -440,6 +444,7 @@ function App() {
     const isFlushingPendingTaskStatusesRef = useRef(false);
     const lastReconciledDuplicateSignatureRef = useRef('');
     const lastIdentityLinkSyncSignatureRef = useRef('');
+    const nativeGoogleTokensSeenRef = useRef(new Set());
 
     const [clients, setClients] = useState([]);
     const [events, setEvents] = useState([]); 
@@ -473,7 +478,7 @@ function App() {
     const pendingRole = !authEmail
         ? 'viewer'
         : pendingManagementMember
-          ? 'management'
+          ? (pendingManagementMember.role || 'management')
           : pendingMatchedManager
             ? 'manager'
             : (pendingMatchedEditor || pendingPreAuthorizedEditor)
@@ -655,6 +660,10 @@ function App() {
                 }
 
                 await waitForAuthState();
+                if (!auth.currentUser && typeof completeGoogleRedirectIfNeeded === 'function') {
+                    const completedGoogleRedirect = await completeGoogleRedirectIfNeeded(auth);
+                    if (completedGoogleRedirect) return;
+                }
                 if (auth.currentUser) return;
 
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -693,6 +702,102 @@ function App() {
             unsubscribe();
         };
     }, []);
+
+    useEffect(() => {
+        if (!auth) return;
+
+        const extractNativeGoogleToken = (url = '') => {
+            if (!url || !String(url).startsWith('clusteragency://auth/google')) return '';
+            try {
+                const target = new URL(url);
+                return target.searchParams.get('token') || '';
+            } catch {
+                return '';
+            }
+        };
+
+        const consumeNativeGoogleToken = async (token = '') => {
+            if (!token) return false;
+            if (nativeGoogleTokensSeenRef.current.has(token)) return false;
+            nativeGoogleTokensSeenRef.current.add(token);
+            window.localStorage.removeItem(NATIVE_GOOGLE_TOKEN_STORAGE_KEY);
+            try {
+                setIsSigningIn(true);
+                await signInWithCustomToken(auth, token);
+                if (!auth.currentUser?.email) {
+                    throw new Error('Google no devolvio un usuario autenticado.');
+                }
+                setUser(auth.currentUser);
+                setView('dashboard');
+                localStorage.setItem('cluster_os_view', 'dashboard');
+                showToast('Sesion iniciada con Google');
+                return true;
+            } catch (error) {
+                console.error('No se pudo completar el retorno nativo de Google:', error);
+                showToast('No se pudo completar el acceso con Google', 'error');
+                return false;
+            } finally {
+                setIsSigningIn(false);
+            }
+        };
+
+        const consumeAppUrl = async (url = '') => {
+            const token = extractNativeGoogleToken(url);
+            if (!token) return false;
+            if (nativeGoogleTokensSeenRef.current.has(token)) return false;
+            window.localStorage.setItem(NATIVE_GOOGLE_TOKEN_STORAGE_KEY, token);
+            return consumeNativeGoogleToken(token);
+        };
+
+        const consumeStoredToken = async () => {
+            const storedToken = window.localStorage.getItem(NATIVE_GOOGLE_TOKEN_STORAGE_KEY) || '';
+            if (!storedToken) return false;
+            return consumeNativeGoogleToken(storedToken);
+        };
+
+        let appUrlHandle = null;
+        let resumeHandle = null;
+
+        CapacitorApp.addListener('appUrlOpen', ({ url }) => {
+            consumeAppUrl(url).catch(() => {});
+        }).then((handle) => {
+            appUrlHandle = handle;
+        }).catch((error) => {
+            console.error('No se pudo registrar appUrlOpen:', error);
+        });
+
+        CapacitorApp.getLaunchUrl().then((result) => {
+            consumeAppUrl(result?.url || '').catch(() => {});
+        }).catch(() => {});
+
+        consumeStoredToken().catch(() => {});
+
+        CapacitorApp.addListener('resume', () => {
+            consumeStoredToken().catch(() => {});
+            CapacitorApp.getLaunchUrl().then((result) => {
+                consumeAppUrl(result?.url || '').catch(() => {});
+            }).catch(() => {});
+            completeGoogleRedirectIfNeeded(auth)
+                .then((completed) => {
+                    if (completed) {
+                        setUser(auth.currentUser);
+                        setView('dashboard');
+                        localStorage.setItem('cluster_os_view', 'dashboard');
+                        setIsSigningIn(false);
+                    }
+                })
+                .catch(() => {
+                    setIsSigningIn(false);
+                });
+        }).then((handle) => {
+            resumeHandle = handle;
+        }).catch(() => {});
+
+        return () => {
+            appUrlHandle?.remove?.();
+            resumeHandle?.remove?.();
+        };
+    }, [auth]);
 
     useEffect(() => {
         if (!user || !db) return;
@@ -745,7 +850,7 @@ function App() {
             missingMembers.map((member) => setDoc(dataDoc('users', `management_${member.directoryKey}`), {
                 name: member.name,
                 email: normalizeEmail(member.email),
-                role: 'management',
+                role: member.role || 'management',
                 managementKey: member.directoryKey,
                 isActive: true,
                 createdAt: nowIso(),
@@ -866,7 +971,7 @@ function App() {
         }
     }, [currentUserProfile, profileBlocked, view]);
 
-    // Notificaciones del navegador para tareas de gestion asignadas al usuario.
+    // Notificaciones locales para tareas asignadas al usuario.
     useEffect(() => {
         if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
         if (!currentUserProfile?.id || profileBlocked) return;
@@ -888,7 +993,37 @@ function App() {
         };
         tryRequestPermission();
 
-        const fireNotification = (task, stage, dueMs) => {
+        const taskNotificationConfigs = [
+            {
+                collectionType: 'accountTask',
+                tasks: accountTasks,
+                label: 'Account',
+                view: 'account-room',
+                defaultTime: '18:00',
+                done: (task) => task.status === 'publicado',
+                assigned: (task) => isTaskAssignedToProfile(task, currentUserProfile, [currentUserProfile?.linkedManagerId])
+            },
+            {
+                collectionType: 'editingTask',
+                tasks: editingTasks,
+                label: 'Edicion',
+                view: 'editions',
+                defaultTime: '18:00',
+                done: (task) => task.status === 'aprobado' || task.status === 'publicado',
+                assigned: (task) => isTaskAssignedToProfile(task, currentUserProfile, [currentUserProfile?.linkedEditorId])
+            },
+            {
+                collectionType: 'managementTask',
+                tasks: managementTasks,
+                label: 'Gestion',
+                view: 'management-room',
+                defaultTime: '',
+                done: (task) => task.status === 'cerrado',
+                assigned: (task) => isTaskAssignedToProfile(task, currentUserProfile, [currentUserProfile?.id])
+            }
+        ];
+
+        const fireNotification = (task, config, stage, dueMs) => {
             if (Notification.permission !== 'granted') return;
             const titleMap = {
                 '8h': '⏰ Tarea proxima a vencer (8h)',
@@ -896,20 +1031,26 @@ function App() {
                 'nag': '🔴 Tarea vencida hace mas de 24h'
             };
             const client = clients.find((c) => c.id === task.clientId);
+            const notificationTitle = stage === '8h'
+                ? `Tarea de ${config.label} proxima a vencer (8h)`
+                : stage === 'overdue'
+                  ? `Tarea de ${config.label} vencida`
+                  : `Tarea de ${config.label} vencida hace mas de 24h`;
             const body = [
                 task.title,
-                task.time ? `Hora limite: ${task.time}` : '',
+                task.time ? `Hora limite: ${task.time}` : (config.defaultTime ? `Hora limite: ${config.defaultTime}` : ''),
                 client ? `Cliente: ${client.name}` : ''
             ].filter(Boolean).join('\n');
             try {
-                const notif = new Notification(titleMap[stage] || 'Tarea de gestion', {
+                const notif = new Notification(notificationTitle || titleMap[stage] || `Tarea de ${config.label}`, {
                     body,
-                    tag: `cluster-task-${task.id}-${stage}`,
+                    tag: `cluster-task-${config.collectionType}-${task.id}-${stage}`,
                     requireInteraction: stage === 'overdue' || stage === 'nag'
                 });
                 notif.onclick = () => {
                     window.focus();
-                    setView('management-room');
+                    setView(config.view);
+                    localStorage.setItem('cluster_os_view', config.view);
                     notif.close();
                 };
             } catch { void 0; }
@@ -920,30 +1061,33 @@ function App() {
             if (document.hidden && Notification.permission !== 'granted') return;
             const state = readState();
             const now = Date.now();
-            const myId = currentUserProfile.id;
             let mutated = false;
 
-            for (const task of managementTasks) {
-                if (!task || task.status === 'cerrado') continue;
-                if (task.notificationsEnabled === false) continue;
-                const mine = task.contextId === myId || task.assigneeUserId === myId;
-                if (!mine) continue;
-                if (!task.date || !/^\d{2}:\d{2}$/.test(task.time || '')) continue;
-                const dueMs = Date.parse(`${task.date}T${task.time}:00-06:00`);
-                if (!Number.isFinite(dueMs)) continue;
-                const diff = dueMs - now;
-                const seen = state[task.id] || {};
+            for (const config of taskNotificationConfigs) {
+                for (const task of config.tasks) {
+                    if (!task || config.done(task)) continue;
+                    if (task.notificationsEnabled === false) continue;
+                    if (!config.assigned(task)) continue;
+                    if (!task.date) continue;
+                    const dueTime = /^\d{2}:\d{2}$/.test(task.time || '') ? task.time : config.defaultTime;
+                    if (!dueTime) continue;
+                    const dueMs = Date.parse(`${task.date}T${dueTime}:00-06:00`);
+                    if (!Number.isFinite(dueMs)) continue;
+                    const diff = dueMs - now;
+                    const stateKey = `${config.collectionType}:${task.id}`;
+                    const seen = state[stateKey] || {};
 
-                if (diff > 0 && diff <= 8 * HOUR && !seen['8h']) {
-                    fireNotification(task, '8h', dueMs); seen['8h'] = now; mutated = true;
-                }
-                if (diff <= 0 && !seen.overdue) {
-                    fireNotification(task, 'overdue', dueMs); seen.overdue = now; mutated = true;
-                } else if (diff <= 0 && seen.overdue && now - (seen.nag || seen.overdue) >= 24 * HOUR) {
-                    fireNotification(task, 'nag', dueMs); seen.nag = now; mutated = true;
-                }
+                    if (diff > 0 && diff <= 8 * HOUR && !seen['8h']) {
+                        fireNotification(task, config, '8h', dueMs); seen['8h'] = now; mutated = true;
+                    }
+                    if (diff <= 0 && !seen.overdue) {
+                        fireNotification(task, config, 'overdue', dueMs); seen.overdue = now; mutated = true;
+                    } else if (diff <= 0 && seen.overdue && now - (seen.nag || seen.overdue) >= 24 * HOUR) {
+                        fireNotification(task, config, 'nag', dueMs); seen.nag = now; mutated = true;
+                    }
 
-                state[task.id] = seen;
+                    state[stateKey] = seen;
+                }
             }
 
             if (mutated) writeState(state);
@@ -957,7 +1101,7 @@ function App() {
             window.clearInterval(interval);
             window.removeEventListener('focus', onFocus);
         };
-    }, [currentUserProfile?.id, profileBlocked, managementTasks, clients]);
+    }, [currentUserProfile?.id, currentUserProfile?.linkedManagerId, currentUserProfile?.linkedEditorId, profileBlocked, accountTasks, editingTasks, managementTasks, clients]);
 
     useEffect(() => {
         if (!db || !currentUserProfile || profileBlocked || isFlushingPendingTaskStatusesRef.current) return;
@@ -1501,13 +1645,38 @@ function App() {
         if (!auth || !GOOGLE_PROVIDER) return;
         setIsSigningIn(true);
         try {
-            await signInWithPopup(auth, GOOGLE_PROVIDER);
-            showToast('Sesion iniciada con Google');
+            const result = await signInWithPopup(auth, GOOGLE_PROVIDER);
+            if (!result?.pendingRedirect) {
+                showToast('Sesion iniciada con Google');
+            }
         } catch (error) {
             console.error(error);
             showToast(getGoogleAuthErrorMessage(error), 'error');
         } finally {
             setIsSigningIn(false);
+        }
+    };
+
+    const handleEmailLinkSignIn = async (event) => {
+        event?.preventDefault();
+        if (!auth) return;
+        const normalizedEmail = normalizeEmail(loginEmail);
+        if (!normalizedEmail) {
+            showToast('Escribe tu correo para enviarte el acceso', 'error');
+            return;
+        }
+
+        setIsSendingLoginLink(true);
+        try {
+            auth.languageCode = 'es';
+            window.localStorage.setItem(EMAIL_LINK_STORAGE_KEY, normalizedEmail);
+            await sendSignInLinkToEmail(auth, normalizedEmail, buildEmailLinkActionCodeSettings());
+            showToast('Te enviamos un enlace de acceso al correo');
+        } catch (error) {
+            console.error(error);
+            showToast(getEmailLinkAuthErrorMessage(error, 'send'), 'error');
+        } finally {
+            setIsSendingLoginLink(false);
         }
     };
 
@@ -1675,7 +1844,7 @@ function App() {
             description: `Crea tarea de account ${data.title}`,
             changes: data,
             successMessage: 'Agendado',
-            execute: () => addDoc(dataCollection('account_tasks'), { ...data, assigneeUserId: manager?.userId || '', status: 'por_disenar', createdAt: nowIso(), updatedAt: nowIso() }),
+            execute: () => addDoc(dataCollection('account_tasks'), { ...data, assigneeUserId: manager?.userId || '', notificationsEnabled: data.notificationsEnabled !== false, status: 'por_disenar', createdAt: nowIso(), updatedAt: nowIso() }),
             afterSuccess: closeModal
         });
     };
@@ -1717,7 +1886,7 @@ function App() {
             description: `Crea video ${data.title}`,
             changes: { ...data, hierarchy: data.hierarchy || getEditingHierarchyId(data) },
             successMessage: 'Agendado',
-            execute: () => addDoc(dataCollection('editing'), { ...data, hierarchy: data.hierarchy || getEditingHierarchyId(data), assigneeUserId: editor?.userId || '', status: data.status || 'editar', createdAt: nowIso(), updatedAt: nowIso() }),
+            execute: () => addDoc(dataCollection('editing'), { ...data, hierarchy: data.hierarchy || getEditingHierarchyId(data), assigneeUserId: editor?.userId || '', notificationsEnabled: data.notificationsEnabled !== false, status: data.status || 'editar', createdAt: nowIso(), updatedAt: nowIso() }),
             afterSuccess: closeModal
         });
     };
@@ -2041,6 +2210,24 @@ function App() {
 
     if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950"><Icon name="Loader2" className="animate-spin text-purple-600" size={32}/></div>;
 
+    if (!authEmail) {
+        return (
+            <>
+                <LoginScreen
+                    isDark={isDark}
+                    onToggleTheme={() => setIsDark(!isDark)}
+                    onGoogleSignIn={handleGoogleSignIn}
+                    isSigningIn={isSigningIn}
+                    email={loginEmail}
+                    onEmailChange={setLoginEmail}
+                    onEmailSubmit={handleEmailLinkSignIn}
+                    isSendingLoginLink={isSendingLoginLink}
+                />
+                {toast && <Toast message={toast.message} type={toast.type} />}
+            </>
+        );
+    }
+
     return (
         <div className="flex h-screen text-slate-900 dark:text-slate-100 overflow-hidden flex-col md:flex-row font-sans transition-colors duration-300">
             
@@ -2162,6 +2349,62 @@ const EmptyState = ({ icon, text }) => (
     <div className="flex flex-col items-center justify-center p-6 text-center h-full opacity-60">
         <Icon name={icon} size={32} className="text-slate-400 dark:text-slate-500 mb-3" />
         <p className="text-sm font-bold text-slate-500 dark:text-slate-400">{text}</p>
+    </div>
+);
+
+const LoginScreen = ({ isDark, onToggleTheme, onGoogleSignIn, isSigningIn, email, onEmailChange, onEmailSubmit, isSendingLoginLink }) => (
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col font-sans">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+            <div className="flex items-center gap-3">
+                <AgencyLogo className="w-9 h-9 text-lg" />
+                <div>
+                    <h1 className="font-black text-lg leading-none">CLUSTER</h1>
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mt-1">Agency OS</p>
+                </div>
+            </div>
+            <button onClick={onToggleTheme} className="p-2 rounded-full bg-white/10 text-slate-200 border border-white/10">
+                <Icon name={isDark ? 'Sun' : 'Moon'} size={18} />
+            </button>
+        </div>
+
+        <main className="flex-1 grid place-items-center px-5 py-8">
+            <section className="w-full max-w-md">
+                <div className="mb-8">
+                    <p className="text-xs font-black uppercase tracking-wider text-purple-300 mb-3">Acceso privado</p>
+                    <h2 className="text-3xl font-black leading-tight">Inicia sesion para entrar al panel</h2>
+                    <p className="text-sm text-slate-400 mt-3 leading-6">Usa tu cuenta autorizada de Cluster para gestionar clientes, tareas y calendario.</p>
+                </div>
+
+                <div className="space-y-3">
+                    <button
+                        onClick={onGoogleSignIn}
+                        disabled={isSigningIn || isSendingLoginLink}
+                        className="w-full min-h-[52px] rounded-xl bg-white text-slate-900 font-black flex items-center justify-center gap-3 disabled:opacity-60"
+                    >
+                        <Icon name={isSigningIn ? 'Loader2' : 'LogIn'} size={18} className={isSigningIn ? 'animate-spin' : ''} />
+                        Entrar con Google
+                    </button>
+
+                    <form onSubmit={onEmailSubmit} className="space-y-3">
+                        <input
+                            type="email"
+                            value={email}
+                            onChange={(event) => onEmailChange(event.target.value)}
+                            placeholder="correo@cluster.com"
+                            className="w-full min-h-[52px] rounded-xl bg-white/10 border border-white/10 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-400 placeholder:text-slate-500"
+                        />
+                        <button
+                            type="submit"
+                            disabled={isSigningIn || isSendingLoginLink}
+                            className="w-full min-h-[52px] rounded-xl bg-purple-600 hover:bg-purple-700 font-black flex items-center justify-center gap-3 disabled:opacity-60"
+                        >
+                            <Icon name={isSendingLoginLink ? 'Loader2' : 'Mail'} size={18} className={isSendingLoginLink ? 'animate-spin' : ''} />
+                            Enviarme enlace
+                        </button>
+                    </form>
+                </div>
+            </section>
+        </main>
     </div>
 );
 

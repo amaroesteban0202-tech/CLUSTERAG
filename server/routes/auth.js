@@ -2,7 +2,7 @@ import express from 'express';
 import { env } from '../config/env.js';
 import { db } from '../db/knex.js';
 import { asyncHandler, createHttpError } from '../lib/http.js';
-import { randomToken, sha256, verifySignedPayload } from '../lib/crypto.js';
+import { randomToken, sha256, signPayload, verifySignedPayload } from '../lib/crypto.js';
 import { addMinutesToIso, isIsoExpired, nowIso } from '../lib/time.js';
 import { normalizeEmail } from '../lib/text.js';
 import { createSession, clearSession } from '../lib/sessions.js';
@@ -38,6 +38,35 @@ const renderPopupResult = (res, { ok, error = '' }) => {
         </html>
     `);
 };
+
+const isNativeRedirect = (value = '') => {
+    try {
+        const target = new URL(value);
+        return target.protocol === 'clusteragency:';
+    } catch {
+        return false;
+    }
+};
+
+const buildGoogleAuthUrl = (state) => {
+    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    url.searchParams.set('client_id', env.google.clientId);
+    url.searchParams.set('redirect_uri', env.google.callbackUrl);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('scope', 'openid email profile');
+    url.searchParams.set('state', state);
+    url.searchParams.set('prompt', 'select_account');
+    return url;
+};
+
+const buildNativeGoogleToken = ({ profilePayload, email }) => signPayload({
+    sub: profilePayload.sub || email,
+    email,
+    name: profilePayload.name || '',
+    provider: 'google.com',
+    authUid: profilePayload.sub || email,
+    exp: addMinutesToIso(5)
+}, env.sessionSecret);
 
 router.get('/session', asyncHandler(async (req, res) => {
     res.json({
@@ -260,15 +289,53 @@ router.get('/google/start', asyncHandler(async (req, res) => {
         created_at: nowIso()
     });
 
-    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    url.searchParams.set('client_id', env.google.clientId);
-    url.searchParams.set('redirect_uri', env.google.callbackUrl);
-    url.searchParams.set('response_type', 'code');
-    url.searchParams.set('scope', 'openid email profile');
-    url.searchParams.set('state', state);
-    url.searchParams.set('prompt', 'select_account');
+    res.redirect(buildGoogleAuthUrl(state).toString());
+}));
 
-    res.redirect(url.toString());
+router.get('/google/native/start', asyncHandler(async (req, res) => {
+    if (!env.google.clientId || !env.google.clientSecret || !env.google.callbackUrl) {
+        throw createHttpError(503, 'Google Sign-In no esta configurado.', 'auth/operation-not-allowed');
+    }
+
+    const state = randomToken(24);
+    const redirectAfter = 'clusteragency://auth/google';
+    await db('auth_oauth_states').insert({
+        state,
+        popup: false,
+        redirect_after: redirectAfter,
+        expires_at: addMinutesToIso(10),
+        created_at: nowIso()
+    });
+
+    res.json({
+        state,
+        authUrl: buildGoogleAuthUrl(state).toString()
+    });
+}));
+
+router.get('/google/native/result', asyncHandler(async (req, res) => {
+    const state = String(req.query.state || '').trim();
+    const stateRow = state
+        ? await db('auth_oauth_states').where({ state }).first()
+        : null;
+
+    if (!stateRow || isIsoExpired(stateRow.expires_at)) {
+        throw createHttpError(404, 'El retorno de Google no esta listo.', 'auth/pending-redirect');
+    }
+
+    const redirectAfter = String(stateRow.redirect_after || '');
+    if (!isNativeRedirect(redirectAfter)) {
+        throw createHttpError(404, 'El retorno de Google no esta listo.', 'auth/pending-redirect');
+    }
+
+    const target = new URL(redirectAfter);
+    const token = target.searchParams.get('token') || '';
+    if (!token) {
+        res.json({ ok: false, pending: true });
+        return;
+    }
+
+    res.json({ ok: true, token });
 }));
 
 router.get('/google/callback', asyncHandler(async (req, res) => {
@@ -283,10 +350,16 @@ router.get('/google/callback', asyncHandler(async (req, res) => {
             renderPopupResult(res, { ok: false, error: 'El estado de Google expiro.' });
             return;
         }
+        if (req.accepts('html')) {
+            res.redirect(env.appBaseUrl || '/');
+            return;
+        }
         throw createHttpError(400, 'El estado de Google no es valido.', 'auth/invalid-state');
     }
 
-    await db('auth_oauth_states').where({ state }).delete();
+    if (!isNativeRedirect(stateRow.redirect_after)) {
+        await db('auth_oauth_states').where({ state }).delete();
+    }
 
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
@@ -339,6 +412,20 @@ router.get('/google/callback', asyncHandler(async (req, res) => {
             return;
         }
         throw createHttpError(403, 'La cuenta esta inactiva.', 'auth/user-disabled');
+    }
+
+    if (isNativeRedirect(stateRow.redirect_after)) {
+        const token = buildNativeGoogleToken({ profilePayload, email });
+        const target = new URL(stateRow.redirect_after);
+        target.searchParams.set('token', token);
+        await db('auth_oauth_states')
+            .where({ state })
+            .update({
+                redirect_after: target.toString(),
+                expires_at: addMinutesToIso(5)
+            });
+        res.redirect(target.toString());
+        return;
     }
 
     await createSession({ req, res, userRecord, provider: 'google.com' });

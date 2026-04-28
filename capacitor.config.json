@@ -1,0 +1,9 @@
+{
+  "appId": "com.clusteragency.os",
+  "appName": "Cluster Agency OS",
+  "webDir": "public",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "capacitor"
+  }
+}

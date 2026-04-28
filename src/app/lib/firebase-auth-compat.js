@@ -14,6 +14,7 @@ import {
 const listeners = new Set();
 let authSingleton = null;
 const EMAIL_LINK_STORAGE_KEY = 'cluster_email_link_for_sign_in';
+const NATIVE_GOOGLE_STATE_STORAGE_KEY = 'cluster_native_google_state';
 
 let firebaseEmailAuth = null;
 
@@ -135,6 +136,10 @@ export const getAuth = (app) => {
     return authSingleton;
 };
 
+export const browserLocalPersistence = { type: 'LOCAL' };
+
+export const setPersistence = async () => {};
+
 export const onAuthStateChanged = (auth, callback) => {
     listeners.add(callback);
     callback(auth.currentUser);
@@ -190,6 +195,22 @@ export const signInWithPopup = async (auth, provider) => {
         const error = new Error('Proveedor no soportado.');
         error.code = 'auth/operation-not-allowed';
         throw error;
+    }
+
+    const isNativeShell = typeof window !== 'undefined'
+        && (
+            window.location.protocol === 'capacitor:' ||
+            window.location.protocol === 'ionic:' ||
+            (window.location.hostname === 'localhost' && window.location.protocol === 'https:')
+        );
+
+    if (isNativeShell) {
+        const payload = await apiFetch('/api/auth/google/native/start');
+        if (payload?.state) {
+            window.localStorage.setItem(NATIVE_GOOGLE_STATE_STORAGE_KEY, payload.state);
+        }
+        window.location.href = payload?.authUrl || buildApiUrl('/api/auth/google/start?redirect=clusteragency%3A%2F%2Fauth%2Fgoogle');
+        return { user: null, pendingRedirect: true };
     }
 
     const popup = window.open(buildApiUrl('/api/auth/google/start?popup=1'), 'cluster-google-auth', 'width=520,height=680');
@@ -249,6 +270,29 @@ export const signInWithPopup = async (auth, provider) => {
 
     await auth.refreshSession();
     return { user: auth.currentUser };
+};
+
+export const completeGoogleRedirectIfNeeded = async (auth) => {
+    const pendingState = typeof window !== 'undefined'
+        ? window.localStorage.getItem(NATIVE_GOOGLE_STATE_STORAGE_KEY) || ''
+        : '';
+
+    if (pendingState) {
+        try {
+            const payload = await apiFetch(`/api/auth/google/native/result?state=${encodeURIComponent(pendingState)}`);
+            if (payload?.token) {
+                await signInWithCustomToken(auth, payload.token);
+                window.localStorage.removeItem(NATIVE_GOOGLE_STATE_STORAGE_KEY);
+                return Boolean(auth.currentUser?.email);
+            }
+            if (payload?.pending) return false;
+        } catch (error) {
+            if (error.status !== 404) throw error;
+        }
+    }
+
+    await auth.refreshSession();
+    return Boolean(auth.currentUser?.email);
 };
 
 export const signInWithCustomToken = async (auth, token) => {

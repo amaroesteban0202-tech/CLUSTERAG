@@ -1,0 +1,8 @@
+android/
+ios/
+dist/
+node_modules/
+.git/
+.tmp/
+firebase-debug.log
+firestore-debug.log

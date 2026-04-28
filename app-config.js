@@ -1,4 +1,5 @@
 window.__cluster_app_id = window.__cluster_app_id || 'cluster-agency-pro-mobile-v6';
+window.__cluster_api_base_url = window.__cluster_api_base_url || 'https://clusterag.vercel.app';
 window.__cluster_firebase_config = window.__cluster_firebase_config || {
     apiKey: 'AIzaSyBAnY2ihWlow17H-TjUKgueWpw2MqYpzUc',
     authDomain: 'cluster-41f73.firebaseapp.com',

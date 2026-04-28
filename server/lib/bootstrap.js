@@ -29,7 +29,7 @@ export const resolveBootstrapRole = (email = '') => {
 
     const managementMember = env.seedManagementTeam.find((item) => normalizeEmail(item.email) === normalizedEmail);
     if (managementMember) {
-        return { role: 'management', managementKey: normalizeNameKey(managementMember.name) };
+        return { role: managementMember.role || 'management', managementKey: normalizeNameKey(managementMember.name) };
     }
 
     const editorMember = env.seedEditorsTeam.find((item) => normalizeEmail(item.email) === normalizedEmail);
@@ -54,7 +54,7 @@ export const ensureBootstrapData = async () => {
             payload: {
                 name: member.name,
                 email,
-                role: 'management',
+                role: member.role || 'management',
                 managementKey,
                 isActive: true,
                 seeded: true,

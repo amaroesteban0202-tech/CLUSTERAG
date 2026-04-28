@@ -7,7 +7,7 @@ import { getRecord, upsertRecord } from './records.js';
 
 const buildCookieOptions = (expiresAt = addHoursToIso(env.sessionTtlHours)) => ({
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: env.isProduction ? 'none' : 'lax',
     secure: env.isProduction,
     path: '/',
     expires: new Date(expiresAt)
@@ -24,7 +24,7 @@ export const buildAuthUser = ({ userRecord, provider = 'password' }) => ({
 
 const buildClearCookieOptions = () => ({
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: env.isProduction ? 'none' : 'lax',
     secure: env.isProduction,
     path: '/'
 });

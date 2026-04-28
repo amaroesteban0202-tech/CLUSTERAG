@@ -59,6 +59,9 @@ const buildManagementTaskEmail = ({
     variant,
     label,
     overdueHours,
+    taskTypeLabel = 'tarea',
+    roomLabel = 'Cluster OS',
+    doneLabel = 'completada',
     assigneeName,
     assignedByName,
     taskTitle,
@@ -85,17 +88,17 @@ const buildManagementTaskEmail = ({
     if (variant === 'upcoming') {
         subject = `[Cluster OS] Tarea proxima a vencer (${label}): ${taskTitle}`;
         heading = `Tu tarea esta por vencer en ${escapeHtml(label)}`;
-        lead = `Hola${safeName ? ` ${safeName}` : ''}, tenes una tarea de gestion${safeAssignedBy ? ` asignada por <strong>${safeAssignedBy}</strong>` : ''} que vence en <strong>${escapeHtml(label)}</strong>.`;
+        lead = `Hola${safeName ? ` ${safeName}` : ''}, tenes una ${escapeHtml(taskTypeLabel)}${safeAssignedBy ? ` asignada por <strong>${safeAssignedBy}</strong>` : ''} que vence en <strong>${escapeHtml(label)}</strong>.`;
         accent = '#f59e0b';
     } else if (variant === 'overdue') {
         subject = `[Cluster OS] Tarea VENCIDA: ${taskTitle}`;
         heading = 'Tu tarea acaba de vencer';
-        lead = `Hola${safeName ? ` ${safeName}` : ''}, la siguiente tarea${safeAssignedBy ? ` asignada por <strong>${safeAssignedBy}</strong>` : ''} ya paso su fecha limite y sigue sin cerrarse.`;
+        lead = `Hola${safeName ? ` ${safeName}` : ''}, la siguiente ${escapeHtml(taskTypeLabel)}${safeAssignedBy ? ` asignada por <strong>${safeAssignedBy}</strong>` : ''} ya paso su fecha limite y sigue pendiente.`;
         accent = '#dc2626';
     } else {
         subject = `[Cluster OS] Tarea vencida hace ${overdueHours || 0}h: ${taskTitle}`;
         heading = `Recordatorio: sigue vencida hace ${overdueHours || 0}h`;
-        lead = `Hola${safeName ? ` ${safeName}` : ''}, esta tarea${safeAssignedBy ? ` asignada por <strong>${safeAssignedBy}</strong>` : ''} todavia no se cierra. Te enviaremos un aviso cada 24 h hasta que la marques como cerrada.`;
+        lead = `Hola${safeName ? ` ${safeName}` : ''}, esta ${escapeHtml(taskTypeLabel)}${safeAssignedBy ? ` asignada por <strong>${safeAssignedBy}</strong>` : ''} todavia sigue pendiente. Te enviaremos un aviso cada 24 h hasta que la marques como ${escapeHtml(doneLabel)}.`;
         accent = '#b91c1c';
     }
 
@@ -116,14 +119,14 @@ const buildManagementTaskEmail = ({
         <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;">
             <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;">
                 <div style="background:${accent};color:#fff;padding:20px 24px;">
-                    <p style="margin:0;font-size:12px;letter-spacing:.15em;text-transform:uppercase;opacity:.85;">Cluster OS - Sala de Gestion</p>
+                    <p style="margin:0;font-size:12px;letter-spacing:.15em;text-transform:uppercase;opacity:.85;">${escapeHtml(roomLabel)}</p>
                     <h2 style="margin:8px 0 0;font-size:22px;">${heading}</h2>
                 </div>
                 <div style="padding:24px;">
                     <p style="margin:0 0 16px;color:#334155;font-size:14px;line-height:1.5;">${lead}</p>
                     <table style="width:100%;border-collapse:collapse;background:#f8fafc;border-radius:12px;">${tableRows}</table>
                     ${link}
-                    <p style="margin:16px 0 0;color:#94a3b8;font-size:12px;">Este correo fue generado automaticamente. Si ya completaste la tarea, abrila en Cluster OS y movela a <em>Cerrado</em> para dejar de recibir recordatorios.</p>
+                    <p style="margin:16px 0 0;color:#94a3b8;font-size:12px;">Este correo fue generado automaticamente. Si ya completaste la tarea, abrila en Cluster OS y movela a <em>${escapeHtml(doneLabel)}</em> para dejar de recibir recordatorios.</p>
                 </div>
             </div>
         </div>
