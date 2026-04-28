@@ -68,6 +68,15 @@ const buildNativeGoogleToken = ({ profilePayload, email }) => signPayload({
     exp: addMinutesToIso(5)
 }, env.sessionSecret);
 
+const buildPersistentAuthToken = ({ userRecord, provider = 'custom', expiresAt = addMinutesToIso(env.magicLinkTtlMinutes * 24 * 60) }) => signPayload({
+    sub: userRecord.authUid || userRecord.id,
+    email: userRecord.email || '',
+    name: userRecord.name || '',
+    provider,
+    authUid: userRecord.authUid || userRecord.id,
+    exp: expiresAt
+}, env.sessionSecret);
+
 router.get('/session', asyncHandler(async (req, res) => {
     res.json({
         user: req.auth?.user || null,
@@ -178,6 +187,7 @@ router.post('/email/complete', asyncHandler(async (req, res) => {
     await createSession({ req, res, userRecord, provider: 'password' });
     res.json({
         ok: true,
+        authToken: buildPersistentAuthToken({ userRecord, provider: 'password' }),
         user: {
             uid: userRecord.authUid || userRecord.id,
             email: userRecord.email || '',
@@ -213,6 +223,7 @@ router.post('/token/exchange', asyncHandler(async (req, res) => {
     await createSession({ req, res, userRecord, provider: payload.provider || 'custom' });
     res.json({
         ok: true,
+        authToken: buildPersistentAuthToken({ userRecord, provider: payload.provider || 'custom' }),
         user: {
             uid: userRecord.authUid || userRecord.id,
             email: userRecord.email || '',
@@ -259,6 +270,7 @@ router.post('/firebase/session', asyncHandler(async (req, res) => {
     await createSession({ req, res, userRecord, provider });
     res.json({
         ok: true,
+        authToken: buildPersistentAuthToken({ userRecord, provider }),
         user: {
             uid: userRecord.authUid || userRecord.id,
             email: userRecord.email || '',

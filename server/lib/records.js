@@ -1,17 +1,13 @@
-import { db } from '../db/knex.js';
 import { createRecordId } from './crypto.js';
 import { nowIso } from './time.js';
 import { normalizeEmail } from './text.js';
 
-const stripUndefined = (value) => JSON.parse(JSON.stringify(value));
+const DEFAULT_APP_ID = 'cluster-agency-pro-mobile-v6';
+const FIRESTORE_BASE = 'https://firestore.googleapis.com/v1';
 
-const safeParseJson = (value) => {
-    try {
-        return JSON.parse(value);
-    } catch (error) {
-        return {};
-    }
-};
+let resolvedAppIdPromise = null;
+
+const stripUndefined = (value) => JSON.parse(JSON.stringify(value));
 
 const compareValues = (left, right, direction = 'asc') => {
     const leftValue = left ?? '';
@@ -21,85 +17,169 @@ const compareValues = (left, right, direction = 'asc') => {
     return direction === 'desc' ? baseResult * -1 : baseResult;
 };
 
-const buildIndexes = (payload) => {
-    const normalizedEmail = normalizeEmail(payload?.email);
+const getConfiguredAppIds = () => {
+    const appIds = [process.env.APP_ID || '', DEFAULT_APP_ID].filter(Boolean);
+    return [...new Set(appIds)];
+};
+
+const buildCollectionPath = (appId, collectionName) => `artifacts/${appId}/public/data/${collectionName}`;
+
+const buildDocumentUrl = (path) => `${FIRESTORE_BASE}/projects/cluster-41f73/databases/(default)/documents/${path}`;
+
+const decodeFirestoreValue = (value = {}) => {
+    if ('nullValue' in value) return null;
+    if ('stringValue' in value) return value.stringValue;
+    if ('booleanValue' in value) return value.booleanValue;
+    if ('integerValue' in value) return Number(value.integerValue);
+    if ('doubleValue' in value) return Number(value.doubleValue);
+    if ('timestampValue' in value) return value.timestampValue;
+    if ('mapValue' in value) return decodeFirestoreFields(value.mapValue.fields || {});
+    if ('arrayValue' in value) return (value.arrayValue.values || []).map(decodeFirestoreValue);
+    return null;
+};
+
+const decodeFirestoreFields = (fields = {}) => Object.fromEntries(
+    Object.entries(fields).map(([key, value]) => [key, decodeFirestoreValue(value)])
+);
+
+const encodeFirestoreValue = (value) => {
+    if (value === null) return { nullValue: null };
+    if (Array.isArray(value)) {
+        return { arrayValue: { values: value.map((item) => encodeFirestoreValue(item)) } };
+    }
+    if (typeof value === 'boolean') return { booleanValue: value };
+    if (typeof value === 'number') {
+        return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
+    }
+    if (typeof value === 'object') return { mapValue: { fields: encodeFirestoreFields(value) } };
+    return { stringValue: String(value ?? '') };
+};
+
+const encodeFirestoreFields = (payload = {}) => Object.fromEntries(
+    Object.entries(stripUndefined(payload)).map(([key, value]) => [key, encodeFirestoreValue(value)])
+);
+
+const parseDocument = (document = null) => {
+    if (!document?.name) return null;
     return {
-        email_index: normalizedEmail || null,
-        role_index: typeof payload?.role === 'string' ? payload.role : null,
-        is_active_index: typeof payload?.isActive === 'boolean' ? payload.isActive : null,
-        auth_uid_index: typeof payload?.authUid === 'string' ? payload.authUid : null,
-        management_key_index: typeof payload?.managementKey === 'string' ? payload.managementKey : null
+        id: String(document.name).split('/').pop(),
+        ...decodeFirestoreFields(document.fields || {})
     };
 };
 
-const parseRow = (row) => {
-    if (!row) return null;
-    return {
-        id: row.record_id,
-        ...safeParseJson(row.payload_json)
-    };
+const apiFetch = async (url, options = {}) => {
+    const response = await fetch(url, {
+        headers: {
+            'content-type': 'application/json',
+            ...(options.headers || {})
+        },
+        ...options
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+        const error = new Error(payload?.error?.message || `Firestore request failed with status ${response.status}`);
+        error.status = response.status;
+        error.code = payload?.error?.status || '';
+        throw error;
+    }
+    return payload;
 };
 
-const toRow = (collectionName, recordId, payload) => {
-    const cleanPayload = stripUndefined(payload);
-    return {
-        collection_name: collectionName,
-        record_id: recordId,
-        payload_json: JSON.stringify(cleanPayload),
-        created_at: cleanPayload.createdAt || nowIso(),
-        updated_at: cleanPayload.updatedAt || nowIso(),
-        ...buildIndexes(cleanPayload)
-    };
+const queryDocuments = async ({ appId, collectionName, pageSize = 500, pageToken = '' }) => {
+    const params = new URLSearchParams({ pageSize: String(pageSize) });
+    if (pageToken) params.set('pageToken', pageToken);
+    return apiFetch(`${buildDocumentUrl(buildCollectionPath(appId, collectionName))}?${params.toString()}`, {
+        headers: {}
+    });
 };
 
-export const getRecord = async ({ collectionName, recordId, trx = db }) => {
-    const row = await trx('app_records')
-        .where({ collection_name: collectionName, record_id: recordId })
-        .first();
-
-    return parseRow(row);
+const listCollectionDocuments = async ({ appId, collectionName }) => {
+    const documents = [];
+    let pageToken = '';
+    do {
+        const payload = await queryDocuments({ appId, collectionName, pageToken });
+        documents.push(...(payload.documents || []));
+        pageToken = payload.nextPageToken || '';
+    } while (pageToken);
+    return documents;
 };
 
-export const listRecords = async ({ collectionName, sortBy = 'updatedAt', sortDirection = 'asc', limitCount, trx = db }) => {
-    let query = trx('app_records').where({ collection_name: collectionName });
-    const canSortInSql = sortBy === 'createdAt' || sortBy === 'updatedAt';
-
-    if (canSortInSql) {
-        query = query.orderBy(sortBy === 'createdAt' ? 'created_at' : 'updated_at', sortDirection);
+const probeCollectionHasDocuments = async (appId, collectionName = 'users') => {
+    try {
+        const payload = await queryDocuments({ appId, collectionName, pageSize: 1 });
+        return Array.isArray(payload.documents) && payload.documents.length > 0;
+    } catch {
+        return false;
     }
+};
 
-    if (limitCount && canSortInSql) {
-        query = query.limit(limitCount);
+const resolveActiveAppId = async () => {
+    if (!resolvedAppIdPromise) {
+        resolvedAppIdPromise = (async () => {
+            const candidates = getConfiguredAppIds();
+            for (const appId of candidates) {
+                if (await probeCollectionHasDocuments(appId, 'users')) return appId;
+                if (await probeCollectionHasDocuments(appId, 'clients')) return appId;
+            }
+            return candidates[0] || DEFAULT_APP_ID;
+        })();
     }
+    return resolvedAppIdPromise;
+};
 
-    const rows = await query;
-    let records = rows.map(parseRow);
-
-    if (!canSortInSql) {
-        records = records.sort((left, right) => compareValues(left?.[sortBy], right?.[sortBy], sortDirection));
-        if (limitCount) records = records.slice(0, limitCount);
+const getDocumentByPath = async (path) => {
+    try {
+        const payload = await apiFetch(buildDocumentUrl(path), { headers: {} });
+        return parseDocument(payload);
+    } catch (error) {
+        if (error.status === 404) return null;
+        throw error;
     }
+};
 
+const findFirstByField = async ({ collectionName, fieldName, value }) => {
+    if (!value) return null;
+    const records = await listRecords({ collectionName });
+    return records.find((record) => {
+        if (fieldName === 'email') return normalizeEmail(record.email) === normalizeEmail(value);
+        return String(record?.[fieldName] || '') === String(value);
+    }) || null;
+};
+
+export const getRecord = async ({ collectionName, recordId }) => {
+    const appId = await resolveActiveAppId();
+    return getDocumentByPath(`${buildCollectionPath(appId, collectionName)}/${recordId}`);
+};
+
+export const listRecords = async ({ collectionName, sortBy = 'updatedAt', sortDirection = 'asc', limitCount }) => {
+    const appId = await resolveActiveAppId();
+    const documents = await listCollectionDocuments({ appId, collectionName });
+    let records = documents.map(parseDocument).filter(Boolean);
+    records = records.sort((left, right) => compareValues(left?.[sortBy], right?.[sortBy], sortDirection));
+    if (limitCount) records = records.slice(0, limitCount);
     return records;
 };
 
-export const createRecord = async ({ collectionName, payload, recordId = createRecordId(), trx = db }) => {
+export const createRecord = async ({ collectionName, payload, recordId = createRecordId() }) => {
+    const appId = await resolveActiveAppId();
     const stamp = nowIso();
     const nextPayload = {
         ...payload,
         createdAt: payload?.createdAt || stamp,
         updatedAt: payload?.updatedAt || stamp
     };
-
-    await trx('app_records').insert(toRow(collectionName, recordId, nextPayload));
+    const url = `${buildDocumentUrl(buildCollectionPath(appId, collectionName))}?documentId=${encodeURIComponent(recordId)}`;
+    await apiFetch(url, {
+        method: 'POST',
+        body: JSON.stringify({ fields: encodeFirestoreFields(nextPayload) })
+    });
     return { id: recordId, ...nextPayload };
 };
 
-export const upsertRecord = async ({ collectionName, recordId = createRecordId(), payload, merge = true, trx = db }) => {
-    const existing = await getRecord({ collectionName, recordId, trx });
-    if (!existing) {
-        return createRecord({ collectionName, payload, recordId, trx });
-    }
+export const upsertRecord = async ({ collectionName, recordId = createRecordId(), payload, merge = true }) => {
+    const appId = await resolveActiveAppId();
+    const existing = await getRecord({ collectionName, recordId });
+    if (!existing) return createRecord({ collectionName, payload, recordId });
 
     const stamp = nowIso();
     const nextPayload = merge
@@ -115,42 +195,34 @@ export const upsertRecord = async ({ collectionName, recordId = createRecordId()
             updatedAt: payload?.updatedAt || stamp
         };
 
-    await trx('app_records')
-        .where({ collection_name: collectionName, record_id: recordId })
-        .update(toRow(collectionName, recordId, nextPayload));
-
+    const updateMask = Object.keys(encodeFirestoreFields(nextPayload))
+        .map((fieldName) => `updateMask.fieldPaths=${encodeURIComponent(fieldName)}`)
+        .join('&');
+    await apiFetch(`${buildDocumentUrl(`${buildCollectionPath(appId, collectionName)}/${recordId}`)}?${updateMask}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ fields: encodeFirestoreFields(nextPayload) })
+    });
     return { id: recordId, ...nextPayload };
 };
 
-export const deleteRecord = async ({ collectionName, recordId, trx = db }) => {
-    await trx('app_records')
-        .where({ collection_name: collectionName, record_id: recordId })
-        .delete();
+export const deleteRecord = async ({ collectionName, recordId }) => {
+    const appId = await resolveActiveAppId();
+    await apiFetch(buildDocumentUrl(`${buildCollectionPath(appId, collectionName)}/${recordId}`), {
+        method: 'DELETE',
+        headers: {}
+    }).catch((error) => {
+        if (error.status === 404) return null;
+        throw error;
+    });
 };
 
-export const findFirstRecordByEmail = async ({ collectionName, email, trx = db }) => {
+export const findFirstRecordByEmail = async ({ collectionName, email }) => {
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail) return null;
-
-    const row = await trx('app_records')
-        .where({
-            collection_name: collectionName,
-            email_index: normalizedEmail
-        })
-        .first();
-
-    return parseRow(row);
+    return findFirstByField({ collectionName, fieldName: 'email', value: normalizedEmail });
 };
 
-export const findFirstRecordByAuthUid = async ({ collectionName, authUid, trx = db }) => {
+export const findFirstRecordByAuthUid = async ({ collectionName, authUid }) => {
     if (!authUid) return null;
-
-    const row = await trx('app_records')
-        .where({
-            collection_name: collectionName,
-            auth_uid_index: authUid
-        })
-        .first();
-
-    return parseRow(row);
+    return findFirstByField({ collectionName, fieldName: 'authUid', value: authUid });
 };

@@ -15,8 +15,28 @@ const listeners = new Set();
 let authSingleton = null;
 const EMAIL_LINK_STORAGE_KEY = 'cluster_email_link_for_sign_in';
 const NATIVE_GOOGLE_STATE_STORAGE_KEY = 'cluster_native_google_state';
+const BACKEND_AUTH_TOKEN_STORAGE_KEY = 'cluster_backend_auth_token';
 
 let firebaseEmailAuth = null;
+
+const readBackendAuthToken = () => {
+    if (typeof window === 'undefined') return '';
+    return window.localStorage.getItem(BACKEND_AUTH_TOKEN_STORAGE_KEY) || '';
+};
+
+const writeBackendAuthToken = (token = '') => {
+    if (typeof window === 'undefined') return;
+    if (!token) {
+        window.localStorage.removeItem(BACKEND_AUTH_TOKEN_STORAGE_KEY);
+        return;
+    }
+    window.localStorage.setItem(BACKEND_AUTH_TOKEN_STORAGE_KEY, token);
+};
+
+const persistAuthPayload = (payload = {}) => {
+    if (payload?.authToken) writeBackendAuthToken(payload.authToken);
+    return payload;
+};
 
 const getFirebaseClientConfig = () => {
     if (typeof window === 'undefined') return null;
@@ -52,7 +72,7 @@ const exchangeFirebaseSession = async ({ idToken, email = '' }) => {
         method: 'POST',
         body: JSON.stringify({ idToken, email })
     });
-    return payload;
+    return persistAuthPayload(payload);
 };
 
 const normalizeUser = (user = null) => {
@@ -111,6 +131,24 @@ class BackendAuth {
                 }
             } catch (error) {
                 void error;
+            }
+        }
+
+        if (!payload?.user) {
+            const backendAuthToken = readBackendAuthToken();
+            if (backendAuthToken) {
+                try {
+                    payload = persistAuthPayload(await apiFetch('/api/auth/token/exchange', {
+                        method: 'POST',
+                        body: JSON.stringify({ token: backendAuthToken })
+                    }));
+                } catch (error) {
+                    if (error.status === 400 || error.status === 401 || error.status === 403) {
+                        writeBackendAuthToken('');
+                    } else {
+                        throw error;
+                    }
+                }
             }
         }
 
@@ -300,6 +338,7 @@ export const signInWithCustomToken = async (auth, token) => {
         method: 'POST',
         body: JSON.stringify({ token })
     });
+    persistAuthPayload(payload);
     auth.setCurrentUser(payload?.user || null);
     return { user: auth.currentUser };
 };
@@ -314,5 +353,6 @@ export const signOut = async (auth) => {
     } catch (error) {
         void error;
     }
+    writeBackendAuthToken('');
     auth.setCurrentUser(null);
 };

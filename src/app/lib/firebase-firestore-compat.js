@@ -132,7 +132,7 @@ export const initializeFirestore = (app, options = {}) => ({ app, options });
 
 export const getFirestore = (app) => ({ app });
 
-export const connectFirestoreEmulator = () => {};
+export const connectFirestoreEmulator = () => { };
 
 export const persistentLocalCache = (config = {}) => config;
 

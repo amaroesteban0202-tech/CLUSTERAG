@@ -7,8 +7,8 @@ const firebaseConfig = typeof window !== 'undefined'
     : null;
 
 const dataAppId = typeof window !== 'undefined' && window.__cluster_app_id
-        ? window.__cluster_app_id
-        : 'cluster-agency-pro-mobile-v6';
+    ? window.__cluster_app_id
+    : 'cluster-agency-pro-mobile-v6';
 
 let auth = null;
 let db = null;
