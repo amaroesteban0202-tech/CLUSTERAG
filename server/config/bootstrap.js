@@ -4,7 +4,7 @@ export const DEFAULT_SUPER_ADMIN_EMAILS = [
 
 export const DEFAULT_MANAGEMENT_TEAM = [
     { name: 'Aiskel', email: 'aiskel.wuerman82@gmail.com' },
-    { name: 'Maycoll', email: 'maycolljaramillo01@gmail.com' },
+    { name: 'Maycoll', email: 'maycolljaramillo01@gmail.com', role: 'super_admin' },
     { name: 'Esteban', email: 'estebanantonio02@gmail.com', role: 'operations' },
     { name: 'Maria', email: 'marialaguna2117@gmail.com' },
     { name: 'Orlando', email: 'info@cluster.marketing' }

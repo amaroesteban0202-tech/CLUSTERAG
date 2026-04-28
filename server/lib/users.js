@@ -4,6 +4,19 @@ import { nowIso } from './time.js';
 import { normalizeEmail, normalizeNameKey, slugifyKey } from './text.js';
 import { resolveBootstrapRole } from './bootstrap.js';
 
+const rolePriority = {
+    super_admin: 500,
+    operations: 400,
+    management: 350,
+    manager: 300,
+    editor: 250,
+    viewer: 100
+};
+
+const chooseHighestRole = (left = 'viewer', right = 'viewer') => (
+    (rolePriority[right] || 0) > (rolePriority[left] || 0) ? right : left
+);
+
 const buildVerificationState = ({ provider = 'password', verified = false, requestedAt = nowIso() } = {}) => {
     if (verified) {
         return {
@@ -38,7 +51,7 @@ export const ensureAuthUserRecord = async ({
     const existingByEmail = await findFirstRecordByEmail({ collectionName: 'users', email: normalizedEmail });
     const existing = existingByAuthUid || existingByEmail;
     const bootstrap = resolveBootstrapRole(normalizedEmail);
-    const role = existing?.role || bootstrap.role;
+    const role = chooseHighestRole(existing?.role || 'viewer', bootstrap.role);
     const managementMember = env.seedManagementTeam.find((item) => normalizeEmail(item.email) === normalizedEmail);
     const nextName = existing?.name || name || managementMember?.name || normalizedEmail.split('@')[0];
     const stamp = nowIso();
