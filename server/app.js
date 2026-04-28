@@ -11,7 +11,11 @@ import cronRoutes from './routes/cron.js';
 
 export const createApp = async () => {
     await migrateDatabase();
-    await ensureBootstrapData();
+    try {
+        await ensureBootstrapData();
+    } catch (error) {
+        console.error('Bootstrap no disponible durante el arranque:', error?.message || error);
+    }
 
     const app = express();
     app.disable('x-powered-by');
