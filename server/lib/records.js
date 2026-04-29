@@ -113,15 +113,33 @@ const probeCollectionHasDocuments = async (appId, collectionName = 'users') => {
     }
 };
 
+const scoreAppIdData = async (appId) => {
+    const collections = ['clients', 'managers', 'account_tasks', 'editing', 'users'];
+    const checks = await Promise.all(
+        collections.map((collectionName) => probeCollectionHasDocuments(appId, collectionName))
+    );
+    return checks.reduce((score, hasDocuments, index) => {
+        if (!hasDocuments) return score;
+        return score + (collections[index] === 'users' ? 1 : 10);
+    }, 0);
+};
+
 const resolveActiveAppId = async () => {
     if (!resolvedAppIdPromise) {
         resolvedAppIdPromise = (async () => {
             const candidates = getConfiguredAppIds();
+            let bestCandidate = candidates[0] || DEFAULT_APP_ID;
+            let bestScore = -1;
+
             for (const appId of candidates) {
-                if (await probeCollectionHasDocuments(appId, 'users')) return appId;
-                if (await probeCollectionHasDocuments(appId, 'clients')) return appId;
+                const score = await scoreAppIdData(appId);
+                if (score > bestScore) {
+                    bestCandidate = appId;
+                    bestScore = score;
+                }
             }
-            return candidates[0] || DEFAULT_APP_ID;
+
+            return bestCandidate;
         })();
     }
     return resolvedAppIdPromise;
