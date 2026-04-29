@@ -140,6 +140,14 @@ const getResolvedManagementEmail = (record = {}) => {
     if (directEmail) return directEmail;
     return normalizeEmail(getManagementDirectoryMeta(record)?.email);
 };
+const buildRecoveredManagerId = (name = '') => {
+    const key = normalizeNameKey(name).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    return key ? `recovered_manager_${key}` : '';
+};
+const findDirectoryMemberByName = (name = '') => {
+    const key = normalizeNameKey(name);
+    return MANAGEMENT_DIRECTORY.find((member) => member.directoryKey === key) || null;
+};
 const getUserRolePriority = (role = '') => {
     const priorities = {
         super_admin: 500,
@@ -437,6 +445,7 @@ function App() {
     const [loginEmail, setLoginEmail] = useState('');
     const [isSendingLoginLink, setIsSendingLoginLink] = useState(false);
     const [hasSeededManagementDirectory, setHasSeededManagementDirectory] = useState(false);
+    const [hasRecoveredManagerDirectory, setHasRecoveredManagerDirectory] = useState(false);
     const [hasBackfilledIdentityLinks, setHasBackfilledIdentityLinks] = useState(false);
     const [usersLoaded, setUsersLoaded] = useState(false);
     const isReconcilingUsersRef = useRef(false);
@@ -862,6 +871,140 @@ function App() {
             }, { merge: true }))
         ).finally(() => setHasSeededManagementDirectory(true));
     }, [db, user, usersLoaded, appUsers, hasSeededManagementDirectory]);
+
+    useEffect(() => {
+        if (!db || !user || !usersLoaded || hasRecoveredManagerDirectory) return;
+        if (!userHasPermission(currentUserProfile, 'manage_managers')) return;
+
+        const existingManagerIds = new Set(managers.map((item) => item.id).filter(Boolean));
+        const existingManagerByName = new Map(
+            managers
+                .filter((item) => normalizeNameKey(item.name))
+                .map((item) => [normalizeNameKey(item.name), item])
+        );
+        const referencedManagers = new Map();
+
+        const addReferencedManager = ({ id = '', name = '', email = '' }) => {
+            const resolvedName = String(name || '').trim();
+            const resolvedEmail = normalizeEmail(email);
+            const resolvedId = String(id || '').trim() || buildRecoveredManagerId(resolvedName);
+            if (!resolvedId || !resolvedName) return;
+
+            const existingByName = existingManagerByName.get(normalizeNameKey(resolvedName));
+            if (existingByName) return;
+            if (existingManagerIds.has(resolvedId)) return;
+
+            const current = referencedManagers.get(resolvedId) || {};
+            referencedManagers.set(resolvedId, {
+                id: resolvedId,
+                name: current.name || resolvedName,
+                email: current.email || resolvedEmail
+            });
+        };
+
+        clients.forEach((client) => {
+            addReferencedManager({
+                id: client.managerId,
+                name: client.manager,
+                email: client.managerEmail
+            });
+        });
+
+        accountTasks.forEach((task) => {
+            if (!task.contextId || existingManagerIds.has(task.contextId)) return;
+            const assignedUser = task.assigneeUserId ? appUsers.find((item) => item.id === task.assigneeUserId) : null;
+            if (!assignedUser) return;
+            addReferencedManager({
+                id: task.contextId,
+                name: assignedUser.name,
+                email: assignedUser.email
+            });
+        });
+
+        appUsers.forEach((appUser) => {
+            if (!appUser.linkedManagerId || existingManagerIds.has(appUser.linkedManagerId)) return;
+            addReferencedManager({
+                id: appUser.linkedManagerId,
+                name: appUser.name,
+                email: appUser.email
+            });
+        });
+
+        const missingManagers = Array.from(referencedManagers.values());
+        if (missingManagers.length === 0) {
+            if (managers.length > 0 || clients.length > 0 || accountTasks.length > 0) {
+                setHasRecoveredManagerDirectory(true);
+            }
+            return;
+        }
+
+        let isCancelled = false;
+        const batch = writeBatch(db);
+        const stamp = nowIso();
+
+        missingManagers.forEach((manager, index) => {
+            const directoryMember = findDirectoryMemberByName(manager.name);
+            const resolvedEmail = normalizeEmail(manager.email || directoryMember?.email);
+            const linkedUser = (resolvedEmail
+                ? appUsers.find((item) => normalizeEmail(item.email) === resolvedEmail)
+                : null) || appUsers.find((item) => normalizeNameKey(item.name) === normalizeNameKey(manager.name));
+            const color = ACCOUNT_COLORS[index % ACCOUNT_COLORS.length];
+
+            batch.set(dataDoc('managers', manager.id), {
+                name: manager.name,
+                email: resolvedEmail,
+                color,
+                userId: linkedUser?.id || '',
+                recovered: true,
+                createdAt: stamp,
+                updatedAt: stamp
+            }, { merge: true });
+
+            if (linkedUser?.id && linkedUser.linkedManagerId !== manager.id) {
+                batch.update(dataDoc('users', linkedUser.id), {
+                    linkedManagerId: manager.id,
+                    updatedAt: stamp
+                });
+            }
+
+            clients
+                .filter((client) => client.managerId === manager.id || (!client.managerId && normalizeNameKey(client.manager) === normalizeNameKey(manager.name)))
+                .forEach((client) => {
+                    batch.update(dataDoc('clients', client.id), {
+                        manager: manager.name,
+                        managerId: manager.id,
+                        managerUserId: linkedUser?.id || client.managerUserId || '',
+                        updatedAt: stamp
+                    });
+                });
+
+            if (linkedUser?.id) {
+                accountTasks
+                    .filter((task) => task.contextId === manager.id && task.assigneeUserId !== linkedUser.id)
+                    .forEach((task) => {
+                        batch.update(dataDoc('account_tasks', task.id), {
+                            assigneeUserId: linkedUser.id,
+                            updatedAt: stamp
+                        });
+                    });
+            }
+        });
+
+        batch.commit()
+            .then(() => {
+                if (!isCancelled) showToast(`Account Managers restaurados: ${missingManagers.length}`);
+            })
+            .catch((error) => {
+                console.error('No se pudo restaurar el directorio de Account Managers:', error);
+            })
+            .finally(() => {
+                if (!isCancelled) setHasRecoveredManagerDirectory(true);
+            });
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [db, user, usersLoaded, hasRecoveredManagerDirectory, currentUserProfile?.id, currentUserProfile?.role, managers, clients, accountTasks, appUsers]);
 
     useEffect(() => {
         if (!db || !user || !usersLoaded) return;
