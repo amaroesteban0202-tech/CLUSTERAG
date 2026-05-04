@@ -5,6 +5,16 @@ import { normalizeEmail, normalizeNameKey, slugifyKey } from './text.js';
 
 const buildManagementRecordId = (name = '') => `management_${slugifyKey(name) || 'member'}`;
 
+const FORCED_MANAGEMENT_ROLES_BY_EMAIL = {
+    'estebanantonio02@gmail.com': 'operations',
+    'marialaguna2117@gmail.com': 'operations'
+};
+
+const getSeedManagementRole = (member = {}) => {
+    const forcedRole = FORCED_MANAGEMENT_ROLES_BY_EMAIL[normalizeEmail(member.email)];
+    return forcedRole || member.role || 'management';
+};
+
 const buildVerificationState = (verified = false) => verified
     ? {
         status: 'verified',
@@ -29,7 +39,7 @@ export const resolveBootstrapRole = (email = '') => {
 
     const managementMember = env.seedManagementTeam.find((item) => normalizeEmail(item.email) === normalizedEmail);
     if (managementMember) {
-        return { role: managementMember.role || 'management', managementKey: normalizeNameKey(managementMember.name) };
+        return { role: getSeedManagementRole(managementMember), managementKey: normalizeNameKey(managementMember.name) };
     }
 
     const editorMember = env.seedEditorsTeam.find((item) => normalizeEmail(item.email) === normalizedEmail);
@@ -54,7 +64,7 @@ export const ensureBootstrapData = async () => {
             payload: {
                 name: member.name,
                 email,
-                role: member.role || 'management',
+                role: getSeedManagementRole(member),
                 managementKey,
                 isActive: true,
                 seeded: true,

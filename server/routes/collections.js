@@ -17,6 +17,16 @@ const router = express.Router();
 
 const getCollectionName = (req) => String(req.params.collectionName || '').trim();
 
+const PUBLIC_READ_COLLECTIONS = new Set([
+    'clients',
+    'events',
+    'managers',
+    'editors',
+    'account_tasks',
+    'editing',
+    'management_tasks'
+]);
+
 const ensureCollectionPermission = (req, action) => {
     const userRecord = requireAuthenticatedUser(req);
     const collectionName = getCollectionName(req);
@@ -28,6 +38,18 @@ const ensureCollectionPermission = (req, action) => {
         throw createHttpError(403, 'No tienes permisos para esta accion.', 'auth/insufficient-permission');
     }
     return { userRecord, collectionName };
+};
+
+const ensureCollectionReadPermission = (req) => {
+    const collectionName = getCollectionName(req);
+    const permission = getCollectionPermission(collectionName, 'read');
+    if (!permission) {
+        throw createHttpError(404, 'La coleccion no existe.', 'collection/not-found');
+    }
+    if (PUBLIC_READ_COLLECTIONS.has(collectionName)) {
+        return { userRecord: req.auth?.userRecord || null, collectionName };
+    }
+    return ensureCollectionPermission(req, 'read');
 };
 
 const prepareCollectionPayload = ({ collectionName, payload, existing = null, actor = null, isCreate = false }) => {
@@ -127,7 +149,7 @@ router.post('/_batch', asyncHandler(async (req, res) => {
 }));
 
 router.get('/:collectionName', asyncHandler(async (req, res) => {
-    const { collectionName } = ensureCollectionPermission(req, 'read');
+    const { collectionName } = ensureCollectionReadPermission(req);
     const records = await listRecords({
         collectionName,
         sortBy: String(req.query.orderBy || 'updatedAt'),
@@ -139,7 +161,7 @@ router.get('/:collectionName', asyncHandler(async (req, res) => {
 }));
 
 router.get('/:collectionName/:recordId', asyncHandler(async (req, res) => {
-    const { collectionName } = ensureCollectionPermission(req, 'read');
+    const { collectionName } = ensureCollectionReadPermission(req);
     const record = await getRecord({ collectionName, recordId: req.params.recordId });
     if (!record) {
         throw createHttpError(404, 'El documento no existe.', 'document/not-found');
