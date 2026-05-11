@@ -527,12 +527,50 @@ function App() {
     const currentRoleMeta = getRoleMeta(currentUserProfile?.role);
     const currentVerificationMeta = getVerificationMeta(currentUserProfile);
     const profileBlocked = Boolean(currentUserProfile && currentUserProfile.isActive === false);
+    const appUserById = new Map(appUsers.map((item) => [item.id, item]));
+    const managementMemberCandidates = [
+        ...appUsers.filter((item) => item.isActive !== false),
+        ...managers.map((item) => {
+            const linkedUser = item.userId ? appUserById.get(item.userId) : null;
+            return {
+                ...(linkedUser || {}),
+                id: linkedUser?.id || item.userId || item.id,
+                name: linkedUser?.name || item.name || '',
+                email: normalizeEmail(linkedUser?.email || item.email),
+                role: linkedUser?.role && linkedUser.role !== 'viewer' ? linkedUser.role : 'manager',
+                isActive: linkedUser?.isActive ?? item.isActive ?? true,
+                linkedManagerId: item.id,
+                managementKey: linkedUser?.managementKey || ''
+            };
+        }),
+        ...editors.map((item) => {
+            const linkedUser = item.userId ? appUserById.get(item.userId) : null;
+            return {
+                ...(linkedUser || {}),
+                id: linkedUser?.id || item.userId || item.id,
+                name: linkedUser?.name || item.name || '',
+                email: normalizeEmail(linkedUser?.email || item.email),
+                role: linkedUser?.role && linkedUser.role !== 'viewer' ? linkedUser.role : 'editor',
+                isActive: linkedUser?.isActive ?? item.isActive ?? true,
+                linkedEditorId: item.id,
+                managementKey: linkedUser?.managementKey || ''
+            };
+        })
+    ].filter((item) => item.isActive !== false && (item.id || item.name || normalizeEmail(item.email)));
     const managementUsers = Array.from(
-        appUsers
-            .filter((item) => item.isActive !== false)
+        managementMemberCandidates
             .reduce((accumulator, item) => {
                 const managementKey = item.managementKey || (item.role === 'management' ? getManagementDirectoryKey(item) : '');
-                const memberKey = managementKey ? `management:${managementKey}` : `user:${item.id}`;
+                const emailKey = normalizeEmail(item.email);
+                const memberKey = managementKey
+                    ? `management:${managementKey}`
+                    : emailKey
+                      ? `email:${emailKey}`
+                      : item.linkedManagerId
+                        ? `manager:${item.linkedManagerId}`
+                        : item.linkedEditorId
+                          ? `editor:${item.linkedEditorId}`
+                          : `user:${item.id}`;
                 const current = accumulator.get(memberKey);
                 if (!current || getUserRecordScore(item) > getUserRecordScore(current)) {
                     accumulator.set(memberKey, item);
