@@ -529,12 +529,13 @@ function App() {
     const profileBlocked = Boolean(currentUserProfile && currentUserProfile.isActive === false);
     const managementUsers = Array.from(
         appUsers
-            .filter((item) => item.role === 'management')
+            .filter((item) => item.isActive !== false)
             .reduce((accumulator, item) => {
-                const managementKey = item.managementKey || getManagementDirectoryKey(item) || `management:${item.id}`;
-                const current = accumulator.get(managementKey);
+                const managementKey = item.managementKey || (item.role === 'management' ? getManagementDirectoryKey(item) : '');
+                const memberKey = managementKey ? `management:${managementKey}` : `user:${item.id}`;
+                const current = accumulator.get(memberKey);
                 if (!current || getUserRecordScore(item) > getUserRecordScore(current)) {
-                    accumulator.set(managementKey, item);
+                    accumulator.set(memberKey, item);
                 }
                 return accumulator;
             }, new Map())
@@ -3640,7 +3641,7 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
             <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Gestion" onAdd={handleAddTask} btnColor="violet" btnIcon="ShieldCheck" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-                    <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Equipo vinculado</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Usuarios vinculados</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {members.map((member) => (
                             <div key={member.id} className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
@@ -3654,7 +3655,7 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
                     <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Alertas de acceso</p>
                     <div className="space-y-3">
                         {members.filter((member) => !normalizeEmail(member.email)).length === 0 ? (
-                            <EmptyState icon="Mail" text="Todos los perfiles de gestion ya tienen correo." />
+                            <EmptyState icon="Mail" text="Todos los usuarios de la sala ya tienen correo." />
                         ) : (
                             members.filter((member) => !normalizeEmail(member.email)).map((member) => (
                                 <div key={member.id} className="p-3 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10">

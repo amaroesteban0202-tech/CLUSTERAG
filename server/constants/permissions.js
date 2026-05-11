@@ -54,6 +54,7 @@ export const ROLE_DEFINITIONS = {
             'view_clients',
             'manage_clients',
             'view_managers',
+            'view_editors',
             'view_account_room',
             'create_account_tasks',
             'manage_account_tasks',
