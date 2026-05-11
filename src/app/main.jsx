@@ -354,7 +354,9 @@ const TASK_ROOM_STATE_VERSION = 2;
 const getTaskRoomDefaults = ({ preferMine = false } = {}) => ({
     currentDate: getHondurasTodayStr(),
     filterMode: preferMine ? 'all' : 'date',
-    ownershipFilter: preferMine ? 'mine' : 'all'
+    ownershipFilter: preferMine ? 'mine' : 'all',
+    rangeStart: getHondurasTodayStr(),
+    rangeEnd: getHondurasTodayStr()
 });
 const readTaskRoomState = (storageKey, options = {}) => {
     const defaults = getTaskRoomDefaults(options);
@@ -365,8 +367,10 @@ const readTaskRoomState = (storageKey, options = {}) => {
         const parsedValue = JSON.parse(rawValue);
         const parsedState = {
             currentDate: resolveStoredTaskRoomDate(parsedValue.currentDate, parsedValue.savedAt, defaults.currentDate),
-            filterMode: ['date', 'overdue', 'all'].includes(parsedValue.filterMode) ? parsedValue.filterMode : defaults.filterMode,
-            ownershipFilter: ['all', 'mine'].includes(parsedValue.ownershipFilter) ? parsedValue.ownershipFilter : defaults.ownershipFilter
+            filterMode: ['date', 'overdue', 'all', 'range'].includes(parsedValue.filterMode) ? parsedValue.filterMode : defaults.filterMode,
+            ownershipFilter: ['all', 'mine'].includes(parsedValue.ownershipFilter) ? parsedValue.ownershipFilter : defaults.ownershipFilter,
+            rangeStart: normalizeDateOnlyString(parsedValue.rangeStart) || defaults.rangeStart,
+            rangeEnd: normalizeDateOnlyString(parsedValue.rangeEnd) || defaults.rangeEnd
         };
         const savedVersion = Number(parsedValue.version || 0);
         const wasPersonalized = parsedValue.personalized === true;
@@ -391,7 +395,9 @@ const useTaskRoomState = (storageKey, options = {}) => {
             const hasChanges =
                 nextState.currentDate !== current.currentDate ||
                 nextState.filterMode !== current.filterMode ||
-                nextState.ownershipFilter !== current.ownershipFilter;
+                nextState.ownershipFilter !== current.ownershipFilter ||
+                nextState.rangeStart !== current.rangeStart ||
+                nextState.rangeEnd !== current.rangeEnd;
             return hasChanges ? nextState : current;
         });
     }, [storageKey, preferMine]);
@@ -411,6 +417,8 @@ const useTaskRoomState = (storageKey, options = {}) => {
         currentDate: roomState.currentDate,
         filterMode: roomState.filterMode,
         ownershipFilter: roomState.ownershipFilter,
+        rangeStart: roomState.rangeStart,
+        rangeEnd: roomState.rangeEnd,
         setCurrentDate: (value) => setRoomState((current) => ({
             ...current,
             currentDate: typeof value === 'function' ? value(current.currentDate) : value
@@ -422,6 +430,14 @@ const useTaskRoomState = (storageKey, options = {}) => {
         setOwnershipFilter: (value) => setRoomState((current) => ({
             ...current,
             ownershipFilter: typeof value === 'function' ? value(current.ownershipFilter) : value
+        })),
+        setRangeStart: (value) => setRoomState((current) => ({
+            ...current,
+            rangeStart: typeof value === 'function' ? value(current.rangeStart) : value
+        })),
+        setRangeEnd: (value) => setRoomState((current) => ({
+            ...current,
+            rangeEnd: typeof value === 'function' ? value(current.rangeEnd) : value
         }))
     };
 };
@@ -2495,7 +2511,21 @@ function App() {
                     {view === 'management-room' && <ManagementRoomView tasks={managementTasks} members={managementUsers} clients={clients} currentUserProfile={currentUserProfile} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'managementTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'managementTask', data: task, isEdit: true })} onChangeStatus={changeManagementTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'managementTask', id, title: 'Tarea de gestion' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'managementTask' })} />}
                     {view === 'control-center' && <UsersAccessView users={appUsers} managers={managers} editors={editors} auditLogs={auditLogs} currentUserProfile={currentUserProfile} onAdd={() => setModalConfig({ isOpen: true, type: 'user' })} onEdit={(userRecord) => setModalConfig({ isOpen: true, type: 'user', data: userRecord, isEdit: true })} onResendVerification={requestUserVerification} />}
                     {view === 'general-calendar' && (
-                        <div className="h-full flex flex-col space-y-6 fade-in"><h2 className="text-2xl font-black text-slate-800 dark:text-white">Calendario General</h2><div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden"><GeneralCalendarGrid activities={allActivities} onDayClick={(dateStr) => setDayDetailsModal({ isOpen: true, date: dateStr })} /></div></div>
+                        <div className="h-full flex flex-col space-y-6 fade-in">
+                            <h2 className="text-2xl font-black text-slate-800 dark:text-white">Calendario General</h2>
+                            <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden">
+                                <GeneralCalendarGrid
+                                    activities={allActivities}
+                                    onDayClick={(dateStr) => setDayDetailsModal({ isOpen: true, date: dateStr })}
+                                    onMoveActivity={async (activity, newDate) => {
+                                        if (!canEditActivity(activity.collectionType)) return;
+                                        const colMap = { accountTask: 'account_tasks', editingTask: 'editing', managementTask: 'management_tasks', event: 'events' };
+                                        const colName = colMap[activity.collectionType];
+                                        if (colName) await updateDoc(dataDoc(colName, activity.id), { date: newDate, updatedAt: nowIso() });
+                                    }}
+                                />
+                            </div>
+                        </div>
                     )}
                     {view === 'calendar' && (
                         <div className="h-full flex flex-col space-y-6 fade-in"><h2 className="text-2xl font-black text-slate-800 dark:text-white">Agenda de Producciones</h2><div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden"><CalendarGrid events={events.filter(e => e.type === 'production')} baseColor="emerald" onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'event', data: { date: dateStr, type: 'production' } })} onEventClick={(e) => handleEventClick(e, 'event')} /></div></div>
@@ -3178,8 +3208,23 @@ const PersonCalendarDetail = ({ person, tasks, title, baseColor, onBack, onAddEv
     );
 };
 
-const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, ownershipFilter = 'all', setOwnershipFilter, title, onAdd, btnColor, btnIcon, searchTerm, setSearchTerm }) => {
+const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, ownershipFilter = 'all', setOwnershipFilter, title, onAdd, btnColor, btnIcon, searchTerm, setSearchTerm, rangeStart, setRangeStart, rangeEnd, setRangeEnd }) => {
     const today = getHondurasTodayStr();
+    const hasRangeSupport = Boolean(setRangeStart && setRangeEnd);
+    const effectiveRangeStart = rangeStart || today;
+    const effectiveRangeEnd = rangeEnd || today;
+
+    const handleRangeStartChange = (e) => {
+        const val = e.target.value;
+        setRangeStart(val);
+        if (compareDateOnlyStrings(val, effectiveRangeEnd) > 0) setRangeEnd(val);
+    };
+    const handleRangeEndChange = (e) => {
+        const val = e.target.value;
+        setRangeEnd(val);
+        if (compareDateOnlyStrings(val, effectiveRangeStart) < 0) setRangeStart(val);
+    };
+
     return (
         <div className="flex flex-col 2xl:flex-row justify-between items-start 2xl:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="flex flex-col lg:flex-row lg:flex-wrap items-start lg:items-center gap-4 w-full min-w-0 2xl:w-auto">
@@ -3189,9 +3234,10 @@ const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, ow
                 </div>
                 <div className="flex flex-col lg:flex-row lg:flex-wrap gap-3 w-full min-w-0 lg:w-auto">
                     <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto max-w-full overflow-x-auto custom-scroll">
-                    <button onClick={() => setFilterMode('date')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'date' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Día Específico</button>
-                    <button onClick={() => setFilterMode('overdue')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${filterMode === 'overdue' ? `bg-red-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-red-500'}`}>Atrasadas <Icon name="Flame" size={14}/></button>
-                    <button onClick={() => setFilterMode('all')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Ver Todas</button>
+                        <button onClick={() => setFilterMode('date')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'date' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Día Específico</button>
+                        {hasRangeSupport && <button onClick={() => setFilterMode('range')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-1.5 ${filterMode === 'range' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}><Icon name="CalendarRange" size={14}/>Rango</button>}
+                        <button onClick={() => setFilterMode('overdue')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${filterMode === 'overdue' ? `bg-red-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-red-500'}`}>Atrasadas <Icon name="Flame" size={14}/></button>
+                        <button onClick={() => setFilterMode('all')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Ver Todas</button>
                     </div>
                     {setOwnershipFilter && (
                         <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto max-w-full overflow-x-auto custom-scroll">
@@ -3206,11 +3252,23 @@ const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, ow
                         {currentDate === today && <span className="text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 font-bold px-2 py-1 rounded-full shrink-0">Hoy</span>}
                     </div>
                 )}
+                {filterMode === 'range' && hasRangeSupport && (
+                    <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-400 dark:text-slate-500 shrink-0">Desde</span>
+                            <input type="date" value={effectiveRangeStart} onChange={handleRangeStartChange} className="min-h-[46px] w-full sm:w-auto text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 outline-none"/>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-400 dark:text-slate-500 shrink-0">Hasta</span>
+                            <input type="date" value={effectiveRangeEnd} min={effectiveRangeStart} onChange={handleRangeEndChange} className="min-h-[46px] w-full sm:w-auto text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 outline-none"/>
+                        </div>
+                    </div>
+                )}
             </div>
             <div className="flex flex-col sm:flex-row sm:flex-wrap w-full 2xl:w-auto gap-3 items-stretch sm:items-center">
                 <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Buscar tarea..." />
                 <div className="w-full sm:w-auto shrink-0">
-                    <Button onClick={() => onAdd(filterMode === 'date' ? currentDate : today)} color={btnColor} icon={btnIcon} full>Nueva Tarea</Button>
+                    <Button onClick={() => onAdd(filterMode === 'date' ? currentDate : filterMode === 'range' ? effectiveRangeStart : today)} color={btnColor} icon={btnIcon} full>Nueva Tarea</Button>
                 </div>
             </div>
         </div>
@@ -3224,7 +3282,11 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
         filterMode,
         setFilterMode,
         ownershipFilter,
-        setOwnershipFilter
+        setOwnershipFilter,
+        rangeStart,
+        setRangeStart,
+        rangeEnd,
+        setRangeEnd
     } = useTaskRoomState('cluster_account_room_state', { preferMine: Boolean(currentUserProfile?.linkedManagerId) });
     const [searchTerm, setSearchTerm] = useState('');
     const [draggedTaskId, setDraggedTaskId] = useState(null);
@@ -3237,11 +3299,14 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
         { id: 'publicado', title: 'Publicado', color: 'indigo' }
     ];
 
+    const effectiveRangeStart = rangeStart || todayStr;
+    const effectiveRangeEnd = rangeEnd || todayStr;
     const filteredTasks = tasks.filter(t => {
         if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
         if (ownershipFilter === 'mine' && !isTaskAssignedToProfile(t, currentUserProfile, [currentUserProfile?.linkedManagerId])) return false;
         if (filterMode === 'date') return compareDateOnlyStrings(t.date, currentDate) === 0;
         if (filterMode === 'overdue') return isDateBeforeDateString(t.date, todayStr) && t.status !== 'publicado';
+        if (filterMode === 'range') return compareDateOnlyStrings(t.date, effectiveRangeStart) >= 0 && compareDateOnlyStrings(t.date, effectiveRangeEnd) <= 0;
         return true;
     });
     const handleAddTask = (dateStr) => {
@@ -3299,7 +3364,7 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
 
     return (
         <div className="h-full flex flex-col space-y-6 fade-in">
-            <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Accounts" onAdd={handleAddTask} btnColor="indigo" btnIcon="Plus" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+            <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Accounts" onAdd={handleAddTask} btnColor="indigo" btnIcon="Plus" searchTerm={searchTerm} setSearchTerm={setSearchTerm} rangeStart={rangeStart} setRangeStart={setRangeStart} rangeEnd={rangeEnd} setRangeEnd={setRangeEnd} />
             {false && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
@@ -4020,43 +4085,147 @@ const CalendarGrid = ({ events, onAdd, onEventClick, baseColor = "emerald" }) =>
     );
 };
 
-const GeneralCalendarGrid = ({ activities, onDayClick }) => {
+const GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
+    const [viewMode, setViewMode] = useState('month');
     const [date, setDate] = useState(new Date());
-    const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-    const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+    const [showPicker, setShowPicker] = useState(false);
+    const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
+    const [draggedId, setDraggedId] = useState(null);
+    const [dragOverDate, setDragOverDate] = useState(null);
+
+    const SHORT_MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const DAY_LABELS = ['D','L','M','M','J','V','S'];
+    const toDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const todayStr = toDateStr(new Date());
+
+    const getWeekDates = () => {
+        const d = new Date(date);
+        d.setDate(d.getDate() - d.getDay());
+        return Array.from({ length: 7 }, (_, i) => { const w = new Date(d); w.setDate(d.getDate() + i); return w; });
+    };
+
+    const navPrev = () => viewMode === 'week'
+        ? setDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })
+        : setDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+
+    const navNext = () => viewMode === 'week'
+        ? setDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })
+        : setDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+
+    const getDateLabel = () => {
+        if (viewMode === 'week') {
+            const wk = getWeekDates();
+            const s = wk[0], e = wk[6];
+            if (s.getMonth() === e.getMonth()) return `${s.getDate()} – ${e.getDate()} ${MONTH_NAMES[s.getMonth()]} ${s.getFullYear()}`;
+            return `${s.getDate()} ${SHORT_MONTHS[s.getMonth()]} – ${e.getDate()} ${SHORT_MONTHS[e.getMonth()]} ${e.getFullYear()}`;
+        }
+        return `${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
+    };
+
+    const handleDragStart = (e, act) => {
+        setDraggedId(act.id);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', act.id);
+    };
+
+    const handleDrop = (e, targetDateStr) => {
+        e.preventDefault();
+        setDragOverDate(null);
+        if (!onMoveActivity || !draggedId) return;
+        const act = activities.find(a => a.id === draggedId);
+        if (act && act.date !== targetDateStr) onMoveActivity(act, targetDateStr);
+        setDraggedId(null);
+    };
+
+    const renderDayCell = (dateObj) => {
+        const dStr = toDateStr(dateObj);
+        const dayActivities = activities.filter(a => a.date === dStr);
+        const isToday = dStr === todayStr;
+        const isDragOver = dragOverDate === dStr;
+        const maxVisible = viewMode === 'week' ? 8 : 4;
+        return (
+            <div
+                key={dStr}
+                onDragOver={(e) => { e.preventDefault(); setDragOverDate(dStr); }}
+                onDragLeave={() => setDragOverDate(s => s === dStr ? null : s)}
+                onDrop={(e) => handleDrop(e, dStr)}
+                onClick={() => !draggedId && onDayClick(dStr)}
+                className={`border-r border-b border-slate-200/60 dark:border-slate-800 p-2 transition-colors cursor-pointer group relative ${viewMode === 'week' ? 'min-h-[200px]' : 'min-h-[120px]'} ${isToday ? 'ring-2 ring-inset ring-blue-400 dark:ring-blue-500' : ''} ${isDragOver ? '!bg-blue-50 dark:!bg-blue-500/10 ring-2 ring-inset ring-blue-400' : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+            >
+                <div className="flex justify-between items-start mb-2">
+                    <span className={`text-xs font-bold flex items-center justify-center ${isToday ? 'bg-blue-500 text-white w-5 h-5 rounded-full' : 'text-slate-400 dark:text-slate-500 group-hover:text-blue-500 dark:group-hover:text-blue-400'}`}>{dateObj.getDate()}</span>
+                    {dayActivities.length > 0 && <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full">{dayActivities.length}</span>}
+                </div>
+                <div className="space-y-1">
+                    {dayActivities.slice(0, maxVisible).map((act, idx) => (
+                        <div
+                            key={`${act.id}-${idx}`}
+                            draggable={Boolean(onMoveActivity)}
+                            onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, act); }}
+                            onDragEnd={() => { setDraggedId(null); setDragOverDate(null); }}
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate select-none bg-${act._color}-100 dark:bg-${act._color}-500/20 text-${act._color}-800 dark:text-${act._color}-400 border border-${act._color}-200 dark:border-${act._color}-500/30 ${onMoveActivity ? 'cursor-grab active:cursor-grabbing' : ''} ${draggedId === act.id ? 'opacity-30' : ''}`}
+                        >{act.title}</div>
+                    ))}
+                    {dayActivities.length > maxVisible && <div className="text-[10px] font-bold text-slate-400 text-center mt-1">+{dayActivities.length - maxVisible} más</div>}
+                </div>
+                {!draggedId && <Icon name="ExternalLink" className="absolute bottom-2 right-2 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" size={14}/>}
+                {isDragOver && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><Icon name="CalendarPlus" className="text-blue-400 dark:text-blue-500 opacity-60" size={24}/></div>}
+            </div>
+        );
+    };
+
+    const weekDates = getWeekDates();
 
     return (
         <>
-        <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-            <div className={`font-bold uppercase text-xs tracking-widest text-slate-500 dark:text-slate-400`}>Mes - Todas las Tareas</div>
-            <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800 rounded-lg p-1"><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() - 1, 1))} className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"><Icon name="ChevronLeft" size={16}/></button><span className="font-black text-slate-700 dark:text-slate-200 w-32 text-center text-sm uppercase">{MONTH_NAMES[date.getMonth()]} {date.getFullYear()}</span><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() + 1, 1))} className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"><Icon name="ChevronRight" size={16}/></button></div>
-        </div>
-        <div className="flex-1 overflow-x-auto overflow-y-auto bg-slate-50 dark:bg-slate-950 custom-scroll">
-            <div className="grid grid-cols-7 auto-rows-fr min-w-[800px] h-full">
-                {['D','L','M','M','J','V','S'].map(d => <div key={d} className="py-2 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 border-r border-b border-slate-200/50 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">{d}</div>)}
-                {Array(startDay).fill(null).map((_, i) => <div key={`empty-${i}`} className="border-r border-b border-slate-200/50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30" />)}
-                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
-                    const dStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                    const dayActivities = activities.filter(e => e.date === dStr);
-                    
-                    return (
-                        <div key={d} onClick={() => onDayClick(dStr)} className="border-r border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 min-h-[120px] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group relative">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className={`text-xs font-bold text-slate-400 dark:text-slate-500 group-hover:text-blue-500 dark:group-hover:text-blue-400`}>{d}</span>
-                                {dayActivities.length > 0 && <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full">{dayActivities.length}</span>}
-                            </div>
-                            <div className="space-y-1">
-                                {dayActivities.slice(0, 4).map((act, idx) => (
-                                    <div key={idx} className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate bg-${act._color}-100 dark:bg-${act._color}-500/20 text-${act._color}-800 dark:text-${act._color}-400 border border-${act._color}-200 dark:border-${act._color}-500/30`}>
-                                        {act.title}
-                                    </div>
-                                ))}
-                                {dayActivities.length > 4 && <div className="text-[10px] font-bold text-slate-400 text-center mt-1">+{dayActivities.length - 4} más</div>}
-                            </div>
-                            <Icon name="ExternalLink" className={`absolute bottom-2 right-2 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity`} size={14}/>
+        <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                    <button onClick={() => setViewMode('week')} className={`shrink-0 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${viewMode === 'week' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Semana</button>
+                    <button onClick={() => setViewMode('month')} className={`shrink-0 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${viewMode === 'month' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Mes</button>
+                </div>
+                <button onClick={() => setDate(new Date())} className="px-3 py-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl transition-all">Hoy</button>
+            </div>
+            <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 rounded-lg p-1 relative">
+                <button onClick={navPrev} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 transition-colors"><Icon name="ChevronLeft" size={16}/></button>
+                <button onClick={() => { setPickerYear(date.getFullYear()); setShowPicker(s => !s); }} className="font-black text-slate-700 dark:text-slate-200 min-w-[180px] text-center text-sm uppercase hover:text-blue-500 dark:hover:text-blue-400 transition-colors px-2">{getDateLabel()}</button>
+                <button onClick={navNext} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 transition-colors"><Icon name="ChevronRight" size={16}/></button>
+                {showPicker && (
+                    <div className="absolute top-full right-0 mt-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-4 w-64" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-3">
+                            <button onClick={() => setPickerYear(y => y - 1)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors"><Icon name="ChevronLeft" size={14}/></button>
+                            <span className="font-black text-slate-800 dark:text-white text-sm">{pickerYear}</span>
+                            <button onClick={() => setPickerYear(y => y + 1)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors"><Icon name="ChevronRight" size={14}/></button>
                         </div>
-                    );
-                })}
+                        <div className="grid grid-cols-3 gap-1.5">
+                            {SHORT_MONTHS.map((m, i) => {
+                                const isSel = pickerYear === date.getFullYear() && i === date.getMonth();
+                                return (
+                                    <button key={m} onClick={() => { setDate(new Date(pickerYear, i, 1)); setViewMode('month'); setShowPicker(false); }} className={`py-2 rounded-xl text-xs font-bold transition-all ${isSel ? 'bg-blue-500 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>{m}</button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+        {showPicker && <div className="fixed inset-0 z-40" onClick={() => setShowPicker(false)} />}
+        <div className="flex-1 overflow-x-auto overflow-y-auto bg-slate-50 dark:bg-slate-950 custom-scroll">
+            <div className="grid grid-cols-7 min-w-[800px] h-full" style={{ gridAutoRows: viewMode === 'month' ? '1fr' : 'auto' }}>
+                {DAY_LABELS.map((d, i) => (
+                    <div key={`hdr-${i}`} className="py-2 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 border-r border-b border-slate-200/50 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">
+                        {viewMode === 'week' ? `${d} ${weekDates[i]?.getDate()}` : d}
+                    </div>
+                ))}
+                {viewMode === 'month' && (() => {
+                    const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+                    const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+                    return [
+                        ...Array(startDay).fill(null).map((_, i) => <div key={`empty-${i}`} className="border-r border-b border-slate-200/50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30" />),
+                        ...Array.from({ length: daysInMonth }, (_, i) => renderDayCell(new Date(date.getFullYear(), date.getMonth(), i + 1)))
+                    ];
+                })()}
+                {viewMode === 'week' && weekDates.map(d => renderDayCell(d))}
             </div>
         </div>
         </>
