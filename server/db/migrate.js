@@ -42,26 +42,6 @@ const ensureAuthSessionsTable = async () => {
     });
 };
 
-const ensureMagicLinksTable = async () => {
-    const exists = await db.schema.hasTable('auth_magic_links');
-    if (exists) return;
-
-    await db.schema.createTable('auth_magic_links', (table) => {
-        table.string('id', 140).primary();
-        table.string('user_record_id', 120).notNullable();
-        table.string('email', 255).notNullable();
-        table.string('token_hash', 255).notNullable();
-        table.text('redirect_url').nullable();
-        table.string('reason', 120).nullable();
-        table.string('requested_by', 120).nullable();
-        table.string('expires_at', 40).notNullable();
-        table.string('consumed_at', 40).nullable();
-        table.string('created_at', 40).notNullable();
-        table.index(['email']);
-        table.index(['token_hash']);
-    });
-};
-
 const ensureOauthStatesTable = async () => {
     const exists = await db.schema.hasTable('auth_oauth_states');
     if (exists) return;
@@ -78,6 +58,5 @@ const ensureOauthStatesTable = async () => {
 export const migrateDatabase = async () => {
     await ensureAppRecordsTable();
     await ensureAuthSessionsTable();
-    await ensureMagicLinksTable();
     await ensureOauthStatesTable();
 };

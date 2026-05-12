@@ -2,25 +2,14 @@ import express from 'express';
 import { env } from '../config/env.js';
 import { db } from '../db/knex.js';
 import { asyncHandler, createHttpError } from '../lib/http.js';
-import { randomToken, sha256, signPayload, verifySignedPayload } from '../lib/crypto.js';
+import { randomToken, signPayload, verifySignedPayload } from '../lib/crypto.js';
 import { addMinutesToIso, isIsoExpired, nowIso } from '../lib/time.js';
 import { normalizeEmail } from '../lib/text.js';
 import { createSession, clearSession } from '../lib/sessions.js';
 import { ensureAuthUserRecord } from '../lib/users.js';
-import { sendMagicLinkEmail } from '../lib/email.js';
 import { verifyFirebaseIdToken } from '../lib/firebase-admin.js';
 
 const router = express.Router();
-
-const resolveBaseUrl = (req) => env.appBaseUrl || `${req.protocol}://${req.get('host')}`;
-
-const buildMagicLink = (req, continueUrl, token) => {
-    const target = new URL(continueUrl || resolveBaseUrl(req));
-    target.searchParams.set('email_link', 'pending');
-    target.searchParams.set('mode', 'signIn');
-    target.searchParams.set('oobCode', token);
-    return target.toString();
-};
 
 const renderPopupResult = (res, { ok, error = '' }) => {
     const payload = JSON.stringify(ok ? { type: 'cluster-auth:success' } : { type: 'cluster-auth:error', error });
@@ -87,117 +76,6 @@ router.get('/session', asyncHandler(async (req, res) => {
 router.post('/logout', asyncHandler(async (req, res) => {
     await clearSession({ req, res });
     res.json({ ok: true });
-}));
-
-router.post('/email/request', asyncHandler(async (req, res) => {
-    const email = normalizeEmail(req.body?.email);
-    const continueUrl = req.body?.continueUrl || resolveBaseUrl(req);
-    if (!email) {
-        throw createHttpError(400, 'El correo es obligatorio.', 'auth/invalid-email');
-    }
-
-    const userRecord = await ensureAuthUserRecord({
-        email,
-        provider: 'password',
-        verified: false
-    });
-
-    if (!userRecord || userRecord.isActive === false) {
-        throw createHttpError(403, 'La cuenta esta inactiva.', 'auth/user-disabled');
-    }
-
-    const rawToken = randomToken(32);
-    const tokenHash = sha256(rawToken);
-    const stamp = nowIso();
-    const expiresAt = addMinutesToIso(env.magicLinkTtlMinutes);
-
-    await db('auth_magic_links').insert({
-        id: randomToken(16),
-        user_record_id: userRecord.id,
-        email,
-        token_hash: tokenHash,
-        redirect_url: continueUrl,
-        reason: req.body?.reason || 'login',
-        requested_by: req.auth?.userRecord?.id || '',
-        expires_at: expiresAt,
-        consumed_at: null,
-        created_at: stamp
-    });
-
-    const magicLink = buildMagicLink(req, continueUrl, rawToken);
-    const delivery = await sendMagicLinkEmail({
-        email,
-        name: userRecord.name || '',
-        link: magicLink,
-        expiresAt
-    });
-
-    res.json({
-        ok: true,
-        sentAt: stamp,
-        email,
-        deliveryMode: delivery.mode,
-        debugLink: env.isProduction ? undefined : magicLink
-    });
-}));
-
-router.post('/email/complete', asyncHandler(async (req, res) => {
-    const email = normalizeEmail(req.body?.email);
-    const token = String(req.body?.token || '').trim();
-
-    if (!email) {
-        throw createHttpError(400, 'El correo es obligatorio.', 'auth/invalid-email');
-    }
-
-    if (!token) {
-        throw createHttpError(400, 'El token del enlace es obligatorio.', 'auth/invalid-action-code');
-    }
-
-    const linkRow = await db('auth_magic_links')
-        .where({
-            email,
-            token_hash: sha256(token)
-        })
-        .orderBy('created_at', 'desc')
-        .first();
-
-    if (!linkRow || linkRow.consumed_at) {
-        throw createHttpError(400, 'El enlace no es valido.', 'auth/invalid-action-code');
-    }
-
-    if (isIsoExpired(linkRow.expires_at)) {
-        throw createHttpError(400, 'El enlace ya vencio.', 'auth/expired-action-code');
-    }
-
-    const userRecord = await ensureAuthUserRecord({
-        email,
-        provider: 'password',
-        authUid: linkRow.user_record_id,
-        verified: true
-    });
-
-    if (!userRecord || userRecord.isActive === false) {
-        throw createHttpError(403, 'La cuenta esta inactiva.', 'auth/user-disabled');
-    }
-
-    await db('auth_magic_links')
-        .where({ id: linkRow.id })
-        .update({ consumed_at: nowIso() });
-
-    await createSession({ req, res, userRecord, provider: 'password' });
-    res.json({
-        ok: true,
-        authToken: buildPersistentAuthToken({ userRecord, provider: 'password' }),
-        user: {
-            uid: userRecord.authUid || userRecord.id,
-            email: userRecord.email || '',
-            displayName: userRecord.name || '',
-            emailVerified: true,
-            isAnonymous: false,
-            providerData: [{ providerId: 'password' }]
-        },
-        profile: userRecord
-    });
 }));
 
 router.post('/token/exchange', asyncHandler(async (req, res) => {
