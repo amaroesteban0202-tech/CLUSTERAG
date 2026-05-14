@@ -153,7 +153,8 @@ const getUserRolePriority = (role = '') => {
         super_admin: 500,
         operations: 400,
         management: 350,
-        editor: 300,
+        manager: 300,
+        editor: 250,
         viewer: 100
     };
     return priorities[role] || 200;
@@ -518,12 +519,19 @@ function App() {
             linkedEditorId: resolvedAuthProfile.linkedEditorId || pendingMatchedEditor?.id || ''
         }
         : null;
+    const pendingProfileRecordId = pendingManagementMember
+        ? `management_${pendingManagementMember.directoryKey}`
+        : pendingMatchedManager
+          ? (pendingMatchedManager.userId || pendingMatchedManager.id || '')
+          : pendingMatchedEditor
+            ? (pendingMatchedEditor.userId || pendingMatchedEditor.id || '')
+            : '';
     const currentUserProfile = !user
         ? null
         : authEmail
           ? effectiveResolvedAuthProfile || {
-                id: 'pending-user',
-                name: user.displayName || authEmail.split('@')[0],
+                id: pendingProfileRecordId || 'pending-user',
+                name: pendingManagementMember?.name || pendingMatchedManager?.name || pendingMatchedEditor?.name || user.displayName || authEmail.split('@')[0],
                 email: authEmail,
                 role: pendingRole,
                 isActive: true,
@@ -571,7 +579,8 @@ function App() {
                 linkedEditorId: item.id,
                 managementKey: linkedUser?.managementKey || ''
             };
-        })
+        }),
+        ...(currentUserProfile && !currentUserProfile.isAnonymous ? [currentUserProfile] : [])
     ].filter((item) => item.isActive !== false && (item.id || item.name || normalizeEmail(item.email)));
     const managementUsers = Array.from(
         managementMemberCandidates
@@ -604,6 +613,9 @@ function App() {
             };
         })
         .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
+    const defaultManagementAssigneeId = currentUserProfile?.id && !['anonymous', 'pending-user'].includes(currentUserProfile.id) && managementUsers.some((item) => item.id === currentUserProfile.id)
+        ? currentUserProfile.id
+        : '';
     const privilegedUsers = appUsers.filter((item) => item.isActive !== false && ['super_admin', 'operations'].includes(item.role));
     const dataCollection = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
     const dataDoc = (name, id) => doc(db, 'artifacts', appId, 'public', 'data', name, id);
@@ -2508,7 +2520,7 @@ function App() {
                     {view === 'editor-detail' && selectedEditor && <PersonCalendarDetail person={selectedEditor} tasks={editingTasks} title="Planificación de Edición" baseColor={selectedEditor.color || 'rose'} onBack={() => handleNavigate('editors')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr, contextId: selectedEditor.id } })} onEventClick={(e) => handleEventClick(e, 'editingTask')} />}
                     {view === 'account-room' && <AccountRoomView tasks={accountTasks} managers={managers} clients={clients} currentUserProfile={currentUserProfile} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'accountTask', data: task, isEdit: true })} onChangeStatus={changeAccountTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'accountTask' })} legacyColorMap={LEGACY_COLOR_MAP} />}
                     {view === 'editions' && <EditionsRoomView tasks={editingTasks} editors={editors} clients={clients} currentUserProfile={currentUserProfile} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'editingTask', data: task, isEdit: true })} onChangeStatus={changeEditingTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'editingTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'editingTask' })} />}
-                    {view === 'management-room' && <ManagementRoomView tasks={managementTasks} members={managementUsers} clients={clients} currentUserProfile={currentUserProfile} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'managementTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'managementTask', data: task, isEdit: true })} onChangeStatus={changeManagementTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'managementTask', id, title: 'Tarea de gestion' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'managementTask' })} />}
+                    {view === 'management-room' && <ManagementRoomView tasks={managementTasks} members={managementUsers} clients={clients} currentUserProfile={currentUserProfile} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'managementTask', data: { date: dateStr, contextId: defaultManagementAssigneeId } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'managementTask', data: task, isEdit: true })} onChangeStatus={changeManagementTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'managementTask', id, title: 'Tarea de gestion' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'managementTask' })} />}
                     {view === 'control-center' && <UsersAccessView users={appUsers} managers={managers} editors={editors} auditLogs={auditLogs} currentUserProfile={currentUserProfile} onAdd={() => setModalConfig({ isOpen: true, type: 'user' })} onEdit={(userRecord) => setModalConfig({ isOpen: true, type: 'user', data: userRecord, isEdit: true })} onResendVerification={requestUserVerification} />}
                     {view === 'general-calendar' && (
                         <div className="h-full flex flex-col space-y-6 fade-in">
@@ -4572,7 +4584,7 @@ const Modal = ({ config, onClose, clients, managers, editors, managementUsers, a
                             <Input name="time" type="time" label="Hora limite *" defaultValue={data?.time || ""} required />
 
                             <select name="member" required defaultValue={data?.contextId || ""} className={selectClassName}>
-                                <option value="">Selecciona integrante...</option>
+                                <option value="">{managementUsers.length > 0 ? 'Selecciona integrante...' : 'Cargando integrantes...'}</option>
                                 {managementUsers.map((member) => <option key={member.id} value={member.id}>{member.name}{member.email ? ` (${member.email})` : ''}</option>)}
                             </select>
 
