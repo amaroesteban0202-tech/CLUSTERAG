@@ -63,6 +63,7 @@ export const ROLE_DEFINITIONS = {
             'manage_editing_tasks',
             'view_management_room',
             'create_management_tasks',
+            'manage_management_tasks',
             'view_general_calendar',
             'view_calendar'
         ]
