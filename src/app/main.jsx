@@ -2164,8 +2164,11 @@ function App() {
             showToast('El integrante asignado necesita un correo para recibir recordatorios automaticos.', 'error');
             return;
         }
+        const updatePermission = userHasPermission(currentUserProfile, 'manage_management_tasks')
+            ? 'manage_management_tasks'
+            : 'create_management_tasks';
         await runMutation({
-            permission: 'manage_management_tasks',
+            permission: updatePermission,
             action: 'update',
             entityType: 'managementTask',
             entityId: id,

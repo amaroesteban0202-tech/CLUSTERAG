@@ -40,6 +40,39 @@ const ensureCollectionPermission = (req, action) => {
     return { userRecord, collectionName };
 };
 
+const canUpdateOwnManagementTask = (userRecord, existing = null) => {
+    if (!existing || !hasPermission(userRecord, 'create_management_tasks')) return false;
+    const userId = String(userRecord?.id || '');
+    const userEmail = normalizeEmail(userRecord?.email);
+    if (!userId) return false;
+    if ([existing.assignedByUserId, existing.assigneeUserId, existing.contextId]
+        .filter(Boolean)
+        .some((value) => String(value) === userId)) {
+        return true;
+    }
+    return Boolean(userEmail && normalizeEmail(existing.assignedByEmail) === userEmail);
+};
+
+const ensureCollectionUpdatePermission = async (req, recordId) => {
+    const userRecord = requireAuthenticatedUser(req);
+    const collectionName = getCollectionName(req);
+    const permission = getCollectionPermission(collectionName, 'update');
+    if (!permission) {
+        throw createHttpError(404, 'La coleccion no existe.', 'collection/not-found');
+    }
+
+    const existing = await getRecord({ collectionName, recordId });
+    if (!existing) {
+        throw createHttpError(404, 'El documento no existe.', 'document/not-found');
+    }
+
+    if (hasPermission(userRecord, permission) || (collectionName === 'management_tasks' && canUpdateOwnManagementTask(userRecord, existing))) {
+        return { userRecord, collectionName, existing };
+    }
+
+    throw createHttpError(403, 'No tienes permisos para esta accion.', 'auth/insufficient-permission');
+};
+
 const ensureCollectionReadPermission = (req) => {
     const collectionName = getCollectionName(req);
     const permission = getCollectionPermission(collectionName, 'read');
@@ -185,8 +218,7 @@ router.post('/:collectionName', asyncHandler(async (req, res) => {
 }));
 
 router.put('/:collectionName/:recordId', asyncHandler(async (req, res) => {
-    const { collectionName, userRecord } = ensureCollectionPermission(req, 'update');
-    const existing = await getRecord({ collectionName, recordId: req.params.recordId });
+    const { collectionName, userRecord, existing } = await ensureCollectionUpdatePermission(req, req.params.recordId);
     const record = await upsertRecord({
         collectionName,
         recordId: req.params.recordId,
@@ -203,11 +235,7 @@ router.put('/:collectionName/:recordId', asyncHandler(async (req, res) => {
 }));
 
 router.patch('/:collectionName/:recordId', asyncHandler(async (req, res) => {
-    const { collectionName, userRecord } = ensureCollectionPermission(req, 'update');
-    const existing = await getRecord({ collectionName, recordId: req.params.recordId });
-    if (!existing) {
-        throw createHttpError(404, 'El documento no existe.', 'document/not-found');
-    }
+    const { collectionName, userRecord, existing } = await ensureCollectionUpdatePermission(req, req.params.recordId);
     const record = await upsertRecord({
         collectionName,
         recordId: req.params.recordId,
