@@ -585,7 +585,7 @@ function App() {
     const managementUsers = Array.from(
         managementMemberCandidates
             .reduce((accumulator, item) => {
-                const managementKey = item.managementKey || (item.role === 'management' ? getManagementDirectoryKey(item) : '');
+                const managementKey = item.managementKey || (['management', 'super_admin', 'operations'].includes(item.role) ? getManagementDirectoryKey(item) : '');
                 const emailKey = normalizeEmail(item.email);
                 const memberKey = managementKey
                     ? `management:${managementKey}`
@@ -913,7 +913,6 @@ function App() {
         if (!db || !user || !usersLoaded || hasSeededManagementDirectory) return;
         const existingKeys = new Set(
             appUsers
-                .filter((item) => item.role === 'management')
                 .map((item) => item.managementKey || getManagementDirectoryKey(item))
                 .filter(Boolean)
         );
