@@ -4452,25 +4452,25 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
     const priorityColors = { urgente: 'text-red-500', alta: 'text-orange-500', normal: 'text-slate-400', baja: 'text-slate-300' };
 
     return (
-        <div className="fixed inset-0 z-[80] bg-[#1a1a2e] flex flex-col">
+        <div className="fixed inset-0 z-[80] bg-white dark:bg-slate-900 flex flex-col">
 
-            {/* Top bar — breadcrumb style like ClickUp */}
-            <div className="h-10 border-b border-white/10 flex items-center px-5 gap-3 shrink-0 bg-[#1a1a2e]">
-                <span className={`flex items-center gap-1.5 text-xs font-bold text-${tagColor}-400`}>
+            {/* Top bar */}
+            <div className="h-10 border-b border-slate-200 dark:border-slate-800 flex items-center px-5 gap-3 shrink-0 bg-white dark:bg-slate-900">
+                <span className={`flex items-center gap-1.5 text-xs font-bold text-${tagColor}-600 dark:text-${tagColor}-400`}>
                     <Icon name={iconName} size={12}/>{typeLabel}
                 </span>
-                <Icon name="ChevronRight" size={12} className="text-slate-600"/>
+                <Icon name="ChevronRight" size={12} className="text-slate-400"/>
                 <span className="text-xs text-slate-400 font-mono">{task.id?.slice(0,8)}</span>
                 <div className="flex-1"/>
                 {canAct && <>
-                    <button onClick={() => onEdit(task, type)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 transition-colors">
+                    <button onClick={() => onEdit(task, type)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                         <Icon name="Edit" size={12}/> Editar
                     </button>
-                    <button onClick={() => onDelete(task, type)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors">
+                    <button onClick={() => onDelete(task, type)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-red-200 dark:border-red-500/30 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
                         <Icon name="Trash2" size={12}/> Eliminar
                     </button>
                 </>}
-                <button onClick={onClose} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors ml-1">
+                <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ml-1">
                     <Icon name="X" size={16}/>
                 </button>
             </div>
@@ -4483,18 +4483,18 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                     <div className="max-w-3xl mx-auto px-10 py-8">
 
                         {/* Title */}
-                        <h1 className="text-2xl font-black text-white leading-tight mb-7">{task.title}</h1>
+                        <h1 className="text-2xl font-black text-slate-900 dark:text-white leading-tight mb-7">{task.title}</h1>
 
                         {/* Fields — 2-column grid, flat rows, no card */}
-                        <div className="grid grid-cols-2 gap-x-10 mb-6 pb-6 border-b border-white/10">
+                        <div className="grid grid-cols-2 gap-x-10 mb-6 pb-6 border-b border-slate-200 dark:border-slate-800">
 
                             {/* COL LEFT */}
                             <div>
                                 {/* Estado */}
-                                <div className="flex items-center min-h-[38px] group hover:bg-white/5 rounded-lg px-2 -mx-2 cursor-pointer transition-colors" onClick={() => canAct && setStatusOpen(o => !o)}>
+                                <div className="flex items-center min-h-[38px] group hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 cursor-pointer transition-colors" onClick={() => canAct && setStatusOpen(o => !o)}>
                                     <div className="flex items-center gap-2 w-40 shrink-0">
-                                        <Icon name="Circle" size={13} className="text-slate-500"/>
-                                        <span className="text-sm font-bold text-slate-400">Estado</span>
+                                        <Icon name="Circle" size={13} className="text-slate-400"/>
+                                        <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Estado</span>
                                     </div>
                                     <div className="relative">
                                         <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-black border cursor-pointer ${STATUS_COLOR_CLASSES[currentStatus?.color || 'slate']}`}>
@@ -4502,13 +4502,13 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                             {canAct && <Icon name="ChevronRight" size={9}/>}
                                         </div>
                                         {statusOpen && canAct && (
-                                            <div className="absolute left-0 top-full mt-1 bg-[#252540] border border-white/10 rounded-xl shadow-2xl z-20 py-1 min-w-[180px]" onClick={e => e.stopPropagation()}>
+                                            <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 min-w-[180px]" onClick={e => e.stopPropagation()}>
                                                 {statuses.map(s => (
                                                     <button key={s.id} onClick={() => { onChangeStatus(task, type, s.id); setStatusOpen(false); }}
-                                                        className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm font-bold hover:bg-white/5 transition-colors text-left ${task.status === s.id ? 'text-purple-400' : 'text-slate-200'}`}>
+                                                        className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left ${task.status === s.id ? 'text-purple-600 dark:text-purple-400' : 'text-slate-700 dark:text-slate-200'}`}>
                                                         <span className={`w-2 h-2 rounded-full bg-${s.color}-500 shrink-0`}/>
                                                         {s.label}
-                                                        {task.status === s.id && <Icon name="Check" size={12} className="ml-auto text-purple-400"/>}
+                                                        {task.status === s.id && <Icon name="Check" size={12} className="ml-auto text-purple-500"/>}
                                                     </button>
                                                 ))}
                                             </div>
@@ -4517,47 +4517,47 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                 </div>
 
                                 {/* Fecha límite */}
-                                <div className="flex items-center min-h-[38px] hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors">
+                                <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors">
                                     <div className="flex items-center gap-2 w-40 shrink-0">
-                                        <Icon name="CalendarDays" size={13} className="text-slate-500"/>
-                                        <span className="text-sm font-bold text-slate-400">Fecha límite</span>
+                                        <Icon name="CalendarDays" size={13} className="text-slate-400"/>
+                                        <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Fecha límite</span>
                                     </div>
                                     {task.date
-                                        ? <span className="text-sm font-bold text-slate-200">{task.date}</span>
-                                        : <span className="text-sm text-slate-600 italic">Vacío</span>}
+                                        ? <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{task.date}</span>
+                                        : <span className="text-sm text-slate-400 dark:text-slate-600 italic">Vacío</span>}
                                 </div>
 
                                 {/* Cliente */}
-                                <div className="flex items-center min-h-[38px] hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors">
+                                <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors">
                                     <div className="flex items-center gap-2 w-40 shrink-0">
-                                        <Icon name="Briefcase" size={13} className="text-slate-500"/>
-                                        <span className="text-sm font-bold text-slate-400">Cliente</span>
+                                        <Icon name="Briefcase" size={13} className="text-slate-400"/>
+                                        <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Cliente</span>
                                     </div>
                                     {client ? (
                                         <div className="flex items-center gap-2">
-                                            <div className="w-5 h-5 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center font-black text-[9px]">{client.name?.charAt(0).toUpperCase()}</div>
-                                            <span className="text-sm font-bold text-slate-200">{client.name}</span>
+                                            <div className="w-5 h-5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-[9px]">{client.name?.charAt(0).toUpperCase()}</div>
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{client.name}</span>
                                         </div>
-                                    ) : <span className="text-sm text-slate-600 italic">Interno</span>}
+                                    ) : <span className="text-sm text-slate-400 dark:text-slate-600 italic">Interno</span>}
                                 </div>
 
                                 {/* Jerarquía / Categoría */}
                                 {type === 'editingTask' && (
-                                    <div className="flex items-center min-h-[38px] hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors">
+                                    <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors">
                                         <div className="flex items-center gap-2 w-40 shrink-0">
-                                            <Icon name="ListTree" size={13} className="text-slate-500"/>
-                                            <span className="text-sm font-bold text-slate-400">Jerarquía</span>
+                                            <Icon name="ListTree" size={13} className="text-slate-400"/>
+                                            <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Jerarquía</span>
                                         </div>
-                                        <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase border border-white/10 text-slate-400 bg-white/5">{getEditingHierarchyId(task).toUpperCase()}</span>
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800">{getEditingHierarchyId(task).toUpperCase()}</span>
                                     </div>
                                 )}
                                 {type === 'managementTask' && task.category && (
-                                    <div className="flex items-center min-h-[38px] hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors">
+                                    <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors">
                                         <div className="flex items-center gap-2 w-40 shrink-0">
-                                            <Icon name="ListTree" size={13} className="text-slate-500"/>
-                                            <span className="text-sm font-bold text-slate-400">Categoría</span>
+                                            <Icon name="ListTree" size={13} className="text-slate-400"/>
+                                            <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Categoría</span>
                                         </div>
-                                        <span className="text-sm font-bold text-slate-200">{task.category}</span>
+                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{task.category}</span>
                                     </div>
                                 )}
                             </div>
@@ -4565,45 +4565,45 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                             {/* COL RIGHT */}
                             <div>
                                 {/* Personas asignadas */}
-                                <div className="flex items-center min-h-[38px] hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors">
+                                <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors">
                                     <div className="flex items-center gap-2 w-44 shrink-0">
-                                        <Icon name="Users" size={13} className="text-slate-500"/>
-                                        <span className="text-sm font-bold text-slate-400">Personas asigna...</span>
+                                        <Icon name="Users" size={13} className="text-slate-400"/>
+                                        <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Personas asigna...</span>
                                     </div>
                                     {assignee ? (
                                         <div className="flex items-center gap-2">
                                             <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[8px]">
                                                 {assignee.name.slice(0,2).toUpperCase()}
                                             </div>
-                                            <span className="text-sm font-bold text-slate-200">{assignee.name}</span>
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{assignee.name}</span>
                                         </div>
-                                    ) : <span className="text-sm text-slate-600 italic">Vacío</span>}
+                                    ) : <span className="text-sm text-slate-400 dark:text-slate-600 italic">Vacío</span>}
                                 </div>
 
                                 {/* Prioridad */}
-                                <div className="flex items-center min-h-[38px] hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors">
+                                <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors">
                                     <div className="flex items-center gap-2 w-44 shrink-0">
-                                        <Icon name="Flame" size={13} className="text-slate-500"/>
-                                        <span className="text-sm font-bold text-slate-400">Prioridad</span>
+                                        <Icon name="Flame" size={13} className="text-slate-400"/>
+                                        <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Prioridad</span>
                                     </div>
                                     {task.priority && task.priority !== 'normal'
-                                        ? <span className={`text-sm font-bold capitalize ${priorityColors[task.priority] || 'text-slate-400'}`}>{task.priority}</span>
-                                        : <span className="text-sm text-slate-600 italic">Vacío</span>}
+                                        ? <span className={`text-sm font-bold capitalize ${priorityColors[task.priority] || 'text-slate-500'}`}>{task.priority}</span>
+                                        : <span className="text-sm text-slate-400 dark:text-slate-600 italic">Vacío</span>}
                                 </div>
 
                                 {/* Registrar tiempo */}
-                                <div className="flex items-center min-h-[38px] hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors">
+                                <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors">
                                     <div className="flex items-center gap-2 w-44 shrink-0">
-                                        <Icon name="Timer" size={13} className="text-slate-500"/>
-                                        <span className="text-sm font-bold text-slate-400">Registrar tiemp...</span>
+                                        <Icon name="Timer" size={13} className="text-slate-400"/>
+                                        <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Registrar tiemp...</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         {timerRunning ? (
                                             <>
                                                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0"/>
-                                                <span className="text-sm font-black text-red-400 tabular-nums">{formatDuration(timerElapsed)}</span>
+                                                <span className="text-sm font-black text-red-500 dark:text-red-400 tabular-nums">{formatDuration(timerElapsed)}</span>
                                                 <button onClick={handleStopTimer} disabled={savingTime}
-                                                    className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-60">
+                                                    className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-red-50 dark:bg-red-500/20 border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/30 transition-colors disabled:opacity-60">
                                                     {savingTime ? <Icon name="Loader2" size={10} className="animate-spin"/> : <Icon name="Square" size={10}/>}
                                                     {savingTime ? '...' : 'Detener'}
                                                 </button>
@@ -4611,11 +4611,11 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                         ) : (
                                             <>
                                                 {totalLoggedMs > 0 && (
-                                                    <span className="text-sm font-black text-emerald-400">{formatDuration(totalLoggedMs)}</span>
+                                                    <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">{formatDuration(totalLoggedMs)}</span>
                                                 )}
                                                 {canAct && (
                                                     <button onClick={() => { setTimerElapsed(0); setTimerRunning(true); }}
-                                                        className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+                                                        className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors">
                                                         <Icon name="Play" size={10}/> Agregar tiempo
                                                     </button>
                                                 )}
@@ -4630,31 +4630,31 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                         <div className="mb-6">
                             {task.notes
                                 ? <>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Descripción</p>
-                                    <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{task.notes}</p>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Descripción</p>
+                                    <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{task.notes}</p>
                                   </>
                                 : <button onClick={canAct ? () => onEdit(task, type) : undefined}
-                                    className={`flex items-center gap-2 text-sm text-slate-600 hover:text-slate-400 transition-colors ${canAct ? 'cursor-pointer' : ''}`}>
+                                    className={`flex items-center gap-2 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors ${canAct ? 'cursor-pointer' : ''}`}>
                                     <Icon name="FileText" size={14}/>
                                     {canAct ? 'Agregar descripción' : 'Sin descripción...'}
                                   </button>
                             }
                         </div>
 
-                        {/* Time entries log (if any) */}
+                        {/* Time entries log */}
                         {timeEntries.length > 0 && (
-                            <div className="border-t border-white/10 pt-4">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3 flex items-center gap-1.5">
-                                    <Icon name="Clock" size={10}/> Historial de tiempo — <span className="text-emerald-400">{formatDuration(totalLoggedMs)} total</span>
+                            <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-1.5">
+                                    <Icon name="Clock" size={10}/> Historial de tiempo — <span className="text-emerald-600 dark:text-emerald-400">{formatDuration(totalLoggedMs)} total</span>
                                 </p>
                                 <div className="space-y-2">
                                     {[...timeEntries].reverse().map(e => (
                                         <div key={e.id} className="flex items-center text-xs gap-3 text-slate-500">
-                                            <span className="w-2 h-2 rounded-full bg-emerald-500/50 shrink-0"/>
-                                            <span className="font-black text-slate-300 tabular-nums">{formatDuration(e.durationMs)}</span>
-                                            <span className="text-slate-600">·</span>
+                                            <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"/>
+                                            <span className="font-black text-slate-700 dark:text-slate-300 tabular-nums">{formatDuration(e.durationMs)}</span>
+                                            <span className="text-slate-300 dark:text-slate-600">·</span>
                                             <span>{e.authorName}</span>
-                                            <span className="ml-auto text-slate-600">{relativeTime(e.loggedAt)}</span>
+                                            <span className="ml-auto text-slate-400">{relativeTime(e.loggedAt)}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -4664,52 +4664,52 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                 </div>
 
                 {/* RIGHT — Actividad */}
-                <div className="w-[340px] shrink-0 border-l border-white/10 flex flex-col bg-[#16162a]">
+                <div className="w-[340px] shrink-0 border-l border-slate-200 dark:border-slate-800 flex flex-col bg-slate-50 dark:bg-slate-950">
 
                     {/* Header */}
-                    <div className="h-10 flex items-center px-4 border-b border-white/10 shrink-0 gap-3">
-                        <span className="font-black text-sm text-slate-200 flex-1">Actividad</span>
+                    <div className="h-10 flex items-center px-4 border-b border-slate-200 dark:border-slate-800 shrink-0 gap-3 bg-white dark:bg-slate-900">
+                        <span className="font-black text-sm text-slate-700 dark:text-slate-200 flex-1">Actividad</span>
                         {totalLoggedMs > 0 && (
-                            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                                 <Icon name="Clock" size={11}/> {formatDuration(totalLoggedMs)}
                             </span>
                         )}
-                        <span className="text-xs font-bold text-slate-500">{comments.length}</span>
+                        <span className="text-xs font-bold text-slate-400">{comments.length}</span>
                     </div>
 
                     {/* Feed */}
                     <div className="flex-1 overflow-y-auto custom-scroll px-4 py-4 space-y-4">
                         {activityFeed.length === 0 && (
                             <div className="text-center py-12">
-                                <p className="text-sm text-slate-600 font-bold">Sin actividad aún</p>
+                                <p className="text-sm text-slate-400 font-bold">Sin actividad aún</p>
                             </div>
                         )}
                         {activityFeed.map(item => item._kind === 'time' ? (
                             <div key={item.id} className="flex gap-2.5 items-start">
-                                <div className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                                    <Icon name="Clock" size={11} className="text-emerald-400"/>
+                                <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                                    <Icon name="Clock" size={11} className="text-emerald-600 dark:text-emerald-400"/>
                                 </div>
                                 <div className="flex-1 pt-0.5">
-                                    <p className="text-xs text-slate-400 leading-snug">
-                                        <span className="font-black text-slate-200">{item.authorName}</span>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug">
+                                        <span className="font-black text-slate-700 dark:text-slate-200">{item.authorName}</span>
                                         {' '}registró{' '}
-                                        <span className="font-black text-emerald-400">{formatDuration(item.durationMs)}</span>
+                                        <span className="font-black text-emerald-600 dark:text-emerald-400">{formatDuration(item.durationMs)}</span>
                                     </p>
-                                    <p className="text-[10px] text-slate-600 mt-0.5">{relativeTime(item.loggedAt)}</p>
+                                    <p className="text-[10px] text-slate-400 mt-0.5">{relativeTime(item.loggedAt)}</p>
                                 </div>
                             </div>
                         ) : (
                             <div key={item.id} className="flex gap-2.5">
-                                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5">
+                                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5">
                                     {(item.authorName || 'U').slice(0,2).toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-baseline gap-2 mb-1">
-                                        <span className="text-xs font-black text-slate-200">{item.authorName || 'Usuario'}</span>
-                                        <span className="text-[10px] text-slate-600">{relativeTime(item.createdAt)}</span>
+                                        <span className="text-xs font-black text-slate-700 dark:text-slate-200">{item.authorName || 'Usuario'}</span>
+                                        <span className="text-[10px] text-slate-400">{relativeTime(item.createdAt)}</span>
                                     </div>
-                                    <div className="bg-white/5 border border-white/10 rounded-xl rounded-tl-none px-3 py-2">
-                                        <p className="text-xs text-slate-300 leading-relaxed break-words">{item.text}</p>
+                                    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl rounded-tl-none px-3 py-2 shadow-sm">
+                                        <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed break-words">{item.text}</p>
                                     </div>
                                 </div>
                             </div>
@@ -4717,9 +4717,9 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                     </div>
 
                     {/* Comment input */}
-                    <div className="border-t border-white/10 p-3 shrink-0">
+                    <div className="border-t border-slate-200 dark:border-slate-800 p-3 shrink-0 bg-white dark:bg-slate-900">
                         <div className="flex gap-2">
-                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5">
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5">
                                 {(currentUserProfile?.name || 'U').slice(0,2).toUpperCase()}
                             </div>
                             <div className="flex-1">
@@ -4727,11 +4727,11 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                     onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmitComment(); }}
                                     placeholder="Escribe un comentario..."
                                     rows={commentText ? 3 : 1}
-                                    className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-xl outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500/50 resize-none text-slate-200 placeholder-slate-600 transition-all"
+                                    className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500/50 resize-none text-slate-700 dark:text-slate-200 placeholder-slate-400 transition-all"
                                 />
                                 {commentText.trim() && (
                                     <div className="flex items-center justify-end mt-1.5 gap-2">
-                                        <span className="text-[10px] text-slate-600">Ctrl+Enter</span>
+                                        <span className="text-[10px] text-slate-400">Ctrl+Enter</span>
                                         <button onClick={handleSubmitComment} disabled={submitting}
                                             className="flex items-center gap-1 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg disabled:opacity-60 transition-colors">
                                             {submitting ? <Icon name="Loader2" size={11} className="animate-spin"/> : <Icon name="Send" size={11}/>}
