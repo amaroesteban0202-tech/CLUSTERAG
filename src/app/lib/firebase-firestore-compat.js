@@ -1,7 +1,26 @@
 import { apiFetch } from './backend-api.js';
 
 const registry = new Map();
-const DEFAULT_POLL_MS = 4000;
+const DEFAULT_POLL_MS = 20000;
+
+if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            registry.forEach((entry, key) => {
+                if (entry.listeners.size > 0 && !entry.intervalId) {
+                    startPolling(key, entry.ref);
+                }
+            });
+        } else {
+            registry.forEach((entry) => {
+                if (entry.intervalId) {
+                    window.clearInterval(entry.intervalId);
+                    entry.intervalId = null;
+                }
+            });
+        }
+    });
+}
 
 const createDocSnapshot = (record) => ({
     id: record.id,

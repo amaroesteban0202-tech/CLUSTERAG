@@ -1,6 +1,5 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { browserLocalPersistence, getAuth, setPersistence } from 'firebase/auth';
-import { getFirestore, initializeFirestore } from 'firebase/firestore';
 
 const firebaseConfig = typeof window !== 'undefined'
     ? (window.__cluster_firebase_config || null)
@@ -25,12 +24,12 @@ try {
         console.warn('No se pudo fijar la persistencia local de Firebase Auth:', error);
     });
 
-    db = getFirestore(app);
+    db = null; // el shim firebase-firestore-compat.js maneja todas las lecturas/escrituras
 } catch (error) {
     try {
         const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
         auth = getAuth(app);
-        db = initializeFirestore(app, {});
+        db = null;
     } catch (fallbackError) {
         console.warn('No se pudo inicializar Firebase:', fallbackError || error);
     }
