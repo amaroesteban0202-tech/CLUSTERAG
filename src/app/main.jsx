@@ -2210,6 +2210,20 @@ function App() {
         await updateDoc(dataDoc(col, task.id), { comments: [...(task.comments || []), newComment], updatedAt: nowIso() });
     };
 
+    const addTaskTimeEntry = async (task, type, durationMs) => {
+        const colMap = { accountTask: 'account_tasks', editingTask: 'editing', managementTask: 'management_tasks' };
+        const col = colMap[type];
+        if (!col || !durationMs || durationMs < 1000) return;
+        const newEntry = {
+            id: Math.random().toString(36).slice(2, 10),
+            durationMs,
+            authorName: currentUserProfile?.name || (authEmail ? authEmail.split('@')[0] : 'Usuario'),
+            authorId: currentUserProfile?.id || '',
+            loggedAt: nowIso()
+        };
+        await updateDoc(dataDoc(col, task.id), { timeEntries: [...(task.timeEntries || []), newEntry], updatedAt: nowIso() });
+    };
+
     const addEvent = async (data) => {
         await runMutation({
             permission: 'manage_calendar',
@@ -2572,7 +2586,7 @@ function App() {
             {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
             <EventActionModal config={eventAction} canEdit={canEditActivity(eventAction.type)} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
             <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} users={managementUsers} canEditActivity={canEditActivity} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
-            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} onChangeStatus={(task, type, newStatus) => { if (type === 'accountTask') changeAccountTaskStatus(task, newStatus); else if (type === 'editingTask') changeEditingTaskStatus(task, newStatus); else if (type === 'managementTask') changeManagementTaskStatus(task, newStatus); }} onAddComment={addTaskComment} onDelete={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setDeleteConfirm({ isOpen: true, type, id: task.id, title: task.title }); }} currentUserProfile={currentUserProfile} accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} />
+            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} onChangeStatus={(task, type, newStatus) => { if (type === 'accountTask') changeAccountTaskStatus(task, newStatus); else if (type === 'editingTask') changeEditingTaskStatus(task, newStatus); else if (type === 'managementTask') changeManagementTaskStatus(task, newStatus); }} onAddComment={addTaskComment} onAddTimeEntry={addTaskTimeEntry} onDelete={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setDeleteConfirm({ isOpen: true, type, id: task.id, title: task.title }); }} currentUserProfile={currentUserProfile} accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} />
         </div>
     );
 }
@@ -4327,6 +4341,17 @@ const TASK_STATUS_DEFS = {
     ]
 };
 
+const formatDuration = (ms) => {
+    if (!ms || ms <= 0) return '0s';
+    const totalSecs = Math.floor(ms / 1000);
+    const hrs  = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+    if (hrs > 0)  return `${hrs}h ${mins > 0 ? `${mins}m` : ''}`.trim();
+    if (mins > 0) return `${mins}m ${secs > 0 ? `${secs}s` : ''}`.trim();
+    return `${secs}s`;
+};
+
 const relativeTime = (iso) => {
     if (!iso) return '';
     const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -4346,11 +4371,28 @@ const STATUS_COLOR_CLASSES = {
     violet:  'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-300 dark:border-violet-500/40',
 };
 
-const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
+const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onAddTimeEntry, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
     const [commentText, setCommentText] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [statusOpen, setStatusOpen] = useState(false);
+    const [timerRunning, setTimerRunning] = useState(false);
+    const [timerElapsed, setTimerElapsed] = useState(0);
+    const [savingTime, setSavingTime] = useState(false);
+    const timerStartRef = useRef(null);
+    const timerIntervalRef = useRef(null);
     const commentInputRef = useRef(null);
+
+    useEffect(() => {
+        if (timerRunning) {
+            timerStartRef.current = Date.now() - timerElapsed;
+            timerIntervalRef.current = setInterval(() => {
+                setTimerElapsed(Date.now() - timerStartRef.current);
+            }, 1000);
+        } else {
+            clearInterval(timerIntervalRef.current);
+        }
+        return () => clearInterval(timerIntervalRef.current);
+    }, [timerRunning]);
 
     if (!config.isOpen || !config.task) return null;
     const { type } = config;
@@ -4370,6 +4412,25 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
     const currentStatus = statuses.find(s => s.id === task.status) || statuses[0];
     const canAct    = canEdit(type);
     const comments  = Array.isArray(task.comments) ? [...task.comments].reverse() : [];
+    const timeEntries = Array.isArray(task.timeEntries) ? task.timeEntries : [];
+    const totalLoggedMs = timeEntries.reduce((acc, e) => acc + (e.durationMs || 0), 0);
+
+    // Activity feed: merge comments + time entries sorted newest first
+    const activityFeed = [
+        ...comments.map(c => ({ ...c, _kind: 'comment' })),
+        ...timeEntries.map(e => ({ ...e, _kind: 'time', createdAt: e.loggedAt }))
+    ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const handleStopTimer = async () => {
+        setTimerRunning(false);
+        const elapsed = timerElapsed;
+        setTimerElapsed(0);
+        if (elapsed >= 1000) {
+            setSavingTime(true);
+            try { await onAddTimeEntry(task, type, elapsed); }
+            finally { setSavingTime(false); }
+        }
+    };
 
     const handleSubmitComment = async () => {
         if (!commentText.trim() || submitting) return;
@@ -4496,6 +4557,42 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                     <span className="font-bold text-slate-700 dark:text-slate-200">{task.category}</span>
                                 </FieldRow>
                             )}
+
+                            {/* Tiempo */}
+                            <FieldRow icon="Clock" label="Tiempo">
+                                <div className="flex items-center gap-3 flex-wrap">
+                                    {/* Total logged */}
+                                    {totalLoggedMs > 0 && (
+                                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30">
+                                            <Icon name="Clock" size={11}/> {formatDuration(totalLoggedMs)}
+                                        </span>
+                                    )}
+                                    {/* Live timer */}
+                                    {timerRunning && (
+                                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 animate-pulse">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"/>
+                                            {formatDuration(timerElapsed)}
+                                        </span>
+                                    )}
+                                    {/* Start / Stop */}
+                                    {canAct && !timerRunning && (
+                                        <button onClick={() => { setTimerElapsed(0); setTimerRunning(true); }}
+                                            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-green-50 hover:text-green-700 hover:border-green-300 dark:hover:bg-green-500/10 dark:hover:text-green-400 dark:hover:border-green-500/30 transition-colors">
+                                            <Icon name="Play" size={11}/> Iniciar
+                                        </button>
+                                    )}
+                                    {canAct && timerRunning && (
+                                        <button onClick={handleStopTimer} disabled={savingTime}
+                                            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border border-red-300 dark:border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors disabled:opacity-60">
+                                            {savingTime ? <Icon name="Loader2" size={11} className="animate-spin"/> : <Icon name="Square" size={11}/>}
+                                            {savingTime ? 'Guardando...' : 'Detener'}
+                                        </button>
+                                    )}
+                                    {totalLoggedMs === 0 && !timerRunning && (
+                                        <span className="text-slate-400 italic text-sm">Sin tiempo registrado</span>
+                                    )}
+                                </div>
+                            </FieldRow>
                         </div>
 
                         {/* Descripción / Notas */}
@@ -4520,36 +4617,55 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                 <div className="w-80 xl:w-96 shrink-0 border-l border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900">
 
                     {/* Activity header */}
-                    <div className="h-12 flex items-center px-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+                    <div className="h-12 flex items-center px-4 border-b border-slate-200 dark:border-slate-800 shrink-0 gap-2">
                         <span className="font-black text-slate-700 dark:text-slate-200 flex-1">Actividad</span>
+                        {totalLoggedMs > 0 && (
+                            <span className="flex items-center gap-1 px-2 py-1 rounded text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10">
+                                <Icon name="Clock" size={11}/> {formatDuration(totalLoggedMs)}
+                            </span>
+                        )}
                         <span className="flex items-center gap-1 px-2 py-1 rounded text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10">
                             <Icon name="Inbox" size={12}/> {comments.length}
                         </span>
                     </div>
 
-                    {/* Comments list */}
+                    {/* Activity list */}
                     <div className="flex-1 overflow-y-auto custom-scroll px-4 py-4 space-y-4">
-                        {comments.length === 0 && (
+                        {activityFeed.length === 0 && (
                             <div className="text-center py-12">
                                 <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
                                     <Icon name="Inbox" size={18} className="text-slate-400"/>
                                 </div>
-                                <p className="text-sm text-slate-400 font-bold">Sin comentarios aún</p>
-                                <p className="text-xs text-slate-400 mt-1">Sé el primero en comentar</p>
+                                <p className="text-sm text-slate-400 font-bold">Sin actividad aún</p>
+                                <p className="text-xs text-slate-400 mt-1">Los comentarios y tiempo aparecen aquí</p>
                             </div>
                         )}
-                        {comments.map(c => (
-                            <div key={c.id} className="flex gap-3">
+                        {activityFeed.map(item => item._kind === 'time' ? (
+                            <div key={item.id} className="flex gap-3 items-start">
+                                <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                                    <Icon name="Clock" size={13} className="text-emerald-600 dark:text-emerald-400"/>
+                                </div>
+                                <div className="flex-1 min-w-0 pt-1">
+                                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                                        <span className="font-black text-slate-700 dark:text-slate-200">{item.authorName || 'Usuario'}</span>
+                                        {' '}registró{' '}
+                                        <span className="font-black text-emerald-600 dark:text-emerald-400">{formatDuration(item.durationMs)}</span>
+                                        <span className="ml-2 text-[10px] text-slate-400">{relativeTime(item.loggedAt)}</span>
+                                    </span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div key={item.id} className="flex gap-3">
                                 <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[10px] shrink-0 mt-0.5">
-                                    {(c.authorName || 'U').slice(0,2).toUpperCase()}
+                                    {(item.authorName || 'U').slice(0,2).toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-baseline gap-2 mb-1">
-                                        <span className="text-xs font-black text-slate-700 dark:text-slate-200">{c.authorName || 'Usuario'}</span>
-                                        <span className="text-[10px] text-slate-400">{relativeTime(c.createdAt)}</span>
+                                        <span className="text-xs font-black text-slate-700 dark:text-slate-200">{item.authorName || 'Usuario'}</span>
+                                        <span className="text-[10px] text-slate-400">{relativeTime(item.createdAt)}</span>
                                     </div>
                                     <div className="bg-slate-50 dark:bg-slate-800 rounded-xl rounded-tl-sm px-3 py-2.5 border border-slate-100 dark:border-slate-700">
-                                        <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words">{c.text}</p>
+                                        <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words">{item.text}</p>
                                     </div>
                                 </div>
                             </div>
