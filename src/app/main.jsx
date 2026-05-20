@@ -2196,6 +2196,13 @@ function App() {
         }
     };
 
+    const changeTaskPriority = async (task, type, priority) => {
+        const colMap = { accountTask: 'account_tasks', editingTask: 'editing', managementTask: 'management_tasks' };
+        const col = colMap[type];
+        if (!col) return;
+        await updateDoc(dataDoc(col, task.id), { priority, updatedAt: nowIso() });
+    };
+
     const addTaskComment = async (task, type, text) => {
         const colMap = { accountTask: 'account_tasks', editingTask: 'editing', managementTask: 'management_tasks' };
         const col = colMap[type];
@@ -2593,7 +2600,7 @@ function App() {
             {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
             <EventActionModal config={eventAction} canEdit={canEditActivity(eventAction.type)} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
             <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} users={managementUsers} canEditActivity={canEditActivity} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
-            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} onChangeStatus={(task, type, newStatus) => { if (type === 'accountTask') changeAccountTaskStatus(task, newStatus); else if (type === 'editingTask') changeEditingTaskStatus(task, newStatus); else if (type === 'managementTask') changeManagementTaskStatus(task, newStatus); }} onAddComment={addTaskComment} onAddTimeEntry={addTaskTimeEntry} onUpdateChecklist={updateTaskChecklist} onDelete={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setDeleteConfirm({ isOpen: true, type, id: task.id, title: task.title }); }} currentUserProfile={currentUserProfile} accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} />
+            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} onChangeStatus={(task, type, newStatus) => { if (type === 'accountTask') changeAccountTaskStatus(task, newStatus); else if (type === 'editingTask') changeEditingTaskStatus(task, newStatus); else if (type === 'managementTask') changeManagementTaskStatus(task, newStatus); }} onAddComment={addTaskComment} onAddTimeEntry={addTaskTimeEntry} onUpdateChecklist={updateTaskChecklist} onChangePriority={changeTaskPriority} onDelete={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setDeleteConfirm({ isOpen: true, type, id: task.id, title: task.title }); }} currentUserProfile={currentUserProfile} accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} />
         </div>
     );
 }
@@ -4378,7 +4385,7 @@ const STATUS_COLOR_CLASSES = {
     violet:  'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-300 dark:border-violet-500/40',
 };
 
-const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onAddTimeEntry, onUpdateChecklist, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
+const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onAddTimeEntry, onUpdateChecklist, onChangePriority, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
     const [commentText, setCommentText] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [statusOpen, setStatusOpen] = useState(false);
@@ -4387,6 +4394,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
     const [savingTime, setSavingTime] = useState(false);
     const [newCheckItem, setNewCheckItem] = useState('');
     const [addingCheck, setAddingCheck] = useState(false);
+    const [priorityOpen, setPriorityOpen] = useState(false);
     const timerStartRef = useRef(null);
     const timerIntervalRef = useRef(null);
     const commentInputRef = useRef(null);
@@ -4590,15 +4598,48 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                 </div>
 
                                 {/* Prioridad */}
-                                <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors">
-                                    <div className="flex items-center gap-2 w-44 shrink-0">
-                                        <Icon name="Flame" size={13} className="text-slate-400"/>
-                                        <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Prioridad</span>
-                                    </div>
-                                    {task.priority && task.priority !== 'normal'
-                                        ? <span className={`text-sm font-bold capitalize ${priorityColors[task.priority] || 'text-slate-500'}`}>{task.priority}</span>
-                                        : <span className="text-sm text-slate-400 dark:text-slate-600 italic">Vacío</span>}
-                                </div>
+                                {(() => {
+                                    const PRIORITIES = [
+                                        { id: 'urgente', label: 'Urgente', color: 'text-red-500',    flag: 'bg-red-500' },
+                                        { id: 'alta',    label: 'Alta',    color: 'text-orange-400', flag: 'bg-orange-400' },
+                                        { id: 'normal',  label: 'Normal',  color: 'text-blue-400',   flag: 'bg-blue-400' },
+                                        { id: 'baja',    label: 'Baja',    color: 'text-slate-400',  flag: 'bg-slate-400' },
+                                    ];
+                                    const current = PRIORITIES.find(p => p.id === task.priority);
+                                    return (
+                                        <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors relative">
+                                            <div className="flex items-center gap-2 w-44 shrink-0">
+                                                <Icon name="Flag" size={13} className="text-slate-400"/>
+                                                <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Prioridad</span>
+                                            </div>
+                                            <button onClick={() => canAct && setPriorityOpen(o => !o)}
+                                                className={`flex items-center gap-2 text-sm font-bold ${current ? current.color : 'text-slate-400 dark:text-slate-600 italic'} ${canAct ? 'cursor-pointer' : 'cursor-default'}`}>
+                                                {current
+                                                    ? <><span className={`w-2.5 h-2.5 rounded-sm ${current.flag} shrink-0`}/>{current.label}</>
+                                                    : 'Vacío'}
+                                            </button>
+                                            {priorityOpen && canAct && (
+                                                <div className="absolute left-40 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-44" onClick={e => e.stopPropagation()}>
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Prioridad</p>
+                                                    {PRIORITIES.map(p => (
+                                                        <button key={p.id} onClick={() => { onChangePriority(task, type, p.id); setPriorityOpen(false); }}
+                                                            className={`w-full flex items-center gap-3 px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left ${p.color} ${task.priority === p.id ? 'opacity-100' : 'opacity-80'}`}>
+                                                            <span className={`w-3 h-3 rounded-sm ${p.flag} shrink-0`}/>
+                                                            {p.label}
+                                                            {task.priority === p.id && <Icon name="Check" size={12} className="ml-auto text-slate-400"/>}
+                                                        </button>
+                                                    ))}
+                                                    {task.priority && (
+                                                        <button onClick={() => { onChangePriority(task, type, null); setPriorityOpen(false); }}
+                                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left border-t border-slate-100 dark:border-slate-700 mt-1">
+                                                            <Icon name="X" size={12}/> Quitar prioridad
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
 
                                 {/* Registrar tiempo */}
                                 <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors">
