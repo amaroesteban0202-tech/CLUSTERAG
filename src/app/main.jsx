@@ -2196,6 +2196,20 @@ function App() {
         }
     };
 
+    const addTaskComment = async (task, type, text) => {
+        const colMap = { accountTask: 'account_tasks', editingTask: 'editing', managementTask: 'management_tasks' };
+        const col = colMap[type];
+        if (!col || !text) return;
+        const newComment = {
+            id: Math.random().toString(36).slice(2, 10),
+            text,
+            authorName: currentUserProfile?.name || (authEmail ? authEmail.split('@')[0] : 'Usuario'),
+            authorId: currentUserProfile?.id || '',
+            createdAt: nowIso()
+        };
+        await updateDoc(dataDoc(col, task.id), { comments: [...(task.comments || []), newComment], updatedAt: nowIso() });
+    };
+
     const addEvent = async (data) => {
         await runMutation({
             permission: 'manage_calendar',
@@ -2558,7 +2572,7 @@ function App() {
             {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
             <EventActionModal config={eventAction} canEdit={canEditActivity(eventAction.type)} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
             <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} users={managementUsers} canEditActivity={canEditActivity} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
-            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} />
+            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} onChangeStatus={(task, type, newStatus) => { if (type === 'accountTask') changeAccountTaskStatus(task, newStatus); else if (type === 'editingTask') changeEditingTaskStatus(task, newStatus); else if (type === 'managementTask') changeManagementTaskStatus(task, newStatus); }} onAddComment={addTaskComment} onDelete={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setDeleteConfirm({ isOpen: true, type, id: task.id, title: task.title }); }} currentUserProfile={currentUserProfile} accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} />
         </div>
     );
 }
@@ -4291,57 +4305,209 @@ const EventActionModal = ({ config, canEdit = true, onClose, onEdit, onDelete })
     );
 };
 
-const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit }) => {
+const TASK_STATUS_DEFS = {
+    accountTask: [
+        { id: 'por_disenar', label: 'Por Diseñar', color: 'slate' },
+        { id: 'aprobacion_interna', label: 'Aprob. Interna', color: 'blue' },
+        { id: 'aprobado_internamente', label: 'Aprobado', color: 'emerald' },
+        { id: 'publicado', label: 'Publicado', color: 'indigo' }
+    ],
+    editingTask: [
+        { id: 'editar', label: 'Por Editar', color: 'slate' },
+        { id: 'en_edicion', label: 'En Edición', color: 'amber' },
+        { id: 'revision_interna', label: 'Revisión', color: 'blue' },
+        { id: 'aprobado', label: 'Aprobado', color: 'emerald' },
+        { id: 'publicado', label: 'Publicado', color: 'indigo' }
+    ],
+    managementTask: [
+        { id: 'pendiente', label: 'Pendiente', color: 'slate' },
+        { id: 'en_proceso', label: 'En Proceso', color: 'violet' },
+        { id: 'en_espera', label: 'En Espera', color: 'amber' },
+        { id: 'cerrado', label: 'Cerrado', color: 'emerald' }
+    ]
+};
+
+const relativeTime = (iso) => {
+    if (!iso) return '';
+    const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+    if (mins < 1) return 'ahora';
+    if (mins < 60) return `hace ${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `hace ${hrs}h`;
+    return `hace ${Math.floor(hrs / 24)}d`;
+};
+
+const STATUS_COLOR_CLASSES = {
+    slate:   'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600',
+    blue:    'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-500/40',
+    emerald: 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/40',
+    indigo:  'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-500/40',
+    amber:   'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/40',
+    violet:  'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-300 dark:border-violet-500/40',
+};
+
+const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
+    const [commentText, setCommentText] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+
     if (!config.isOpen || !config.task) return null;
-    const { task, type } = config;
-    
-    const client = clients.find(c => c.id === task.clientId);
-    const assignee = type === 'accountTask'
-        ? managers.find(m => m.id === task.contextId)
-        : type === 'managementTask'
-          ? users.find(u => u.id === task.contextId)
-          : editors.find(e => e.id === task.contextId);
-    const tagColor = type === 'accountTask' ? 'indigo' : type === 'managementTask' ? 'violet' : 'amber';
-    const iconName = type === 'accountTask' ? 'LayoutList' : type === 'managementTask' ? 'ShieldCheck' : 'Video';
+    const { type } = config;
+
+    const liveArrays = { accountTask: accountTasks, editingTask: editingTasks, managementTask: managementTasks };
+    const task = (liveArrays[type] || []).find(t => t.id === config.task.id) || config.task;
+
+    const client   = clients.find(c => c.id === task.clientId);
+    const assignee = type === 'accountTask' ? managers.find(m => m.id === task.contextId)
+                   : type === 'managementTask' ? users.find(u => u.id === task.contextId)
+                   : editors.find(e => e.id === task.contextId);
+
+    const tagColor  = type === 'accountTask' ? 'indigo' : type === 'managementTask' ? 'violet' : 'amber';
+    const typeLabel = type === 'accountTask' ? 'Account' : type === 'managementTask' ? 'Gestión' : 'Edición';
+    const iconName  = type === 'accountTask' ? 'LayoutList' : type === 'managementTask' ? 'ShieldCheck' : 'Video';
+    const statuses  = TASK_STATUS_DEFS[type] || [];
+    const canAct    = canEdit(type);
+    const comments  = Array.isArray(task.comments) ? task.comments : [];
+
+    const handleSubmitComment = async () => {
+        if (!commentText.trim() || submitting) return;
+        setSubmitting(true);
+        try { await onAddComment(task, type, commentText.trim()); setCommentText(''); }
+        finally { setSubmitting(false); }
+    };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
-            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
-                <div className={`p-6 bg-${tagColor}-50 dark:bg-${tagColor}-500/10 border-b border-${tagColor}-100 dark:border-${tagColor}-500/20 relative`}>
-                    <button onClick={onClose} className={`absolute top-4 right-4 p-2 hover:bg-${tagColor}-100 dark:hover:bg-${tagColor}-500/30 rounded-full text-${tagColor}-600 dark:text-${tagColor}-400 transition-colors`}><Icon name="X" size={20}/></button>
-                    <div className="flex items-center gap-2 mb-3">
-                        <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-${tagColor}-100 dark:bg-${tagColor}-500/30 text-${tagColor}-700 dark:text-${tagColor}-300`}><Icon name={iconName} size={12}/> {type === 'accountTask' ? 'Account' : 'Edición'}</span>
-                        {task.priority && <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${task.priority === 'urgente' ? 'border-red-500 text-red-600 bg-red-50' : 'border-slate-300 text-slate-500'}`}>{task.priority}</span>}
-                        {type === 'editingTask' && <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-slate-300 text-slate-500 bg-white/70 dark:bg-slate-900/40">{getEditingHierarchyId(task).toUpperCase()}</span>}
-                        {type === 'managementTask' && task.category && <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300 bg-violet-100/80 dark:bg-violet-500/20">{task.category}</span>}
-                    </div>
-                    <h2 className="text-2xl font-black text-slate-800 dark:text-white leading-tight">{task.title}</h2>
+        <div className="fixed inset-0 z-[80] flex" onClick={onClose}>
+            <div className="flex-1 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm" />
+            <div className="w-full max-w-[500px] bg-white dark:bg-slate-900 h-full flex flex-col shadow-2xl border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-right duration-200" onClick={e => e.stopPropagation()}>
+
+                {/* Header */}
+                <div className={`px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 shrink-0 bg-${tagColor}-50 dark:bg-${tagColor}-500/10`}>
+                    <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-${tagColor}-100 dark:bg-${tagColor}-500/30 text-${tagColor}-700 dark:text-${tagColor}-300`}>
+                        <Icon name={iconName} size={11}/>{typeLabel}
+                    </span>
+                    <div className="flex-1" />
+                    {canAct && <>
+                        <button onClick={() => onEdit(task, type)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                            <Icon name="Edit" size={13}/> Editar
+                        </button>
+                        <button onClick={() => onDelete(task, type)} className="p-2 rounded-lg text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 transition-colors">
+                            <Icon name="Trash2" size={15}/>
+                        </button>
+                    </>}
+                    <button onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                        <Icon name="X" size={18}/>
+                    </button>
                 </div>
-                <div className="p-6 space-y-6">
-                    <div className="flex flex-wrap gap-4">
-                        <div className="flex-1 min-w-[120px]">
-                            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1"><Icon name="Briefcase" size={12}/> Cliente</p>
-                            {client ? (
-                                <div className="flex items-center gap-2">
-                                    <div className="w-6 h-6 rounded bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xs">{client.name ? client.name.charAt(0).toUpperCase() : '?'}</div>
-                                    <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{client.name}</span>
+
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto custom-scroll">
+                    <div className="p-6 space-y-6">
+
+                        {/* Title + badges */}
+                        <div>
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                                {task.priority && task.priority !== 'normal' && (
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${task.priority === 'urgente' ? 'border-red-400 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10' : 'border-slate-300 text-slate-500 bg-slate-50'}`}>{task.priority}</span>
+                                )}
+                                {type === 'editingTask' && <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800">{getEditingHierarchyId(task).toUpperCase()}</span>}
+                                {type === 'managementTask' && task.category && <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-500/10">{task.category}</span>}
+                            </div>
+                            <h2 className="text-xl font-black text-slate-800 dark:text-white leading-tight">{task.title}</h2>
+                        </div>
+
+                        {/* Status selector */}
+                        <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5">Estado</p>
+                            <div className="flex flex-wrap gap-2">
+                                {statuses.map(s => {
+                                    const isActive = task.status === s.id;
+                                    return (
+                                        <button key={s.id} onClick={() => canAct && task.status !== s.id && onChangeStatus(task, type, s.id)}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${isActive ? `${STATUS_COLOR_CLASSES[s.color]} shadow-sm` : 'border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900'} ${!canAct ? 'cursor-default' : isActive ? 'cursor-default' : 'cursor-pointer hover:scale-105'}`}>
+                                            {isActive && '✓ '}{s.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Metadata */}
+                        <div className="grid grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-950 rounded-xl p-4 border border-slate-100 dark:border-slate-800">
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center gap-1"><Icon name="Briefcase" size={9}/> Cliente</p>
+                                {client ? (
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center font-black text-[9px] shrink-0">{client.name?.charAt(0).toUpperCase()}</div>
+                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{client.name}</span>
+                                    </div>
+                                ) : <span className="text-xs text-slate-400">Interno</span>}
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center gap-1"><Icon name="UserCircle2" size={9}/> Asignado</p>
+                                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{assignee?.name || '—'}</span>
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center gap-1"><Icon name="CalendarDays" size={9}/> Fecha</p>
+                                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{task.date || '—'}</span>
+                            </div>
+                        </div>
+
+                        {/* Notes */}
+                        <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1"><Icon name="ListTree" size={10}/> Notas y enlaces</p>
+                            <div className="bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 p-4 min-h-[72px]">
+                                {task.notes
+                                    ? <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{task.notes}</p>
+                                    : <p className="text-sm italic text-slate-400">Sin notas adicionales...</p>}
+                            </div>
+                        </div>
+
+                        {/* Comments */}
+                        <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-1.5">
+                                <Icon name="Inbox" size={10}/> Comentarios
+                                {comments.length > 0 && <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[9px] font-black">{comments.length}</span>}
+                            </p>
+                            {comments.length > 0 && (
+                                <div className="space-y-3 mb-4">
+                                    {comments.map(c => (
+                                        <div key={c.id} className="flex gap-3">
+                                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[10px] shrink-0 mt-0.5">
+                                                {(c.authorName || 'U').slice(0, 2).toUpperCase()}
+                                            </div>
+                                            <div className="flex-1 bg-slate-50 dark:bg-slate-950 rounded-xl p-3 border border-slate-100 dark:border-slate-800">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-xs font-black text-slate-700 dark:text-slate-200">{c.authorName || 'Usuario'}</span>
+                                                    <span className="text-[10px] text-slate-400">{relativeTime(c.createdAt)}</span>
+                                                </div>
+                                                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{c.text}</p>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            ) : <span className="text-sm font-bold text-slate-400">Interno / Sin asignar</span>}
+                            )}
+                            <div className="flex gap-3">
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[10px] shrink-0 mt-1">
+                                    {(currentUserProfile?.name || 'U').slice(0, 2).toUpperCase()}
+                                </div>
+                                <div className="flex-1">
+                                    <textarea value={commentText} onChange={e => setCommentText(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmitComment(); }}
+                                        placeholder="Escribe un comentario... (Ctrl+Enter para enviar)" rows={2}
+                                        className="w-full p-3 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-slate-700 dark:text-slate-200 placeholder-slate-400 transition-all"
+                                    />
+                                    {commentText.trim() && (
+                                        <button onClick={handleSubmitComment} disabled={submitting}
+                                            className="mt-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg shadow-sm disabled:opacity-60 transition-colors flex items-center gap-1.5">
+                                            {submitting ? <Icon name="Loader2" size={13} className="animate-spin"/> : <Icon name="ArrowRight" size={13}/>}
+                                            {submitting ? 'Enviando...' : 'Comentar'}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex-1 min-w-[120px]">
-                            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1"><Icon name="UserCircle2" size={12}/> Asignado a</p>
-                            <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{assignee ? assignee.name : 'Nadie'}</span>
-                        </div>
-                        <div className="flex-1 min-w-[120px]">
-                            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1"><Icon name="CalendarDays" size={12}/> Fecha Límite</p>
-                            <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{task.date}</span>
-                        </div>
+
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 min-h-[100px]">
-                        <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1"><Icon name="ListTree" size={12}/> Notas y Enlaces</p>
-                        <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{task.notes || <span className="italic text-slate-400">Sin notas adicionales...</span>}</p>
-                    </div>
-                    {canEdit(type) && <Button full onClick={() => onEdit(task, type)} color={tagColor} icon="Edit">Editar Tarea</Button>}
                 </div>
             </div>
         </div>
