@@ -62,7 +62,8 @@ const VIEW_PERMISSIONS = {
     'management-room': 'view_management_room',
     'general-calendar': 'view_general_calendar',
     calendar: 'view_calendar',
-    'control-center': 'view_users'
+    'control-center': 'view_users',
+    reports: 'view_dashboard'
 };
 
 const normalizeEmail = (value = '') => String(value || '').trim().toLowerCase();
@@ -1905,6 +1906,9 @@ function App() {
     const urgentEditions = editingTasks.filter((task) => getEditingHierarchyId(task) === 'p1' && task.status !== 'aprobado' && task.status !== 'publicado').length;
     const pendingAccounts = accountTasks.filter(t => t.status === 'por_disenar').length;
     const pendingManagement = managementTasks.filter((task) => task.status !== 'cerrado').length;
+    const totalActiveAccountTasks = accountTasks.filter(t => t.status !== 'publicado').length;
+    const totalActiveEditingTasks = editingTasks.filter(t => t.status !== 'aprobado' && t.status !== 'publicado').length;
+    const totalActiveManagementTasks = managementTasks.filter(t => t.status !== 'cerrado').length;
 
     let allActivities = [
         ...events.map(e => ({ ...e, collectionType: 'event', _color: 'emerald', _icon: 'CalendarIcon', _label: 'Producción' })),
@@ -2466,14 +2470,15 @@ function App() {
                     <SidebarItem active={view === 'editors' || view === 'editor-detail'} onClick={() => handleNavigate('editors')} icon="PenTool" label="Editores" color="rose" />
                     
                     <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Salas de Trabajo</div>
-                    <SidebarItem active={view === 'account-room'} onClick={() => handleNavigate('account-room')} icon="LayoutList" label="Sala de Accounts" color="indigo" badge={pendingAccounts > 0 ? pendingAccounts : null} badgeColor="bg-indigo-500 text-white" />
-                    <SidebarItem active={view === 'management-room'} onClick={() => handleNavigate('management-room')} icon="ShieldCheck" label="Sala de Gestion" color="violet" badge={pendingManagement > 0 ? pendingManagement : null} badgeColor="bg-violet-500 text-white" />
-                    <SidebarItem active={view === 'editions'} onClick={() => handleNavigate('editions')} icon="Video" label="Sala de Edición" color="amber" badge={urgentEditions > 0 ? urgentEditions : null} badgeColor="bg-red-500 text-white animate-pulse" />
-                    
+                    <SidebarItem active={view === 'account-room'} onClick={() => handleNavigate('account-room')} icon="LayoutList" label="Sala de Accounts" color="indigo" badge={totalActiveAccountTasks > 0 ? totalActiveAccountTasks : null} badgeColor={pendingAccounts > 0 ? "bg-indigo-500 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"} />
+                    <SidebarItem active={view === 'management-room'} onClick={() => handleNavigate('management-room')} icon="ShieldCheck" label="Sala de Gestion" color="violet" badge={totalActiveManagementTasks > 0 ? totalActiveManagementTasks : null} badgeColor={pendingManagement > 0 ? "bg-violet-500 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"} />
+                    <SidebarItem active={view === 'editions'} onClick={() => handleNavigate('editions')} icon="Video" label="Sala de Edición" color="amber" badge={totalActiveEditingTasks > 0 ? totalActiveEditingTasks : null} badgeColor={urgentEditions > 0 ? "bg-red-500 text-white animate-pulse" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"} />
+
                     <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Control & Global</div>
                     <SidebarItem active={view === 'control-center'} onClick={() => handleNavigate('control-center')} icon="ClipboardList" label="Usuarios y Accesos" color="purple" />
                     <SidebarItem active={view === 'general-calendar'} onClick={() => handleNavigate('general-calendar')} icon="CalendarDays" label="Calendario General" color="blue" />
                     <SidebarItem active={view === 'calendar'} onClick={() => handleNavigate('calendar')} icon="CalendarIcon" label="Agenda Producción" color="emerald" />
+                    <SidebarItem active={view === 'reports'} onClick={() => handleNavigate('reports')} icon="BarChart3" label="Reportes" color="emerald" />
                 </nav>
 
                 <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
@@ -2544,6 +2549,7 @@ function App() {
                     {view === 'calendar' && (
                         <div className="h-full flex flex-col space-y-6 fade-in"><h2 className="text-2xl font-black text-slate-800 dark:text-white">Agenda de Producciones</h2><div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden"><CalendarGrid events={events.filter(e => e.type === 'production')} baseColor="emerald" onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'event', data: { date: dateStr, type: 'production' } })} onEventClick={(e) => handleEventClick(e, 'event')} /></div></div>
                     )}
+                    {view === 'reports' && <ReportsView accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} clients={clients} managers={managers} editors={editors} />}
                 </div>
             </main>
 
@@ -4648,6 +4654,284 @@ const DeleteConfirmModal = ({ config, onClose, onConfirm }) => (
 );
 
 const Toast = ({ message, type }) => (<div className={`fixed bottom-6 right-6 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 fade-in z-[110] ${type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 dark:bg-white text-white dark:text-slate-900'}`}><Icon name={type === 'success' ? "CheckCircle2" : "AlertTriangle"} size={20} className={type === 'success' ? "text-green-400" : ""}/><span className="font-bold text-sm">{message}</span></div>);
+
+const ReportStatCard = ({ label, value, color, icon, sub }) => (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+            <span className="text-xs font-black uppercase tracking-widest text-slate-400">{label}</span>
+            <div className={`w-8 h-8 rounded-xl bg-${color}-50 dark:bg-${color}-500/20 flex items-center justify-center`}>
+                <Icon name={icon} size={16} className={`text-${color}-500`} />
+            </div>
+        </div>
+        <p className={`text-3xl font-black text-${color}-600 dark:text-${color}-400`}>{value}</p>
+        {sub && <p className="text-xs text-slate-400">{sub}</p>}
+    </div>
+);
+
+const ReportsView = ({ accountTasks, editingTasks, managementTasks, clients, managers, editors }) => {
+    const todayStr = getHondurasTodayStr();
+    const now = new Date();
+    const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const [fromDate, setFromDate] = useState(firstOfMonth);
+    const [toDate, setToDate] = useState(todayStr);
+    const [activeTab, setActiveTab] = useState('content');
+
+    const inRange = (dateStr) => {
+        if (!dateStr) return false;
+        return compareDateOnlyStrings(dateStr, fromDate) >= 0 && compareDateOnlyStrings(dateStr, toDate) <= 0;
+    };
+
+    const filteredAccountTasks = accountTasks.filter(t => inRange(t.date));
+    const filteredEditingTasks = editingTasks.filter(t => inRange(t.date));
+    const filteredManagementTasks = managementTasks.filter(t => inRange(t.date));
+
+    const accountPublished = filteredAccountTasks.filter(t => t.status === 'publicado').length;
+    const editingPublished = filteredEditingTasks.filter(t => t.status === 'publicado').length;
+    const totalContentPieces = filteredAccountTasks.length + filteredEditingTasks.length;
+    const totalPublished = accountPublished + editingPublished;
+
+    const managerStats = managers.map(m => {
+        const mTasks = filteredAccountTasks.filter(t => t.contextId === m.id);
+        return {
+            ...m,
+            total: mTasks.length,
+            published: mTasks.filter(t => t.status === 'publicado').length,
+            approved: mTasks.filter(t => t.status === 'aprobado_internamente').length,
+            inProgress: mTasks.filter(t => !['publicado', 'aprobado_internamente'].includes(t.status)).length
+        };
+    }).filter(m => m.total > 0).sort((a, b) => b.total - a.total);
+
+    const editorStats = editors.map(e => {
+        const eTasks = filteredEditingTasks.filter(t => t.contextId === e.id);
+        return {
+            ...e,
+            total: eTasks.length,
+            published: eTasks.filter(t => t.status === 'publicado').length,
+            approved: eTasks.filter(t => t.status === 'aprobado').length,
+            inProgress: eTasks.filter(t => !['publicado', 'aprobado'].includes(t.status)).length
+        };
+    }).filter(e => e.total > 0).sort((a, b) => b.total - a.total);
+
+    const tabs = [
+        { id: 'content', label: 'Piezas de Contenido' },
+        { id: 'managers', label: 'Por Manager' },
+        { id: 'editors', label: 'Por Editor' },
+        { id: 'management', label: 'Gestión' }
+    ];
+
+    const rowStyle = (i) => i % 2 !== 0 ? 'bg-slate-50/50 dark:bg-slate-950/30' : '';
+
+    return (
+        <div className="space-y-6 fade-in">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+                <h2 className="text-2xl font-black text-slate-800 dark:text-white">Reportes</h2>
+                <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
+                        <span className="text-xs font-black text-slate-400 uppercase">Desde</span>
+                        <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" />
+                    </div>
+                    <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
+                        <span className="text-xs font-black text-slate-400 uppercase">Hasta</span>
+                        <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" />
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <ReportStatCard label="Total Piezas" value={totalContentPieces} color="purple" icon="BarChart3" sub="accounts + edición" />
+                <ReportStatCard label="Publicadas" value={totalPublished} color="emerald" icon="CheckCircle2" sub={`${Math.round(totalContentPieces > 0 ? (totalPublished / totalContentPieces) * 100 : 0)}% del total`} />
+                <ReportStatCard label="Sala Accounts" value={filteredAccountTasks.length} color="indigo" icon="LayoutList" sub={`${accountPublished} publicadas`} />
+                <ReportStatCard label="Sala Edición" value={filteredEditingTasks.length} color="amber" icon="Video" sub={`${editingPublished} publicadas`} />
+            </div>
+
+            <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
+                {tabs.map(tab => (
+                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-2.5 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.id ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {activeTab === 'content' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+                        <h3 className="font-black text-slate-800 dark:text-white mb-5 flex items-center gap-2">
+                            <Icon name="LayoutList" size={18} className="text-indigo-500" /> Sala de Accounts
+                        </h3>
+                        <div className="space-y-3">
+                            {[
+                                { label: 'Por Diseñar', status: 'por_disenar', color: 'slate' },
+                                { label: 'Aprobación Interna', status: 'aprobacion_interna', color: 'blue' },
+                                { label: 'Aprobado Internamente', status: 'aprobado_internamente', color: 'emerald' },
+                                { label: 'Publicado', status: 'publicado', color: 'indigo' }
+                            ].map(row => {
+                                const count = filteredAccountTasks.filter(t => t.status === row.status).length;
+                                const pct = filteredAccountTasks.length > 0 ? Math.round((count / filteredAccountTasks.length) * 100) : 0;
+                                return (
+                                    <div key={row.status}>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`w-2 h-2 rounded-full bg-${row.color}-500 shrink-0`} />
+                                            <span className="text-sm text-slate-600 dark:text-slate-300 flex-1">{row.label}</span>
+                                            <span className="font-black text-slate-800 dark:text-white">{count}</span>
+                                            <span className="text-xs text-slate-400 w-8 text-right">{pct}%</span>
+                                        </div>
+                                        <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                            <div className={`h-full bg-${row.color}-500 rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between">
+                                <span className="text-sm font-bold text-slate-500">Total</span>
+                                <span className="font-black text-slate-800 dark:text-white">{filteredAccountTasks.length}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+                        <h3 className="font-black text-slate-800 dark:text-white mb-5 flex items-center gap-2">
+                            <Icon name="Video" size={18} className="text-amber-500" /> Sala de Edición
+                        </h3>
+                        <div className="space-y-3">
+                            {[
+                                { label: 'Por Editar', status: 'editar', color: 'slate' },
+                                { label: 'En Edición', status: 'en_edicion', color: 'amber' },
+                                { label: 'Revisión Interna', status: 'revision_interna', color: 'blue' },
+                                { label: 'Aprobado', status: 'aprobado', color: 'emerald' },
+                                { label: 'Publicado', status: 'publicado', color: 'indigo' }
+                            ].map(row => {
+                                const count = filteredEditingTasks.filter(t => t.status === row.status).length;
+                                const pct = filteredEditingTasks.length > 0 ? Math.round((count / filteredEditingTasks.length) * 100) : 0;
+                                return (
+                                    <div key={row.status}>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`w-2 h-2 rounded-full bg-${row.color}-500 shrink-0`} />
+                                            <span className="text-sm text-slate-600 dark:text-slate-300 flex-1">{row.label}</span>
+                                            <span className="font-black text-slate-800 dark:text-white">{count}</span>
+                                            <span className="text-xs text-slate-400 w-8 text-right">{pct}%</span>
+                                        </div>
+                                        <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                            <div className={`h-full bg-${row.color}-500 rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between">
+                                <span className="text-sm font-bold text-slate-500">Total</span>
+                                <span className="font-black text-slate-800 dark:text-white">{filteredEditingTasks.length}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'managers' && (
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                    {managerStats.length === 0
+                        ? <div className="p-16 text-center text-slate-400 font-bold">Sin datos en este rango de fechas</div>
+                        : <table className="w-full">
+                            <thead>
+                                <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                                    <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-400">Manager</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">Total</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">En Proceso</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">Aprobadas</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">Publicadas</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {managerStats.map((m, i) => (
+                                    <tr key={m.id} className={`border-b border-slate-50 dark:border-slate-800/50 ${rowStyle(i)}`}>
+                                        <td className="p-4 font-bold text-slate-800 dark:text-white">{m.name}</td>
+                                        <td className="p-4 text-center font-black text-slate-800 dark:text-white">{m.total}</td>
+                                        <td className="p-4 text-center text-slate-500 dark:text-slate-400">{m.inProgress}</td>
+                                        <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">{m.approved}</td>
+                                        <td className="p-4 text-center font-bold text-indigo-600 dark:text-indigo-400">{m.published}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                    }
+                </div>
+            )}
+
+            {activeTab === 'editors' && (
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                    {editorStats.length === 0
+                        ? <div className="p-16 text-center text-slate-400 font-bold">Sin datos en este rango de fechas</div>
+                        : <table className="w-full">
+                            <thead>
+                                <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                                    <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-400">Editor</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">Total</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">En Proceso</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">Aprobadas</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">Publicadas</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {editorStats.map((e, i) => (
+                                    <tr key={e.id} className={`border-b border-slate-50 dark:border-slate-800/50 ${rowStyle(i)}`}>
+                                        <td className="p-4 font-bold text-slate-800 dark:text-white">{e.name}</td>
+                                        <td className="p-4 text-center font-black text-slate-800 dark:text-white">{e.total}</td>
+                                        <td className="p-4 text-center text-slate-500 dark:text-slate-400">{e.inProgress}</td>
+                                        <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">{e.approved}</td>
+                                        <td className="p-4 text-center font-bold text-indigo-600 dark:text-indigo-400">{e.published}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                    }
+                </div>
+            )}
+
+            {activeTab === 'management' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+                        <h3 className="font-black text-slate-800 dark:text-white mb-5 flex items-center gap-2">
+                            <Icon name="ShieldCheck" size={18} className="text-violet-500" /> Sala de Gestión
+                        </h3>
+                        <div className="space-y-3">
+                            {[
+                                { label: 'Pendiente', status: 'pendiente', color: 'slate' },
+                                { label: 'En Proceso', status: 'en_proceso', color: 'violet' },
+                                { label: 'En Espera', status: 'en_espera', color: 'amber' },
+                                { label: 'Cerrado', status: 'cerrado', color: 'emerald' }
+                            ].map(row => {
+                                const count = filteredManagementTasks.filter(t => t.status === row.status).length;
+                                const pct = filteredManagementTasks.length > 0 ? Math.round((count / filteredManagementTasks.length) * 100) : 0;
+                                return (
+                                    <div key={row.status}>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`w-2 h-2 rounded-full bg-${row.color}-500 shrink-0`} />
+                                            <span className="text-sm text-slate-600 dark:text-slate-300 flex-1">{row.label}</span>
+                                            <span className="font-black text-slate-800 dark:text-white">{count}</span>
+                                            <span className="text-xs text-slate-400 w-8 text-right">{pct}%</span>
+                                        </div>
+                                        <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                            <div className={`h-full bg-${row.color}-500 rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between">
+                                <span className="text-sm font-bold text-slate-500">Total</span>
+                                <span className="font-black text-slate-800 dark:text-white">{filteredManagementTasks.length}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col gap-4">
+                        <h3 className="font-black text-slate-800 dark:text-white flex items-center gap-2">
+                            <Icon name="Flame" size={18} className="text-orange-500" /> Resumen
+                        </h3>
+                        <ReportStatCard label="Tareas Abiertas" value={filteredManagementTasks.filter(t => t.status !== 'cerrado').length} color="violet" icon="Circle" />
+                        <ReportStatCard label="Tareas Cerradas" value={filteredManagementTasks.filter(t => t.status === 'cerrado').length} color="emerald" icon="CheckCircle2" />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const root = createRoot(document.getElementById('root'));
 root.render(<App />);
