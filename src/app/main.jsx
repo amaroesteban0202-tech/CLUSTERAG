@@ -2224,6 +2224,13 @@ function App() {
         await updateDoc(dataDoc(col, task.id), { timeEntries: [...(task.timeEntries || []), newEntry], updatedAt: nowIso() });
     };
 
+    const updateTaskChecklist = async (task, type, checklist) => {
+        const colMap = { accountTask: 'account_tasks', editingTask: 'editing', managementTask: 'management_tasks' };
+        const col = colMap[type];
+        if (!col) return;
+        await updateDoc(dataDoc(col, task.id), { checklist, updatedAt: nowIso() });
+    };
+
     const addEvent = async (data) => {
         await runMutation({
             permission: 'manage_calendar',
@@ -2586,7 +2593,7 @@ function App() {
             {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
             <EventActionModal config={eventAction} canEdit={canEditActivity(eventAction.type)} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
             <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} users={managementUsers} canEditActivity={canEditActivity} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
-            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} onChangeStatus={(task, type, newStatus) => { if (type === 'accountTask') changeAccountTaskStatus(task, newStatus); else if (type === 'editingTask') changeEditingTaskStatus(task, newStatus); else if (type === 'managementTask') changeManagementTaskStatus(task, newStatus); }} onAddComment={addTaskComment} onAddTimeEntry={addTaskTimeEntry} onDelete={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setDeleteConfirm({ isOpen: true, type, id: task.id, title: task.title }); }} currentUserProfile={currentUserProfile} accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} />
+            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} onChangeStatus={(task, type, newStatus) => { if (type === 'accountTask') changeAccountTaskStatus(task, newStatus); else if (type === 'editingTask') changeEditingTaskStatus(task, newStatus); else if (type === 'managementTask') changeManagementTaskStatus(task, newStatus); }} onAddComment={addTaskComment} onAddTimeEntry={addTaskTimeEntry} onUpdateChecklist={updateTaskChecklist} onDelete={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setDeleteConfirm({ isOpen: true, type, id: task.id, title: task.title }); }} currentUserProfile={currentUserProfile} accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} />
         </div>
     );
 }
@@ -4371,13 +4378,15 @@ const STATUS_COLOR_CLASSES = {
     violet:  'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-300 dark:border-violet-500/40',
 };
 
-const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onAddTimeEntry, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
+const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onAddTimeEntry, onUpdateChecklist, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
     const [commentText, setCommentText] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [statusOpen, setStatusOpen] = useState(false);
     const [timerRunning, setTimerRunning] = useState(false);
     const [timerElapsed, setTimerElapsed] = useState(0);
     const [savingTime, setSavingTime] = useState(false);
+    const [newCheckItem, setNewCheckItem] = useState('');
+    const [addingCheck, setAddingCheck] = useState(false);
     const timerStartRef = useRef(null);
     const timerIntervalRef = useRef(null);
     const commentInputRef = useRef(null);
@@ -4643,7 +4652,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
 
                         {/* Time entries log */}
                         {timeEntries.length > 0 && (
-                            <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
+                            <div className="border-t border-slate-200 dark:border-slate-800 pt-4 mb-6">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-1.5">
                                     <Icon name="Clock" size={10}/> Historial de tiempo — <span className="text-emerald-600 dark:text-emerald-400">{formatDuration(totalLoggedMs)} total</span>
                                 </p>
@@ -4660,6 +4669,91 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                 </div>
                             </div>
                         )}
+
+                        {/* ── SECCIÓN: Listas de control ── */}
+                        {(() => {
+                            const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+                            const done = checklist.filter(i => i.done).length;
+                            const pct = checklist.length > 0 ? Math.round((done / checklist.length) * 100) : 0;
+
+                            const toggleItem = (id) => {
+                                const updated = checklist.map(i => i.id === id ? { ...i, done: !i.done } : i);
+                                onUpdateChecklist(task, type, updated);
+                            };
+                            const deleteItem = (id) => {
+                                onUpdateChecklist(task, type, checklist.filter(i => i.id !== id));
+                            };
+                            const addItem = () => {
+                                if (!newCheckItem.trim()) return;
+                                const updated = [...checklist, { id: Math.random().toString(36).slice(2,10), text: newCheckItem.trim(), done: false }];
+                                onUpdateChecklist(task, type, updated);
+                                setNewCheckItem('');
+                                setAddingCheck(false);
+                            };
+
+                            return (
+                                <div className="border-t border-slate-200 dark:border-slate-800 pt-5 mb-5">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Icon name="CheckSquare" size={14} className="text-slate-400"/>
+                                        <span className="text-sm font-black text-slate-600 dark:text-slate-300">Listas de control</span>
+                                        {checklist.length > 0 && (
+                                            <span className="text-xs text-slate-400 ml-auto">{done}/{checklist.length}</span>
+                                        )}
+                                    </div>
+                                    {checklist.length > 0 && (
+                                        <>
+                                            {pct > 0 && (
+                                                <div className="h-1 bg-slate-200 dark:bg-slate-700 rounded-full mb-3 overflow-hidden">
+                                                    <div className="h-full bg-emerald-500 rounded-full transition-all duration-300" style={{width: `${pct}%`}}/>
+                                                </div>
+                                            )}
+                                            <div className="space-y-1 mb-2">
+                                                {checklist.map(item => (
+                                                    <div key={item.id} className="flex items-center gap-2.5 group py-1 px-2 -mx-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                                        <button onClick={() => toggleItem(item.id)}
+                                                            className={`w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-colors ${item.done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600 hover:border-emerald-400'}`}>
+                                                            {item.done && <Icon name="Check" size={10} className="text-white"/>}
+                                                        </button>
+                                                        <span className={`flex-1 text-sm ${item.done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}`}>{item.text}</span>
+                                                        <button onClick={() => deleteItem(item.id)} className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-slate-400 hover:text-red-400 transition-all">
+                                                            <Icon name="X" size={12}/>
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                    {addingCheck ? (
+                                        <div className="flex gap-2 items-center mt-1">
+                                            <div className="w-4 h-4 rounded border-2 border-slate-300 dark:border-slate-600 shrink-0"/>
+                                            <input autoFocus value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
+                                                onKeyDown={e => { if (e.key === 'Enter') addItem(); if (e.key === 'Escape') { setAddingCheck(false); setNewCheckItem(''); } }}
+                                                placeholder="Nombre del elemento..."
+                                                className="flex-1 text-sm bg-transparent border-b border-slate-300 dark:border-slate-600 outline-none text-slate-700 dark:text-slate-200 pb-0.5 focus:border-purple-500 transition-colors placeholder-slate-400"
+                                            />
+                                            <button onClick={addItem} className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition-colors">Agregar</button>
+                                            <button onClick={() => { setAddingCheck(false); setNewCheckItem(''); }} className="px-2 py-1 text-slate-400 hover:text-slate-600 text-xs transition-colors">Cancelar</button>
+                                        </div>
+                                    ) : (
+                                        <button onClick={() => canAct && setAddingCheck(true)}
+                                            className={`flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors mt-1 ${!canAct ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
+                                            <Icon name="Plus" size={14}/> Crear lista de control
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })()}
+
+                        {/* ── SECCIÓN: Subtareas ── */}
+                        <div className="border-t border-slate-200 dark:border-slate-800 pt-5 mb-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Icon name="GitBranch" size={14} className="text-slate-400"/>
+                                <span className="text-sm font-black text-slate-600 dark:text-slate-300">Agregar subtarea</span>
+                            </div>
+                            <button className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-default opacity-60">
+                                <Icon name="Plus" size={14}/> Add Tarea <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">Próximamente</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
