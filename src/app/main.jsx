@@ -4349,6 +4349,8 @@ const STATUS_COLOR_CLASSES = {
 const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
     const [commentText, setCommentText] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [statusOpen, setStatusOpen] = useState(false);
+    const commentInputRef = useRef(null);
 
     if (!config.isOpen || !config.task) return null;
     const { type } = config;
@@ -4365,8 +4367,9 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
     const typeLabel = type === 'accountTask' ? 'Account' : type === 'managementTask' ? 'Gestión' : 'Edición';
     const iconName  = type === 'accountTask' ? 'LayoutList' : type === 'managementTask' ? 'ShieldCheck' : 'Video';
     const statuses  = TASK_STATUS_DEFS[type] || [];
+    const currentStatus = statuses.find(s => s.id === task.status) || statuses[0];
     const canAct    = canEdit(type);
-    const comments  = Array.isArray(task.comments) ? task.comments : [];
+    const comments  = Array.isArray(task.comments) ? [...task.comments].reverse() : [];
 
     const handleSubmitComment = async () => {
         if (!commentText.trim() || submitting) return;
@@ -4375,140 +4378,212 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
         finally { setSubmitting(false); }
     };
 
+    const FieldRow = ({ icon, label, children }) => (
+        <div className="flex items-center min-h-[36px] hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-lg px-3 -mx-3 transition-colors group">
+            <div className="flex items-center gap-2 w-44 shrink-0">
+                <Icon name={icon} size={14} className="text-slate-400 shrink-0"/>
+                <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
+            </div>
+            <div className="flex-1 text-sm">{children}</div>
+        </div>
+    );
+
+    const priorityColors = { urgente: 'text-red-500', alta: 'text-orange-500', normal: 'text-slate-400', baja: 'text-slate-300' };
+
     return (
-        <div className="fixed inset-0 z-[80] flex" onClick={onClose}>
-            <div className="flex-1 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm" />
-            <div className="w-full max-w-[500px] bg-white dark:bg-slate-900 h-full flex flex-col shadow-2xl border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-right duration-200" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[80] bg-white dark:bg-slate-900 flex flex-col animate-in fade-in duration-150">
 
-                {/* Header */}
-                <div className={`px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 shrink-0 bg-${tagColor}-50 dark:bg-${tagColor}-500/10`}>
-                    <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-${tagColor}-100 dark:bg-${tagColor}-500/30 text-${tagColor}-700 dark:text-${tagColor}-300`}>
-                        <Icon name={iconName} size={11}/>{typeLabel}
-                    </span>
-                    <div className="flex-1" />
-                    {canAct && <>
-                        <button onClick={() => onEdit(task, type)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                            <Icon name="Edit" size={13}/> Editar
-                        </button>
-                        <button onClick={() => onDelete(task, type)} className="p-2 rounded-lg text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 transition-colors">
-                            <Icon name="Trash2" size={15}/>
-                        </button>
-                    </>}
-                    <button onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                        <Icon name="X" size={18}/>
+            {/* Top bar */}
+            <div className="h-12 border-b border-slate-200 dark:border-slate-800 flex items-center px-4 gap-3 shrink-0 bg-white dark:bg-slate-900">
+                <span className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider bg-${tagColor}-100 dark:bg-${tagColor}-500/20 text-${tagColor}-700 dark:text-${tagColor}-300`}>
+                    <Icon name={iconName} size={10}/>{typeLabel}
+                </span>
+                <span className="text-xs text-slate-400 font-mono">{task.id?.slice(0,8)}</span>
+                <div className="flex-1"/>
+                {canAct && <>
+                    <button onClick={() => onEdit(task, type)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                        <Icon name="Edit" size={12}/> Editar campos
                     </button>
-                </div>
+                    <button onClick={() => onDelete(task, type)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-red-200 dark:border-red-500/30 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+                        <Icon name="Trash2" size={12}/> Eliminar
+                    </button>
+                </>}
+                <button onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ml-1">
+                    <Icon name="X" size={18}/>
+                </button>
+            </div>
 
-                {/* Body */}
+            {/* Main content */}
+            <div className="flex-1 flex overflow-hidden">
+
+                {/* LEFT — Task body */}
                 <div className="flex-1 overflow-y-auto custom-scroll">
-                    <div className="p-6 space-y-6">
+                    <div className="max-w-3xl mx-auto px-8 py-8">
 
-                        {/* Title + badges */}
-                        <div>
-                            <div className="flex flex-wrap gap-1.5 mb-2">
-                                {task.priority && task.priority !== 'normal' && (
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${task.priority === 'urgente' ? 'border-red-400 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10' : 'border-slate-300 text-slate-500 bg-slate-50'}`}>{task.priority}</span>
-                                )}
-                                {type === 'editingTask' && <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800">{getEditingHierarchyId(task).toUpperCase()}</span>}
-                                {type === 'managementTask' && task.category && <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-500/10">{task.category}</span>}
-                            </div>
-                            <h2 className="text-xl font-black text-slate-800 dark:text-white leading-tight">{task.title}</h2>
-                        </div>
+                        {/* Title */}
+                        <h1 className="text-2xl font-black text-slate-800 dark:text-white leading-tight mb-8">{task.title}</h1>
 
-                        {/* Status selector */}
-                        <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2.5">Estado</p>
-                            <div className="flex flex-wrap gap-2">
-                                {statuses.map(s => {
-                                    const isActive = task.status === s.id;
-                                    return (
-                                        <button key={s.id} onClick={() => canAct && task.status !== s.id && onChangeStatus(task, type, s.id)}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${isActive ? `${STATUS_COLOR_CLASSES[s.color]} shadow-sm` : 'border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900'} ${!canAct ? 'cursor-default' : isActive ? 'cursor-default' : 'cursor-pointer hover:scale-105'}`}>
-                                            {isActive && '✓ '}{s.label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        {/* Fields */}
+                        <div className="space-y-0.5 mb-8">
 
-                        {/* Metadata */}
-                        <div className="grid grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-950 rounded-xl p-4 border border-slate-100 dark:border-slate-800">
-                            <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center gap-1"><Icon name="Briefcase" size={9}/> Cliente</p>
-                                {client ? (
-                                    <div className="flex items-center gap-1.5">
-                                        <div className="w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center font-black text-[9px] shrink-0">{client.name?.charAt(0).toUpperCase()}</div>
-                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{client.name}</span>
-                                    </div>
-                                ) : <span className="text-xs text-slate-400">Interno</span>}
-                            </div>
-                            <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center gap-1"><Icon name="UserCircle2" size={9}/> Asignado</p>
-                                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{assignee?.name || '—'}</span>
-                            </div>
-                            <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center gap-1"><Icon name="CalendarDays" size={9}/> Fecha</p>
-                                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{task.date || '—'}</span>
-                            </div>
-                        </div>
-
-                        {/* Notes */}
-                        <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1"><Icon name="ListTree" size={10}/> Notas y enlaces</p>
-                            <div className="bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 p-4 min-h-[72px]">
-                                {task.notes
-                                    ? <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{task.notes}</p>
-                                    : <p className="text-sm italic text-slate-400">Sin notas adicionales...</p>}
-                            </div>
-                        </div>
-
-                        {/* Comments */}
-                        <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-1.5">
-                                <Icon name="Inbox" size={10}/> Comentarios
-                                {comments.length > 0 && <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[9px] font-black">{comments.length}</span>}
-                            </p>
-                            {comments.length > 0 && (
-                                <div className="space-y-3 mb-4">
-                                    {comments.map(c => (
-                                        <div key={c.id} className="flex gap-3">
-                                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[10px] shrink-0 mt-0.5">
-                                                {(c.authorName || 'U').slice(0, 2).toUpperCase()}
-                                            </div>
-                                            <div className="flex-1 bg-slate-50 dark:bg-slate-950 rounded-xl p-3 border border-slate-100 dark:border-slate-800">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <span className="text-xs font-black text-slate-700 dark:text-slate-200">{c.authorName || 'Usuario'}</span>
-                                                    <span className="text-[10px] text-slate-400">{relativeTime(c.createdAt)}</span>
-                                                </div>
-                                                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{c.text}</p>
-                                            </div>
+                            {/* Estado */}
+                            <FieldRow icon="Circle" label="Estado">
+                                <div className="relative inline-block">
+                                    <button onClick={() => canAct && setStatusOpen(o => !o)}
+                                        className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black border ${STATUS_COLOR_CLASSES[currentStatus?.color || 'slate']} ${canAct ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} transition-opacity`}>
+                                        {currentStatus?.label || task.status}
+                                        {canAct && <Icon name="ChevronDown" size={11}/>}
+                                    </button>
+                                    {statusOpen && canAct && (
+                                        <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-10 py-1 min-w-[180px]">
+                                            {statuses.map(s => (
+                                                <button key={s.id} onClick={() => { onChangeStatus(task, type, s.id); setStatusOpen(false); }}
+                                                    className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left ${task.status === s.id ? 'text-purple-600 dark:text-purple-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                                                    <span className={`w-2 h-2 rounded-full bg-${s.color}-500 shrink-0`}/>
+                                                    {s.label}
+                                                    {task.status === s.id && <Icon name="CheckCircle2" size={13} className="ml-auto text-purple-500"/>}
+                                                </button>
+                                            ))}
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                            <div className="flex gap-3">
-                                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[10px] shrink-0 mt-1">
-                                    {(currentUserProfile?.name || 'U').slice(0, 2).toUpperCase()}
-                                </div>
-                                <div className="flex-1">
-                                    <textarea value={commentText} onChange={e => setCommentText(e.target.value)}
-                                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmitComment(); }}
-                                        placeholder="Escribe un comentario... (Ctrl+Enter para enviar)" rows={2}
-                                        className="w-full p-3 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-slate-700 dark:text-slate-200 placeholder-slate-400 transition-all"
-                                    />
-                                    {commentText.trim() && (
-                                        <button onClick={handleSubmitComment} disabled={submitting}
-                                            className="mt-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg shadow-sm disabled:opacity-60 transition-colors flex items-center gap-1.5">
-                                            {submitting ? <Icon name="Loader2" size={13} className="animate-spin"/> : <Icon name="ArrowRight" size={13}/>}
-                                            {submitting ? 'Enviando...' : 'Comentar'}
-                                        </button>
                                     )}
                                 </div>
-                            </div>
+                            </FieldRow>
+
+                            {/* Persona asignada */}
+                            <FieldRow icon="UserCircle2" label="Persona asignada">
+                                {assignee ? (
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[10px]">
+                                            {assignee.name.slice(0,2).toUpperCase()}
+                                        </div>
+                                        <span className="font-bold text-slate-700 dark:text-slate-200">{assignee.name}</span>
+                                    </div>
+                                ) : <span className="text-slate-400 italic">Vacío</span>}
+                            </FieldRow>
+
+                            {/* Fecha límite */}
+                            <FieldRow icon="CalendarDays" label="Fecha límite">
+                                {task.date
+                                    ? <span className="font-bold text-slate-700 dark:text-slate-200">{task.date}</span>
+                                    : <span className="text-slate-400 italic">Vacío</span>}
+                            </FieldRow>
+
+                            {/* Prioridad */}
+                            <FieldRow icon="Flame" label="Prioridad">
+                                {task.priority
+                                    ? <span className={`font-bold capitalize ${priorityColors[task.priority] || 'text-slate-500'}`}>{task.priority}</span>
+                                    : <span className="text-slate-400 italic">Vacío</span>}
+                            </FieldRow>
+
+                            {/* Cliente */}
+                            <FieldRow icon="Briefcase" label="Cliente">
+                                {client ? (
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 flex items-center justify-center font-black text-[9px]">{client.name?.charAt(0).toUpperCase()}</div>
+                                        <span className="font-bold text-slate-700 dark:text-slate-200">{client.name}</span>
+                                    </div>
+                                ) : <span className="text-slate-400 italic">Interno</span>}
+                            </FieldRow>
+
+                            {/* Jerarquía / Categoría */}
+                            {type === 'editingTask' && (
+                                <FieldRow icon="ListTree" label="Jerarquía">
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800">{getEditingHierarchyId(task).toUpperCase()}</span>
+                                </FieldRow>
+                            )}
+                            {type === 'managementTask' && task.category && (
+                                <FieldRow icon="ListTree" label="Categoría">
+                                    <span className="font-bold text-slate-700 dark:text-slate-200">{task.category}</span>
+                                </FieldRow>
+                            )}
                         </div>
 
+                        {/* Descripción / Notas */}
+                        <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
+                            <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-1.5">
+                                <Icon name="ListTree" size={11}/> Descripción
+                            </p>
+                            {task.notes
+                                ? <div className="prose prose-sm dark:prose-invert max-w-none">
+                                    <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{task.notes}</p>
+                                  </div>
+                                : <button onClick={canAct ? () => onEdit(task, type) : undefined}
+                                    className={`text-sm text-slate-400 italic ${canAct ? 'hover:text-slate-500 cursor-pointer' : ''}`}>
+                                    {canAct ? '+ Agregar descripción' : 'Sin descripción...'}
+                                  </button>
+                            }
+                        </div>
                     </div>
                 </div>
+
+                {/* RIGHT — Actividad */}
+                <div className="w-80 xl:w-96 shrink-0 border-l border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900">
+
+                    {/* Activity header */}
+                    <div className="h-12 flex items-center px-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+                        <span className="font-black text-slate-700 dark:text-slate-200 flex-1">Actividad</span>
+                        <span className="flex items-center gap-1 px-2 py-1 rounded text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10">
+                            <Icon name="Inbox" size={12}/> {comments.length}
+                        </span>
+                    </div>
+
+                    {/* Comments list */}
+                    <div className="flex-1 overflow-y-auto custom-scroll px-4 py-4 space-y-4">
+                        {comments.length === 0 && (
+                            <div className="text-center py-12">
+                                <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
+                                    <Icon name="Inbox" size={18} className="text-slate-400"/>
+                                </div>
+                                <p className="text-sm text-slate-400 font-bold">Sin comentarios aún</p>
+                                <p className="text-xs text-slate-400 mt-1">Sé el primero en comentar</p>
+                            </div>
+                        )}
+                        {comments.map(c => (
+                            <div key={c.id} className="flex gap-3">
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[10px] shrink-0 mt-0.5">
+                                    {(c.authorName || 'U').slice(0,2).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-baseline gap-2 mb-1">
+                                        <span className="text-xs font-black text-slate-700 dark:text-slate-200">{c.authorName || 'Usuario'}</span>
+                                        <span className="text-[10px] text-slate-400">{relativeTime(c.createdAt)}</span>
+                                    </div>
+                                    <div className="bg-slate-50 dark:bg-slate-800 rounded-xl rounded-tl-sm px-3 py-2.5 border border-slate-100 dark:border-slate-700">
+                                        <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words">{c.text}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Comment input — fixed at bottom */}
+                    <div className="border-t border-slate-200 dark:border-slate-800 p-4 shrink-0">
+                        <div className="flex gap-2.5">
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[10px] shrink-0 mt-1">
+                                {(currentUserProfile?.name || 'U').slice(0,2).toUpperCase()}
+                            </div>
+                            <div className="flex-1">
+                                <textarea ref={commentInputRef} value={commentText} onChange={e => setCommentText(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmitComment(); }}
+                                    placeholder="Escribe un comentario..."
+                                    rows={commentText ? 3 : 1}
+                                    className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-slate-700 dark:text-slate-200 placeholder-slate-400 transition-all"
+                                />
+                                {commentText.trim() && (
+                                    <div className="flex items-center justify-between mt-2">
+                                        <span className="text-[10px] text-slate-400">Ctrl+Enter para enviar</span>
+                                        <button onClick={handleSubmitComment} disabled={submitting}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg disabled:opacity-60 transition-colors">
+                                            {submitting ? <Icon name="Loader2" size={12} className="animate-spin"/> : <Icon name="ArrowRight" size={12}/>}
+                                            {submitting ? 'Enviando...' : 'Comentar'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     );
