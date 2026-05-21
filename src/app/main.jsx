@@ -5283,11 +5283,11 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
     else if (data?.date) { try { const [y,m,d] = data.date.split('-'); displayDate = new Date(y,m-1,d).toLocaleDateString('es-ES', { day:'numeric', month:'short' }); } catch(e){} }
 
     return (
-        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm z-[90] flex items-start justify-center pt-20 pb-8 px-4" onClick={onClose}>
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-visible" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm z-[90] flex items-start justify-center pt-12 pb-8 px-4" onClick={onClose}>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-visible" onClick={e => e.stopPropagation()}>
 
             {/* Header */}
-            <div className="flex items-center gap-2 px-5 pt-4 pb-2">
+            <div className="flex items-center gap-2 px-6 pt-5 pb-2">
                 <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[11px] font-black uppercase tracking-wide bg-${tagColor}-100 dark:bg-${tagColor}-500/20 text-${tagColor}-700 dark:text-${tagColor}-400`}>
                     <Icon name={iconName} size={11}/> {typeLabel}
                 </div>
@@ -5303,26 +5303,26 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
             </div>
 
             {/* Title input */}
-            <div className="px-5 py-2">
+            <div className="px-6 py-3">
                 <input autoFocus value={title} onChange={e => setTitle(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && title.trim()) handleSubmit(); }}
                     placeholder="Escribe el nombre de la tarea..."
-                    className="w-full text-[17px] font-bold text-slate-900 dark:text-white bg-transparent outline-none placeholder-slate-300 dark:placeholder-slate-600"
+                    className="w-full text-xl font-bold text-slate-900 dark:text-white bg-transparent outline-none placeholder-slate-300 dark:placeholder-slate-600"
                 />
             </div>
 
             {/* Description */}
-            <div className="px-5 pb-3">
+            <div className="px-6 pb-4">
                 {showDesc ? (
                     <textarea autoFocus value={notes} onChange={e => setNotes(e.target.value)}
                         placeholder="Agregar descripción..."
-                        rows={3}
-                        className="w-full text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3 py-2 outline-none resize-none placeholder-slate-400 border border-slate-200 dark:border-slate-700"
+                        rows={4}
+                        className="w-full text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 rounded-xl px-4 py-3 outline-none resize-none placeholder-slate-400 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400 transition-all"
                     />
                 ) : (
                     <button onClick={() => setShowDesc(true)}
                         className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors py-1">
-                        <Icon name="AlignLeft" size={13}/> Agregar descripción
+                        <Icon name="AlignLeft" size={14}/> Agregar descripción
                     </button>
                 )}
             </div>
@@ -5331,7 +5331,7 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
             <div className="border-t border-slate-100 dark:border-slate-800"/>
 
             {/* Chips */}
-            <div className="px-5 py-3 flex flex-wrap gap-2">
+            <div className="px-6 py-4 flex flex-wrap gap-2.5">
 
                 {/* Persona asignada */}
                 <div className="relative" data-ctdrop>
@@ -5442,13 +5442,13 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
             </div>
 
             {/* Footer */}
-            <div className="border-t border-slate-100 dark:border-slate-800 px-5 py-3 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50 rounded-b-2xl">
-                <button onClick={onClose} className="text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors px-3 py-1.5">
+            <div className="border-t border-slate-100 dark:border-slate-800 px-6 py-4 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50 rounded-b-2xl">
+                <button onClick={onClose} className="text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors px-4 py-2">
                     Cancelar
                 </button>
                 <button onClick={handleSubmit} disabled={!title.trim()}
-                    className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-black text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-${tagColor}-600 hover:bg-${tagColor}-700 shadow-sm`}>
-                    <Icon name="Plus" size={13}/>
+                    className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-black text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-${tagColor}-600 hover:bg-${tagColor}-700 shadow-sm`}>
+                    <Icon name="Plus" size={14}/>
                     Crear {typeLabel}
                 </button>
             </div>
