@@ -5212,6 +5212,7 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
     const [category, setCategory] = useState('seguimiento');
     const [assigneeOpen, setAssigneeOpen] = useState(false);
     const [clientOpen, setClientOpen] = useState(false);
+    const [clientSearch, setClientSearch] = useState('');
     const [priorityOpen, setPriorityOpen] = useState(false);
     const [datePickerOpen, setDatePickerOpen] = useState(false);
 
@@ -5395,21 +5396,46 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
 
                 {/* Cliente */}
                 <div className="relative" data-ctdrop>
-                    <Chip icon="Briefcase" active={!!client} onClick={() => setClientOpen(o => !o)}>
+                    <Chip icon="Briefcase" active={!!client} onClick={() => { setClientOpen(o => !o); setClientSearch(''); }}>
                         {client ? client.name : 'Cliente'}
                     </Chip>
                     {clientOpen && (
-                        <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-52" data-ctdrop>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Cliente</p>
-                            <button onClick={() => { setClientId(''); setClientOpen(false); }} className="w-full px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left">Sin cliente (interno)</button>
-                            {clients.map(c => (
-                                <button key={c.id} onClick={() => { setClientId(c.id); setClientOpen(false); }}
-                                    className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                    <div className="w-5 h-5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-600 flex items-center justify-center font-black text-[9px]">{c.name.charAt(0).toUpperCase()}</div>
-                                    <span className={`text-sm font-semibold flex-1 ${clientId===c.id?'text-purple-600 dark:text-purple-400':'text-slate-700 dark:text-slate-200'}`}>{c.name}</span>
-                                    {clientId===c.id && <Icon name="Check" size={12} className="text-purple-500"/>}
-                                </button>
-                            ))}
+                        <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 w-64 overflow-hidden" data-ctdrop>
+                            {/* Search */}
+                            <div className="px-3 pt-2.5 pb-1.5 border-b border-slate-100 dark:border-slate-700">
+                                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg px-2.5 py-1.5">
+                                    <Icon name="Search" size={12} className="text-slate-400 shrink-0"/>
+                                    <input autoFocus value={clientSearch} onChange={e => setClientSearch(e.target.value)}
+                                        placeholder="Buscar cliente..."
+                                        className="flex-1 text-sm bg-transparent outline-none text-slate-700 dark:text-slate-200 placeholder-slate-400 min-w-0"
+                                    />
+                                    {clientSearch && <button onClick={() => setClientSearch('')} className="text-slate-400 hover:text-slate-600"><Icon name="X" size={11}/></button>}
+                                </div>
+                            </div>
+                            {/* List */}
+                            <div className="overflow-y-auto" style={{maxHeight:'280px'}}>
+                                {!clientSearch && (
+                                    <button onClick={() => { setClientId(''); setClientOpen(false); setClientSearch(''); }}
+                                        className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left border-b border-slate-100 dark:border-slate-700">
+                                        <Icon name="X" size={13}/> Sin cliente (interno)
+                                    </button>
+                                )}
+                                {clients
+                                    .filter(c => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+                                    .slice(0, 8)
+                                    .map(c => (
+                                        <button key={c.id} onClick={() => { setClientId(c.id); setClientOpen(false); setClientSearch(''); }}
+                                            className={`w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${clientId===c.id ? 'bg-purple-50 dark:bg-purple-500/10' : ''}`}>
+                                            <div className="w-6 h-6 rounded-lg bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-[10px] shrink-0">{c.name.charAt(0).toUpperCase()}</div>
+                                            <span className={`text-sm font-semibold flex-1 text-left truncate ${clientId===c.id?'text-purple-600 dark:text-purple-400':'text-slate-700 dark:text-slate-200'}`}>{c.name}</span>
+                                            {clientId===c.id && <Icon name="Check" size={12} className="text-purple-500 shrink-0"/>}
+                                        </button>
+                                    ))
+                                }
+                                {clientSearch && clients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
+                                    <p className="px-4 py-3 text-sm text-slate-400 text-center">Sin resultados</p>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>
