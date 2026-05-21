@@ -3751,24 +3751,26 @@ const computeManagementDueBadge = (task) => {
     return { label: `Vencida hace ${Math.round(absHours / 24)}d`, tone: 'red' };
 };
 
+const MGMT_CATEGORY_COLORS = {
+    seguimiento: 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300 border-sky-200 dark:border-sky-500/20',
+    reunion: 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 border-purple-200 dark:border-purple-500/20',
+    entrega: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300 border-orange-200 dark:border-orange-500/20',
+    revision: 'bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300 border-teal-200 dark:border-teal-500/20',
+};
+const getMgmtCategoryColor = (cat) => MGMT_CATEGORY_COLORS[(cat || '').toLowerCase()] || 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+
 const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
-    const {
-        currentDate,
-        setCurrentDate,
-        filterMode,
-        setFilterMode,
-        ownershipFilter,
-        setOwnershipFilter
-    } = useTaskRoomState('cluster_management_room_state', { preferMine: currentUserProfile?.role === 'management' });
+    const { currentDate, setCurrentDate, filterMode, setFilterMode, ownershipFilter, setOwnershipFilter } = useTaskRoomState('cluster_management_room_state', { preferMine: currentUserProfile?.role === 'management' });
     const [searchTerm, setSearchTerm] = useState('');
     const [draggedTaskId, setDraggedTaskId] = useState(null);
+    const [showTeam, setShowTeam] = useState(false);
     const todayStr = getHondurasTodayStr();
 
     const columns = [
-        { id: 'pendiente', title: 'Pendiente', color: 'slate' },
-        { id: 'en_proceso', title: 'En Proceso', color: 'violet' },
-        { id: 'en_espera', title: 'En Espera', color: 'amber' },
-        { id: 'cerrado', title: 'Cerrado', color: 'emerald' }
+        { id: 'pendiente',  title: 'Pendiente',  color: 'slate',   icon: 'Circle' },
+        { id: 'en_proceso', title: 'En Proceso',  color: 'violet',  icon: 'Zap' },
+        { id: 'en_espera',  title: 'En Espera',   color: 'amber',   icon: 'PauseCircle' },
+        { id: 'cerrado',    title: 'Cerrado',     color: 'emerald', icon: 'CheckCircle2' },
     ];
 
     const filteredTasks = tasks.filter((task) => {
@@ -3778,6 +3780,7 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
         if (filterMode === 'overdue') return isDateBeforeDateString(task.date, todayStr) && task.status !== 'cerrado';
         return true;
     });
+
     const handleAddTask = (dateStr) => {
         const nextDate = normalizeDateOnlyString(dateStr) || todayStr;
         setCurrentDate(nextDate);
@@ -3785,10 +3788,7 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
         onAdd(nextDate);
     };
 
-    const handleDragStart = (e, taskId) => {
-        setDraggedTaskId(taskId);
-        e.dataTransfer.effectAllowed = 'move';
-    };
+    const handleDragStart = (e, taskId) => { setDraggedTaskId(taskId); e.dataTransfer.effectAllowed = 'move'; };
     const handleDragEnd = () => setDraggedTaskId(null);
     const handleDragOver = (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
     const handleDragLeave = (e) => { e.currentTarget.classList.remove('drag-over'); };
@@ -3796,95 +3796,204 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
         e.preventDefault();
         e.currentTarget.classList.remove('drag-over');
         if (draggedTaskId) {
-            const task = tasks.find((item) => item.id === draggedTaskId);
+            const task = tasks.find(t => t.id === draggedTaskId);
             if (task && task.status !== targetStatus) onChangeStatus(task, targetStatus);
         }
     };
 
+    const membersWithAlert = members.filter(m => !normalizeEmail(m.email));
+    const badgeToneMap = {
+        slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+        amber: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+        red:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    };
+
     return (
-        <div className="h-full flex flex-col space-y-6 fade-in">
+        <div className="h-full flex flex-col gap-4 fade-in">
+            {/* Header */}
             <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Gestion" onAdd={handleAddTask} btnColor="violet" btnIcon="ShieldCheck" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-                    <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Usuarios vinculados</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {members.map((member) => (
-                            <div key={member.id} className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-                                <p className="font-bold text-slate-800 dark:text-white">{member.name}</p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{member.email || 'Correo pendiente de asignar'}</p>
+
+            {/* Stats + Team strip */}
+            <div className="flex flex-col lg:flex-row gap-3">
+                {/* Stat cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 flex-1">
+                    {columns.map(col => {
+                        const count = tasks.filter(t => t.status === col.id).length;
+                        return (
+                            <div key={col.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 flex items-center gap-3">
+                                <div className={`p-2 rounded-lg bg-${col.color}-50 dark:bg-${col.color}-500/20 shrink-0`}>
+                                    <Icon name={col.icon} size={16} className={`text-${col.color}-600 dark:text-${col.color}-400`}/>
+                                </div>
+                                <div>
+                                    <p className="text-2xl font-black text-slate-800 dark:text-white leading-none">{count}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-0.5">{col.title}</p>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Team toggle pill */}
+                <button
+                    onClick={() => setShowTeam(s => !s)}
+                    className="flex items-center gap-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors shrink-0 self-stretch"
+                >
+                    <div className="flex -space-x-2 shrink-0">
+                        {members.slice(0, 4).map(m => (
+                            <div key={m.id} className={`w-7 h-7 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center text-[9px] font-black text-white ${membersWithAlert.find(a => a.id === m.id) ? 'bg-amber-500' : 'bg-violet-500'}`}>
+                                {(m.name || '?').slice(0, 2).toUpperCase()}
                             </div>
                         ))}
+                        {members.length > 4 && <div className="w-7 h-7 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center text-[9px] font-black bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">+{members.length - 4}</div>}
                     </div>
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-                    <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Alertas de acceso</p>
-                    <div className="space-y-3">
-                        {members.filter((member) => !normalizeEmail(member.email)).length === 0 ? (
-                            <EmptyState icon="Mail" text="Todos los usuarios de la sala ya tienen correo." />
-                        ) : (
-                            members.filter((member) => !normalizeEmail(member.email)).map((member) => (
-                                <div key={member.id} className="p-3 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10">
-                                    <p className="font-bold text-amber-700 dark:text-amber-300">{member.name}</p>
-                                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Asignale correo desde Usuarios y Accesos para habilitar su entrada real.</p>
-                                </div>
-                            ))
-                        )}
+                    <div className="text-left">
+                        <p className="text-xs font-black text-slate-700 dark:text-slate-200">Equipo</p>
+                        {membersWithAlert.length > 0
+                            ? <p className="text-[10px] font-bold text-amber-500">{membersWithAlert.length} sin correo</p>
+                            : <p className="text-[10px] font-bold text-emerald-500">Todo en orden</p>
+                        }
                     </div>
-                </div>
+                    <Icon name={showTeam ? 'ChevronUp' : 'ChevronDown'} size={14} className="text-slate-400 ml-1"/>
+                </button>
             </div>
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
+
+            {/* Team expanded panel */}
+            {showTeam && (
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 fade-in">
+                    {members.map(member => {
+                        const openCount = tasks.filter(t => t.contextId === member.id && t.status !== 'cerrado').length;
+                        const hasAlert = !normalizeEmail(member.email);
+                        return (
+                            <div key={member.id} className={`flex items-center gap-3 p-3 rounded-xl border ${hasAlert ? 'border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/5' : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950'}`}>
+                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black text-white shrink-0 ${hasAlert ? 'bg-amber-500' : 'bg-violet-500'}`}>
+                                    {(member.name || '?').slice(0, 2).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-slate-800 dark:text-white text-sm truncate">{member.name}</p>
+                                    <p className={`text-[10px] truncate ${hasAlert ? 'text-amber-500 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`}>{hasAlert ? 'Sin correo asignado' : member.email}</p>
+                                </div>
+                                {openCount > 0 && <span className="shrink-0 text-[10px] font-black bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-1 rounded-full">{openCount} activas</span>}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Kanban */}
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden min-h-0">
                 {columns.map((col, colIndex) => {
-                    const colTasks = filteredTasks.filter((task) => task.status === col.id);
+                    const colTasks = filteredTasks.filter(task => task.status === col.id);
                     const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
                     const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
                     return (
-                        <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(e) => handleDrop(e, col.id)}>
-                            <div className={`p-3 font-black text-[11px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
-                                {col.title} <span className="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
+                        <div
+                            key={col.id}
+                            className="flex flex-col bg-slate-100/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden"
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={(e) => handleDrop(e, col.id)}
+                        >
+                            {/* Colored top bar */}
+                            <div className={`h-1 w-full bg-${col.color}-500 dark:bg-${col.color}-400 shrink-0`} />
+                            {/* Column header */}
+                            <div className="px-4 py-3 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 shrink-0">
+                                <div className="flex items-center gap-2">
+                                    <Icon name={col.icon} size={13} className={`text-${col.color}-500 dark:text-${col.color}-400`}/>
+                                    <span className={`font-black text-[11px] uppercase tracking-widest text-${col.color}-700 dark:text-${col.color}-400`}>{col.title}</span>
+                                </div>
+                                <span className={`text-xs font-black px-2 py-0.5 rounded-full bg-${col.color}-100 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-300`}>{colTasks.length}</span>
                             </div>
+
+                            {/* Cards */}
                             <div className="p-3 flex-1 overflow-y-auto space-y-3 custom-scroll">
-                                {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacio" /> :
-                                    colTasks.map((task) => {
-                                        const member = members.find((item) => item.id === task.contextId);
-                                        const client = clients.find((item) => item.id === task.clientId);
-                                        const isOverdue = isDateBeforeDateString(task.date, todayStr) && col.id !== 'cerrado';
-                                        return (
-                                            <div key={task.id} onClick={() => onTaskClick(task)} draggable="true" onDragStart={(e) => handleDragStart(e, task.id)} onDragEnd={handleDragEnd} className={`bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all group cursor-grab active:cursor-grabbing border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${isOverdue ? 'border-l-red-500 dark:bg-red-950/20' : 'border-l-violet-500'}`}>
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <div className="flex flex-col gap-1.5 items-start">
-                                                        {client && <span className="text-[9px] font-black uppercase bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800 flex items-center gap-1 max-w-[140px] truncate"><Icon name="Briefcase" size={10}/> {client.name}</span>}
-                                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border border-black/5 dark:border-white/5 bg-violet-100 dark:bg-violet-900 text-violet-800 dark:text-violet-100">{member ? member.name : 'Sin asignar'}</span>
-                                                    </div>
-                                                    <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                                        <button onClick={(e) => { e.stopPropagation(); onEdit(task); }} className="text-slate-400 hover:text-blue-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Edit" size={16}/></button>
-                                                        <button onClick={(e) => { e.stopPropagation(); onDelete(task.id); }} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Trash2" size={16}/></button>
-                                                    </div>
-                                                </div>
-                                                <p className="font-bold text-slate-700 dark:text-slate-200 text-sm mb-2 leading-tight">{task.title}</p>
-                                                {task.notes && <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 truncate max-w-[80%]">{task.notes}</p>}
-                                                {(() => {
-                                                    const badge = computeManagementDueBadge(task);
-                                                    if (!badge || col.id === 'cerrado') return null;
-                                                    const toneMap = {
-                                                        slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
-                                                        amber: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-                                                        red: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                                                    };
-                                                    return (
-                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md mb-2 ${toneMap[badge.tone] || toneMap.slate}`}>
-                                                            <Icon name={badge.tone === 'red' ? 'AlertTriangle' : 'Clock'} size={10} />
+                                {colTasks.length === 0 ? <EmptyState icon="Inbox" text="Vacío" /> : colTasks.map(task => {
+                                    const member = members.find(m => m.id === task.contextId);
+                                    const client = clients.find(c => c.id === task.clientId);
+                                    const isOverdue = isDateBeforeDateString(task.date, todayStr) && col.id !== 'cerrado';
+                                    const badge = computeManagementDueBadge(task);
+
+                                    return (
+                                        <div
+                                            key={task.id}
+                                            draggable="true"
+                                            onDragStart={(e) => handleDragStart(e, task.id)}
+                                            onDragEnd={handleDragEnd}
+                                            onClick={() => onTaskClick(task)}
+                                            className={`bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group overflow-hidden border border-slate-200 dark:border-slate-700 ${isOverdue ? 'ring-1 ring-red-400/60 dark:ring-red-500/40' : ''}`}
+                                        >
+                                            {/* Top accent */}
+                                            <div className={`h-0.5 w-full ${isOverdue ? 'bg-red-500' : `bg-${col.color}-400 dark:bg-${col.color}-500`}`} />
+
+                                            <div className="p-4 space-y-2.5">
+                                                {/* Category + Due badge */}
+                                                <div className="flex items-center justify-between gap-2 min-h-[20px]">
+                                                    {task.category
+                                                        ? <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${getMgmtCategoryColor(task.category)}`}>{task.category}</span>
+                                                        : <span />
+                                                    }
+                                                    {badge && col.id !== 'cerrado' && (
+                                                        <span className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${badgeToneMap[badge.tone] || badgeToneMap.slate}`}>
+                                                            <Icon name={badge.tone === 'red' ? 'AlertTriangle' : 'Clock'} size={9}/>
                                                             {badge.label}
-                                                            {task.time ? ` · ${task.time}` : ''}
                                                         </span>
-                                                    );
-                                                })()}
-                                                <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-                                                    {prevStatus && <button onClick={(e) => { e.stopPropagation(); onChangeStatus(task, prevStatus); }} className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Icon name="ChevronLeft" size={12}/> Atras</button>}
-                                                    {nextStatus && <button onClick={(e) => { e.stopPropagation(); onChangeStatus(task, nextStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-${col.color}-50 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-400 hover:bg-${col.color}-100 dark:hover:bg-${col.color}-500/30 transition-colors`}>{nextStatus === 'cerrado' ? 'Cerrar' : 'Avanzar'} <Icon name={nextStatus === 'cerrado' ? 'CheckCircle2' : 'ChevronRight'} size={12}/></button>}
+                                                    )}
+                                                </div>
+
+                                                {/* Title */}
+                                                <p className="font-black text-slate-800 dark:text-white text-sm leading-snug">{task.title}</p>
+
+                                                {/* Member + Client */}
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {member && (
+                                                        <span className="flex items-center gap-1 text-[10px] font-bold bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 rounded border border-violet-100 dark:border-violet-500/20 max-w-[130px] truncate">
+                                                            <Icon name="UserCircle2" size={9}/>{member.name}
+                                                        </span>
+                                                    )}
+                                                    {client && (
+                                                        <span className="flex items-center gap-1 text-[10px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800 max-w-[130px] truncate">
+                                                            <Icon name="Briefcase" size={9}/>{client.name}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {/* Date */}
+                                                <div className="flex items-center gap-1.5">
+                                                    <Icon name="CalendarDays" size={10} className={isOverdue ? 'text-red-400' : 'text-slate-400 dark:text-slate-500'}/>
+                                                    <span className={`text-[10px] font-bold ${isOverdue ? 'text-red-500 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                                        {task.date}{task.time ? ` · ${task.time}` : ''}
+                                                    </span>
+                                                    {isOverdue && <span className="text-[9px] font-black text-red-500 dark:text-red-400 uppercase tracking-wider">Vencida</span>}
+                                                </div>
+
+                                                {/* Notes */}
+                                                {task.notes && <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug line-clamp-2">{task.notes}</p>}
+                                            </div>
+
+                                            {/* Footer */}
+                                            <div className="flex items-center justify-between gap-1 px-3 py-2.5 border-t border-slate-100 dark:border-slate-800">
+                                                {prevStatus
+                                                    ? <button onClick={(e) => { e.stopPropagation(); onChangeStatus(task, prevStatus); }} className="flex items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                                        <Icon name="ChevronLeft" size={11}/> Atrás
+                                                    </button>
+                                                    : <span />
+                                                }
+                                                <div className="flex items-center gap-0.5">
+                                                    <button onClick={(e) => { e.stopPropagation(); onEdit(task); }} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors opacity-60 group-hover:opacity-100">
+                                                        <Icon name="Edit" size={13}/>
+                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); onDelete(task.id); }} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors opacity-60 group-hover:opacity-100">
+                                                        <Icon name="Trash2" size={13}/>
+                                                    </button>
+                                                    {nextStatus && (
+                                                        <button onClick={(e) => { e.stopPropagation(); onChangeStatus(task, nextStatus); }} className={`flex items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-${col.color}-500 hover:bg-${col.color}-600 text-white transition-colors ml-1`}>
+                                                            {nextStatus === 'cerrado' ? 'Cerrar' : 'Avanzar'} <Icon name={nextStatus === 'cerrado' ? 'Check' : 'ChevronRight'} size={11}/>
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
-                                        );
-                                    })}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     );
