@@ -2634,7 +2634,8 @@ function App() {
             </main>
 
             {toast && <Toast message={toast.message} type={toast.type} />}
-            {modalConfig.isOpen && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} managementUsers={managementUsers} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask, addManagementTask, updateManagementTask, addUserRecord, updateUserRecord }} />}
+            {modalConfig.isOpen && ['accountTask','editingTask','managementTask'].includes(modalConfig.type) && !modalConfig.isEdit && <CreateTaskModal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} managementUsers={managementUsers} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask, addManagementTask, updateManagementTask, addUserRecord, updateUserRecord }} />}
+            {modalConfig.isOpen && !((['accountTask','editingTask','managementTask'].includes(modalConfig.type)) && !modalConfig.isEdit) && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} managementUsers={managementUsers} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask, addManagementTask, updateManagementTask, addUserRecord, updateUserRecord }} />}
             {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
             <EventActionModal config={eventAction} canEdit={canEditActivity(eventAction.type)} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
             <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} users={managementUsers} canEditActivity={canEditActivity} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
@@ -5192,6 +5193,267 @@ const DayDetailsModal = ({ config, onClose, activities, clients, managers, edito
                     )}
                 </div>
             </div>
+        </div>
+    );
+};
+
+const CreateTaskModal = ({ config, onClose, clients, managers, editors, managementUsers, actions }) => {
+    const { type, data } = config;
+    const [title, setTitle] = useState('');
+    const [notes, setNotes] = useState('');
+    const [showDesc, setShowDesc] = useState(false);
+    const [assigneeId, setAssigneeId] = useState('');
+    const [clientId, setClientId] = useState('');
+    const [date, setDate] = useState('');
+    const [priority, setPriority] = useState('');
+    const [status, setStatus] = useState('editar');
+    const [hierarchy, setHierarchy] = useState('p2');
+    const [time, setTime] = useState('');
+    const [category, setCategory] = useState('seguimiento');
+    const [assigneeOpen, setAssigneeOpen] = useState(false);
+    const [clientOpen, setClientOpen] = useState(false);
+    const [priorityOpen, setPriorityOpen] = useState(false);
+    const [datePickerOpen, setDatePickerOpen] = useState(false);
+
+    // Reset when modal opens
+    useEffect(() => {
+        if (config.isOpen) {
+            setTitle(''); setNotes(''); setShowDesc(false);
+            setAssigneeId(data?.contextId || '');
+            setClientId(data?.clientId || '');
+            setDate(data?.date || '');
+            setPriority(''); setTime(''); setHierarchy('p2');
+            setCategory('seguimiento'); setStatus('editar');
+            setAssigneeOpen(false); setClientOpen(false);
+            setPriorityOpen(false); setDatePickerOpen(false);
+        }
+    }, [config.isOpen, config.type]);
+
+    // Close dropdowns on outside click
+    useEffect(() => {
+        if (!assigneeOpen && !clientOpen && !priorityOpen) return;
+        const h = (e) => { if (!e.target.closest('[data-ctdrop]')) { setAssigneeOpen(false); setClientOpen(false); setPriorityOpen(false); } };
+        document.addEventListener('mousedown', h);
+        return () => document.removeEventListener('mousedown', h);
+    }, [assigneeOpen, clientOpen, priorityOpen]);
+
+    if (!config.isOpen || config.isEdit || !['accountTask','editingTask','managementTask'].includes(type)) return null;
+
+    const peoplePool = type === 'accountTask' ? managers : type === 'editingTask' ? editors : managementUsers;
+    const assignee   = peoplePool.find(p => p.id === assigneeId);
+    const client     = clients.find(c => c.id === clientId);
+    const tagColor   = type === 'accountTask' ? 'indigo' : type === 'managementTask' ? 'violet' : 'amber';
+    const typeLabel  = type === 'accountTask' ? 'Account' : type === 'managementTask' ? 'Gestión' : 'Edición';
+    const iconName   = type === 'accountTask' ? 'LayoutList' : type === 'managementTask' ? 'ShieldCheck' : 'Video';
+
+    const TASK_PRIORITIES = [
+        { id: 'urgente', label: 'Urgente', iconColor: '#ef4444', color: 'text-red-500' },
+        { id: 'alta',    label: 'Alta',    iconColor: '#fb923c', color: 'text-orange-400' },
+        { id: 'normal',  label: 'Normal',  iconColor: '#60a5fa', color: 'text-blue-400' },
+        { id: 'baja',    label: 'Baja',    iconColor: '#94a3b8', color: 'text-slate-400' },
+    ];
+    const curPriority = TASK_PRIORITIES.find(p => p.id === priority);
+
+    const FlagIcon = ({ color, filled, size = 12 }) => (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? color : 'none'} stroke={color || 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+        </svg>
+    );
+
+    const Chip = ({ icon, label, active, color, onClick, children }) => (
+        <button onClick={onClick}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors
+                ${active ? 'border-purple-300 dark:border-purple-600 bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300'
+                         : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'} ${color || ''}`}>
+            {icon && <Icon name={icon} size={11}/>}
+            {children || label}
+        </button>
+    );
+
+    const handleSubmit = () => {
+        if (!title.trim()) return;
+        if (type === 'accountTask')     actions.addAccountTask({ date, title: title.trim(), time, contextId: assigneeId, clientId, notes, priority });
+        if (type === 'editingTask')     actions.addEditingTask({ date, title: title.trim(), priority: priority || 'normal', hierarchy, status, notes, contextId: assigneeId, clientId });
+        if (type === 'managementTask')  actions.addManagementTask({ date, title: title.trim(), time, contextId: assigneeId, clientId, category, notes, priority, notificationsEnabled: false });
+        onClose();
+    };
+
+    let displayDate = '';
+    if (date) { try { const [y,m,d] = date.split('-'); displayDate = new Date(y, m-1, d).toLocaleDateString('es-ES', { day:'numeric', month:'short' }); } catch(e){} }
+    else if (data?.date) { try { const [y,m,d] = data.date.split('-'); displayDate = new Date(y,m-1,d).toLocaleDateString('es-ES', { day:'numeric', month:'short' }); } catch(e){} }
+
+    return (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm z-[90] flex items-start justify-center pt-20 pb-8 px-4" onClick={onClose}>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-visible" onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="flex items-center gap-2 px-5 pt-4 pb-2">
+                <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[11px] font-black uppercase tracking-wide bg-${tagColor}-100 dark:bg-${tagColor}-500/20 text-${tagColor}-700 dark:text-${tagColor}-400`}>
+                    <Icon name={iconName} size={11}/> {typeLabel}
+                </div>
+                {displayDate && (
+                    <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <Icon name="CalendarDays" size={11}/>{displayDate}
+                    </span>
+                )}
+                <div className="flex-1"/>
+                <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <Icon name="X" size={15}/>
+                </button>
+            </div>
+
+            {/* Title input */}
+            <div className="px-5 py-2">
+                <input autoFocus value={title} onChange={e => setTitle(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && title.trim()) handleSubmit(); }}
+                    placeholder="Escribe el nombre de la tarea..."
+                    className="w-full text-[17px] font-bold text-slate-900 dark:text-white bg-transparent outline-none placeholder-slate-300 dark:placeholder-slate-600"
+                />
+            </div>
+
+            {/* Description */}
+            <div className="px-5 pb-3">
+                {showDesc ? (
+                    <textarea autoFocus value={notes} onChange={e => setNotes(e.target.value)}
+                        placeholder="Agregar descripción..."
+                        rows={3}
+                        className="w-full text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3 py-2 outline-none resize-none placeholder-slate-400 border border-slate-200 dark:border-slate-700"
+                    />
+                ) : (
+                    <button onClick={() => setShowDesc(true)}
+                        className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors py-1">
+                        <Icon name="AlignLeft" size={13}/> Agregar descripción
+                    </button>
+                )}
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-slate-100 dark:border-slate-800"/>
+
+            {/* Chips */}
+            <div className="px-5 py-3 flex flex-wrap gap-2">
+
+                {/* Persona asignada */}
+                <div className="relative" data-ctdrop>
+                    <Chip icon={assignee ? null : 'UserCircle2'} active={!!assignee}
+                        onClick={() => setAssigneeOpen(o => !o)}>
+                        {assignee ? (
+                            <><div className="w-4 h-4 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[8px]">{assignee.name.slice(0,2).toUpperCase()}</div>{assignee.name}</>
+                        ) : 'Persona asignada'}
+                    </Chip>
+                    {assigneeOpen && (
+                        <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-52" data-ctdrop>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Asignar a</p>
+                            {peoplePool.map(p => (
+                                <button key={p.id} onClick={() => { setAssigneeId(assigneeId === p.id ? '' : p.id); setAssigneeOpen(false); }}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                    <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0">{p.name.slice(0,2).toUpperCase()}</div>
+                                    <span className={`text-sm font-semibold flex-1 ${assigneeId === p.id ? 'text-purple-600 dark:text-purple-400':'text-slate-700 dark:text-slate-200'}`}>{p.name}</span>
+                                    {assigneeId === p.id && <Icon name="Check" size={12} className="text-purple-500"/>}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Fecha límite */}
+                <div className="relative">
+                    <Chip icon="CalendarDays" active={!!date} onClick={() => setDatePickerOpen(o => !o)}>
+                        {date || 'Fecha límite'}
+                    </Chip>
+                    {datePickerOpen && (
+                        <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 p-3">
+                            <input type="date" value={date} onChange={e => { setDate(e.target.value); setDatePickerOpen(false); }}
+                                className="text-sm bg-transparent outline-none text-slate-700 dark:text-slate-200 cursor-pointer"
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* Prioridad */}
+                <div className="relative" data-ctdrop>
+                    <button onClick={() => setPriorityOpen(o => !o)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors
+                            ${curPriority ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900':'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                        <FlagIcon color={curPriority?.iconColor || '#94a3b8'} filled={!!curPriority}/>
+                        <span className={curPriority?.color || 'text-slate-600 dark:text-slate-300'}>
+                            {curPriority?.label || 'Prioridad'}
+                        </span>
+                    </button>
+                    {priorityOpen && (
+                        <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-44" data-ctdrop>
+                            {TASK_PRIORITIES.map(p => (
+                                <button key={p.id} onClick={() => { setPriority(priority === p.id ? '' : p.id); setPriorityOpen(false); }}
+                                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left ${p.color}`}>
+                                    <FlagIcon color={p.iconColor} filled size={13}/>{p.label}
+                                    {priority === p.id && <Icon name="Check" size={12} className="ml-auto text-slate-400"/>}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Cliente */}
+                <div className="relative" data-ctdrop>
+                    <Chip icon="Briefcase" active={!!client} onClick={() => setClientOpen(o => !o)}>
+                        {client ? client.name : 'Cliente'}
+                    </Chip>
+                    {clientOpen && (
+                        <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-52" data-ctdrop>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Cliente</p>
+                            <button onClick={() => { setClientId(''); setClientOpen(false); }} className="w-full px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left">Sin cliente (interno)</button>
+                            {clients.map(c => (
+                                <button key={c.id} onClick={() => { setClientId(c.id); setClientOpen(false); }}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                    <div className="w-5 h-5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-600 flex items-center justify-center font-black text-[9px]">{c.name.charAt(0).toUpperCase()}</div>
+                                    <span className={`text-sm font-semibold flex-1 ${clientId===c.id?'text-purple-600 dark:text-purple-400':'text-slate-700 dark:text-slate-200'}`}>{c.name}</span>
+                                    {clientId===c.id && <Icon name="Check" size={12} className="text-purple-500"/>}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Jerarquía — solo editingTask */}
+                {type === 'editingTask' && (
+                    <select value={hierarchy} onChange={e => setHierarchy(e.target.value)}
+                        className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 outline-none cursor-pointer">
+                        {(EDITING_HIERARCHY_OPTIONS||[{id:'p1',label:'P1'},{id:'p2',label:'P2'},{id:'p3',label:'P3'},{id:'reel',label:'Reel'},{id:'story',label:'Story'}]).map(o=><option key={o.id} value={o.id}>{o.label||o.id}</option>)}
+                    </select>
+                )}
+
+                {/* Categoría — solo managementTask */}
+                {type === 'managementTask' && (
+                    <select value={category} onChange={e => setCategory(e.target.value)}
+                        className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 outline-none cursor-pointer">
+                        {['seguimiento','reunion','revision','entrega','otro'].map(c=><option key={c} value={c}>{c.charAt(0).toUpperCase()+c.slice(1)}</option>)}
+                    </select>
+                )}
+
+                {/* Hora — account & management */}
+                {(type === 'accountTask' || type === 'managementTask') && (
+                    <div className="relative">
+                        <input type="time" value={time} onChange={e => setTime(e.target.value)}
+                            title="Hora"
+                            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 outline-none cursor-pointer w-[110px]"
+                        />
+                    </div>
+                )}
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-slate-100 dark:border-slate-800 px-5 py-3 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50 rounded-b-2xl">
+                <button onClick={onClose} className="text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors px-3 py-1.5">
+                    Cancelar
+                </button>
+                <button onClick={handleSubmit} disabled={!title.trim()}
+                    className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-black text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-${tagColor}-600 hover:bg-${tagColor}-700 shadow-sm`}>
+                    <Icon name="Plus" size={13}/>
+                    Crear {typeLabel}
+                </button>
+            </div>
+
+        </div>
         </div>
     );
 };
