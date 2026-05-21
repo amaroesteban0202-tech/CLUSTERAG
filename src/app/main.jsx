@@ -4615,10 +4615,14 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
     );
 
     return (
-        <div className="fixed inset-0 z-[80] bg-white dark:bg-slate-900 flex flex-col">
+        <div className="fixed inset-0 z-[80] bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-start justify-center pt-10 pb-8 px-4 overflow-y-auto" onClick={onClose}>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex w-full max-w-5xl min-h-0 overflow-hidden border border-slate-200 dark:border-slate-800" style={{maxHeight:'88vh'}} onClick={e => e.stopPropagation()}>
 
-            {/* Top bar — slim, tipo Jira */}
-            <div className="h-11 border-b border-slate-200 dark:border-slate-800 flex items-center px-4 gap-2 shrink-0">
+            {/* LEFT — Contenido principal */}
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+            {/* Top bar */}
+            <div className="h-11 border-b border-slate-200 dark:border-slate-800 flex items-center px-4 gap-2 shrink-0 bg-white dark:bg-slate-900">
                 <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wide bg-${tagColor}-100 dark:bg-${tagColor}-500/20 text-${tagColor}-700 dark:text-${tagColor}-400`}>
                     <Icon name={iconName} size={11}/>{typeLabel}
                 </div>
@@ -4627,7 +4631,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                 <div className="flex-1"/>
                 {canAct && <>
                     <button onClick={() => onEdit(task, type)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                        <Icon name="Pencil" size={11}/> Editar
+                        <Icon name="Edit" size={11}/> Editar
                     </button>
                     <button onClick={() => onDelete(task, type)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
                         <Icon name="Trash2" size={11}/> Eliminar
@@ -4638,23 +4642,27 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                 </button>
             </div>
 
-            {/* Body — layout Jira: left=content, right=details */}
-            <div className="flex-1 flex overflow-hidden">
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto custom-scroll">
+                <div className="px-7 pt-6 pb-10">
 
-                {/* LEFT — Contenido principal */}
-                <div className="flex-1 overflow-y-auto custom-scroll bg-white dark:bg-slate-900">
-                    <div className="max-w-3xl mx-auto px-8 pt-7 pb-12">
+                    {/* Title */}
+                    <h1 className="text-xl font-black text-slate-900 dark:text-white leading-snug mb-5">{task.title}</h1>
 
-                        {/* Title */}
-                        <h1 className="text-[22px] font-black text-slate-900 dark:text-white leading-snug mb-5 pr-4">{task.title}</h1>
+                    {/* Fields grid — 2 columnas estilo ClickUp */}
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-0 mb-7 border border-slate-100 dark:border-slate-800 rounded-xl px-4 py-2">
 
-                        {/* Estado pill prominente bajo el título */}
-                        <div className="flex items-center gap-3 mb-7" data-dropdown>
-                            <div className="relative">
+                        {/* Estado */}
+                        <div className="flex items-center min-h-[38px] gap-0" data-dropdown>
+                            <div className="flex items-center gap-2 w-36 shrink-0">
+                                <Icon name="Circle" size={13} className="text-slate-400"/>
+                                <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Estado</span>
+                            </div>
+                            <div className="relative flex-1">
                                 <button onClick={() => canAct && setStatusOpen(o => !o)}
-                                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border ${STATUS_COLOR_CLASSES[currentStatus?.color || 'slate']} ${canAct ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} transition-opacity`}>
+                                    className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-black border ${STATUS_COLOR_CLASSES[currentStatus?.color || 'slate']} ${canAct ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} transition-opacity`}>
                                     {currentStatus?.label || task.status}
-                                    {canAct && <Icon name="ChevronDown" size={10}/>}
+                                    {canAct && <Icon name="ChevronDown" size={9}/>}
                                 </button>
                                 {statusOpen && canAct && (
                                     <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 min-w-[180px]" data-dropdown>
@@ -4669,329 +4677,359 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                     </div>
                                 )}
                             </div>
-                            {task.createdAt && (
-                                <span className="text-xs text-slate-400 flex items-center gap-1">
-                                    <Icon name="Clock" size={11}/>
-                                    Creado el {new Date(task.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} a las {new Date(task.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                            )}
                         </div>
 
-                        {/* Descripción */}
-                        <div className="mb-8">
-                            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Descripción</p>
-                            {task.notes
-                                ? <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{task.notes}</p>
-                                : <button onClick={canAct ? () => onEdit(task, type) : undefined}
-                                    className={`w-full text-left px-4 py-3 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 text-sm text-slate-400 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-500 transition-colors ${canAct ? 'cursor-pointer' : ''}`}>
-                                    {canAct ? '+ Agregar descripción' : 'Sin descripción...'}
-                                  </button>
-                            }
-                        </div>
-
-                        {/* Checklist */}
-                        {(() => {
-                            const checklist = Array.isArray(task.checklist) ? task.checklist : [];
-                            const done = checklist.filter(i => i.done).length;
-                            const pct = checklist.length > 0 ? Math.round((done / checklist.length) * 100) : 0;
-                            const toggleItem = (id) => onUpdateChecklist(task, type, checklist.map(i => i.id === id ? { ...i, done: !i.done } : i));
-                            const deleteItem = (id) => onUpdateChecklist(task, type, checklist.filter(i => i.id !== id));
-                            const addItem = () => {
-                                if (!newCheckItem.trim()) return;
-                                onUpdateChecklist(task, type, [...checklist, { id: Math.random().toString(36).slice(2,10), text: newCheckItem.trim(), done: false }]);
-                                setNewCheckItem(''); setAddingCheck(false);
-                            };
-                            return (
-                                <div className="mb-8">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <Icon name="CheckSquare" size={13} className="text-slate-400"/>
-                                        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Lista de control</p>
-                                        {checklist.length > 0 && <span className="text-xs text-slate-400 ml-1">{done}/{checklist.length}</span>}
-                                        {checklist.length > 0 && <span className="ml-auto text-xs font-bold text-slate-400">{pct}%</span>}
-                                    </div>
-                                    {checklist.length > 0 && (
-                                        <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full mb-3 overflow-hidden">
-                                            <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{width:`${pct}%`}}/>
-                                        </div>
-                                    )}
-                                    <div className="space-y-0.5">
-                                        {checklist.map(item => (
-                                            <div key={item.id} className="flex items-center gap-3 group py-1.5 px-3 -mx-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                                                <button onClick={() => toggleItem(item.id)}
-                                                    className={`w-[18px] h-[18px] rounded-[4px] border-2 shrink-0 flex items-center justify-center transition-all ${item.done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600 hover:border-emerald-400'}`}>
-                                                    {item.done && <Icon name="Check" size={11} className="text-white"/>}
-                                                </button>
-                                                <span className={`flex-1 text-sm ${item.done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}`}>{item.text}</span>
-                                                <button onClick={() => deleteItem(item.id)} className="opacity-0 group-hover:opacity-100 p-1 rounded text-slate-400 hover:text-red-400 transition-all">
-                                                    <Icon name="X" size={12}/>
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    {addingCheck ? (
-                                        <div className="flex gap-3 items-center mt-2 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/40">
-                                            <div className="w-[18px] h-[18px] rounded-[4px] border-2 border-slate-300 dark:border-slate-600 shrink-0"/>
-                                            <input autoFocus value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
-                                                onKeyDown={e => { if (e.key === 'Enter') addItem(); if (e.key === 'Escape') { setAddingCheck(false); setNewCheckItem(''); } }}
-                                                placeholder="Nombre del elemento... (Enter para guardar)"
-                                                className="flex-1 text-sm bg-transparent outline-none text-slate-700 dark:text-slate-200 placeholder-slate-400"
-                                            />
-                                            <button onClick={() => { setAddingCheck(false); setNewCheckItem(''); }} className="text-slate-400 hover:text-slate-600 transition-colors"><Icon name="X" size={13}/></button>
-                                        </div>
-                                    ) : (
-                                        <button onClick={() => canAct && setAddingCheck(true)}
-                                            className={`flex items-center gap-2 mt-2 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors px-3 py-1 -mx-3 ${!canAct ? 'opacity-40 cursor-default' : ''}`}>
-                                            <Icon name="Plus" size={13}/> Agregar elemento
-                                        </button>
-                                    )}
-                                </div>
-                            );
-                        })()}
-
-                        {/* Actividad — en el contenido principal, estilo Jira */}
-                        <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
-                            <div className="flex items-center gap-2 mb-5">
-                                <Icon name="MessageSquare" size={13} className="text-slate-400"/>
-                                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Actividad</p>
-                                {totalLoggedMs > 0 && (
-                                    <span className="ml-auto text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                                        <Icon name="Clock" size={11}/>{formatDuration(totalLoggedMs)}
-                                    </span>
-                                )}
+                        {/* Personas asignadas */}
+                        <div className="flex items-center min-h-[38px]" data-dropdown>
+                            <div className="flex items-center gap-2 w-36 shrink-0">
+                                <Icon name="Users" size={13} className="text-slate-400"/>
+                                <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Personas asigna...</span>
                             </div>
-
-                            {/* Comment input */}
-                            <div className="flex gap-3 mb-6">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[10px] shrink-0">
-                                    {(currentUserProfile?.name || 'U').slice(0,2).toUpperCase()}
-                                </div>
-                                <div className="flex-1">
-                                    <textarea ref={commentInputRef} value={commentText} onChange={e => setCommentText(e.target.value)}
-                                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmitComment(); }}
-                                        placeholder="Escribe un comentario... (Ctrl+Enter para enviar)"
-                                        rows={commentText ? 3 : 1}
-                                        className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 resize-none text-slate-700 dark:text-slate-200 placeholder-slate-400 transition-all"
-                                    />
-                                    {commentText.trim() && (
-                                        <div className="flex justify-end mt-2">
-                                            <button onClick={handleSubmitComment} disabled={submitting}
-                                                className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg disabled:opacity-60 transition-colors">
-                                                {submitting ? <Icon name="Loader2" size={12} className="animate-spin"/> : <Icon name="Send" size={12}/>}
-                                                {submitting ? 'Enviando...' : 'Comentar'}
+                            <div className="relative flex-1">
+                                <button onClick={() => canAct && setAssigneeOpen(o => !o)}
+                                    className={`flex items-center gap-2 text-sm font-semibold ${canAct ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} transition-opacity`}>
+                                    {assignee ? (
+                                        <>
+                                            <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[8px] shrink-0">{assignee.name.slice(0,2).toUpperCase()}</div>
+                                            <span className="text-slate-700 dark:text-slate-200">{assignee.name}</span>
+                                        </>
+                                    ) : <span className="text-slate-400 italic font-normal text-sm">Vacío</span>}
+                                </button>
+                                {assigneeOpen && canAct && (
+                                    <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-52" data-dropdown>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Asignar a</p>
+                                        {peoplePool.map(p => (
+                                            <button key={p.id} onClick={() => { onChangeAssignee(task, type, task.contextId === p.id ? null : p.id); setAssigneeOpen(false); }}
+                                                className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0">{p.name.slice(0,2).toUpperCase()}</div>
+                                                <span className={`text-sm font-semibold flex-1 ${task.contextId === p.id ? 'text-purple-600 dark:text-purple-400' : 'text-slate-700 dark:text-slate-200'}`}>{p.name}</span>
+                                                {task.contextId === p.id && <Icon name="Check" size={12} className="text-purple-500"/>}
                                             </button>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Feed */}
-                            <div className="space-y-5">
-                                {activityFeed.length === 0 && (
-                                    <p className="text-sm text-slate-400 text-center py-4">Sin actividad aún</p>
+                                        ))}
+                                        {task.contextId && (
+                                            <button onClick={() => { onChangeAssignee(task, type, null); setAssigneeOpen(false); }}
+                                                className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-t border-slate-100 dark:border-slate-700 mt-1">
+                                                <Icon name="UserX" size={13}/> Quitar asignación
+                                            </button>
+                                        )}
+                                    </div>
                                 )}
-                                {activityFeed.map(item => item._kind === 'time' ? (
-                                    <div key={item.id} className="flex gap-3 items-center">
-                                        <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-500/10 flex items-center justify-center shrink-0">
-                                            <Icon name="Clock" size={12} className="text-emerald-600 dark:text-emerald-400"/>
-                                        </div>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">
-                                            <span className="font-bold text-slate-700 dark:text-slate-200">{item.authorName}</span>
-                                            {' '}registró{' '}
-                                            <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatDuration(item.durationMs)}</span>
-                                            <span className="text-slate-400 text-xs ml-2">{relativeTime(item.loggedAt)}</span>
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div key={item.id} className="flex gap-3">
-                                        <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5">
-                                            {(item.authorName || 'U').slice(0,2).toUpperCase()}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-baseline gap-2 mb-1.5">
-                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{item.authorName || 'Usuario'}</span>
-                                                <span className="text-xs text-slate-400">{relativeTime(item.createdAt)}</span>
-                                            </div>
-                                            <div className="bg-slate-50 dark:bg-slate-800 rounded-xl rounded-tl-none px-4 py-3 border border-slate-200 dark:border-slate-700">
-                                                <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words">{item.text}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* RIGHT — Panel de detalles estilo Jira */}
-                <div className="w-64 shrink-0 border-l border-slate-200 dark:border-slate-800 overflow-y-auto custom-scroll bg-slate-50 dark:bg-slate-900/50">
-                    <div className="p-5 space-y-5">
-
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Detalles</p>
-
-                        {/* Asignado */}
-                        <div data-dropdown className="relative">
-                            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Asignado</p>
-                            <button onClick={() => canAct && setAssigneeOpen(o => !o)}
-                                className={`flex items-center gap-2 w-full rounded-lg py-1 ${canAct ? 'hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer' : 'cursor-default'} transition-colors -mx-1 px-1`}>
-                                {assignee ? (
-                                    <>
-                                        <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0">
-                                            {assignee.name.slice(0,2).toUpperCase()}
-                                        </div>
-                                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{assignee.name}</span>
-                                    </>
-                                ) : <span className="text-sm text-slate-400 italic">Sin asignar</span>}
-                            </button>
-                            {assigneeOpen && canAct && (
-                                <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-52" data-dropdown>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Asignar a</p>
-                                    {peoplePool.map(p => (
-                                        <button key={p.id} onClick={() => { onChangeAssignee(task, type, task.contextId === p.id ? null : p.id); setAssigneeOpen(false); }}
-                                            className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0">
-                                                {p.name.slice(0,2).toUpperCase()}
-                                            </div>
-                                            <span className={`text-sm font-semibold flex-1 ${task.contextId === p.id ? 'text-purple-600 dark:text-purple-400' : 'text-slate-700 dark:text-slate-200'}`}>{p.name}</span>
-                                            {task.contextId === p.id && <Icon name="Check" size={12} className="text-purple-500"/>}
-                                        </button>
-                                    ))}
-                                    {task.contextId && (
-                                        <button onClick={() => { onChangeAssignee(task, type, null); setAssigneeOpen(false); }}
-                                            className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-t border-slate-100 dark:border-slate-700 mt-1">
-                                            <Icon name="UserX" size={13}/> Quitar asignación
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Prioridad */}
-                        <div data-dropdown className="relative">
-                            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Prioridad</p>
-                            <button onClick={() => canAct && setPriorityOpen(o => !o)}
-                                className={`flex items-center gap-2 w-full rounded-lg py-1 ${canAct ? 'hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer' : 'cursor-default'} transition-colors -mx-1 px-1`}>
-                                <FlagIcon color={currentPriority?.iconColor || '#94a3b8'} filled={!!currentPriority}/>
-                                <span className={`text-sm font-semibold ${currentPriority?.color || 'text-slate-400 italic'}`}>
-                                    {currentPriority?.label || 'Sin prioridad'}
-                                </span>
-                            </button>
-                            {priorityOpen && canAct && (
-                                <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-44" data-dropdown>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Prioridad</p>
-                                    {PRIORITIES.map(p => (
-                                        <button key={p.id} onClick={() => { onChangePriority(task, type, p.id); setPriorityOpen(false); }}
-                                            className={`w-full flex items-center gap-3 px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left ${p.color}`}>
-                                            <FlagIcon color={p.iconColor} filled size={14}/>
-                                            {p.label}
-                                            {task.priority === p.id && <Icon name="Check" size={12} className="ml-auto text-slate-400"/>}
-                                        </button>
-                                    ))}
-                                    {task.priority && (
-                                        <button onClick={() => { onChangePriority(task, type, null); setPriorityOpen(false); }}
-                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-t border-slate-100 dark:border-slate-700 mt-1">
-                                            <Icon name="X" size={12}/> Quitar prioridad
-                                        </button>
-                                    )}
-                                </div>
-                            )}
                         </div>
 
                         {/* Fecha límite */}
-                        <div>
-                            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Fecha límite</p>
-                            <div className="flex items-center gap-2 py-1 -mx-1 px-1">
-                                <Icon name="CalendarDays" size={13} className="text-slate-400 shrink-0"/>
-                                <span className={`text-sm font-semibold ${task.date ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 italic'}`}>
-                                    {task.date || 'Sin fecha'}
-                                </span>
+                        <div className="flex items-center min-h-[38px]">
+                            <div className="flex items-center gap-2 w-36 shrink-0">
+                                <Icon name="CalendarDays" size={13} className="text-slate-400"/>
+                                <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Fechas</span>
+                            </div>
+                            <span className={`text-sm font-semibold ${task.date ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 italic font-normal'}`}>
+                                {task.date || 'Vacío'}
+                            </span>
+                        </div>
+
+                        {/* Prioridad */}
+                        <div className="flex items-center min-h-[38px]" data-dropdown>
+                            <div className="flex items-center gap-2 w-36 shrink-0">
+                                <Icon name="ChevronDown" size={13} className="text-slate-400"/>
+                                <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Prioridad</span>
+                            </div>
+                            <div className="relative flex-1">
+                                <button onClick={() => canAct && setPriorityOpen(o => !o)}
+                                    className={`flex items-center gap-1.5 text-sm font-semibold ${canAct ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} transition-opacity`}>
+                                    <FlagIcon color={currentPriority?.iconColor || '#94a3b8'} filled={!!currentPriority} size={13}/>
+                                    <span className={currentPriority?.color || 'text-slate-400 italic font-normal'}>
+                                        {currentPriority?.label || 'Vacío'}
+                                    </span>
+                                </button>
+                                {priorityOpen && canAct && (
+                                    <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-44" data-dropdown>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Prioridad</p>
+                                        {PRIORITIES.map(p => (
+                                            <button key={p.id} onClick={() => { onChangePriority(task, type, p.id); setPriorityOpen(false); }}
+                                                className={`w-full flex items-center gap-3 px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left ${p.color}`}>
+                                                <FlagIcon color={p.iconColor} filled size={14}/>
+                                                {p.label}
+                                                {task.priority === p.id && <Icon name="Check" size={12} className="ml-auto text-slate-400"/>}
+                                            </button>
+                                        ))}
+                                        {task.priority && (
+                                            <button onClick={() => { onChangePriority(task, type, null); setPriorityOpen(false); }}
+                                                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-t border-slate-100 dark:border-slate-700 mt-1">
+                                                <Icon name="X" size={12}/> Quitar prioridad
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
                         {/* Cliente */}
-                        <div>
-                            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Cliente</p>
-                            <div className="flex items-center gap-2 py-1 -mx-1 px-1">
-                                {client ? (
-                                    <>
-                                        <div className="w-5 h-5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-[9px] shrink-0">{client.name?.charAt(0).toUpperCase()}</div>
-                                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{client.name}</span>
-                                    </>
-                                ) : <span className="text-sm text-slate-400 italic">Interno</span>}
+                        <div className="flex items-center min-h-[38px]">
+                            <div className="flex items-center gap-2 w-36 shrink-0">
+                                <Icon name="Briefcase" size={13} className="text-slate-400"/>
+                                <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Cliente</span>
                             </div>
+                            {client ? (
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-4 h-4 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-[9px] shrink-0">{client.name?.charAt(0).toUpperCase()}</div>
+                                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{client.name}</span>
+                                </div>
+                            ) : <span className="text-sm text-slate-400 italic font-normal">Interno</span>}
                         </div>
 
-                        {/* Jerarquía / Categoría */}
-                        {type === 'editingTask' && (
-                            <div>
-                                <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Jerarquía</p>
-                                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800">{getEditingHierarchyId(task).toUpperCase()}</span>
-                            </div>
-                        )}
-                        {type === 'managementTask' && task.category && (
-                            <div>
-                                <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Categoría</p>
-                                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{task.category}</span>
-                            </div>
-                        )}
-
                         {/* Tiempo */}
-                        <div>
-                            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Tiempo registrado</p>
+                        <div className="flex items-center min-h-[38px]">
+                            <div className="flex items-center gap-2 w-36 shrink-0">
+                                <Icon name="Timer" size={13} className="text-slate-400"/>
+                                <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Registrar el tie...</span>
+                            </div>
                             <div className="flex items-center gap-2">
                                 {timerRunning ? (
                                     <>
-                                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0"/>
-                                        <span className="text-sm font-black text-red-500 dark:text-red-400 tabular-nums">{formatDuration(timerElapsed)}</span>
+                                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0"/>
+                                        <span className="text-sm font-black text-red-500 tabular-nums">{formatDuration(timerElapsed)}</span>
                                         <button onClick={handleStopTimer} disabled={savingTime}
-                                            className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors disabled:opacity-60">
+                                            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-60">
                                             {savingTime ? <Icon name="Loader2" size={10} className="animate-spin"/> : <Icon name="Square" size={10}/>}
                                             {savingTime ? '...' : 'Detener'}
                                         </button>
                                     </>
                                 ) : (
-                                    <>
-                                        <Icon name="Timer" size={13} className="text-slate-400"/>
-                                        <span className={`text-sm ${totalLoggedMs > 0 ? 'font-black text-emerald-600 dark:text-emerald-400' : 'text-slate-400 italic'}`}>
-                                            {totalLoggedMs > 0 ? formatDuration(totalLoggedMs) : 'Sin tiempo'}
+                                    <button onClick={() => canAct && (setTimerElapsed(0), setTimerRunning(true))}
+                                        className={`flex items-center gap-1.5 text-sm ${canAct ? 'cursor-pointer' : 'cursor-default'}`}>
+                                        <span className="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center shrink-0">
+                                            {totalLoggedMs > 0 && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/>}
                                         </span>
-                                        {canAct && (
-                                            <button onClick={() => { setTimerElapsed(0); setTimerRunning(true); }}
-                                                className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors">
-                                                <Icon name="Play" size={10}/> Iniciar
-                                            </button>
-                                        )}
-                                    </>
+                                        <span className={totalLoggedMs > 0 ? 'font-black text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}>
+                                            {totalLoggedMs > 0 ? formatDuration(totalLoggedMs) : 'Agregar tiempo'}
+                                        </span>
+                                    </button>
                                 )}
                             </div>
-                            {timeEntries.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                    {[...timeEntries].reverse().slice(0,3).map(e => (
-                                        <div key={e.id} className="flex items-center text-xs gap-2 text-slate-400">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"/>
-                                            <span className="font-bold text-slate-600 dark:text-slate-300">{formatDuration(e.durationMs)}</span>
-                                            <span className="truncate">{e.authorName}</span>
-                                            <span className="ml-auto shrink-0">{relativeTime(e.loggedAt)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
                         </div>
+
+                        {/* Jerarquía / Categoría */}
+                        {type === 'editingTask' && (
+                            <div className="flex items-center min-h-[38px]">
+                                <div className="flex items-center gap-2 w-36 shrink-0">
+                                    <Icon name="ListTree" size={13} className="text-slate-400"/>
+                                    <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Jerarquía</span>
+                                </div>
+                                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400">{getEditingHierarchyId(task).toUpperCase()}</span>
+                            </div>
+                        )}
+                        {type === 'managementTask' && task.category && (
+                            <div className="flex items-center min-h-[38px]">
+                                <div className="flex items-center gap-2 w-36 shrink-0">
+                                    <Icon name="ListTree" size={13} className="text-slate-400"/>
+                                    <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Categoría</span>
+                                </div>
+                                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{task.category}</span>
+                            </div>
+                        )}
 
                         {/* Fecha creación */}
                         {task.createdAt && (
-                            <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
-                                <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Creado</p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    {new Date(task.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
-                                    <br/>{new Date(task.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                                </p>
+                            <div className="flex items-center min-h-[38px] col-span-2 border-t border-slate-100 dark:border-slate-800">
+                                <div className="flex items-center gap-2 w-36 shrink-0">
+                                    <Icon name="CalendarIcon" size={13} className="text-slate-400"/>
+                                    <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Creado</span>
+                                </div>
+                                <span className="text-sm text-slate-500 dark:text-slate-400">
+                                    {new Date(task.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })} · {new Date(task.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
                             </div>
                         )}
                     </div>
+
+                    {/* Descripción */}
+                    <div className="mb-6">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Icon name="FileText" size={13} className="text-slate-400"/>
+                            <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Descripción</span>
+                        </div>
+                        {task.notes
+                            ? <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed pl-5">{task.notes}</p>
+                            : <button onClick={canAct ? () => onEdit(task, type) : undefined}
+                                className={`flex items-center gap-2 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors pl-5 ${canAct ? 'cursor-pointer' : ''}`}>
+                                {canAct ? 'Agregar descripción' : 'Sin descripción...'}
+                              </button>
+                        }
+                    </div>
+
+                    {/* Agregar campos */}
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-5 mb-5">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Icon name="Plus" size={13} className="text-slate-400"/>
+                            <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Agregar campos</span>
+                        </div>
+                        <button className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors pl-5 opacity-60 cursor-default">
+                            <Icon name="Plus" size={13}/> Crea un campo en esta lista
+                        </button>
+                    </div>
+
+                    {/* Agregar subtarea */}
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-5 mb-5">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Icon name="ArrowRight" size={13} className="text-slate-400"/>
+                            <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Agregar subtarea</span>
+                        </div>
+                        <button className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors pl-5 opacity-60 cursor-default">
+                            <Icon name="Plus" size={13}/> Add Tarea
+                            <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">Próximamente</span>
+                        </button>
+                    </div>
+
+                    {/* Listas de control */}
+                    {(() => {
+                        const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+                        const done = checklist.filter(i => i.done).length;
+                        const pct = checklist.length > 0 ? Math.round((done / checklist.length) * 100) : 0;
+                        const toggleItem = (id) => onUpdateChecklist(task, type, checklist.map(i => i.id === id ? { ...i, done: !i.done } : i));
+                        const deleteItem = (id) => onUpdateChecklist(task, type, checklist.filter(i => i.id !== id));
+                        const addItem = () => {
+                            if (!newCheckItem.trim()) return;
+                            onUpdateChecklist(task, type, [...checklist, { id: Math.random().toString(36).slice(2,10), text: newCheckItem.trim(), done: false }]);
+                            setNewCheckItem(''); setAddingCheck(false);
+                        };
+                        return (
+                            <div className="border-t border-slate-100 dark:border-slate-800 pt-5">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Icon name="CheckSquare" size={13} className="text-slate-400"/>
+                                    <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Listas de control</span>
+                                    {checklist.length > 0 && (
+                                        <>
+                                            <span className="text-xs text-slate-400 ml-1">{done}/{checklist.length}</span>
+                                            <span className="ml-auto text-xs font-bold text-slate-400">{pct}%</span>
+                                        </>
+                                    )}
+                                </div>
+                                {checklist.length > 0 && (
+                                    <div className="h-1 bg-slate-100 dark:bg-slate-800 rounded-full mb-3 mx-5 overflow-hidden">
+                                        <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{width:`${pct}%`}}/>
+                                    </div>
+                                )}
+                                <div className="space-y-0.5 pl-5">
+                                    {checklist.map(item => (
+                                        <div key={item.id} className="flex items-center gap-3 group py-1.5 px-2 -mx-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                            <button onClick={() => toggleItem(item.id)}
+                                                className={`w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-all ${item.done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600 hover:border-emerald-400'}`}>
+                                                {item.done && <Icon name="Check" size={10} className="text-white"/>}
+                                            </button>
+                                            <span className={`flex-1 text-sm ${item.done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}`}>{item.text}</span>
+                                            <button onClick={() => deleteItem(item.id)} className="opacity-0 group-hover:opacity-100 p-1 rounded text-slate-400 hover:text-red-400 transition-all">
+                                                <Icon name="X" size={11}/>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                                {addingCheck ? (
+                                    <div className="flex gap-3 items-center mt-2 pl-5 pr-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/40">
+                                        <div className="w-4 h-4 rounded border-2 border-slate-300 dark:border-slate-600 shrink-0"/>
+                                        <input autoFocus value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter') addItem(); if (e.key === 'Escape') { setAddingCheck(false); setNewCheckItem(''); } }}
+                                            placeholder="Nombre del elemento... (Enter para guardar)"
+                                            className="flex-1 text-sm bg-transparent outline-none text-slate-700 dark:text-slate-200 placeholder-slate-400"
+                                        />
+                                        <button onClick={() => { setAddingCheck(false); setNewCheckItem(''); }} className="text-slate-400 hover:text-slate-600 transition-colors"><Icon name="X" size={13}/></button>
+                                    </div>
+                                ) : (
+                                    <button onClick={() => canAct && setAddingCheck(true)}
+                                        className={`flex items-center gap-2 mt-2 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors pl-5 ${!canAct ? 'opacity-40 cursor-default' : ''}`}>
+                                        <Icon name="Plus" size={13}/> Crear lista de control
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })()}
+
+                </div>
+            </div>
+
+            </div>{/* end LEFT panel */}
+
+            {/* RIGHT — Actividad */}
+            <div className="w-[300px] shrink-0 border-l border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900">
+
+                {/* Header */}
+                <div className="h-11 flex items-center px-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+                    <span className="font-black text-sm text-slate-700 dark:text-slate-200 flex-1">Actividad</span>
+                    {totalLoggedMs > 0 && (
+                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                            <Icon name="Clock" size={11}/> {formatDuration(totalLoggedMs)}
+                        </span>
+                    )}
                 </div>
 
-            </div>
-        </div>
+                {/* Feed */}
+                <div className="flex-1 overflow-y-auto custom-scroll px-4 py-4 space-y-4">
+                    {activityFeed.length === 0 && (
+                        <p className="text-sm text-slate-400 text-center pt-8">Sin actividad aún</p>
+                    )}
+                    {activityFeed.map(item => item._kind === 'time' ? (
+                        <div key={item.id} className="flex gap-2.5 items-start">
+                            <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                                <Icon name="Clock" size={11} className="text-emerald-600 dark:text-emerald-400"/>
+                            </div>
+                            <div className="flex-1 pt-0.5">
+                                <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug">
+                                    <span className="font-black text-slate-700 dark:text-slate-200">{item.authorName}</span>
+                                    {' '}registró{' '}
+                                    <span className="font-black text-emerald-600 dark:text-emerald-400">{formatDuration(item.durationMs)}</span>
+                                </p>
+                                <p className="text-[10px] text-slate-400 mt-0.5">{relativeTime(item.loggedAt)}</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div key={item.id} className="flex gap-2.5">
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5">
+                                {(item.authorName || 'U').slice(0,2).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-baseline gap-2 mb-1">
+                                    <span className="text-xs font-black text-slate-700 dark:text-slate-200">{item.authorName || 'Usuario'}</span>
+                                    <span className="text-[10px] text-slate-400">{relativeTime(item.createdAt)}</span>
+                                </div>
+                                <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl rounded-tl-none px-3 py-2">
+                                    <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed break-words">{item.text}</p>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Comment input */}
+                <div className="border-t border-slate-200 dark:border-slate-800 p-3 shrink-0">
+                    <div className="flex gap-2">
+                        <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5">
+                            {(currentUserProfile?.name || 'U').slice(0,2).toUpperCase()}
+                        </div>
+                        <div className="flex-1">
+                            <textarea ref={commentInputRef} value={commentText} onChange={e => setCommentText(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmitComment(); }}
+                                placeholder="Escribe un comentario..."
+                                rows={commentText ? 3 : 1}
+                                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500/50 resize-none text-slate-700 dark:text-slate-200 placeholder-slate-400 transition-all"
+                            />
+                            {commentText.trim() && (
+                                <div className="flex items-center justify-end mt-1.5 gap-2">
+                                    <span className="text-[10px] text-slate-400">Ctrl+Enter</span>
+                                    <button onClick={handleSubmitComment} disabled={submitting}
+                                        className="flex items-center gap-1 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg disabled:opacity-60 transition-colors">
+                                        {submitting ? <Icon name="Loader2" size={11} className="animate-spin"/> : <Icon name="Send" size={11}/>}
+                                        {submitting ? '...' : 'Enviar'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+            </div>{/* end RIGHT panel */}
+
+        </div>{/* end modal container */}
+        </div>{/* end backdrop */}
     );
 };
 
