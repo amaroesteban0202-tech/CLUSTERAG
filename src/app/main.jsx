@@ -2245,6 +2245,37 @@ function App() {
         await updateDoc(dataDoc(col, task.id), { checklist, updatedAt: nowIso() });
     };
 
+    const addTaskAttachment = async (task, type, file) => {
+        const colMap = { accountTask: 'account_tasks', editingTask: 'editing', managementTask: 'management_tasks' };
+        const col = colMap[type];
+        if (!col || !file) return;
+        const MAX_SIZE = 8 * 1024 * 1024; // 8 MB
+        if (file.size > MAX_SIZE) { alert('El archivo es demasiado grande (máx. 8 MB)'); return; }
+        const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+        const newAttachment = {
+            id: Math.random().toString(36).slice(2, 10),
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            data: base64,
+            uploadedBy: currentUserProfile?.name || (authEmail ? authEmail.split('@')[0] : 'Usuario'),
+            uploadedAt: nowIso()
+        };
+        await updateDoc(dataDoc(col, task.id), { attachments: [...(task.attachments || []), newAttachment], updatedAt: nowIso() });
+    };
+
+    const removeTaskAttachment = async (task, type, attachmentId) => {
+        const colMap = { accountTask: 'account_tasks', editingTask: 'editing', managementTask: 'management_tasks' };
+        const col = colMap[type];
+        if (!col) return;
+        await updateDoc(dataDoc(col, task.id), { attachments: (task.attachments || []).filter(a => a.id !== attachmentId), updatedAt: nowIso() });
+    };
+
     const addEvent = async (data) => {
         await runMutation({
             permission: 'manage_calendar',
@@ -2607,7 +2638,7 @@ function App() {
             {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
             <EventActionModal config={eventAction} canEdit={canEditActivity(eventAction.type)} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
             <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} users={managementUsers} canEditActivity={canEditActivity} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
-            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} onChangeStatus={(task, type, newStatus) => { if (type === 'accountTask') changeAccountTaskStatus(task, newStatus); else if (type === 'editingTask') changeEditingTaskStatus(task, newStatus); else if (type === 'managementTask') changeManagementTaskStatus(task, newStatus); }} onAddComment={addTaskComment} onAddTimeEntry={addTaskTimeEntry} onUpdateChecklist={updateTaskChecklist} onChangePriority={changeTaskPriority} onChangeAssignee={changeTaskAssignee} onDelete={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setDeleteConfirm({ isOpen: true, type, id: task.id, title: task.title }); }} currentUserProfile={currentUserProfile} accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} />
+            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} onChangeStatus={(task, type, newStatus) => { if (type === 'accountTask') changeAccountTaskStatus(task, newStatus); else if (type === 'editingTask') changeEditingTaskStatus(task, newStatus); else if (type === 'managementTask') changeManagementTaskStatus(task, newStatus); }} onAddComment={addTaskComment} onAddTimeEntry={addTaskTimeEntry} onUpdateChecklist={updateTaskChecklist} onChangePriority={changeTaskPriority} onChangeAssignee={changeTaskAssignee} onAddAttachment={addTaskAttachment} onRemoveAttachment={removeTaskAttachment} onDelete={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setDeleteConfirm({ isOpen: true, type, id: task.id, title: task.title }); }} currentUserProfile={currentUserProfile} accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} />
         </div>
     );
 }
@@ -4501,10 +4532,12 @@ const STATUS_COLOR_CLASSES = {
     violet:  'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-300 dark:border-violet-500/40',
 };
 
-const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onAddTimeEntry, onUpdateChecklist, onChangePriority, onChangeAssignee, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
+const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onAddTimeEntry, onUpdateChecklist, onChangePriority, onChangeAssignee, onAddAttachment, onRemoveAttachment, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
     const [commentText, setCommentText] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [statusOpen, setStatusOpen] = useState(false);
+    const [uploadingFile, setUploadingFile] = useState(false);
+    const fileInputRef = useRef(null);
     const [timerRunning, setTimerRunning] = useState(false);
     const [timerElapsed, setTimerElapsed] = useState(0);
     const [savingTime, setSavingTime] = useState(false);
@@ -4743,6 +4776,85 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                         <button onClick={() => canAct && setAddingCheck(true)}
                                             className={`flex items-center gap-2 mt-2 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors px-3 py-1 -mx-3 ${!canAct ? 'opacity-40 cursor-default' : ''}`}>
                                             <Icon name="Plus" size={13}/> Agregar elemento
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })()}
+
+                        {/* Adjuntos */}
+                        {(() => {
+                            const attachments = Array.isArray(task.attachments) ? task.attachments : [];
+                            const handleFileChange = async (e) => {
+                                const file = e.target.files && e.target.files[0];
+                                if (!file) return;
+                                setUploadingFile(true);
+                                try { await onAddAttachment(task, type, file); }
+                                finally { setUploadingFile(false); e.target.value = ''; }
+                            };
+                            const formatFileSize = (bytes) => {
+                                if (bytes < 1024) return bytes + ' B';
+                                if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+                                return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+                            };
+                            const downloadFile = (att) => {
+                                const a = document.createElement('a');
+                                a.href = att.data;
+                                a.download = att.name;
+                                a.click();
+                            };
+                            const isImage = (att) => att.type && att.type.startsWith('image/');
+                            return (
+                                <div className="mb-8">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Icon name="Inbox" size={13} className="text-slate-400"/>
+                                        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Adjuntos</p>
+                                        {attachments.length > 0 && <span className="text-xs text-slate-400 ml-1">{attachments.length}</span>}
+                                        {canAct && (
+                                            <button onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                                                disabled={uploadingFile}
+                                                className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50">
+                                                {uploadingFile ? <Icon name="Loader2" size={11} className="animate-spin"/> : <Icon name="Plus" size={11}/>}
+                                                {uploadingFile ? 'Subiendo...' : 'Adjuntar'}
+                                            </button>
+                                        )}
+                                    </div>
+                                    <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.mp4,.mov"/>
+                                    {attachments.length > 0 && (
+                                        <div className="space-y-2">
+                                            {attachments.map(att => (
+                                                <div key={att.id} className="flex items-center gap-3 group p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800/50 transition-colors">
+                                                    {isImage(att) ? (
+                                                        <img src={att.data} alt={att.name} className="w-10 h-10 rounded-lg object-cover shrink-0 border border-slate-200 dark:border-slate-700"/>
+                                                    ) : (
+                                                        <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                                                            <Icon name="FileText" size={16} className="text-slate-400"/>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{att.name}</p>
+                                                        <p className="text-xs text-slate-400">{formatFileSize(att.size)} · {att.uploadedBy} · {relativeTime(att.uploadedAt)}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                        <button onClick={() => downloadFile(att)} title="Descargar"
+                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                                                            <Icon name="ArrowRight" size={13}/>
+                                                        </button>
+                                                        {canAct && (
+                                                            <button onClick={() => onRemoveAttachment(task, type, att.id)} title="Eliminar"
+                                                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+                                                                <Icon name="X" size={13}/>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {attachments.length === 0 && (
+                                        <button onClick={() => canAct && fileInputRef.current && fileInputRef.current.click()}
+                                            className={`flex items-center gap-2 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors px-3 py-1 -mx-3 ${!canAct ? 'opacity-40 cursor-default' : ''}`}>
+                                            <Icon name="Plus" size={13}/> Adjuntar archivo
                                         </button>
                                     )}
                                 </div>
