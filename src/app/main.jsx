@@ -2210,18 +2210,41 @@ function App() {
         await updateDoc(dataDoc(col, task.id), { contextId: contextId || null, updatedAt: nowIso() });
     };
 
-    const addTaskComment = async (task, type, text) => {
+    const changeTaskAssignees = async (task, type, assigneeIds) => {
+        const colMap = { accountTask: 'account_tasks', editingTask: 'editing', managementTask: 'management_tasks' };
+        const col = colMap[type];
+        if (!col) return;
+        await updateDoc(dataDoc(col, task.id), { assignees: assigneeIds, updatedAt: nowIso() });
+    };
+
+    const sendNotification = async (payload) => {
+        try {
+            await apiFetch('/api/notifications/send', { method: 'POST', body: JSON.stringify({ ...payload, appUrl: window.location.origin }) });
+        } catch(e) { console.warn('[notify]', e.message); }
+    };
+
+    const addTaskComment = async (task, type, text, mentionedIds = []) => {
         const colMap = { accountTask: 'account_tasks', editingTask: 'editing', managementTask: 'management_tasks' };
         const col = colMap[type];
         if (!col || !text) return;
+        const senderName = currentUserProfile?.name || (authEmail ? authEmail.split('@')[0] : 'Usuario');
         const newComment = {
             id: Math.random().toString(36).slice(2, 10),
             text,
-            authorName: currentUserProfile?.name || (authEmail ? authEmail.split('@')[0] : 'Usuario'),
+            authorName: senderName,
             authorId: currentUserProfile?.id || '',
             createdAt: nowIso()
         };
         await updateDoc(dataDoc(col, task.id), { comments: [...(task.comments || []), newComment], updatedAt: nowIso() });
+        // Notificaciones de mención
+        const allPeople = [...(managementUsers || []), ...(managers || []), ...(editors || [])];
+        for (const uid of mentionedIds) {
+            const person = allPeople.find(p => p.id === uid);
+            const email = person?.email || person?.authEmail;
+            if (email && uid !== (currentUserProfile?.id || '')) {
+                sendNotification({ to: email, type: 'mention', senderName, taskTitle: task.title, taskType: type, comment: text });
+            }
+        }
     };
 
     const addTaskTimeEntry = async (task, type, durationMs) => {
@@ -2639,7 +2662,7 @@ function App() {
             {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
             <EventActionModal config={eventAction} canEdit={canEditActivity(eventAction.type)} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
             <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} users={managementUsers} canEditActivity={canEditActivity} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
-            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} onChangeStatus={(task, type, newStatus) => { if (type === 'accountTask') changeAccountTaskStatus(task, newStatus); else if (type === 'editingTask') changeEditingTaskStatus(task, newStatus); else if (type === 'managementTask') changeManagementTaskStatus(task, newStatus); }} onAddComment={addTaskComment} onAddTimeEntry={addTaskTimeEntry} onUpdateChecklist={updateTaskChecklist} onChangePriority={changeTaskPriority} onChangeAssignee={changeTaskAssignee} onAddAttachment={addTaskAttachment} onRemoveAttachment={removeTaskAttachment} onDelete={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setDeleteConfirm({ isOpen: true, type, id: task.id, title: task.title }); }} currentUserProfile={currentUserProfile} accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} />
+            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} onChangeStatus={(task, type, newStatus) => { if (type === 'accountTask') changeAccountTaskStatus(task, newStatus); else if (type === 'editingTask') changeEditingTaskStatus(task, newStatus); else if (type === 'managementTask') changeManagementTaskStatus(task, newStatus); }} onAddComment={addTaskComment} onAddTimeEntry={addTaskTimeEntry} onUpdateChecklist={updateTaskChecklist} onChangePriority={changeTaskPriority} onChangeAssignee={changeTaskAssignee} onChangeAssignees={changeTaskAssignees} sendNotification={sendNotification} onAddAttachment={addTaskAttachment} onRemoveAttachment={removeTaskAttachment} onDelete={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setDeleteConfirm({ isOpen: true, type, id: task.id, title: task.title }); }} currentUserProfile={currentUserProfile} accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} />
         </div>
     );
 }
@@ -4533,7 +4556,7 @@ const STATUS_COLOR_CLASSES = {
     violet:  'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-300 dark:border-violet-500/40',
 };
 
-const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onAddTimeEntry, onUpdateChecklist, onChangePriority, onChangeAssignee, onAddAttachment, onRemoveAttachment, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
+const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onAddTimeEntry, onUpdateChecklist, onChangePriority, onChangeAssignee, onChangeAssignees, sendNotification, onAddAttachment, onRemoveAttachment, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
     const [commentText, setCommentText] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [statusOpen, setStatusOpen] = useState(false);
@@ -4546,6 +4569,10 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
     const [addingCheck, setAddingCheck] = useState(false);
     const [priorityOpen, setPriorityOpen] = useState(false);
     const [assigneeOpen, setAssigneeOpen] = useState(false);
+    const [mentionOpen, setMentionOpen] = useState(false);
+    const [mentionQuery, setMentionQuery] = useState('');
+    const [mentionStart, setMentionStart] = useState(-1);
+    const [mentionedIds, setMentionedIds] = useState([]);
 
     // Cerrar dropdowns al click fuera
     useEffect(() => {
@@ -4586,6 +4613,8 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
     const assignee = type === 'accountTask' ? managers.find(m => m.id === task.contextId)
                    : type === 'managementTask' ? users.find(u => u.id === task.contextId)
                    : editors.find(e => e.id === task.contextId);
+    // Multi-assignees: use task.assignees if present, else fall back to contextId
+    const currentAssigneeIds = Array.isArray(task.assignees) ? task.assignees : (task.contextId ? [task.contextId] : []);
 
     const tagColor  = type === 'accountTask' ? 'indigo' : type === 'managementTask' ? 'violet' : 'amber';
     const typeLabel = type === 'accountTask' ? 'Account' : type === 'managementTask' ? 'Gestión' : 'Edición';
@@ -4617,8 +4646,36 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
     const handleSubmitComment = async () => {
         if (!commentText.trim() || submitting) return;
         setSubmitting(true);
-        try { await onAddComment(task, type, commentText.trim()); setCommentText(''); }
+        try { await onAddComment(task, type, commentText.trim(), mentionedIds); setCommentText(''); setMentionedIds([]); }
         finally { setSubmitting(false); }
+    };
+
+    const handleCommentChange = (e) => {
+        const val = e.target.value;
+        setCommentText(val);
+        const pos = e.target.selectionStart;
+        const before = val.slice(0, pos);
+        const atMatch = before.match(/@([\wÀ-ž]*)$/);
+        if (atMatch) {
+            setMentionOpen(true);
+            setMentionQuery(atMatch[1]);
+            setMentionStart(before.lastIndexOf('@'));
+        } else {
+            setMentionOpen(false);
+            setMentionQuery('');
+            setMentionStart(-1);
+        }
+    };
+
+    const insertMention = (person) => {
+        const before = commentText.slice(0, mentionStart);
+        const after = commentText.slice(mentionStart + 1 + mentionQuery.length);
+        setCommentText(before + '@' + person.name + ' ' + after);
+        setMentionedIds(prev => prev.includes(person.id) ? prev : [...prev, person.id]);
+        setMentionOpen(false);
+        setMentionQuery('');
+        setMentionStart(-1);
+        setTimeout(() => commentInputRef.current && commentInputRef.current.focus(), 0);
     };
 
     const FieldRow = ({ icon, label, children }) => (
@@ -4641,6 +4698,8 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
     ];
     const currentPriority = PRIORITIES.find(p => p.id === task.priority);
     const peoplePool = type === 'accountTask' ? managers : type === 'editingTask' ? editors : users;
+    const allMentionables = [...(users || []), ...(managers || []), ...(editors || [])].filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i);
+    const mentionSuggestions = mentionOpen ? allMentionables.filter(p => p.name && p.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 6) : [];
 
     const FlagIcon = ({ color, filled, size = 13 }) => (
         <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? color : 'none'} stroke={color || 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -4879,13 +4938,31 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[10px] shrink-0">
                                     {(currentUserProfile?.name || 'U').slice(0,2).toUpperCase()}
                                 </div>
-                                <div className="flex-1">
-                                    <textarea ref={commentInputRef} value={commentText} onChange={e => setCommentText(e.target.value)}
-                                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmitComment(); }}
-                                        placeholder="Escribe un comentario... (Ctrl+Enter para enviar)"
+                                <div className="flex-1 relative">
+                                    <textarea ref={commentInputRef} value={commentText} onChange={handleCommentChange}
+                                        onKeyDown={e => {
+                                            if (mentionOpen && e.key === 'Escape') { setMentionOpen(false); e.preventDefault(); return; }
+                                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmitComment();
+                                        }}
+                                        placeholder="Escribe un comentario... usa @ para mencionar (Ctrl+Enter para enviar)"
                                         rows={commentText ? 3 : 1}
                                         className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 resize-none text-slate-700 dark:text-slate-200 placeholder-slate-400 transition-all"
                                     />
+                                    {/* @mention dropdown */}
+                                    {mentionOpen && mentionSuggestions.length > 0 && (
+                                        <div className="absolute left-0 bottom-full mb-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-52">
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-3 pt-1.5 pb-1">Mencionar</p>
+                                            {mentionSuggestions.map(p => (
+                                                <button key={p.id} onMouseDown={e => { e.preventDefault(); insertMention(p); }}
+                                                    className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                                    <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0">
+                                                        {p.name.slice(0,2).toUpperCase()}
+                                                    </div>
+                                                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1 text-left">{p.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                     {commentText.trim() && (
                                         <div className="flex justify-end mt-2">
                                             <button onClick={handleSubmitComment} disabled={submitting}
@@ -4926,7 +5003,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                                 <span className="text-xs text-slate-400">{relativeTime(item.createdAt)}</span>
                                             </div>
                                             <div className="bg-slate-50 dark:bg-slate-800 rounded-xl rounded-tl-none px-4 py-3 border border-slate-200 dark:border-slate-700">
-                                                <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words">{item.text}</p>
+                                                <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words">{item.text.split(/(@\S+)/g).map((part, i) => part.startsWith('@') ? <span key={i} className="text-purple-600 dark:text-purple-400 font-bold">{part}</span> : part)}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -4942,37 +5019,66 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
 
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Detalles</p>
 
-                        {/* Asignado */}
+                        {/* Asignados */}
                         <div data-dropdown className="relative">
-                            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Asignado</p>
-                            <button onClick={() => canAct && setAssigneeOpen(o => !o)}
-                                className={`flex items-center gap-2 w-full rounded-lg py-1 ${canAct ? 'hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer' : 'cursor-default'} transition-colors -mx-1 px-1`}>
-                                {assignee ? (
-                                    <>
-                                        <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0">
-                                            {assignee.name.slice(0,2).toUpperCase()}
+                            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Asignados</p>
+                            {/* Avatars row */}
+                            <div className="flex items-center gap-1 flex-wrap min-h-[28px] py-0.5 -mx-1 px-1">
+                                {currentAssigneeIds.length > 0 ? currentAssigneeIds.map(uid => {
+                                    const person = peoplePool.find(p => p.id === uid);
+                                    if (!person) return null;
+                                    return (
+                                        <div key={uid} className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-full pl-0.5 pr-2 py-0.5 group">
+                                            <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[8px] shrink-0">
+                                                {person.name.slice(0,2).toUpperCase()}
+                                            </div>
+                                            <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 leading-none">{person.name.split(' ')[0]}</span>
+                                            {canAct && (
+                                                <button onClick={() => onChangeAssignees(task, type, currentAssigneeIds.filter(id => id !== uid))}
+                                                    className="ml-0.5 text-slate-400 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
+                                                    <Icon name="X" size={9}/>
+                                                </button>
+                                            )}
                                         </div>
-                                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{assignee.name}</span>
-                                    </>
-                                ) : <span className="text-sm text-slate-400 italic">Sin asignar</span>}
-                            </button>
+                                    );
+                                }) : <span className="text-sm text-slate-400 italic">Sin asignar</span>}
+                                {canAct && (
+                                    <button onClick={() => setAssigneeOpen(o => !o)}
+                                        className="w-6 h-6 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-400 hover:border-purple-400 hover:text-purple-500 transition-colors shrink-0">
+                                        <Icon name="Plus" size={10}/>
+                                    </button>
+                                )}
+                            </div>
                             {assigneeOpen && canAct && (
                                 <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-52" data-dropdown>
                                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Asignar a</p>
-                                    {peoplePool.map(p => (
-                                        <button key={p.id} onClick={() => { onChangeAssignee(task, type, task.contextId === p.id ? null : p.id); setAssigneeOpen(false); }}
-                                            className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0">
-                                                {p.name.slice(0,2).toUpperCase()}
-                                            </div>
-                                            <span className={`text-sm font-semibold flex-1 ${task.contextId === p.id ? 'text-purple-600 dark:text-purple-400' : 'text-slate-700 dark:text-slate-200'}`}>{p.name}</span>
-                                            {task.contextId === p.id && <Icon name="Check" size={12} className="text-purple-500"/>}
-                                        </button>
-                                    ))}
-                                    {task.contextId && (
-                                        <button onClick={() => { onChangeAssignee(task, type, null); setAssigneeOpen(false); }}
+                                    {peoplePool.map(p => {
+                                        const isChecked = currentAssigneeIds.includes(p.id);
+                                        return (
+                                            <button key={p.id} onClick={() => {
+                                                const newIds = isChecked ? currentAssigneeIds.filter(id => id !== p.id) : [...currentAssigneeIds, p.id];
+                                                onChangeAssignees(task, type, newIds);
+                                                // Notificar al nuevo asignado
+                                                if (!isChecked && sendNotification) {
+                                                    const email = p.email || p.authEmail;
+                                                    if (email) sendNotification({ to: email, type: 'assigned', senderName: currentUserProfile?.name || 'Alguien', taskTitle: task.title, taskType: type });
+                                                }
+                                            }}
+                                                className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${isChecked ? 'bg-purple-500 border-purple-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                                                    {isChecked && <Icon name="Check" size={9} className="text-white"/>}
+                                                </div>
+                                                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0">
+                                                    {p.name.slice(0,2).toUpperCase()}
+                                                </div>
+                                                <span className={`text-sm font-semibold flex-1 ${isChecked ? 'text-purple-600 dark:text-purple-400' : 'text-slate-700 dark:text-slate-200'}`}>{p.name}</span>
+                                            </button>
+                                        );
+                                    })}
+                                    {currentAssigneeIds.length > 0 && (
+                                        <button onClick={() => { onChangeAssignees(task, type, []); setAssigneeOpen(false); }}
                                             className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-t border-slate-100 dark:border-slate-700 mt-1">
-                                            <Icon name="UserX" size={13}/> Quitar asignación
+                                            <Icon name="UserX" size={13}/> Quitar todos
                                         </button>
                                     )}
                                 </div>
