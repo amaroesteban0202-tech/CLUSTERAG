@@ -2657,8 +2657,8 @@ function App() {
             </main>
 
             {toast && <Toast message={toast.message} type={toast.type} />}
-            {modalConfig.isOpen && ['accountTask','editingTask','managementTask'].includes(modalConfig.type) && !modalConfig.isEdit && <CreateTaskModal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} managementUsers={managementUsers} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask, addManagementTask, updateManagementTask, addUserRecord, updateUserRecord }} />}
-            {modalConfig.isOpen && !((['accountTask','editingTask','managementTask'].includes(modalConfig.type)) && !modalConfig.isEdit) && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} managementUsers={managementUsers} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask, addManagementTask, updateManagementTask, addUserRecord, updateUserRecord }} />}
+            {modalConfig.isOpen && ['accountTask','editingTask','managementTask'].includes(modalConfig.type) && <CreateTaskModal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} managementUsers={managementUsers} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask, addManagementTask, updateManagementTask, addUserRecord, updateUserRecord }} />}
+            {modalConfig.isOpen && !['accountTask','editingTask','managementTask'].includes(modalConfig.type) && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} managementUsers={managementUsers} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask, addManagementTask, updateManagementTask, addUserRecord, updateUserRecord }} />}
             {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
             <EventActionModal config={eventAction} canEdit={canEditActivity(eventAction.type)} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
             <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} users={managementUsers} canEditActivity={canEditActivity} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
@@ -5347,19 +5347,33 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
     const [priorityOpen, setPriorityOpen] = useState(false);
     const [datePickerOpen, setDatePickerOpen] = useState(false);
 
-    // Reset when modal opens
+    // Reset / pre-fill when modal opens
     useEffect(() => {
         if (config.isOpen) {
-            setTitle(''); setNotes(''); setShowDesc(false);
-            setAssigneeId(data?.contextId || '');
-            setClientId(data?.clientId || '');
-            setDate(data?.date || '');
-            setPriority(''); setTime(''); setHierarchy('p2');
-            setCategory('seguimiento'); setStatus('editar');
+            if (config.isEdit && data) {
+                setTitle(data.title || '');
+                setNotes(data.notes || '');
+                setShowDesc(!!(data.notes));
+                setAssigneeId(data.contextId || '');
+                setClientId(data.clientId || '');
+                setDate(data.date || '');
+                setPriority(data.priority || '');
+                setTime(data.time || '');
+                setHierarchy(data.hierarchy || data.editingHierarchy || 'p2');
+                setCategory(data.category || 'seguimiento');
+                setStatus(data.status || 'editar');
+            } else {
+                setTitle(''); setNotes(''); setShowDesc(false);
+                setAssigneeId(data?.contextId || '');
+                setClientId(data?.clientId || '');
+                setDate(data?.date || '');
+                setPriority(''); setTime(''); setHierarchy('p2');
+                setCategory('seguimiento'); setStatus('editar');
+            }
             setAssigneeOpen(false); setClientOpen(false);
             setPriorityOpen(false); setDatePickerOpen(false);
         }
-    }, [config.isOpen, config.type]);
+    }, [config.isOpen, config.type, config.isEdit]);
 
     // Close dropdowns on outside click
     useEffect(() => {
@@ -5369,7 +5383,7 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
         return () => document.removeEventListener('mousedown', h);
     }, [assigneeOpen, clientOpen, priorityOpen]);
 
-    if (!config.isOpen || config.isEdit || !['accountTask','editingTask','managementTask'].includes(type)) return null;
+    if (!config.isOpen || !['accountTask','editingTask','managementTask'].includes(type)) return null;
 
     const peoplePool = type === 'accountTask' ? managers : type === 'editingTask' ? editors : managementUsers;
     const assignee   = peoplePool.find(p => p.id === assigneeId);
@@ -5404,9 +5418,15 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
 
     const handleSubmit = () => {
         if (!title.trim()) return;
-        if (type === 'accountTask')     actions.addAccountTask({ date, title: title.trim(), time, contextId: assigneeId, clientId, notes, priority });
-        if (type === 'editingTask')     actions.addEditingTask({ date, title: title.trim(), priority: priority || 'normal', hierarchy, status, notes, contextId: assigneeId, clientId });
-        if (type === 'managementTask')  actions.addManagementTask({ date, title: title.trim(), time, contextId: assigneeId, clientId, category, notes, priority, notificationsEnabled: false });
+        if (config.isEdit && data?.id) {
+            if (type === 'accountTask')    actions.updateAccountTask(data.id, { date, title: title.trim(), time, contextId: assigneeId, clientId, notes, priority });
+            if (type === 'editingTask')    actions.updateEditingTask(data.id, { date, title: title.trim(), priority: priority || 'normal', hierarchy, status, notes, contextId: assigneeId, clientId });
+            if (type === 'managementTask') actions.updateManagementTask(data.id, { date, title: title.trim(), time, contextId: assigneeId, clientId, category, notes, priority, notificationsEnabled: data.notificationsEnabled || false });
+        } else {
+            if (type === 'accountTask')    actions.addAccountTask({ date, title: title.trim(), time, contextId: assigneeId, clientId, notes, priority });
+            if (type === 'editingTask')    actions.addEditingTask({ date, title: title.trim(), priority: priority || 'normal', hierarchy, status, notes, contextId: assigneeId, clientId });
+            if (type === 'managementTask') actions.addManagementTask({ date, title: title.trim(), time, contextId: assigneeId, clientId, category, notes, priority, notificationsEnabled: false });
+        }
         onClose();
     };
 
@@ -5421,7 +5441,7 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
             {/* Header */}
             <div className="flex items-center gap-2 px-6 pt-5 pb-2">
                 <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[11px] font-black uppercase tracking-wide bg-${tagColor}-100 dark:bg-${tagColor}-500/20 text-${tagColor}-700 dark:text-${tagColor}-400`}>
-                    <Icon name={iconName} size={11}/> {typeLabel}
+                    <Icon name={iconName} size={11}/> {config.isEdit ? `Editar ${typeLabel}` : `Nueva ${typeLabel}`}
                 </div>
                 {displayDate && (
                     <span className="text-xs text-slate-400 flex items-center gap-1">
@@ -5605,8 +5625,8 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
                 </button>
                 <button onClick={handleSubmit} disabled={!title.trim()}
                     className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-black text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-${tagColor}-600 hover:bg-${tagColor}-700 shadow-sm`}>
-                    <Icon name="Plus" size={14}/>
-                    Crear {typeLabel}
+                    <Icon name={config.isEdit ? 'Save' : 'Plus'} size={14}/>
+                    {config.isEdit ? 'Guardar cambios' : `Crear ${typeLabel}`}
                 </button>
             </div>
 
