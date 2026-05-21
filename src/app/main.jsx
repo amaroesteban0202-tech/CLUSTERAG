@@ -3357,16 +3357,24 @@ const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, ow
                     <h2 className="text-xl font-black text-slate-800 dark:text-white">{title}</h2>
                 </div>
                 <div className="flex flex-col lg:flex-row lg:flex-wrap gap-3 w-full min-w-0 lg:w-auto">
-                    <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto max-w-full overflow-x-auto custom-scroll">
-                        <button onClick={() => setFilterMode('date')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'date' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Día Específico</button>
-                        {hasRangeSupport && <button onClick={() => setFilterMode('range')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-1.5 ${filterMode === 'range' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}><Icon name="CalendarRange" size={14}/>Rango</button>}
-                        <button onClick={() => setFilterMode('overdue')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${filterMode === 'overdue' ? `bg-red-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-red-500'}`}>Atrasadas <Icon name="Flame" size={14}/></button>
-                        <button onClick={() => setFilterMode('all')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Ver Todas</button>
-                    </div>
-                    {setOwnershipFilter && (
+                    {/* Filtro por FECHA */}
+                    <div className="flex flex-col gap-0.5">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-1">Fecha</span>
                         <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto max-w-full overflow-x-auto custom-scroll">
-                            <button onClick={() => setOwnershipFilter('all')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Todas</button>
-                            <button onClick={() => setOwnershipFilter('mine')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === 'mine' ? `bg-${btnColor}-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Asignadas a mi</button>
+                            <button onClick={() => setFilterMode('date')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'date' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Día específico</button>
+                            {hasRangeSupport && <button onClick={() => setFilterMode('range')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-1.5 ${filterMode === 'range' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}><Icon name="CalendarRange" size={14}/>Rango</button>}
+                            <button onClick={() => setFilterMode('overdue')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${filterMode === 'overdue' ? `bg-red-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-red-500'}`}>Atrasadas <Icon name="Flame" size={14}/></button>
+                            <button onClick={() => setFilterMode('all')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Todas las fechas</button>
+                        </div>
+                    </div>
+                    {/* Filtro por ASIGNACIÓN */}
+                    {setOwnershipFilter && (
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-1">Asignación</span>
+                            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto max-w-full overflow-x-auto custom-scroll">
+                                <button onClick={() => setOwnershipFilter('all')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Todo el equipo</button>
+                                <button onClick={() => setOwnershipFilter('mine')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === 'mine' ? `bg-${btnColor}-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Asignadas a mí</button>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -3880,14 +3888,19 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
                 {/* Stat cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 flex-1">
                     {columns.map(col => {
-                        const count = tasks.filter(t => t.status === col.id).length;
+                        const filteredCount = filteredTasks.filter(t => t.status === col.id).length;
+                        const totalCount = tasks.filter(t => t.status === col.id).length;
+                        const isFiltered = filteredCount !== totalCount;
                         return (
                             <div key={col.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 flex items-center gap-3">
                                 <div className={`p-2 rounded-lg bg-${col.color}-50 dark:bg-${col.color}-500/20 shrink-0`}>
                                     <Icon name={col.icon} size={16} className={`text-${col.color}-600 dark:text-${col.color}-400`}/>
                                 </div>
                                 <div>
-                                    <p className="text-2xl font-black text-slate-800 dark:text-white leading-none">{count}</p>
+                                    <div className="flex items-baseline gap-1.5">
+                                        <p className="text-2xl font-black text-slate-800 dark:text-white leading-none">{filteredCount}</p>
+                                        {isFiltered && <span className="text-xs font-bold text-slate-400 dark:text-slate-500">/ {totalCount}</span>}
+                                    </div>
                                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-0.5">{col.title}</p>
                                 </div>
                             </div>
@@ -3911,8 +3924,8 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
                     <div className="text-left">
                         <p className="text-xs font-black text-slate-700 dark:text-slate-200">Equipo</p>
                         {membersWithAlert.length > 0
-                            ? <p className="text-[10px] font-bold text-amber-500">{membersWithAlert.length} sin correo</p>
-                            : <p className="text-[10px] font-bold text-emerald-500">Todo en orden</p>
+                            ? <p className="text-[10px] font-bold text-amber-500">{membersWithAlert.length} sin email — ver detalles</p>
+                            : <p className="text-[10px] font-bold text-emerald-500">Todos con email ✓</p>
                         }
                     </div>
                     <Icon name={showTeam ? 'ChevronUp' : 'ChevronDown'} size={14} className="text-slate-400 ml-1"/>
@@ -3938,6 +3951,18 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {/* Indicador de filtros activos */}
+            {(filterMode !== 'all' || ownershipFilter !== 'all' || searchTerm) && (
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Filtros activos:</span>
+                    {filterMode === 'date' && <span className="flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30"><Icon name="Calendar" size={9}/>Fecha: {currentDate}</span>}
+                    {filterMode === 'overdue' && <span className="flex items-center gap-1 text-[10px] font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-500/30"><Icon name="Flame" size={9}/>Solo atrasadas</span>}
+                    {ownershipFilter === 'mine' && <span className="flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30"><Icon name="User" size={9}/>Solo mis tareas</span>}
+                    {searchTerm && <span className="flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700"><Icon name="Search" size={9}/>"{searchTerm}"</span>}
+                    <span className="text-[10px] text-slate-400">— mostrando {filteredTasks.length} de {tasks.length} tareas</span>
                 </div>
             )}
 
