@@ -2203,6 +2203,13 @@ function App() {
         await updateDoc(dataDoc(col, task.id), { priority, updatedAt: nowIso() });
     };
 
+    const changeTaskAssignee = async (task, type, contextId) => {
+        const colMap = { accountTask: 'account_tasks', editingTask: 'editing', managementTask: 'management_tasks' };
+        const col = colMap[type];
+        if (!col) return;
+        await updateDoc(dataDoc(col, task.id), { contextId: contextId || null, updatedAt: nowIso() });
+    };
+
     const addTaskComment = async (task, type, text) => {
         const colMap = { accountTask: 'account_tasks', editingTask: 'editing', managementTask: 'management_tasks' };
         const col = colMap[type];
@@ -2600,7 +2607,7 @@ function App() {
             {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
             <EventActionModal config={eventAction} canEdit={canEditActivity(eventAction.type)} onClose={() => setEventAction({ isOpen: false, event: null, type: null })} onEdit={(event, type) => setModalConfig({ isOpen: true, type, data: event, isEdit: true })} onDelete={(event, type) => setDeleteConfirm({ isOpen: true, type, id: event.id, title: event.title })} />
             <DayDetailsModal config={dayDetailsModal} onClose={() => setDayDetailsModal({ isOpen: false, date: null })} activities={allActivities} clients={clients} managers={managers} editors={editors} users={managementUsers} canEditActivity={canEditActivity} onEdit={(act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true })} onDelete={(act, type) => setDeleteConfirm({ isOpen: true, type, id: act.id, title: act.title })} />
-            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} onChangeStatus={(task, type, newStatus) => { if (type === 'accountTask') changeAccountTaskStatus(task, newStatus); else if (type === 'editingTask') changeEditingTaskStatus(task, newStatus); else if (type === 'managementTask') changeManagementTaskStatus(task, newStatus); }} onAddComment={addTaskComment} onAddTimeEntry={addTaskTimeEntry} onUpdateChecklist={updateTaskChecklist} onChangePriority={changeTaskPriority} onDelete={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setDeleteConfirm({ isOpen: true, type, id: task.id, title: task.title }); }} currentUserProfile={currentUserProfile} accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} />
+            <TaskDetailModal config={taskDetailConfig} onClose={() => setTaskDetailConfig({ isOpen: false, task: null, type: null })} clients={clients} managers={managers} editors={editors} users={managementUsers} canEdit={(type) => canEditActivity(type)} onEdit={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setModalConfig({ isOpen: true, type, data: task, isEdit: true }); }} onChangeStatus={(task, type, newStatus) => { if (type === 'accountTask') changeAccountTaskStatus(task, newStatus); else if (type === 'editingTask') changeEditingTaskStatus(task, newStatus); else if (type === 'managementTask') changeManagementTaskStatus(task, newStatus); }} onAddComment={addTaskComment} onAddTimeEntry={addTaskTimeEntry} onUpdateChecklist={updateTaskChecklist} onChangePriority={changeTaskPriority} onChangeAssignee={changeTaskAssignee} onDelete={(task, type) => { setTaskDetailConfig({ isOpen: false, task: null, type: null }); setDeleteConfirm({ isOpen: true, type, id: task.id, title: task.title }); }} currentUserProfile={currentUserProfile} accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} />
         </div>
     );
 }
@@ -4494,7 +4501,7 @@ const STATUS_COLOR_CLASSES = {
     violet:  'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-300 dark:border-violet-500/40',
 };
 
-const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onAddTimeEntry, onUpdateChecklist, onChangePriority, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
+const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, canEdit, onEdit, onChangeStatus, onAddComment, onAddTimeEntry, onUpdateChecklist, onChangePriority, onChangeAssignee, onDelete, currentUserProfile, accountTasks = [], editingTasks = [], managementTasks = [] }) => {
     const [commentText, setCommentText] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [statusOpen, setStatusOpen] = useState(false);
@@ -4504,6 +4511,21 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
     const [newCheckItem, setNewCheckItem] = useState('');
     const [addingCheck, setAddingCheck] = useState(false);
     const [priorityOpen, setPriorityOpen] = useState(false);
+    const [assigneeOpen, setAssigneeOpen] = useState(false);
+
+    // Cerrar dropdowns al click fuera
+    useEffect(() => {
+        if (!statusOpen && !priorityOpen && !assigneeOpen) return;
+        const handler = (e) => {
+            if (!e.target.closest('[data-dropdown]')) {
+                setStatusOpen(false);
+                setPriorityOpen(false);
+                setAssigneeOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [statusOpen, priorityOpen, assigneeOpen]);
     const timerStartRef = useRef(null);
     const timerIntervalRef = useRef(null);
     const commentInputRef = useRef(null);
@@ -4617,18 +4639,18 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                             {/* COL LEFT */}
                             <div>
                                 {/* Estado */}
-                                <div className="flex items-center min-h-[38px] group hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 cursor-pointer transition-colors" onClick={() => canAct && setStatusOpen(o => !o)}>
+                                <div className="flex items-center min-h-[38px] group hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 cursor-pointer transition-colors" onClick={() => canAct && setStatusOpen(o => !o)} data-dropdown>
                                     <div className="flex items-center gap-2 w-40 shrink-0">
                                         <Icon name="Circle" size={13} className="text-slate-400"/>
                                         <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Estado</span>
                                     </div>
-                                    <div className="relative">
+                                    <div className="relative" data-dropdown>
                                         <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-black border cursor-pointer ${STATUS_COLOR_CLASSES[currentStatus?.color || 'slate']}`}>
                                             {currentStatus?.label || task.status}
                                             {canAct && <Icon name="ChevronRight" size={9}/>}
                                         </div>
                                         {statusOpen && canAct && (
-                                            <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 min-w-[180px]" onClick={e => e.stopPropagation()}>
+                                            <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 min-w-[180px]" data-dropdown>
                                                 {statuses.map(s => (
                                                     <button key={s.id} onClick={() => { onChangeStatus(task, type, s.id); setStatusOpen(false); }}
                                                         className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left ${task.status === s.id ? 'text-purple-600 dark:text-purple-400' : 'text-slate-700 dark:text-slate-200'}`}>
@@ -4691,49 +4713,81 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                             {/* COL RIGHT */}
                             <div>
                                 {/* Personas asignadas */}
-                                <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors">
-                                    <div className="flex items-center gap-2 w-44 shrink-0">
-                                        <Icon name="Users" size={13} className="text-slate-400"/>
-                                        <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Personas asigna...</span>
-                                    </div>
-                                    {assignee ? (
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[8px]">
-                                                {assignee.name.slice(0,2).toUpperCase()}
+                                {(() => {
+                                    const peoplePool = type === 'accountTask' ? managers : type === 'editingTask' ? editors : users;
+                                    return (
+                                        <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors relative" data-dropdown>
+                                            <div className="flex items-center gap-2 w-44 shrink-0">
+                                                <Icon name="Users" size={13} className="text-slate-400"/>
+                                                <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Personas asigna...</span>
                                             </div>
-                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{assignee.name}</span>
+                                            <button onClick={() => canAct && setAssigneeOpen(o => !o)}
+                                                className={`flex items-center gap-2 text-sm font-bold ${canAct ? 'cursor-pointer' : 'cursor-default'}`}>
+                                                {assignee ? (
+                                                    <>
+                                                        <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[8px]">
+                                                            {assignee.name.slice(0,2).toUpperCase()}
+                                                        </div>
+                                                        <span className="text-slate-700 dark:text-slate-200">{assignee.name}</span>
+                                                    </>
+                                                ) : <span className="text-slate-400 dark:text-slate-600 italic font-normal">Sin asignar</span>}
+                                            </button>
+                                            {assigneeOpen && canAct && (
+                                                <div className="absolute left-40 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-52" data-dropdown>
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Asignar a</p>
+                                                    {peoplePool.map(p => (
+                                                        <button key={p.id} onClick={() => { onChangeAssignee(task, type, task.contextId === p.id ? null : p.id); setAssigneeOpen(false); }}
+                                                            className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left">
+                                                            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0">
+                                                                {p.name.slice(0,2).toUpperCase()}
+                                                            </div>
+                                                            <span className={`text-sm font-bold flex-1 ${task.contextId === p.id ? 'text-purple-600 dark:text-purple-400' : 'text-slate-700 dark:text-slate-200'}`}>{p.name}</span>
+                                                            {task.contextId === p.id && <Icon name="Check" size={12} className="text-purple-500 shrink-0"/>}
+                                                        </button>
+                                                    ))}
+                                                    {task.contextId && (
+                                                        <button onClick={() => { onChangeAssignee(task, type, null); setAssigneeOpen(false); }}
+                                                            className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-t border-slate-100 dark:border-slate-700 mt-1">
+                                                            <Icon name="UserX" size={13}/> Quitar asignación
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
-                                    ) : <span className="text-sm text-slate-400 dark:text-slate-600 italic">Vacío</span>}
-                                </div>
+                                    );
+                                })()}
 
                                 {/* Prioridad */}
                                 {(() => {
                                     const PRIORITIES = [
-                                        { id: 'urgente', label: 'Urgente', color: 'text-red-500',    flag: 'bg-red-500' },
-                                        { id: 'alta',    label: 'Alta',    color: 'text-orange-400', flag: 'bg-orange-400' },
-                                        { id: 'normal',  label: 'Normal',  color: 'text-blue-400',   flag: 'bg-blue-400' },
-                                        { id: 'baja',    label: 'Baja',    color: 'text-slate-400',  flag: 'bg-slate-400' },
+                                        { id: 'urgente', label: 'Urgente', color: 'text-red-500',    iconColor: '#ef4444' },
+                                        { id: 'alta',    label: 'Alta',    color: 'text-orange-400', iconColor: '#fb923c' },
+                                        { id: 'normal',  label: 'Normal',  color: 'text-blue-400',   iconColor: '#60a5fa' },
+                                        { id: 'baja',    label: 'Baja',    color: 'text-slate-400',  iconColor: '#94a3b8' },
                                     ];
                                     const current = PRIORITIES.find(p => p.id === task.priority);
                                     return (
-                                        <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors relative">
+                                        <div className="flex items-center min-h-[38px] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors relative" data-dropdown>
                                             <div className="flex items-center gap-2 w-44 shrink-0">
                                                 <Icon name="Flag" size={13} className="text-slate-400"/>
                                                 <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Prioridad</span>
                                             </div>
                                             <button onClick={() => canAct && setPriorityOpen(o => !o)}
-                                                className={`flex items-center gap-2 text-sm font-bold ${current ? current.color : 'text-slate-400 dark:text-slate-600 italic'} ${canAct ? 'cursor-pointer' : 'cursor-default'}`}>
-                                                {current
-                                                    ? <><span className={`w-2.5 h-2.5 rounded-sm ${current.flag} shrink-0`}/>{current.label}</>
-                                                    : 'Vacío'}
+                                                className={`flex items-center gap-1.5 text-sm font-bold ${current ? current.color : 'text-slate-400 dark:text-slate-500'} ${canAct ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} transition-opacity`}>
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill={current ? current.iconColor : 'none'} stroke={current ? current.iconColor : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+                                                </svg>
+                                                {current ? current.label : 'Sin prioridad'}
                                             </button>
                                             {priorityOpen && canAct && (
-                                                <div className="absolute left-40 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-44" onClick={e => e.stopPropagation()}>
+                                                <div className="absolute left-40 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-44" data-dropdown>
                                                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Prioridad</p>
                                                     {PRIORITIES.map(p => (
                                                         <button key={p.id} onClick={() => { onChangePriority(task, type, p.id); setPriorityOpen(false); }}
-                                                            className={`w-full flex items-center gap-3 px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left ${p.color} ${task.priority === p.id ? 'opacity-100' : 'opacity-80'}`}>
-                                                            <span className={`w-3 h-3 rounded-sm ${p.flag} shrink-0`}/>
+                                                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left ${p.color}`}>
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill={p.iconColor} stroke={p.iconColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                                                                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+                                                            </svg>
                                                             {p.label}
                                                             {task.priority === p.id && <Icon name="Check" size={12} className="ml-auto text-slate-400"/>}
                                                         </button>
@@ -4784,6 +4838,14 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                 </div>
                             </div>
                         </div>
+
+                        {/* Fecha de creación */}
+                        {task.createdAt && (
+                            <p className="text-xs text-slate-400 dark:text-slate-600 mb-5 flex items-center gap-1.5">
+                                <Icon name="CalendarClock" size={12}/>
+                                Creado el {new Date(task.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })} a las {new Date(task.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                        )}
 
                         {/* Descripción */}
                         <div className="mb-6">
