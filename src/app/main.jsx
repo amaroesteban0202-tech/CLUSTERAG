@@ -5346,6 +5346,7 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
     const [clientSearch, setClientSearch] = useState('');
     const [priorityOpen, setPriorityOpen] = useState(false);
     const [datePickerOpen, setDatePickerOpen] = useState(false);
+    const [confirmNoDate, setConfirmNoDate] = useState(false);
 
     // Reset / pre-fill when modal opens
     useEffect(() => {
@@ -5416,8 +5417,7 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
         </button>
     );
 
-    const handleSubmit = () => {
-        if (!title.trim()) return;
+    const doSubmit = () => {
         if (config.isEdit && data?.id) {
             if (type === 'accountTask')    actions.updateAccountTask(data.id, { date, title: title.trim(), time, contextId: assigneeId, clientId, notes, priority });
             if (type === 'editingTask')    actions.updateEditingTask(data.id, { date, title: title.trim(), priority: priority || 'normal', hierarchy, status, notes, contextId: assigneeId, clientId });
@@ -5428,6 +5428,12 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
             if (type === 'managementTask') actions.addManagementTask({ date, title: title.trim(), time, contextId: assigneeId, clientId, category, notes, priority, notificationsEnabled: false });
         }
         onClose();
+    };
+
+    const handleSubmit = () => {
+        if (!title.trim()) return;
+        if (!date && !config.isEdit) { setConfirmNoDate(true); return; }
+        doSubmit();
     };
 
     let displayDate = '';
@@ -5631,6 +5637,33 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
             </div>
 
         </div>
+
+        {/* Popup confirmación sin fecha */}
+        {confirmNoDate && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setConfirmNoDate(false)}>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-sm p-6 flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center shrink-0">
+                            <Icon name="CalendarOff" size={18} className="text-amber-500"/>
+                        </div>
+                        <div>
+                            <p className="font-black text-slate-800 dark:text-white text-base">¿Sin fecha límite?</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Esta tarea no tendrá una fecha de vencimiento asignada. Podrás agregarla después.</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                        <button onClick={() => setConfirmNoDate(false)}
+                            className="px-4 py-2 text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                            Cancelar
+                        </button>
+                        <button onClick={() => { setConfirmNoDate(false); doSubmit(); }}
+                            className="px-5 py-2 text-sm font-black text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors">
+                            Sí, crear sin fecha
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
         </div>
     );
 };
