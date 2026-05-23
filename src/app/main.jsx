@@ -3618,10 +3618,11 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
     const todayStr = getHondurasTodayStr();
 
     const columns = [
-        { id: 'editar', title: 'Por Editar', color: 'slate' },
-        { id: 'correccion', title: 'En Corrección', color: 'amber' },
-        { id: 'aprobado', title: 'Aprobado', color: 'emerald' },
-        { id: 'publicado', title: 'Publicado', color: 'indigo' } 
+        { id: 'editar',           title: 'Por Editar',  color: 'slate'   },
+        { id: 'en_edicion',       title: 'En Edición',  color: 'amber'   },
+        { id: 'revision_interna', title: 'En Revisión', color: 'blue'    },
+        { id: 'aprobado',         title: 'Aprobado',    color: 'emerald' },
+        { id: 'publicado',        title: 'Publicado',   color: 'indigo'  },
     ];
     
     const priorityStyles = {
@@ -3712,7 +3713,7 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
     return (
         <div className="h-full flex flex-col space-y-6 fade-in">
             <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Edición" onAdd={handleAddTask} btnColor="amber" btnIcon="Video" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4 overflow-hidden">
                 {columns.map((col, colIndex) => {
                     const colTasks = filteredTasks.filter(t => t.status === col.id);
                     const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
