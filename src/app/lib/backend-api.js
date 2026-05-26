@@ -1,4 +1,14 @@
-const resolveApiBaseUrl = () => String(window.__cluster_api_base_url || '').replace(/\/+$/, '');
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]']);
+
+const isLocalWebOrigin = () => typeof window !== 'undefined'
+    && ['http:', 'https:'].includes(window.location.protocol)
+    && LOCAL_HOSTNAMES.has(window.location.hostname);
+
+const resolveApiBaseUrl = () => {
+    const configuredBaseUrl = String(window.__cluster_api_base_url || '').replace(/\/+$/, '');
+    if (isLocalWebOrigin() && configuredBaseUrl === 'https://clusterag.vercel.app') return '';
+    return configuredBaseUrl;
+};
 
 export const buildApiUrl = (path) => `${resolveApiBaseUrl()}${path}`;
 

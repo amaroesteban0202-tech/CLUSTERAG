@@ -1,4 +1,4 @@
-import { apiFetch } from './backend-api.js';
+import { apiFetch } from './backend-api.js?v=20260525-local-api';
 
 const registry = new Map();
 const DEFAULT_POLL_MS = 20000;

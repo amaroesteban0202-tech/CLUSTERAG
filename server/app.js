@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.js';
 import collectionRoutes from './routes/collections.js';
 import cronRoutes from './routes/cron.js';
 import notificationRoutes from './routes/notifications.js';
+import { getRequestOrigin, isLocalOrigin } from './lib/request-origin.js';
 
 export const createApp = async () => {
     await migrateDatabase();
@@ -30,7 +31,9 @@ export const createApp = async () => {
 
     app.use((req, res, next) => {
         const origin = req.get('origin');
-        if (origin && allowedCorsOrigins.has(origin)) {
+        const requestOrigin = getRequestOrigin(req);
+        const allowLocalDevOrigin = !env.isProduction && isLocalOrigin(origin) && isLocalOrigin(requestOrigin);
+        if (origin && (allowedCorsOrigins.has(origin) || allowLocalDevOrigin)) {
             res.set('Access-Control-Allow-Origin', origin);
             res.set('Access-Control-Allow-Credentials', 'true');
             res.set('Vary', 'Origin');
@@ -52,7 +55,9 @@ export const createApp = async () => {
         res.json({ ok: true, appId: env.appId });
     });
 
-    app.get('/app-config.js', (_req, res) => {
+    app.get('/app-config.js', (req, res) => {
+        const requestOrigin = getRequestOrigin(req);
+        const apiBaseUrl = isLocalOrigin(requestOrigin) ? '' : (env.appBaseUrl || '');
         const firebaseConfig = env.firebase.apiKey && env.firebase.appId
             ? {
                 apiKey: env.firebase.apiKey,
@@ -68,7 +73,7 @@ export const createApp = async () => {
         res.type('application/javascript');
         res.set('Cache-Control', 'no-store');
         res.send([
-            `window.__cluster_api_base_url = ${JSON.stringify(env.appBaseUrl || '')};`,
+            `window.__cluster_api_base_url = ${JSON.stringify(apiBaseUrl)};`,
             `window.__cluster_app_id = ${JSON.stringify(env.appId)};`,
             `window.__cluster_firebase_config = ${JSON.stringify(firebaseConfig)};`
         ].join('\n'));

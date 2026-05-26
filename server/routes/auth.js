@@ -8,6 +8,7 @@ import { normalizeEmail } from '../lib/text.js';
 import { createSession, clearSession } from '../lib/sessions.js';
 import { ensureAuthUserRecord } from '../lib/users.js';
 import { verifyFirebaseIdToken } from '../lib/firebase-admin.js';
+import { getLocalGoogleCallbackUrl, getRequestOrigin, isLocalOrigin } from '../lib/request-origin.js';
 
 const router = express.Router();
 
@@ -37,10 +38,17 @@ const isNativeRedirect = (value = '') => {
     }
 };
 
-const buildGoogleAuthUrl = (state) => {
+const resolveGoogleCallbackUrl = (req) => getLocalGoogleCallbackUrl(req) || env.google.callbackUrl;
+
+const resolveAppRedirectBaseUrl = (req) => {
+    const origin = getRequestOrigin(req);
+    return isLocalOrigin(origin) ? origin : (env.appBaseUrl || origin || '/');
+};
+
+const buildGoogleAuthUrl = (req, state) => {
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     url.searchParams.set('client_id', env.google.clientId);
-    url.searchParams.set('redirect_uri', env.google.callbackUrl);
+    url.searchParams.set('redirect_uri', resolveGoogleCallbackUrl(req));
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('scope', 'openid email profile');
     url.searchParams.set('state', state);
@@ -179,7 +187,7 @@ router.get('/google/start', asyncHandler(async (req, res) => {
         created_at: nowIso()
     });
 
-    res.redirect(buildGoogleAuthUrl(state).toString());
+    res.redirect(buildGoogleAuthUrl(req, state).toString());
 }));
 
 router.get('/google/native/start', asyncHandler(async (req, res) => {
@@ -199,7 +207,7 @@ router.get('/google/native/start', asyncHandler(async (req, res) => {
 
     res.json({
         state,
-        authUrl: buildGoogleAuthUrl(state).toString()
+        authUrl: buildGoogleAuthUrl(req, state).toString()
     });
 }));
 
@@ -241,7 +249,7 @@ router.get('/google/callback', asyncHandler(async (req, res) => {
             return;
         }
         if (req.accepts('html')) {
-            res.redirect(env.appBaseUrl || '/');
+            res.redirect(resolveAppRedirectBaseUrl(req));
             return;
         }
         throw createHttpError(400, 'El estado de Google no es valido.', 'auth/invalid-state');
@@ -257,7 +265,7 @@ router.get('/google/callback', asyncHandler(async (req, res) => {
         body: JSON.stringify({
             client_id: env.google.clientId,
             client_secret: env.google.clientSecret,
-            redirect_uri: env.google.callbackUrl,
+            redirect_uri: resolveGoogleCallbackUrl(req),
             grant_type: 'authorization_code',
             code
         })

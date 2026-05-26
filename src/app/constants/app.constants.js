@@ -1,4 +1,4 @@
-// Mantener este string visible en runtime ayuda a no perder clases dinamicas de Tailwind CDN.
+// Mantener este string visible ayuda a Tailwind CLI a no perder clases dinamicas.
 export const TAILWIND_SAFELIST = 'bg-purple-50 text-purple-700 border-purple-200 bg-purple-100 dark:bg-purple-500/20 dark:text-purple-400 dark:border-purple-500/30 bg-purple-500 text-purple-600 ' +
 'bg-indigo-50 text-indigo-700 border-indigo-200 bg-indigo-100 dark:bg-indigo-500/20 dark:text-indigo-400 dark:border-indigo-500/30 bg-indigo-500 text-indigo-600 ' +
 'bg-blue-50 text-blue-700 border-blue-200 bg-blue-100 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30 bg-blue-500 text-blue-600 ' +

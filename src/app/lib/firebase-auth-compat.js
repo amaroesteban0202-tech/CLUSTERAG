@@ -1,4 +1,4 @@
-import { apiFetch, buildApiUrl, getApiOrigin } from './backend-api.js';
+import { apiFetch, buildApiUrl, getApiOrigin } from './backend-api.js?v=20260525-local-api';
 import {
     getApp as getFirebaseClientApp,
     getApps as getFirebaseClientApps,
@@ -268,15 +268,6 @@ export const signInWithPopup = async (auth, provider) => {
             reject(error);
         }, 120000);
 
-        const interval = window.setInterval(() => {
-            if (!popup || popup.closed) {
-                cleanup();
-                const error = new Error('El popup fue cerrado.');
-                error.code = 'auth/popup-closed-by-user';
-                reject(error);
-            }
-        }, 400);
-
         const handleMessage = (event) => {
             if (event.origin !== apiOrigin && event.origin !== window.location.origin) return;
             if (event.data?.type === 'cluster-auth:success') {
@@ -294,13 +285,7 @@ export const signInWithPopup = async (auth, provider) => {
 
         const cleanup = () => {
             window.clearTimeout(timeout);
-            window.clearInterval(interval);
             window.removeEventListener('message', handleMessage);
-            try {
-                popup.close();
-            } catch (error) {
-                void error;
-            }
         };
 
         window.addEventListener('message', handleMessage);

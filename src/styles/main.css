@@ -1,9 +1,65 @@
+:root {
+    --color-primary: #7c3aed;
+    --color-primary-hover: #6d28d9;
+    --color-accent: #f59e0b;
+    --color-sidebar-bg: #0f172a;
+    --color-sidebar-text: #f1f5f9;
+}
+
 body { font-family: 'Plus Jakarta Sans', sans-serif; }
+button, [role="button"], input, select, textarea {
+    touch-action: manipulation;
+}
+button, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+}
+button {
+    cursor: pointer;
+}
+button:disabled {
+    cursor: not-allowed;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+.icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+    border-radius: 10px;
+}
+.text-secondary-accessible {
+    color: #64748b;
+}
+.kanban-mobile-scroll {
+    scrollbar-width: none;
+}
+.kanban-mobile-scroll::-webkit-scrollbar {
+    display: none;
+}
+.pb-mobile-nav {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+}
 .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
 .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 .dark .custom-scroll::-webkit-scrollbar-thumb { background: #334155; }
 .fade-in { animation: fadeIn 0.3s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
+}
 
 .drag-source-hidden {
     position: absolute !important;

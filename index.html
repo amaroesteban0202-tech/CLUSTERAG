@@ -6,15 +6,13 @@
     <title>Cluster Agency OS</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg">
     
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="./src/config/tailwind.config.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
+    <link rel="stylesheet" href="./src/styles/tailwind.generated.css">
     <link rel="stylesheet" href="./src/styles/main.css">
 
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-    <script src="/app-config.js"></script>
+    <script src="/app-config.js?v=20260525-local-api"></script>
     <script>
         window.__cluster_app_id = 'cluster-agency-pro-mobile-v6';
         window.__cluster_firebase_config = window.__cluster_firebase_config || null;
@@ -29,17 +27,16 @@
             "@capacitor/core": "https://esm.sh/@capacitor/core@8.3.1",
             "@capacitor/app": "https://esm.sh/@capacitor/app@8.1.0",
             "firebase/app": "./src/app/lib/firebase-app-compat.js",
-            "firebase/auth": "./src/app/lib/firebase-auth-compat.js",
-            "firebase/firestore": "./src/app/lib/firebase-firestore-compat.js"
+            "firebase/auth": "./src/app/lib/firebase-auth-compat.js?v=20260525-local-api",
+            "firebase/firestore": "./src/app/lib/firebase-firestore-compat.js?v=20260525-local-api"
         }
     }
     </script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
     <div id="root"></div>
 
-    <script type="text/babel" data-type="module" src="./src/app/main.jsx"></script>
+    <script type="module" src="./src/app/main.compiled.js?v=20260525-prod-build"></script>
 </body>
 </html>
 

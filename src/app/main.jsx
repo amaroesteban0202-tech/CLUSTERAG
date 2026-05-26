@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App as CapacitorApp } from '@capacitor/app';
 import {
     LayoutDashboard, Users, Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X,
     CheckCircle2, Circle, ExternalLink, Briefcase, UserCircle2, Loader2, Trash2,
     Video, ArrowRight, UserPlus, MonitorPlay, Search, Menu, PenTool, LayoutList, CalendarDays,
-    AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles, Trophy, Medal, BarChart3,
-    ShieldCheck, LogIn, LogOut, ClipboardList, Lock, Mail
+    AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, ChevronUp, Sparkles, Trophy, Medal, BarChart3,
+    ShieldCheck, LogIn, LogOut, ClipboardList, Lock, Mail, AlignLeft, Calendar, CalendarOff, CalendarPlus, CalendarRange, Check, CheckSquare, Clock,
+    FileText, MessageSquare, Pencil, Play, Save, Send, Square, Timer, User, UserX, Zap, PauseCircle
 } from 'lucide-react';
 import { signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, isSignInWithEmailLink, sendSignInLinkToEmail, signInWithEmailLink, signInWithPopup, completeGoogleRedirectIfNeeded, signOut as firebaseSignOut } from 'firebase/auth';
 import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, limit, writeBatch, setDoc, getDocs } from 'firebase/firestore';
@@ -32,13 +33,93 @@ const IconsMap = {
     LayoutDashboard, Users, CalendarIcon, Plus, ChevronLeft, ChevronRight, X, 
     CheckCircle2, Circle, ExternalLink, Briefcase, UserCircle2, Loader2, Trash2, 
     Video, ArrowRight, UserPlus, MonitorPlay, Search, Menu, PenTool, LayoutList, CalendarDays,
-    AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, Sparkles, Trophy, Medal, BarChart3,
-    ShieldCheck, LogIn, LogOut, ClipboardList, Lock, Mail
+    AlertTriangle, Smile, Meh, Frown, Instagram, Edit, Inbox, Moon, Sun, MousePointerClick, Flame, ListTree, ChevronDown, ChevronUp, Sparkles, Trophy, Medal, BarChart3,
+    ShieldCheck, LogIn, LogOut, ClipboardList, Lock, Mail, AlignLeft, Calendar, CalendarOff, CalendarPlus, CalendarRange, Check, CheckSquare, Clock,
+    FileText, MessageSquare, Pencil, Play, Save, Send, Square, Timer, User, UserX, Zap, PauseCircle
 };
 
-const Icon = ({ name, size = 18, className = "" }) => {
+const Icon = ({ name, size = 18, className = "", ...props }) => {
     const LucideIcon = IconsMap[name];
-    return LucideIcon ? <LucideIcon size={size} className={className} /> : null;
+    const { 'aria-hidden': ariaHidden = true, focusable = false, ...iconProps } = props;
+    return LucideIcon ? <LucideIcon size={size} className={className} aria-hidden={ariaHidden} focusable={focusable} {...iconProps} /> : null;
+};
+
+const FOCUSABLE_SELECTOR = [
+    'a[href]',
+    'button:not([disabled])',
+    'textarea:not([disabled])',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])'
+].join(',');
+
+const slugifyId = (value = '') => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+
+const useDialogA11y = (isOpen, onClose) => {
+    const dialogRef = useRef(null);
+    const previousActiveElementRef = useRef(null);
+    const onCloseRef = useRef(onClose);
+
+    useEffect(() => {
+        onCloseRef.current = onClose;
+    }, [onClose]);
+
+    useEffect(() => {
+        if (!isOpen || typeof document === 'undefined') return undefined;
+        previousActiveElementRef.current = document.activeElement;
+        const originalOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        const focusTimer = window.setTimeout(() => {
+            const dialog = dialogRef.current;
+            if (!dialog) return;
+            const focusable = dialog.querySelector(FOCUSABLE_SELECTOR);
+            (focusable || dialog).focus?.();
+        }, 30);
+
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                event.stopPropagation();
+                onCloseRef.current?.();
+                return;
+            }
+            if (event.key !== 'Tab') return;
+
+            const dialog = dialogRef.current;
+            if (!dialog) return;
+            const focusable = Array.from(dialog.querySelectorAll(FOCUSABLE_SELECTOR))
+                .filter((element) => element.offsetParent !== null || element === document.activeElement);
+            if (focusable.length === 0) {
+                event.preventDefault();
+                dialog.focus?.();
+                return;
+            }
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.clearTimeout(focusTimer);
+            document.removeEventListener('keydown', handleKeyDown);
+            document.body.style.overflow = originalOverflow;
+            previousActiveElementRef.current?.focus?.();
+        };
+    }, [isOpen]);
+
+    return dialogRef;
 };
 
 const AgencyLogo = ({ className }) => {
@@ -1909,6 +1990,13 @@ function App() {
     const totalActiveAccountTasks = accountTasks.filter(t => t.status !== 'publicado').length;
     const totalActiveEditingTasks = editingTasks.filter(t => t.status !== 'aprobado' && t.status !== 'publicado').length;
     const totalActiveManagementTasks = managementTasks.filter(t => t.status !== 'cerrado').length;
+    const isAdminConfigVisible = ['super_admin', 'operations'].includes(currentUserProfile?.role);
+    const isFirstTimeWorkspace = clients.length === 0 && accountTasks.length === 0 && editingTasks.length === 0 && managementTasks.length === 0;
+    const sidebarFooterText = currentUserProfile?.isActive === false
+        ? 'Cuenta inactiva'
+        : !authEmail
+          ? 'Sin sesión iniciada'
+          : `${currentRoleMeta.label} · ${authEmail}`;
 
     let allActivities = [
         ...events.map(e => ({ ...e, collectionType: 'event', _color: 'emerald', _icon: 'CalendarIcon', _label: 'Producción' })),
@@ -2527,7 +2615,7 @@ function App() {
         return false;
     };
 
-    if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950"><Icon name="Loader2" className="animate-spin text-purple-600" size={32}/></div>;
+    if (loading) return <AppShellSkeleton />;
 
     if (!authEmail) {
         return (
@@ -2542,7 +2630,9 @@ function App() {
                     onEmailSubmit={handleEmailLinkSignIn}
                     isSendingLoginLink={isSendingLoginLink}
                 />
-                {toast && <Toast message={toast.message} type={toast.type} />}
+                <div aria-live="polite" aria-atomic="true" className="fixed bottom-6 right-6 z-[110] pointer-events-none">
+                    {toast && <Toast message={toast.message} type={toast.type} />}
+                </div>
             </>
         );
     }
@@ -2553,7 +2643,14 @@ function App() {
             {/* Header Móvil */}
             <div className="md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center z-30 shadow-sm shrink-0">
                 <div className="flex items-center gap-2"><AgencyLogo className="w-8 h-8 text-sm" /><span className="font-black text-slate-800 dark:text-white text-lg">CLUSTER</span></div>
-                <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><Icon name={isMobileMenuOpen ? "X" : "Menu"} size={24} /></button>
+                <button
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    aria-label={isMobileMenuOpen ? 'Cerrar navegación' : 'Abrir navegación'}
+                    aria-expanded={isMobileMenuOpen}
+                    className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                >
+                    <Icon name={isMobileMenuOpen ? "X" : "Menu"} size={24} />
+                </button>
             </div>
 
             <div className={`fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm transition-opacity md:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileMenuOpen(false)} />
@@ -2562,26 +2659,34 @@ function App() {
             <aside className={`fixed md:relative z-50 h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col w-64 shrink-0 transition-transform duration-300 top-0 left-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
                 <div className="p-8 hidden md:block">
                     <div className="flex items-center gap-3 mb-1"><AgencyLogo className="w-8 h-8 text-lg" /><h1 className="text-2xl font-black text-slate-800 dark:text-white">CLUSTER</h1></div>
-                    <p className="text-[10px] uppercase font-bold text-slate-400 pl-11">Agency OS</p>
+                    <p className="text-[10px] uppercase font-bold text-slate-500 pl-11">Agency OS</p>
                 </div>
                 
-                <nav className="flex-1 px-4 space-y-1 pt-20 md:pt-4 overflow-y-auto custom-scroll">
-                    <SidebarItem active={view === 'dashboard'} onClick={() => handleNavigate('dashboard')} icon="LayoutDashboard" label="Panel Central" color="purple" />
-                    <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Equipo & Clientes</div>
-                    <SidebarItem active={view === 'clients' || view === 'client-detail'} onClick={() => handleNavigate('clients')} icon="Briefcase" label="Clientes" color="blue" />
-                    <SidebarItem active={view === 'managers' || view === 'manager-detail'} onClick={() => handleNavigate('managers')} icon="Users" label="Account Managers" color="indigo" />
-                    <SidebarItem active={view === 'editors' || view === 'editor-detail'} onClick={() => handleNavigate('editors')} icon="PenTool" label="Editores" color="rose" />
-                    
-                    <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Salas de Trabajo</div>
-                    <SidebarItem active={view === 'account-room'} onClick={() => handleNavigate('account-room')} icon="LayoutList" label="Sala de Accounts" color="indigo" badge={totalActiveAccountTasks > 0 ? totalActiveAccountTasks : null} badgeColor={pendingAccounts > 0 ? "bg-indigo-500 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"} />
-                    <SidebarItem active={view === 'management-room'} onClick={() => handleNavigate('management-room')} icon="ShieldCheck" label="Sala de Gestion" color="violet" badge={totalActiveManagementTasks > 0 ? totalActiveManagementTasks : null} badgeColor={pendingManagement > 0 ? "bg-violet-500 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"} />
-                    <SidebarItem active={view === 'editions'} onClick={() => handleNavigate('editions')} icon="Video" label="Sala de Edición" color="amber" badge={totalActiveEditingTasks > 0 ? totalActiveEditingTasks : null} badgeColor={urgentEditions > 0 ? "bg-red-500 text-white animate-pulse" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"} />
+                <nav className="flex-1 px-4 space-y-1 pt-20 md:pt-4 overflow-y-auto custom-scroll" aria-label="Navegación principal">
+                    <div className="pt-1 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Principal</div>
+                    {canAccessView(currentUserProfile, 'dashboard') && <SidebarItem active={view === 'dashboard'} onClick={() => handleNavigate('dashboard')} icon="LayoutDashboard" label="Panel Central" color="purple" />}
 
-                    <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">Control & Global</div>
-                    <SidebarItem active={view === 'control-center'} onClick={() => handleNavigate('control-center')} icon="ClipboardList" label="Usuarios y Accesos" color="purple" />
-                    <SidebarItem active={view === 'general-calendar'} onClick={() => handleNavigate('general-calendar')} icon="CalendarDays" label="Calendario General" color="blue" />
-                    <SidebarItem active={view === 'calendar'} onClick={() => handleNavigate('calendar')} icon="CalendarIcon" label="Agenda Producción" color="emerald" />
-                    <SidebarItem active={view === 'reports'} onClick={() => handleNavigate('reports')} icon="BarChart3" label="Reportes" color="emerald" />
+                    <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">Clientes & equipo</div>
+                    {canAccessView(currentUserProfile, 'clients') && <SidebarItem active={view === 'clients' || view === 'client-detail'} onClick={() => handleNavigate('clients')} icon="Briefcase" label="Clientes" color="blue" />}
+                    {canAccessView(currentUserProfile, 'managers') && <SidebarItem active={view === 'managers' || view === 'manager-detail'} onClick={() => handleNavigate('managers')} icon="Users" label="Account Managers" color="indigo" />}
+                    {canAccessView(currentUserProfile, 'editors') && <SidebarItem active={view === 'editors' || view === 'editor-detail'} onClick={() => handleNavigate('editors')} icon="PenTool" label="Editores" color="rose" />}
+                    
+                    <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">Salas de trabajo</div>
+                    {canAccessView(currentUserProfile, 'account-room') && <SidebarItem active={view === 'account-room'} onClick={() => handleNavigate('account-room')} icon="LayoutList" label="Sala de Accounts" color="indigo" badge={totalActiveAccountTasks > 0 ? totalActiveAccountTasks : null} badgeColor={pendingAccounts > 0 ? "bg-indigo-500 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"} />}
+                    {canAccessView(currentUserProfile, 'management-room') && <SidebarItem active={view === 'management-room'} onClick={() => handleNavigate('management-room')} icon="ShieldCheck" label="Sala de Gestión" color="violet" badge={totalActiveManagementTasks > 0 ? totalActiveManagementTasks : null} badgeColor={pendingManagement > 0 ? "bg-violet-500 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"} />}
+                    {canAccessView(currentUserProfile, 'editions') && <SidebarItem active={view === 'editions'} onClick={() => handleNavigate('editions')} icon="Video" label="Sala de Edición" color="amber" badge={totalActiveEditingTasks > 0 ? totalActiveEditingTasks : null} badgeColor={urgentEditions > 0 ? "bg-red-500 text-white animate-pulse" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"} />}
+
+                    <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">Calendario</div>
+                    {canAccessView(currentUserProfile, 'general-calendar') && <SidebarItem active={view === 'general-calendar'} onClick={() => handleNavigate('general-calendar')} icon="CalendarDays" label="Calendario General" color="blue" />}
+                    {canAccessView(currentUserProfile, 'calendar') && <SidebarItem active={view === 'calendar'} onClick={() => handleNavigate('calendar')} icon="CalendarIcon" label="Agenda Producción" color="emerald" />}
+                    {canAccessView(currentUserProfile, 'reports') && <SidebarItem active={view === 'reports'} onClick={() => handleNavigate('reports')} icon="BarChart3" label="Reportes" color="emerald" />}
+
+                    {isAdminConfigVisible && (
+                        <>
+                            <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">Configuración</div>
+                            {canAccessView(currentUserProfile, 'control-center') && <SidebarItem active={view === 'control-center'} onClick={() => handleNavigate('control-center')} icon="ClipboardList" label="Usuarios y accesos" color="purple" />}
+                        </>
+                    )}
                 </nav>
 
                 <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
@@ -2591,7 +2696,7 @@ function App() {
                         </div>
                         <div className="min-w-0">
                             <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{currentUserProfile?.name || 'Invitado'}</p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase truncate">{currentRoleMeta.label}{authEmail ? ` · ${authEmail}` : ' · Sin correo'}</p>
+                            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase truncate">{sidebarFooterText}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -2608,11 +2713,11 @@ function App() {
                         }`}>
                             {profileBlocked ? 'Bloqueado' : authEmail ? currentVerificationMeta.label : 'Invitado'}
                         </span>
-                        <button onClick={() => setIsDark(!isDark)} className="ml-auto p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300"><Icon name={isDark ? 'Sun' : 'Moon'} size={16} /></button>
+                        <button onClick={() => setIsDark(!isDark)} aria-label={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'} title={isDark ? 'Modo claro' : 'Modo oscuro'} className="ml-auto p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300"><Icon name={isDark ? 'Sun' : 'Moon'} size={16} /></button>
                         {authEmail ? (
-                            <button onClick={handleLogout} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300"><Icon name="LogOut" size={16} /></button>
+                            <button onClick={handleLogout} aria-label="Cerrar sesión" title="Cerrar sesión" className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300"><Icon name="LogOut" size={16} /></button>
                         ) : (
-                            <button onClick={handleGoogleSignIn} disabled={isSigningIn} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300 disabled:opacity-60"><Icon name={isSigningIn ? 'Loader2' : 'LogIn'} size={16} className={isSigningIn ? 'animate-spin' : ''} /></button>
+                            <button onClick={handleGoogleSignIn} disabled={isSigningIn} aria-label="Iniciar sesión" title="Iniciar sesión" className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300 disabled:opacity-60"><Icon name={isSigningIn ? 'Loader2' : 'LogIn'} size={16} className={isSigningIn ? 'animate-spin' : ''} /></button>
                         )}
                     </div>
                 </div>
@@ -2620,8 +2725,11 @@ function App() {
 
             {/* Vistas Principales */}
             <main className="flex-1 overflow-y-auto relative w-full h-full">
-                <div className="p-4 md:p-8 max-w-[1600px] mx-auto min-h-full pb-20">
-                    {view === 'dashboard' && <DashboardView clients={clients} managers={managers} events={events} tasks={editingTasks} accountTasks={accountTasks} managementTasks={managementTasks} currentUserProfile={currentUserProfile} onSignIn={handleGoogleSignIn} />}
+                <div className="p-4 md:p-8 max-w-[1600px] mx-auto min-h-full pb-mobile-nav md:pb-20">
+                    {view === 'dashboard' && (isFirstTimeWorkspace
+                        ? <FirstTimeView role={currentUserProfile?.role} onNavigate={handleNavigate} />
+                        : <DashboardView clients={clients} managers={managers} events={events} tasks={editingTasks} accountTasks={accountTasks} managementTasks={managementTasks} currentUserProfile={currentUserProfile} onSignIn={handleGoogleSignIn} />
+                    )}
                     {view === 'clients' && <ClientsView clients={clients} onAdd={() => setModalConfig({ isOpen: true, type: 'client' })} onSelect={(c) => { setSelectedClient(c); handleNavigate('client-detail'); }} />}
                     {view === 'client-detail' && selectedClient && <ClientDetail client={selectedClient} managers={managers} onReassignManager={reassignClientManager} onBack={() => handleNavigate('clients')} onUpdate={updateClient} onDelete={() => setDeleteConfirm({ isOpen: true, type: 'client', id: selectedClient.id, title: selectedClient.name })} onEdit={() => setModalConfig({ isOpen: true, type: 'client', data: selectedClient, isEdit: true })} />}
                     {view === 'managers' && <TeamView title="Account Managers" team={managers} iconColor="indigo" onAdd={() => setModalConfig({ isOpen: true, type: 'manager' })} onSelect={(m) => { setSelectedManager(m); handleNavigate('manager-detail'); }} onDelete={(m) => setDeleteConfirm({ isOpen: true, type: 'manager', id: m.id, title: m.name })} onEdit={(m) => setModalConfig({ isOpen: true, type: 'manager', data: m, isEdit: true })} />}
@@ -2652,11 +2760,15 @@ function App() {
                     {view === 'calendar' && (
                         <div className="h-full flex flex-col space-y-6 fade-in"><h2 className="text-2xl font-black text-slate-800 dark:text-white">Agenda de Producciones</h2><div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden"><CalendarGrid events={events.filter(e => e.type === 'production')} baseColor="emerald" onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'event', data: { date: dateStr, type: 'production' } })} onEventClick={(e) => handleEventClick(e, 'event')} /></div></div>
                     )}
-                    {view === 'reports' && <ReportsView accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} clients={clients} managers={managers} editors={editors} />}
+                    {view === 'reports' && <ReportsView accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} clients={clients} managers={managers} editors={editors} users={managementUsers} />}
                 </div>
             </main>
 
-            {toast && <Toast message={toast.message} type={toast.type} />}
+            <MobileBottomNav view={view} onNavigate={handleNavigate} currentUserProfile={currentUserProfile} />
+
+            <div aria-live="polite" aria-atomic="true" className="fixed bottom-6 right-6 z-[110] pointer-events-none">
+                {toast && <Toast message={toast.message} type={toast.type} />}
+            </div>
             {modalConfig.isOpen && ['accountTask','editingTask','managementTask'].includes(modalConfig.type) && <CreateTaskModal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} managementUsers={managementUsers} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask, addManagementTask, updateManagementTask, addUserRecord, updateUserRecord }} />}
             {modalConfig.isOpen && !['accountTask','editingTask','managementTask'].includes(modalConfig.type) && <Modal config={modalConfig} onClose={closeModal} clients={clients} managers={managers} editors={editors} managementUsers={managementUsers} actions={{ addClient, updateClient, addManager, updateManager, addEditor, updateEditor, addEvent, updateEvent, addAccountTask, updateAccountTask, addEditingTask, updateEditingTask, addManagementTask, updateManagementTask, addUserRecord, updateUserRecord }} />}
             {deleteConfirm.isOpen && <DeleteConfirmModal config={deleteConfirm} onClose={closeDelete} onConfirm={handleDelete} />}
@@ -2669,7 +2781,7 @@ function App() {
 
 // --- SUBCOMPONENTES ---
 const SidebarItem = ({ active, onClick, icon, label, color, badge, badgeColor }) => (
-    <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 group ${active ? `bg-${color}-50 dark:bg-${color}-500/20 text-${color}-700 dark:text-${color}-300 shadow-sm border-${color}-100 dark:border-${color}-500/30` : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200 border-transparent"}`}>
+    <button onClick={onClick} aria-current={active ? 'page' : undefined} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 group ${active ? `bg-${color}-50 dark:bg-${color}-500/20 text-${color}-700 dark:text-${color}-300 shadow-sm border-${color}-100 dark:border-${color}-500/30` : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200 border-transparent"}`}>
         <div className={`transition-transform duration-200 ${active ? 'scale-110' : 'group-hover:scale-110'} text-[inherit]`}><Icon name={icon} size={20}/></div>
         <span className="font-bold text-sm flex-1 text-left text-[inherit]">{label}</span>
         {badge && <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${badgeColor}`}>{badge}</span>}
@@ -2677,16 +2789,166 @@ const SidebarItem = ({ active, onClick, icon, label, color, badge, badgeColor })
     </button>
 );
 
-const Button = ({ children, onClick, type = 'button', color = 'purple', full, icon }) => (
-    <button type={type} onClick={onClick} className={`${full ? 'w-full' : ''} min-h-[46px] whitespace-nowrap bg-${color}-600 hover:bg-${color}-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-${color}-500/30 flex items-center justify-center gap-2 transition-all transform active:scale-95`}>{icon && <Icon name={icon}/>} {children}</button>
+const Button = ({ children, onClick, type = 'button', color = 'purple', full, icon, ...props }) => (
+    <button type={type} onClick={onClick} className={`${full ? 'w-full' : ''} min-h-[46px] whitespace-nowrap bg-${color}-600 hover:bg-${color}-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-${color}-500/30 flex items-center justify-center gap-2 transition-all transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-${color}-500 dark:focus-visible:ring-offset-slate-950`} {...props}>{icon && <Icon name={icon}/>} {children}</button>
 );
 
 const EmptyState = ({ icon, text }) => (
     <div className="flex flex-col items-center justify-center p-6 text-center h-full opacity-60">
-        <Icon name={icon} size={32} className="text-slate-400 dark:text-slate-500 mb-3" />
+        <Icon name={icon} size={32} className="text-slate-500 dark:text-slate-400 mb-3" />
         <p className="text-sm font-bold text-slate-500 dark:text-slate-400">{text}</p>
     </div>
 );
+
+const AppShellSkeleton = () => (
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+        <div className="hidden md:flex w-64 shrink-0 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+            <div className="h-10 w-36 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+            <div className="mt-10 space-y-3">
+                {Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-11 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />)}
+            </div>
+        </div>
+        <div className="flex-1 p-4 md:p-8">
+            <div className="mb-6 h-10 w-64 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={index} className="h-28 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+                        <div className="h-3 w-24 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+                        <div className="mt-5 h-8 w-16 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+                    </div>
+                ))}
+            </div>
+            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="h-72 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+                        <div className="h-4 w-32 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+                        <div className="mt-5 space-y-3">
+                            {Array.from({ length: 4 }).map((__, itemIndex) => <div key={itemIndex} className="h-12 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />)}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+);
+
+const Breadcrumb = ({ items }) => (
+    <nav aria-label="Ruta de navegación" className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 mb-2">
+        {items.map((item, index) => (
+            <React.Fragment key={`${item.label}-${index}`}>
+                {index > 0 && <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">/</span>}
+                {item.onClick ? (
+                    <button onClick={item.onClick} className="min-h-0 min-w-0 rounded-md px-1 py-0.5 font-bold hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
+                        {item.label}
+                    </button>
+                ) : (
+                    <span className="font-bold text-slate-800 dark:text-slate-100">{item.label}</span>
+                )}
+            </React.Fragment>
+        ))}
+    </nav>
+);
+
+const FirstTimeView = ({ role, onNavigate }) => {
+    const normalizedRole = ['editor', 'manager', 'management', 'operations', 'super_admin'].includes(role) ? role : 'viewer';
+    const stepsByRole = {
+        editor: [
+            { icon: 'Video', title: 'Sala de Edición', desc: 'Revisa tus tareas asignadas y avanza cada pieza por estado.', view: 'editions' },
+            { icon: 'CheckCircle2', title: 'Estados claros', desc: 'Mueve las tarjetas cuando una pieza pase a revisión, aprobación o publicación.', view: 'editions' },
+            { icon: 'Mail', title: 'Recordatorios', desc: 'Mantén tu correo activo para recibir avisos de vencimiento.', view: 'general-calendar' }
+        ],
+        manager: [
+            { icon: 'Briefcase', title: 'Clientes', desc: 'Crea la cartera inicial y asigna cada cuenta a su responsable.', view: 'clients' },
+            { icon: 'LayoutList', title: 'Sala de Accounts', desc: 'Planifica publicaciones y tareas por fecha, estado y responsable.', view: 'account-room' },
+            { icon: 'CalendarDays', title: 'Calendario', desc: 'Consulta la carga del equipo desde una vista general.', view: 'general-calendar' }
+        ],
+        management: [
+            { icon: 'ShieldCheck', title: 'Sala de Gestión', desc: 'Centraliza seguimientos internos con fecha, hora y responsable.', view: 'management-room' },
+            { icon: 'Briefcase', title: 'Clientes', desc: 'Asocia tareas de gestión a clientes cuando aplique.', view: 'clients' },
+            { icon: 'CalendarDays', title: 'Calendario', desc: 'Revisa vencimientos y movimiento del equipo.', view: 'general-calendar' }
+        ],
+        operations: [
+            { icon: 'Users', title: 'Equipo', desc: 'Carga managers, editores y usuarios autorizados.', view: 'control-center' },
+            { icon: 'Briefcase', title: 'Clientes', desc: 'Prepara la estructura base de cuentas antes de operar.', view: 'clients' },
+            { icon: 'LayoutDashboard', title: 'Panel Central', desc: 'Monitorea volumen, atrasos y avance global.', view: 'dashboard' }
+        ],
+        super_admin: [
+            { icon: 'Users', title: 'Accesos', desc: 'Configura roles activos y correos verificados.', view: 'control-center' },
+            { icon: 'Briefcase', title: 'Clientes', desc: 'Crea la primera cartera y asigna responsables.', view: 'clients' },
+            { icon: 'LayoutDashboard', title: 'Panel Central', desc: 'Revisa salud operativa cuando ya exista actividad.', view: 'dashboard' }
+        ],
+        viewer: [
+            { icon: 'LayoutDashboard', title: 'Panel Central', desc: 'Aquí verás el resumen cuando el equipo empiece a cargar datos.', view: 'dashboard' },
+            { icon: 'LayoutList', title: 'Salas de trabajo', desc: 'Consulta tareas por fecha y estado.', view: 'account-room' },
+            { icon: 'CalendarDays', title: 'Calendario', desc: 'Abre el calendario para ubicar actividad por día.', view: 'general-calendar' }
+        ]
+    };
+    const steps = stepsByRole[normalizedRole] || stepsByRole.viewer;
+
+    return (
+        <div className="min-h-full flex items-center">
+            <section className="w-full max-w-5xl mx-auto">
+                <div className="mb-8 max-w-2xl">
+                    <p className="text-xs font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-3">Inicio rápido</p>
+                    <h2 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white leading-tight">Prepara ClusterAG para operar</h2>
+                    <p className="mt-3 text-sm md:text-base text-slate-600 dark:text-slate-300 leading-7">Empieza por la estructura mínima de equipo, clientes y salas de trabajo.</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {steps.map((step) => (
+                        <button key={step.title} onClick={() => onNavigate(step.view)} className="group min-h-[180px] text-left rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-purple-300 dark:hover:border-purple-700 hover:shadow-lg transition-all">
+                            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-purple-50 dark:bg-purple-500/15 text-purple-600 dark:text-purple-300">
+                                <Icon name={step.icon} size={20} />
+                            </div>
+                            <h3 className="text-base font-black text-slate-900 dark:text-white">{step.title}</h3>
+                            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{step.desc}</p>
+                            <span className="mt-4 inline-flex items-center gap-1 text-xs font-black uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                                Abrir <Icon name="ArrowRight" size={13} />
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            </section>
+        </div>
+    );
+};
+
+const MobileBottomNav = ({ view, onNavigate, currentUserProfile }) => {
+    const items = [
+        { view: 'dashboard', icon: 'LayoutDashboard', label: 'Inicio' },
+        { view: 'account-room', icon: 'LayoutList', label: 'Accounts' },
+        { view: 'editions', icon: 'Video', label: 'Edición' },
+        { view: 'management-room', icon: 'ShieldCheck', label: 'Gestión' },
+        { view: 'clients', icon: 'Briefcase', label: 'Clientes' }
+    ].filter((item) => canAccessView(currentUserProfile, item.view)).slice(0, 5);
+
+    if (items.length === 0) return null;
+
+    const isItemActive = (itemView) => view === itemView || (itemView === 'clients' && view === 'client-detail');
+
+    return (
+        <nav aria-label="Navegación principal" className="fixed bottom-0 left-0 right-0 z-30 md:hidden bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
+            {items.map((item) => {
+                const active = isItemActive(item.view);
+                return (
+                    <button
+                        key={item.view}
+                        onClick={() => onNavigate(item.view)}
+                        aria-label={item.label}
+                        aria-current={active ? 'page' : undefined}
+                        className={`flex-1 min-w-0 min-h-[64px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] font-bold transition-colors ${
+                            active
+                                ? 'text-purple-600 dark:text-purple-400'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                    >
+                        <Icon name={item.icon} size={20} />
+                        <span className="truncate max-w-full">{item.label}</span>
+                    </button>
+                );
+            })}
+        </nav>
+    );
+};
 
 const LoginScreen = ({ isDark, onToggleTheme, onGoogleSignIn, isSigningIn, email, onEmailChange, onEmailSubmit, isSendingLoginLink }) => (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col font-sans">
@@ -2695,10 +2957,10 @@ const LoginScreen = ({ isDark, onToggleTheme, onGoogleSignIn, isSigningIn, email
                 <AgencyLogo className="w-9 h-9 text-lg" />
                 <div>
                     <h1 className="font-black text-lg leading-none">CLUSTER</h1>
-                    <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mt-1">Agency OS</p>
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mt-1">Agency OS</p>
                 </div>
             </div>
-            <button onClick={onToggleTheme} className="p-2 rounded-full bg-white/10 text-slate-200 border border-white/10">
+            <button onClick={onToggleTheme} aria-label={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'} title={isDark ? 'Modo claro' : 'Modo oscuro'} className="p-2 rounded-full bg-white/10 text-slate-200 border border-white/10">
                 <Icon name={isDark ? 'Sun' : 'Moon'} size={18} />
             </button>
         </div>
@@ -2708,7 +2970,7 @@ const LoginScreen = ({ isDark, onToggleTheme, onGoogleSignIn, isSigningIn, email
                 <div className="mb-8">
                     <p className="text-xs font-black uppercase tracking-wider text-purple-300 mb-3">Acceso privado</p>
                     <h2 className="text-3xl font-black leading-tight">Inicia sesion para entrar al panel</h2>
-                    <p className="text-sm text-slate-400 mt-3 leading-6">Usa tu cuenta autorizada de Cluster para gestionar clientes, tareas y calendario.</p>
+                    <p className="text-sm text-slate-500 mt-3 leading-6">Usa tu cuenta autorizada de Cluster para gestionar clientes, tareas y calendario.</p>
                 </div>
 
                 <div className="space-y-3">
@@ -2723,10 +2985,13 @@ const LoginScreen = ({ isDark, onToggleTheme, onGoogleSignIn, isSigningIn, email
 
                     <form onSubmit={onEmailSubmit} className="space-y-3">
                         <input
+                            id="login-email"
                             type="email"
                             value={email}
                             onChange={(event) => onEmailChange(event.target.value)}
                             placeholder="correo@cluster.com"
+                            aria-label="Correo autorizado"
+                            autoComplete="email"
                             className="w-full min-h-[52px] rounded-xl bg-white/10 border border-white/10 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-400 placeholder:text-slate-500"
                         />
                         <button
@@ -2746,19 +3011,34 @@ const LoginScreen = ({ isDark, onToggleTheme, onGoogleSignIn, isSigningIn, email
 
 const SearchBar = ({ searchTerm, setSearchTerm, placeholder }) => (
     <div className="relative w-full md:w-64 shrink-0">
-        <Icon name="Search" className="absolute left-3 top-3 text-slate-400 dark:text-slate-500" size={16}/>
-        <input type="text" placeholder={placeholder} value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="min-h-[46px] w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"/>
+        <Icon name="Search" className="absolute left-3 top-3 text-slate-500 dark:text-slate-400" size={16}/>
+        <input type="text" aria-label={placeholder || 'Buscar'} placeholder={placeholder} value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="min-h-[46px] w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-500"/>
     </div>
 );
 
 const StatCard = ({ title, value, icon, color }) => (
     <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
-        <div><p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">{title}</p><p className="text-3xl font-black text-slate-800 dark:text-white">{value}</p></div>
+        <div><p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">{title}</p><p className="text-3xl font-black text-slate-800 dark:text-white">{value}</p></div>
         <div className={`p-3 rounded-xl bg-${color}-50 dark:bg-${color}-500/20 text-${color}-600 dark:text-${color}-400`}><Icon name={icon} size={24}/></div>
     </div>
 );
 
-const Input = ({ label, ...props }) => (<div>{label && <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">{label}</label>}<input className="w-full p-4 md:p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-medium text-slate-700 dark:text-slate-200 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500" {...props} /></div>);
+const Input = ({ label, id, className = '', ...props }) => {
+    const reactId = useId();
+    const inputId = id || `input-${slugifyId(label || props.name || props.placeholder || reactId)}`;
+    const ariaLabel = props['aria-label'] || (label ? undefined : props.placeholder || props.name);
+    return (
+        <div>
+            {label && <label htmlFor={inputId} className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">{label}</label>}
+            <input
+                id={inputId}
+                aria-label={ariaLabel}
+                className={`w-full p-4 md:p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-medium text-slate-700 dark:text-slate-200 transition-all placeholder:text-slate-500 dark:placeholder:text-slate-500 ${className}`}
+                {...props}
+            />
+        </div>
+    );
+};
 
 const CheckItem = ({ label, checked, onToggle }) => (
     <button onClick={onToggle} className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${checked ? 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30 text-green-800 dark:text-green-400' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600'}`}><span className="font-bold text-sm">{label}</span>{checked ? <Icon name="CheckCircle2" size={20} className="text-green-500" /> : <Icon name="Circle" size={20} />}</button>
@@ -2828,7 +3108,7 @@ const CompactMetricBar = ({ label, value, color = 'slate', meta, helper }) => {
     return (
         <div className="min-w-0">
             <div className="mb-1.5 flex items-start justify-between gap-3">
-                <span className="min-w-0 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{label}</span>
+                <span className="min-w-0 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">{label}</span>
                 <span className="shrink-0 text-[11px] font-bold" style={{ color: palette.strong }}>{meta || `${Math.round(safeValue)}%`}</span>
             </div>
             <div className="h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800">
@@ -2863,7 +3143,7 @@ const PortfolioHealthChart = ({ totalClients, contentos, neutrales, enRiesgo }) 
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
                     <div className="h-24 w-24 rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col items-center justify-center text-center">
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Indice</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Indice</span>
                         <span className="mt-1 text-3xl font-black leading-none text-slate-900 dark:text-white">{healthScore}</span>
                         <span className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">{healthLabel}</span>
                     </div>
@@ -2873,12 +3153,12 @@ const PortfolioHealthChart = ({ totalClients, contentos, neutrales, enRiesgo }) 
             <div className="min-w-0 space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-950/50">
-                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Pulso actual</p>
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Pulso actual</p>
                         <p className="mt-1 break-words text-lg font-black leading-tight text-slate-900 dark:text-white">{dominantSegment?.label || 'Sin datos'}</p>
                         <p className="break-words text-xs leading-relaxed font-medium text-slate-500 dark:text-slate-400">{totalClients > 0 ? Math.round(((dominantSegment?.value || 0) / totalClients) * 100) : 0}% de la cartera</p>
                     </div>
                     <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-950/50">
-                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">En foco</p>
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">En foco</p>
                         <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">{attentionCount}</p>
                         <p className="break-words text-xs leading-relaxed font-medium text-slate-500 dark:text-slate-400">{totalClients > 0 ? Math.round((attentionCount / totalClients) * 100) : 0}% con seguimiento cercano</p>
                     </div>
@@ -2895,7 +3175,7 @@ const PortfolioHealthChart = ({ totalClients, contentos, neutrales, enRiesgo }) 
                                 </div>
                                 <div className="shrink-0 text-right">
                                     <span className="text-sm font-black text-slate-900 dark:text-white">{segment.value}</span>
-                                    <span className="ml-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">{percent}%</span>
+                                    <span className="ml-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">{percent}%</span>
                                 </div>
                             </div>
                             <div className="mt-2 h-2.5 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800">
@@ -2933,7 +3213,7 @@ const ProgressOverviewChart = ({ completionPercent, completedTasks, totalTasks, 
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
                     <div className="h-24 w-24 rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col items-center justify-center text-center">
-                        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Avance</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Avance</span>
                         <span className="mt-1 text-3xl font-black leading-none text-slate-900 dark:text-white">{Math.round(safePercent)}%</span>
                         <span className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">{completedTasks}/{totalTasks}</span>
                     </div>
@@ -2967,15 +3247,15 @@ const ProgressOverviewChart = ({ completionPercent, completedTasks, totalTasks, 
 
                 <div className="grid grid-cols-3 gap-2 pt-1">
                     <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-2.5 text-center dark:border-slate-800 dark:bg-slate-950/50">
-                        <p className="break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Total</p>
+                        <p className="break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Total</p>
                         <p className="mt-1 text-lg font-black leading-none text-slate-900 dark:text-white">{totalTasks}</p>
                     </div>
                     <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-2.5 text-center dark:border-slate-800 dark:bg-slate-950/50">
-                        <p className="break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Hechas</p>
+                        <p className="break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Hechas</p>
                         <p className="mt-1 text-lg font-black leading-none text-slate-900 dark:text-white">{completedTasks}</p>
                     </div>
                     <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-2.5 text-center dark:border-slate-800 dark:bg-slate-950/50">
-                        <p className="break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Abiertas</p>
+                        <p className="break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Abiertas</p>
                         <p className="mt-1 text-lg font-black leading-none text-slate-900 dark:text-white">{pendingTasks}</p>
                     </div>
                 </div>
@@ -3159,7 +3439,7 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
                                         <p className="break-words text-sm font-bold leading-tight text-slate-800 dark:text-slate-100 group-hover:text-purple-600 transition-colors">{t.title}</p>
                                         <div className="mt-1.5 flex flex-wrap items-center gap-2">
                                             <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-[0.14em]">{t._type}</span>
-                                            <span className={`text-[9px] font-bold break-words ${isDateBeforeDateString(t.date, todayStr) ? 'text-red-500' : 'text-slate-400'}`}>Vence: {t.date}</span>
+                                            <span className={`text-[9px] font-bold break-words ${isDateBeforeDateString(t.date, todayStr) ? 'text-red-500' : 'text-slate-500'}`}>Vence: {t.date}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -3190,10 +3470,10 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
                             const isThird = index === 2;
                             const palette = getDashboardPalette(ms.mappedColor);
                             
-                            let medalColor = 'text-slate-400';
+                            let medalColor = 'text-slate-500';
                             let medalBg = 'bg-slate-100 dark:bg-slate-800';
                             if (isTop) { medalColor = 'text-yellow-500'; medalBg = 'bg-yellow-50 dark:bg-yellow-500/10 ring-2 ring-yellow-400/50'; }
-                            else if (isSecond) { medalColor = 'text-slate-400'; medalBg = 'bg-slate-50 dark:bg-slate-500/10 ring-2 ring-slate-300/50'; }
+                            else if (isSecond) { medalColor = 'text-slate-500'; medalBg = 'bg-slate-50 dark:bg-slate-500/10 ring-2 ring-slate-300/50'; }
                             else if (isThird) { medalColor = 'text-amber-600'; medalBg = 'bg-amber-50 dark:bg-amber-600/10 ring-2 ring-amber-600/50'; }
 
                             return (
@@ -3215,19 +3495,19 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
                                             </div>
                                         </div>
                                         <div className="text-right shrink-0">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Score</p>
+                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Score</p>
                                             <span className="text-2xl font-black" style={{ color: palette.strong }}>{ms.score} pts</span>
                                         </div>
                                     </div>
                                     
                                     <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800/80 dark:bg-slate-900/40">
                                         <div className="min-w-0">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Tareas</p>
+                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Tareas</p>
                                             <p className="mt-1 text-base font-black text-slate-900 dark:text-white">{ms.completedTasks}/{ms.totalTasks}</p>
                                             <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">resueltas</p>
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Workflow</p>
+                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Workflow</p>
                                             <p className="mt-1 text-base font-black text-slate-900 dark:text-white">{ms.workflowCompleted}/{ms.workflowTotal}</p>
                                             <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">hitos activos</p>
                                         </div>
@@ -3289,8 +3569,8 @@ const TeamView = ({ title, team, iconColor, onAdd, onSelect, onDelete, onEdit })
                         return (
                             <div key={person.id} onClick={() => onSelect(person)} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-xl hover:border-slate-300 dark:hover:border-slate-600 transition-all cursor-pointer group relative">
                                 <div className="absolute top-4 right-4 flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                    <button onClick={(e) => { e.stopPropagation(); onEdit(person); }} className="text-slate-400 dark:text-slate-500 hover:text-blue-500 dark:hover:text-blue-400 p-3 md:p-2 bg-slate-50 dark:bg-slate-800 rounded-full hover:bg-blue-50 dark:hover:bg-slate-700"><Icon name="Edit" size={16}/></button>
-                                    <button onClick={(e) => { e.stopPropagation(); onDelete(person); }} className="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 p-3 md:p-2 bg-slate-50 dark:bg-slate-800 rounded-full hover:bg-red-50 dark:hover:bg-slate-700"><Icon name="Trash2" size={16}/></button>
+                                    <button onClick={(e) => { e.stopPropagation(); onEdit(person); }} aria-label={`Editar ${person.name || 'miembro'}`} title="Editar" className="text-slate-500 dark:text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 p-3 md:p-2 bg-slate-50 dark:bg-slate-800 rounded-full hover:bg-blue-50 dark:hover:bg-slate-700"><Icon name="Edit" size={16}/></button>
+                                    <button onClick={(e) => { e.stopPropagation(); onDelete(person); }} aria-label={`Eliminar ${person.name || 'miembro'}`} title="Eliminar" className="text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 p-3 md:p-2 bg-slate-50 dark:bg-slate-800 rounded-full hover:bg-red-50 dark:hover:bg-slate-700"><Icon name="Trash2" size={16}/></button>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <div className={`h-14 w-14 ${style.bg} rounded-xl flex items-center justify-center text-2xl font-black ${style.text} shadow-sm border border-black/5 dark:border-white/5`}>
@@ -3313,10 +3593,12 @@ const TeamView = ({ title, team, iconColor, onAdd, onSelect, onDelete, onEdit })
 const PersonCalendarDetail = ({ person, tasks, title, baseColor, onBack, onAddEvent, onEventClick }) => {
     let mappedColorName = LEGACY_COLOR_MAP[baseColor] || baseColor;
     const style = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
+    const parentLabel = title.includes('Cuentas') ? 'Account Managers' : 'Editores';
     return (
         <div className="h-full flex flex-col space-y-6 fade-in">
+            <Breadcrumb items={[{ label: parentLabel, onClick: onBack }, { label: person.name || 'Detalle' }]} />
             <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-                <button onClick={onBack} className="p-3 md:p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300"><Icon name="ChevronLeft"/></button>
+                <button onClick={onBack} aria-label={`Volver a ${parentLabel}`} className="p-3 md:p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300"><Icon name="ChevronLeft"/></button>
                 <div>
                     <h2 className="text-2xl font-black text-slate-800 dark:text-white flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm shadow-sm border border-black/5 dark:border-white/5 ${style.bg} ${style.text}`}>{person.name ? person.name.charAt(0).toUpperCase() : '?'}</div>
@@ -3359,7 +3641,7 @@ const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, ow
                 <div className="flex flex-col lg:flex-row lg:flex-wrap gap-3 w-full min-w-0 lg:w-auto">
                     {/* Filtro por FECHA */}
                     <div className="flex flex-col gap-0.5">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-1">Fecha</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 px-1">Fecha</span>
                         <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto max-w-full overflow-x-auto custom-scroll">
                             <button onClick={() => setFilterMode('date')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === 'date' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Día específico</button>
                             {hasRangeSupport && <button onClick={() => setFilterMode('range')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-1.5 ${filterMode === 'range' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}><Icon name="CalendarRange" size={14}/>Rango</button>}
@@ -3370,7 +3652,7 @@ const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, ow
                     {/* Filtro por ASIGNACIÓN */}
                     {setOwnershipFilter && (
                         <div className="flex flex-col gap-0.5">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-1">Asignación</span>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 px-1">Asignación</span>
                             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto max-w-full overflow-x-auto custom-scroll">
                                 <button onClick={() => setOwnershipFilter('all')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === 'all' ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Todo el equipo</button>
                                 <button onClick={() => setOwnershipFilter('mine')} className={`shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === 'mine' ? `bg-${btnColor}-500 text-white shadow-sm` : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Asignadas a mí</button>
@@ -3387,11 +3669,11 @@ const DateHeader = ({ currentDate, setCurrentDate, filterMode, setFilterMode, ow
                 {filterMode === 'range' && hasRangeSupport && (
                     <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
                         <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-400 dark:text-slate-500 shrink-0">Desde</span>
+                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Desde</span>
                             <input type="date" value={effectiveRangeStart} onChange={handleRangeStartChange} className="min-h-[46px] w-full sm:w-auto text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 outline-none"/>
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-400 dark:text-slate-500 shrink-0">Hasta</span>
+                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Hasta</span>
                             <input type="date" value={effectiveRangeEnd} min={effectiveRangeStart} onChange={handleRangeEndChange} className="min-h-[46px] w-full sm:w-auto text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 outline-none"/>
                         </div>
                     </div>
@@ -3425,10 +3707,10 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
     const todayStr = getHondurasTodayStr();
 
     const columns = [
-        { id: 'por_disenar', title: 'Por Diseñar', color: 'slate' },
-        { id: 'aprobacion_interna', title: 'Aprobación Interna', color: 'blue' },
-        { id: 'aprobado_internamente', title: 'Aprobado Interno', color: 'emerald' },
-        { id: 'publicado', title: 'Publicado', color: 'indigo' }
+        { id: 'por_disenar', title: 'Por Diseñar', color: 'slate', icon: 'PenTool' },
+        { id: 'aprobacion_interna', title: 'Aprobación Interna', color: 'blue', icon: 'Search' },
+        { id: 'aprobado_internamente', title: 'Aprobado Interno', color: 'emerald', icon: 'CheckCircle2' },
+        { id: 'publicado', title: 'Publicado', color: 'indigo', icon: 'Sparkles' }
     ];
 
     const effectiveRangeStart = rangeStart || todayStr;
@@ -3500,19 +3782,19 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
             {false && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-                    <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Jerarquizacion</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">Jerarquizacion</p>
                     <h3 className="text-lg font-black text-slate-800 dark:text-white mb-4">Prioridad de videos en sala</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {EDITING_HIERARCHY_OPTIONS.map((option) => (
                             <div key={option.id} className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">{option.label}</p>
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">{option.label}</p>
                                 <p className="text-2xl font-black text-slate-800 dark:text-white mt-2">{rankedTasks.filter((task) => task.hierarchy === option.id).length}</p>
                             </div>
                         ))}
                     </div>
                 </div>
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-                    <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Top ranking</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">Top ranking</p>
                     <h3 className="text-lg font-black text-slate-800 dark:text-white mb-4">Orden sugerido de salida</h3>
                     <div className="space-y-3">
                         {rankedTasks.slice(0, 4).map((task, index) => (
@@ -3529,18 +3811,19 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
                 </div>
             </div>
             )}
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
+            <div className="flex-1 flex md:grid md:grid-cols-4 gap-4 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0">
                 {columns.map((col, colIndex) => {
                     const colTasks = filteredTasks.filter(t => t.status === col.id);
                     const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
                     const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
+                    const prevLabel = colIndex > 0 ? columns[colIndex - 1].title : '';
 
                     return (
-                        <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300"
+                        <div key={col.id} className="flex flex-col shrink-0 w-[85vw] sm:w-72 md:w-auto md:shrink bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300 snap-start"
                              onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(e) => handleDrop(e, col.id)}>
                             
                             <div className={`p-3 font-black text-[11px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
-                                {col.title} <span className="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
+                                <span className="flex items-center gap-2"><Icon name={col.icon} size={13}/>{col.title}</span> <span className="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
                             </div>
                             
                             <div className="p-3 flex-1 overflow-y-auto space-y-3 custom-scroll">
@@ -3567,8 +3850,8 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
                                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border border-black/5 dark:border-white/5 ${mStyles.bg} ${mStyles.text}`}>{manager ? manager.name : 'Sin asignar'}</span>
                                                 </div>
                                                 <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={(e) => { e.stopPropagation(); onEdit(t); }} className="text-slate-400 hover:text-blue-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Edit" size={16}/></button>
-                                                    <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Trash2" size={16}/></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); onEdit(t); }} aria-label={`Editar ${t.title || 'tarea'}`} title="Editar" className="text-slate-500 hover:text-blue-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Edit" size={16}/></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} aria-label={`Eliminar ${t.title || 'tarea'}`} title="Eliminar" className="text-slate-500 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Trash2" size={16}/></button>
                                                 </div>
                                             </div>
                                             
@@ -3582,8 +3865,8 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
 
                                             <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                                                 {prevStatus && (
-                                                    <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, prevStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}>
-                                                        <Icon name="ChevronLeft" size={12}/> Atrás
+                                                    <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, prevStatus); }} aria-label={`Volver a ${prevLabel}`} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}>
+                                                        <Icon name="ChevronLeft" size={12}/> Volver a {prevLabel}
                                                     </button>
                                                 )}
                                                 {nextStatus && (
@@ -3618,11 +3901,11 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
     const todayStr = getHondurasTodayStr();
 
     const columns = [
-        { id: 'editar',           title: 'Por Editar',  color: 'slate'   },
-        { id: 'en_edicion',       title: 'En Edición',  color: 'amber'   },
-        { id: 'revision_interna', title: 'En Revisión', color: 'blue'    },
-        { id: 'aprobado',         title: 'Aprobado',    color: 'emerald' },
-        { id: 'publicado',        title: 'Publicado',   color: 'indigo'  },
+        { id: 'editar',           title: 'Por Editar',  color: 'slate',   icon: 'PenTool' },
+        { id: 'en_edicion',       title: 'En Edición',  color: 'amber',   icon: 'Video' },
+        { id: 'revision_interna', title: 'En Revisión', color: 'blue',    icon: 'Search' },
+        { id: 'aprobado',         title: 'Aprobado',    color: 'emerald', icon: 'CheckCircle2' },
+        { id: 'publicado',        title: 'Publicado',   color: 'indigo',  icon: 'Sparkles' },
     ];
     
     const priorityStyles = {
@@ -3713,18 +3996,19 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
     return (
         <div className="h-full flex flex-col space-y-6 fade-in">
             <DateHeader currentDate={currentDate} setCurrentDate={setCurrentDate} filterMode={filterMode} setFilterMode={setFilterMode} ownershipFilter={ownershipFilter} setOwnershipFilter={setOwnershipFilter} title="Sala de Edición" onAdd={handleAddTask} btnColor="amber" btnIcon="Video" searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4 overflow-hidden">
+            <div className="flex-1 flex md:grid md:grid-cols-5 gap-4 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0">
                 {columns.map((col, colIndex) => {
                     const colTasks = filteredTasks.filter(t => t.status === col.id);
                     const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
                     const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
+                    const prevLabel = colIndex > 0 ? columns[colIndex - 1].title : '';
 
                     return (
-                        <div key={col.id} className="flex flex-col bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300"
+                        <div key={col.id} className="flex flex-col shrink-0 w-[85vw] sm:w-72 md:w-auto md:shrink bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300 snap-start"
                              onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(e) => handleDrop(e, col.id)}>
                             
                             <div className={`p-3 font-black text-[11px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`}>
-                                {col.title} <span className="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
+                                <span className="flex items-center gap-2"><Icon name={col.icon} size={13}/>{col.title}</span> <span className="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full text-slate-500 dark:text-slate-400 shadow-sm">{colTasks.length}</span>
                             </div>
                             
                             <div className="p-3 flex-1 overflow-y-auto space-y-3 custom-scroll">
@@ -3763,8 +4047,8 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
                                                 </div>
                                                 {canManageEditingTasks && (
                                                     <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                                        <button onClick={(e) => { e.stopPropagation(); onEdit(t); }} className="text-slate-400 hover:text-blue-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Edit" size={16}/></button>
-                                                        <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Trash2" size={16}/></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onEdit(t); }} aria-label={`Editar ${t.title || 'tarea'}`} title="Editar" className="text-slate-500 hover:text-blue-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Edit" size={16}/></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} aria-label={`Eliminar ${t.title || 'tarea'}`} title="Eliminar" className="text-slate-500 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Icon name="Trash2" size={16}/></button>
                                                     </div>
                                                 )}
                                             </div>
@@ -3781,8 +4065,8 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
                                             {canManageEditingTasks && (
                                                 <div className="flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                                                 {prevStatus && (
-                                                    <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, prevStatus); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}>
-                                                        <Icon name="ChevronLeft" size={12}/> Atrás
+                                                    <button onClick={(e) => { e.stopPropagation(); onChangeStatus(t, prevStatus); }} aria-label={`Volver a ${prevLabel}`} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}>
+                                                        <Icon name="ChevronLeft" size={12}/> Volver a {prevLabel}
                                                     </button>
                                                 )}
                                                 {nextStatus && (
@@ -3900,9 +4184,9 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
                                 <div>
                                     <div className="flex items-baseline gap-1.5">
                                         <p className="text-2xl font-black text-slate-800 dark:text-white leading-none">{filteredCount}</p>
-                                        {isFiltered && <span className="text-xs font-bold text-slate-400 dark:text-slate-500">/ {totalCount}</span>}
+                                        {isFiltered && <span className="text-xs font-bold text-slate-500 dark:text-slate-400">/ {totalCount}</span>}
                                     </div>
-                                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-0.5">{col.title}</p>
+                                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">{col.title}</p>
                                 </div>
                             </div>
                         );
@@ -3929,7 +4213,7 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
                             : <p className="text-[10px] font-bold text-emerald-500">Todos con email ✓</p>
                         }
                     </div>
-                    <Icon name={showTeam ? 'ChevronUp' : 'ChevronDown'} size={14} className="text-slate-400 ml-1"/>
+                    <Icon name={showTeam ? 'ChevronUp' : 'ChevronDown'} size={14} className="text-slate-500 ml-1"/>
                 </button>
             </div>
 
@@ -3946,7 +4230,7 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="font-bold text-slate-800 dark:text-white text-sm truncate">{member.name}</p>
-                                    <p className={`text-[10px] truncate ${hasAlert ? 'text-amber-500 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`}>{hasAlert ? 'Sin correo asignado' : member.email}</p>
+                                    <p className={`text-[10px] truncate ${hasAlert ? 'text-amber-500 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>{hasAlert ? 'Sin correo asignado' : member.email}</p>
                                 </div>
                                 {openCount > 0 && <span className="shrink-0 text-[10px] font-black bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-1 rounded-full">{openCount} activas</span>}
                             </div>
@@ -3958,25 +4242,26 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
             {/* Indicador de filtros activos */}
             {(filterMode !== 'all' || ownershipFilter !== 'all' || searchTerm) && (
                 <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Filtros activos:</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Filtros activos:</span>
                     {filterMode === 'date' && <span className="flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30"><Icon name="Calendar" size={9}/>Fecha: {currentDate}</span>}
                     {filterMode === 'overdue' && <span className="flex items-center gap-1 text-[10px] font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-500/30"><Icon name="Flame" size={9}/>Solo atrasadas</span>}
                     {ownershipFilter === 'mine' && <span className="flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30"><Icon name="User" size={9}/>Solo mis tareas</span>}
                     {searchTerm && <span className="flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700"><Icon name="Search" size={9}/>"{searchTerm}"</span>}
-                    <span className="text-[10px] text-slate-400">— mostrando {filteredTasks.length} de {tasks.length} tareas</span>
+                    <span className="text-[10px] text-slate-500">— mostrando {filteredTasks.length} de {tasks.length} tareas</span>
                 </div>
             )}
 
             {/* Kanban */}
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden min-h-0">
+            <div className="flex-1 flex md:grid md:grid-cols-4 gap-4 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0">
                 {columns.map((col, colIndex) => {
                     const colTasks = filteredTasks.filter(task => task.status === col.id);
                     const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
                     const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
+                    const prevLabel = colIndex > 0 ? columns[colIndex - 1].title : '';
                     return (
                         <div
                             key={col.id}
-                            className="flex flex-col bg-slate-100/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden"
+                            className="flex flex-col shrink-0 w-[85vw] sm:w-72 md:w-auto md:shrink bg-slate-100/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden snap-start"
                             onDragOver={handleDragOver}
                             onDragLeave={handleDragLeave}
                             onDrop={(e) => handleDrop(e, col.id)}
@@ -4046,8 +4331,8 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
 
                                                 {/* Date */}
                                                 <div className="flex items-center gap-1.5">
-                                                    <Icon name="CalendarDays" size={10} className={isOverdue ? 'text-red-400' : 'text-slate-400 dark:text-slate-500'}/>
-                                                    <span className={`text-[10px] font-bold ${isOverdue ? 'text-red-500 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                                    <Icon name="CalendarDays" size={10} className={isOverdue ? 'text-red-400' : 'text-slate-500 dark:text-slate-400'}/>
+                                                    <span className={`text-[10px] font-bold ${isOverdue ? 'text-red-500 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
                                                         {task.date}{task.time ? ` · ${task.time}` : ''}
                                                     </span>
                                                     {isOverdue && <span className="text-[9px] font-black text-red-500 dark:text-red-400 uppercase tracking-wider">Vencida</span>}
@@ -4060,16 +4345,16 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
                                             {/* Footer */}
                                             <div className="flex items-center justify-between gap-1 px-3 py-2.5 border-t border-slate-100 dark:border-slate-800">
                                                 {prevStatus
-                                                    ? <button onClick={(e) => { e.stopPropagation(); onChangeStatus(task, prevStatus); }} className="flex items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                                                        <Icon name="ChevronLeft" size={11}/> Atrás
+                                                    ? <button onClick={(e) => { e.stopPropagation(); onChangeStatus(task, prevStatus); }} aria-label={`Volver a ${prevLabel}`} className="flex items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                                        <Icon name="ChevronLeft" size={11}/> Volver a {prevLabel}
                                                     </button>
                                                     : <span />
                                                 }
                                                 <div className="flex items-center gap-0.5">
-                                                    <button onClick={(e) => { e.stopPropagation(); onEdit(task); }} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors opacity-60 group-hover:opacity-100">
+                                                    <button onClick={(e) => { e.stopPropagation(); onEdit(task); }} aria-label={`Editar ${task.title || 'tarea'}`} title="Editar" className="p-1.5 rounded-lg text-slate-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors opacity-60 group-hover:opacity-100">
                                                         <Icon name="Edit" size={13}/>
                                                     </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); onDelete(task.id); }} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors opacity-60 group-hover:opacity-100">
+                                                    <button onClick={(e) => { e.stopPropagation(); onDelete(task.id); }} aria-label={`Eliminar ${task.title || 'tarea'}`} title="Eliminar" className="p-1.5 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors opacity-60 group-hover:opacity-100">
                                                         <Icon name="Trash2" size={13}/>
                                                     </button>
                                                     {nextStatus && (
@@ -4119,7 +4404,7 @@ const UsersAccessView = ({ users, managers, editors, auditLogs, currentUserProfi
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-black text-slate-800 dark:text-white">Directorio</h3>
-                        <span className="text-xs font-black uppercase tracking-wider text-slate-400">{getRoleMeta(currentUserProfile?.role).label}</span>
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">{getRoleMeta(currentUserProfile?.role).label}</span>
                     </div>
                     <div className="space-y-3 max-h-[540px] overflow-y-auto custom-scroll pr-2">
                         {filteredUsers.length === 0 ? <EmptyState icon="Users" text="No hay usuarios para este filtro." /> : filteredUsers.map((record) => {
@@ -4156,7 +4441,7 @@ const UsersAccessView = ({ users, managers, editors, auditLogs, currentUserProfi
                                                 {record.emailVerification.lastError}
                                             </p>
                                         )}
-                                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Ultimo acceso: {record.lastSeenAt || 'Sin registro'}</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Ultimo acceso: {record.lastSeenAt || 'Sin registro'}</p>
                                         <div className="flex flex-wrap gap-2 mt-3">
                                             {linkedLabels.map((label) => (
                                                 <span key={`${record.id}-${label}`} className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-violet-50 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
@@ -4169,11 +4454,11 @@ const UsersAccessView = ({ users, managers, editors, auditLogs, currentUserProfi
                                     </div>
                                     <div className="flex flex-col gap-2">
                                         {normalizeEmail(record.email) && !verificationMeta.isVerified && (
-                                            <button onClick={() => onResendVerification(record)} className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Reenviar acceso por correo">
+                                            <button onClick={() => onResendVerification(record)} className="p-2 text-slate-500 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Reenviar acceso por correo">
                                                 <Icon name="Mail" size={18} />
                                             </button>
                                         )}
-                                        <button onClick={() => onEdit(record)} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Editar usuario">
+                                        <button onClick={() => onEdit(record)} className="p-2 text-slate-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Editar usuario">
                                             <Icon name="Edit" size={18} />
                                         </button>
                                     </div>
@@ -4202,7 +4487,7 @@ const UsersAccessView = ({ users, managers, editors, auditLogs, currentUserProfi
                                     </div>
                                     <div className="text-right">
                                         <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{log.actor?.name || 'Sistema'}</p>
-                                        <p className="text-[10px] text-slate-400 dark:text-slate-500">{log.createdAt || ''}</p>
+                                        <p className="text-[10px] text-slate-500 dark:text-slate-400">{log.createdAt || ''}</p>
                                     </div>
                                 </div>
                             </div>
@@ -4240,7 +4525,7 @@ const ClientsView = ({ clients, onAdd, onSelect }) => {
                                 <div className={`w-3 h-3 rounded-full shadow-sm border border-white dark:border-slate-900 ${c.mood === 'En Riesgo' ? 'bg-red-500 animate-pulse' : c.mood === 'Neutral' ? 'bg-amber-400' : 'bg-green-500'}`}></div>
                             </div>
                             <h3 className="text-lg font-bold text-slate-800 dark:text-white pr-4 truncate">{c.name}</h3>
-                            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">{c.niche || 'Sin rubro'}</p>
+                            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">{c.niche || 'Sin rubro'}</p>
                             <div className="pt-4 border-t border-slate-50 dark:border-slate-800 mt-4 flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 truncate"><Icon name="UserCircle2" size={16} className="text-blue-400 dark:text-blue-500 shrink-0"/> {c.manager || 'Sin asignar'}</div>
                         </div>
                     ))}
@@ -4252,10 +4537,11 @@ const ClientsView = ({ clients, onAdd, onSelect }) => {
 
 const ClientDetail = ({ client, managers, onReassignManager, onBack, onUpdate, onDelete, onEdit }) => (
     <div className="space-y-6 max-w-5xl mx-auto fade-in">
-        <button onClick={onBack} className="flex items-center gap-2 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 font-bold text-sm uppercase p-2 -ml-2"><Icon name="ChevronLeft" size={16}/> Volver</button>
+        <Breadcrumb items={[{ label: 'Clientes', onClick: onBack }, { label: client.name || 'Detalle' }]} />
+        <button onClick={onBack} className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 font-bold text-sm uppercase p-2 -ml-2"><Icon name="ChevronLeft" size={16}/> Volver a clientes</button>
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
             <div className="bg-slate-900 dark:bg-slate-950 p-6 md:p-8 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative group border-b border-slate-800">
-                <button onClick={onEdit} className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><Icon name="Edit" size={18}/></button>
+                <button onClick={onEdit} aria-label="Editar cliente" className="absolute top-4 right-4 text-slate-500 hover:text-white p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><Icon name="Edit" size={18}/></button>
                 
                 <div className="flex items-start md:items-center gap-6">
                     <div className="h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl font-black shadow-inner shrink-0">
@@ -4279,14 +4565,14 @@ const ClientDetail = ({ client, managers, onReassignManager, onBack, onUpdate, o
                     </div>
                 </div>
                 
-                <div className="flex gap-2 bg-white/10 p-1 rounded-xl shrink-0 mt-4 md:mt-0">{['Contento', 'Neutral', 'En Riesgo'].map(m => <button key={m} onClick={() => onUpdate(client.id, {mood: m})} className={`p-2 rounded-lg ${client.mood === m ? 'bg-white/20' : 'opacity-50 hover:opacity-100'}`}><Icon name={m === 'Contento' ? 'Smile' : m === 'Neutral' ? 'Meh' : 'Frown'} className={m === 'Contento' ? 'text-green-400' : m === 'Neutral' ? 'text-yellow-400' : 'text-red-400'}/></button>)}</div>
+                <div className="flex gap-2 bg-white/10 p-1 rounded-xl shrink-0 mt-4 md:mt-0">{['Contento', 'Neutral', 'En Riesgo'].map(m => <button key={m} onClick={() => onUpdate(client.id, {mood: m})} aria-label={`Marcar cliente como ${m}`} aria-pressed={client.mood === m} className={`p-2 rounded-lg ${client.mood === m ? 'bg-white/20' : 'opacity-50 hover:opacity-100'}`}><Icon name={m === 'Contento' ? 'Smile' : m === 'Neutral' ? 'Meh' : 'Frown'} className={m === 'Contento' ? 'text-green-400' : m === 'Neutral' ? 'text-yellow-400' : 'text-red-400'}/></button>)}</div>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-slate-100 dark:divide-slate-800">
                 <div className="lg:col-span-2 p-6 md:p-8 space-y-8">
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800"><h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Icon name="Instagram" size={14}/> Redes</h3><div className="flex flex-col md:flex-row gap-2"><input defaultValue={client.instagram} onBlur={(e) => onUpdate(client.id, {instagram: e.target.value})} placeholder="Link Instagram..." className="flex-1 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-xl text-sm px-4 py-3 border outline-none text-slate-800 dark:text-slate-200"/><a href={client.instagram || '#'} target="_blank" className="bg-pink-50 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400 px-4 py-3 rounded-xl font-bold text-sm hover:bg-pink-100 dark:hover:bg-pink-500/20 flex items-center justify-center gap-2">Ver <Icon name="ExternalLink" size={14}/></a></div></div>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800"><h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Icon name="Instagram" size={14}/> Redes</h3><div className="flex flex-col md:flex-row gap-2"><input defaultValue={client.instagram} onBlur={(e) => onUpdate(client.id, {instagram: e.target.value})} placeholder="Link Instagram..." className="flex-1 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-xl text-sm px-4 py-3 border outline-none text-slate-800 dark:text-slate-200"/><a href={client.instagram || '#'} target="_blank" className="bg-pink-50 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400 px-4 py-3 rounded-xl font-bold text-sm hover:bg-pink-100 dark:hover:bg-pink-500/20 flex items-center justify-center gap-2">Ver <Icon name="ExternalLink" size={14}/></a></div></div>
                     <button onClick={onDelete} className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400 text-xs font-bold flex items-center gap-2 p-2 -ml-2"><Icon name="Trash2" size={14}/> ELIMINAR CLIENTE</button>
                 </div>
-                <div className="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50"><h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2"><Icon name="CheckCircle2" size={14}/> Workflow</h3><div className="space-y-3">{['week1', 'week2', 'week3', 'week4'].map((w, i) => <CheckItem key={w} label={['Estrategia', 'Producción', 'Aprobación', 'Reporte'][i]} checked={client.workflow?.[w] || false} onToggle={() => onUpdate(client.id, {[`workflow.${w}`]: !client.workflow?.[w]})} />)}</div></div>
+                <div className="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50"><h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2"><Icon name="CheckCircle2" size={14}/> Workflow</h3><div className="space-y-3">{['week1', 'week2', 'week3', 'week4'].map((w, i) => <CheckItem key={w} label={['Estrategia', 'Producción', 'Aprobación', 'Reporte'][i]} checked={client.workflow?.[w] || false} onToggle={() => onUpdate(client.id, {[`workflow.${w}`]: !client.workflow?.[w]})} />)}</div></div>
             </div>
         </div>
     </div>
@@ -4304,11 +4590,11 @@ const CalendarGrid = ({ events, onAdd, onEventClick, baseColor = "emerald" }) =>
         <>
         <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
             <div className={`font-bold uppercase text-xs tracking-widest text-slate-500 dark:text-slate-400`}>Vista Mensual</div>
-            <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800 rounded-lg p-1"><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() - 1, 1))} className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"><Icon name="ChevronLeft" size={16}/></button><span className="font-black text-slate-700 dark:text-slate-200 w-32 text-center text-sm uppercase">{MONTH_NAMES[date.getMonth()]} {date.getFullYear()}</span><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() + 1, 1))} className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"><Icon name="ChevronRight" size={16}/></button></div>
+            <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800 rounded-lg p-1"><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() - 1, 1))} aria-label="Mes anterior" className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"><Icon name="ChevronLeft" size={16}/></button><span className="font-black text-slate-700 dark:text-slate-200 w-32 text-center text-sm uppercase">{MONTH_NAMES[date.getMonth()]} {date.getFullYear()}</span><button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() + 1, 1))} aria-label="Mes siguiente" className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"><Icon name="ChevronRight" size={16}/></button></div>
         </div>
         <div className="flex-1 overflow-x-auto overflow-y-auto bg-slate-50 dark:bg-slate-950 custom-scroll">
             <div className="grid grid-cols-7 auto-rows-fr min-w-[800px] h-full">
-                {['D','L','M','M','J','V','S'].map(d => <div key={d} className="py-2 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 border-r border-b border-slate-200/50 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">{d}</div>)}
+                {['D','L','M','M','J','V','S'].map(d => <div key={d} className="py-2 text-center text-[10px] font-black text-slate-500 dark:text-slate-400 border-r border-b border-slate-200/50 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">{d}</div>)}
                 {Array(startDay).fill(null).map((_, i) => <div key={`empty-${i}`} className="border-r border-b border-slate-200/50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30" />)}
                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
                     const dStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -4316,7 +4602,7 @@ const CalendarGrid = ({ events, onAdd, onEventClick, baseColor = "emerald" }) =>
                     
                     return (
                         <div key={d} onClick={() => onAdd(dStr)} className="border-r border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 min-h-[120px] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group relative">
-                            <span className={`text-xs font-bold text-slate-400 dark:text-slate-500 group-hover:text-purple-500 dark:group-hover:text-purple-400`}>{d}</span>
+                            <span className={`text-xs font-bold text-slate-500 dark:text-slate-400 group-hover:text-purple-500 dark:group-hover:text-purple-400`}>{d}</span>
                             <div className="mt-2 space-y-1.5">
                                 {dayEvents.map(e => {
                                     const isCompleted = e.status === 'publicado' || e.status === 'aprobado';
@@ -4412,7 +4698,7 @@ const GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
                 className={`border-r border-b border-slate-200/60 dark:border-slate-800 p-2 transition-colors cursor-pointer group relative ${viewMode === 'week' ? 'min-h-[200px]' : 'min-h-[120px]'} ${isToday ? 'ring-2 ring-inset ring-blue-400 dark:ring-blue-500' : ''} ${isDragOver ? '!bg-blue-50 dark:!bg-blue-500/10 ring-2 ring-inset ring-blue-400' : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
             >
                 <div className="flex justify-between items-start mb-2">
-                    <span className={`text-xs font-bold flex items-center justify-center ${isToday ? 'bg-blue-500 text-white w-5 h-5 rounded-full' : 'text-slate-400 dark:text-slate-500 group-hover:text-blue-500 dark:group-hover:text-blue-400'}`}>{dateObj.getDate()}</span>
+                    <span className={`text-xs font-bold flex items-center justify-center ${isToday ? 'bg-blue-500 text-white w-5 h-5 rounded-full' : 'text-slate-500 dark:text-slate-400 group-hover:text-blue-500 dark:group-hover:text-blue-400'}`}>{dateObj.getDate()}</span>
                     {dayActivities.length > 0 && <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full">{dayActivities.length}</span>}
                 </div>
                 <div className="space-y-1">
@@ -4425,7 +4711,7 @@ const GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
                             className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate select-none bg-${act._color}-100 dark:bg-${act._color}-500/20 text-${act._color}-800 dark:text-${act._color}-400 border border-${act._color}-200 dark:border-${act._color}-500/30 ${onMoveActivity ? 'cursor-grab active:cursor-grabbing' : ''} ${draggedId === act.id ? 'opacity-30' : ''}`}
                         >{act.title}</div>
                     ))}
-                    {dayActivities.length > maxVisible && <div className="text-[10px] font-bold text-slate-400 text-center mt-1">+{dayActivities.length - maxVisible} más</div>}
+                    {dayActivities.length > maxVisible && <div className="text-[10px] font-bold text-slate-500 text-center mt-1">+{dayActivities.length - maxVisible} más</div>}
                 </div>
                 {!draggedId && <Icon name="ExternalLink" className="absolute bottom-2 right-2 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" size={14}/>}
                 {isDragOver && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><Icon name="CalendarPlus" className="text-blue-400 dark:text-blue-500 opacity-60" size={24}/></div>}
@@ -4446,15 +4732,15 @@ const GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
                 <button onClick={() => setDate(new Date())} className="px-3 py-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl transition-all">Hoy</button>
             </div>
             <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 rounded-lg p-1 relative">
-                <button onClick={navPrev} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 transition-colors"><Icon name="ChevronLeft" size={16}/></button>
+                <button onClick={navPrev} aria-label={viewMode === 'week' ? 'Semana anterior' : 'Mes anterior'} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 transition-colors"><Icon name="ChevronLeft" size={16}/></button>
                 <button onClick={() => { setPickerYear(date.getFullYear()); setShowPicker(s => !s); }} className="font-black text-slate-700 dark:text-slate-200 min-w-[180px] text-center text-sm uppercase hover:text-blue-500 dark:hover:text-blue-400 transition-colors px-2">{getDateLabel()}</button>
-                <button onClick={navNext} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 transition-colors"><Icon name="ChevronRight" size={16}/></button>
+                <button onClick={navNext} aria-label={viewMode === 'week' ? 'Semana siguiente' : 'Mes siguiente'} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 transition-colors"><Icon name="ChevronRight" size={16}/></button>
                 {showPicker && (
                     <div className="absolute top-full right-0 mt-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-4 w-64" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-3">
-                            <button onClick={() => setPickerYear(y => y - 1)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors"><Icon name="ChevronLeft" size={14}/></button>
+                            <button onClick={() => setPickerYear(y => y - 1)} aria-label="Año anterior" className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors"><Icon name="ChevronLeft" size={14}/></button>
                             <span className="font-black text-slate-800 dark:text-white text-sm">{pickerYear}</span>
-                            <button onClick={() => setPickerYear(y => y + 1)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors"><Icon name="ChevronRight" size={14}/></button>
+                            <button onClick={() => setPickerYear(y => y + 1)} aria-label="Año siguiente" className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors"><Icon name="ChevronRight" size={14}/></button>
                         </div>
                         <div className="grid grid-cols-3 gap-1.5">
                             {SHORT_MONTHS.map((m, i) => {
@@ -4472,7 +4758,7 @@ const GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
         <div className="flex-1 overflow-x-auto overflow-y-auto bg-slate-50 dark:bg-slate-950 custom-scroll">
             <div className="grid grid-cols-7 min-w-[800px] h-full" style={{ gridAutoRows: viewMode === 'month' ? '1fr' : 'auto' }}>
                 {DAY_LABELS.map((d, i) => (
-                    <div key={`hdr-${i}`} className="py-2 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 border-r border-b border-slate-200/50 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">
+                    <div key={`hdr-${i}`} className="py-2 text-center text-[10px] font-black text-slate-500 dark:text-slate-400 border-r border-b border-slate-200/50 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">
                         {viewMode === 'week' ? `${d} ${weekDates[i]?.getDate()}` : d}
                     </div>
                 ))}
@@ -4492,13 +4778,15 @@ const GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
 };
 
 const EventActionModal = ({ config, canEdit = true, onClose, onEdit, onDelete }) => {
+    const dialogRef = useDialogA11y(config.isOpen, onClose);
+    const dialogTitleId = useId();
     if (!config.isOpen || !config.event) return null;
     return (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-xs overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
+            <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={dialogTitleId} tabIndex={-1} className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-xs overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 outline-none" onClick={(event) => event.stopPropagation()}>
                 <div className="p-6 text-center border-b border-slate-100 dark:border-slate-800">
                     <div className="mx-auto w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 mb-4"><Icon name="MousePointerClick" size={24} /></div>
-                    <h3 className="text-lg font-black text-slate-800 dark:text-white truncate">{config.event.title || 'Elemento'}</h3>
+                    <h3 id={dialogTitleId} className="text-lg font-black text-slate-800 dark:text-white truncate">{config.event.title || 'Elemento'}</h3>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">¿Qué deseas hacer?</p>
                 </div>
                 <div className="p-4 space-y-3">
@@ -4599,6 +4887,8 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
     const [mentionQuery, setMentionQuery] = useState('');
     const [mentionStart, setMentionStart] = useState(-1);
     const [mentionedIds, setMentionedIds] = useState([]);
+    const dialogRef = useDialogA11y(config.isOpen, onClose);
+    const dialogTitleId = useId();
 
     // Cerrar dropdowns al click fuera
     useEffect(() => {
@@ -4707,20 +4997,20 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
     const FieldRow = ({ icon, label, children }) => (
         <div className="flex items-center min-h-[32px] hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-lg px-2 -mx-2 transition-colors">
             <div className="flex items-center gap-2 w-40 shrink-0">
-                <Icon name={icon} size={13} className="text-slate-400 shrink-0"/>
+                <Icon name={icon} size={13} className="text-slate-500 shrink-0"/>
                 <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">{label}</span>
             </div>
             <div className="flex-1 text-sm">{children}</div>
         </div>
     );
 
-    const priorityColors = { urgente: 'text-red-500', alta: 'text-orange-500', normal: 'text-slate-400', baja: 'text-slate-300' };
+    const priorityColors = { urgente: 'text-red-500', alta: 'text-orange-500', normal: 'text-slate-500', baja: 'text-slate-300' };
 
     const PRIORITIES = [
         { id: 'urgente', label: 'Urgente', color: 'text-red-500',    iconColor: '#ef4444' },
         { id: 'alta',    label: 'Alta',    color: 'text-orange-400', iconColor: '#fb923c' },
         { id: 'normal',  label: 'Normal',  color: 'text-blue-400',   iconColor: '#60a5fa' },
-        { id: 'baja',    label: 'Baja',    color: 'text-slate-400',  iconColor: '#94a3b8' },
+        { id: 'baja',    label: 'Baja',    color: 'text-slate-500',  iconColor: '#94a3b8' },
     ];
     const currentPriority = PRIORITIES.find(p => p.id === task.priority);
     const peoplePool = type === 'accountTask' ? managers : type === 'editingTask' ? editors : users;
@@ -4735,7 +5025,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
 
     return (
         <div className="fixed inset-0 z-[80] bg-black/60 dark:bg-black/75 flex items-start justify-center pt-8 pb-6 px-4 overflow-y-auto" onClick={onClose}>
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col border border-slate-200 dark:border-slate-800 overflow-hidden" style={{maxHeight:'90vh'}} onClick={function(e){e.stopPropagation()}}>
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={dialogTitleId} tabIndex={-1} className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col border border-slate-200 dark:border-slate-800 overflow-hidden outline-none" style={{maxHeight:'90vh'}} onClick={function(e){e.stopPropagation()}}>
 
             {/* Top bar — slim, tipo Jira */}
             <div className="h-11 border-b border-slate-200 dark:border-slate-800 flex items-center px-4 gap-2 shrink-0">
@@ -4743,7 +5033,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                     <Icon name={iconName} size={11}/>{typeLabel}
                 </div>
                 <Icon name="ChevronRight" size={12} className="text-slate-300 dark:text-slate-600"/>
-                <span className="text-xs text-slate-400 font-mono">{task.id?.slice(0,8)}</span>
+                <span className="text-xs text-slate-500 font-mono">{task.id?.slice(0,8)}</span>
                 <div className="flex-1"/>
                 {canAct && <>
                     <button onClick={() => onEdit(task, type)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
@@ -4753,7 +5043,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                         <Icon name="Trash2" size={11}/> Eliminar
                     </button>
                 </>}
-                <button onClick={onClose} className="ml-2 p-1.5 rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <button onClick={onClose} aria-label="Cerrar modal" className="ml-2 p-1.5 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                     <Icon name="X" size={16}/>
                 </button>
             </div>
@@ -4766,7 +5056,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                     <div className="max-w-3xl mx-auto px-8 pt-7 pb-12">
 
                         {/* Title */}
-                        <h1 className="text-[22px] font-black text-slate-900 dark:text-white leading-snug mb-5 pr-4">{task.title}</h1>
+                        <h1 id={dialogTitleId} className="text-[22px] font-black text-slate-900 dark:text-white leading-snug mb-5 pr-4">{task.title}</h1>
 
                         {/* Estado pill prominente bajo el título */}
                         <div className="flex items-center gap-3 mb-7" data-dropdown>
@@ -4790,7 +5080,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                 )}
                             </div>
                             {task.createdAt && (
-                                <span className="text-xs text-slate-400 flex items-center gap-1">
+                                <span className="text-xs text-slate-500 flex items-center gap-1">
                                     <Icon name="Clock" size={11}/>
                                     Creado el {new Date(task.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} a las {new Date(task.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                                 </span>
@@ -4799,11 +5089,11 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
 
                         {/* Descripción */}
                         <div className="mb-8">
-                            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Descripción</p>
+                            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Descripción</p>
                             {task.notes
                                 ? <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{task.notes}</p>
                                 : <button onClick={canAct ? () => onEdit(task, type) : undefined}
-                                    className={`w-full text-left px-4 py-3 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 text-sm text-slate-400 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-500 transition-colors ${canAct ? 'cursor-pointer' : ''}`}>
+                                    className={`w-full text-left px-4 py-3 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 text-sm text-slate-500 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-500 transition-colors ${canAct ? 'cursor-pointer' : ''}`}>
                                     {canAct ? '+ Agregar descripción' : 'Sin descripción...'}
                                   </button>
                             }
@@ -4824,10 +5114,10 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                             return (
                                 <div className="mb-8">
                                     <div className="flex items-center gap-2 mb-3">
-                                        <Icon name="CheckSquare" size={13} className="text-slate-400"/>
-                                        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Lista de control</p>
-                                        {checklist.length > 0 && <span className="text-xs text-slate-400 ml-1">{done}/{checklist.length}</span>}
-                                        {checklist.length > 0 && <span className="ml-auto text-xs font-bold text-slate-400">{pct}%</span>}
+                                        <Icon name="CheckSquare" size={13} className="text-slate-500"/>
+                                        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Lista de control</p>
+                                        {checklist.length > 0 && <span className="text-xs text-slate-500 ml-1">{done}/{checklist.length}</span>}
+                                        {checklist.length > 0 && <span className="ml-auto text-xs font-bold text-slate-500">{pct}%</span>}
                                     </div>
                                     {checklist.length > 0 && (
                                         <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full mb-3 overflow-hidden">
@@ -4841,8 +5131,8 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                                     className={`w-[18px] h-[18px] rounded-[4px] border-2 shrink-0 flex items-center justify-center transition-all ${item.done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600 hover:border-emerald-400'}`}>
                                                     {item.done && <Icon name="Check" size={11} className="text-white"/>}
                                                 </button>
-                                                <span className={`flex-1 text-sm ${item.done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}`}>{item.text}</span>
-                                                <button onClick={() => deleteItem(item.id)} className="opacity-0 group-hover:opacity-100 p-1 rounded text-slate-400 hover:text-red-400 transition-all">
+                                                <span className={`flex-1 text-sm ${item.done ? 'line-through text-slate-500' : 'text-slate-700 dark:text-slate-200'}`}>{item.text}</span>
+                                                <button onClick={() => deleteItem(item.id)} className="opacity-0 group-hover:opacity-100 p-1 rounded text-slate-500 hover:text-red-400 transition-all">
                                                     <Icon name="X" size={12}/>
                                                 </button>
                                             </div>
@@ -4856,11 +5146,11 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                                 placeholder="Nombre del elemento... (Enter para guardar)"
                                                 className="flex-1 text-sm bg-transparent outline-none text-slate-700 dark:text-slate-200 placeholder-slate-400"
                                             />
-                                            <button onClick={() => { setAddingCheck(false); setNewCheckItem(''); }} className="text-slate-400 hover:text-slate-600 transition-colors"><Icon name="X" size={13}/></button>
+                                            <button onClick={() => { setAddingCheck(false); setNewCheckItem(''); }} className="text-slate-500 hover:text-slate-600 transition-colors"><Icon name="X" size={13}/></button>
                                         </div>
                                     ) : (
                                         <button onClick={() => canAct && setAddingCheck(true)}
-                                            className={`flex items-center gap-2 mt-2 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors px-3 py-1 -mx-3 ${!canAct ? 'opacity-40 cursor-default' : ''}`}>
+                                            className={`flex items-center gap-2 mt-2 text-sm text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors px-3 py-1 -mx-3 ${!canAct ? 'opacity-40 cursor-default' : ''}`}>
                                             <Icon name="Plus" size={13}/> Agregar elemento
                                         </button>
                                     )}
@@ -4893,9 +5183,9 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                             return (
                                 <div className="mb-8">
                                     <div className="flex items-center gap-2 mb-3">
-                                        <Icon name="Inbox" size={13} className="text-slate-400"/>
-                                        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Adjuntos</p>
-                                        {attachments.length > 0 && <span className="text-xs text-slate-400 ml-1">{attachments.length}</span>}
+                                        <Icon name="Inbox" size={13} className="text-slate-500"/>
+                                        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Adjuntos</p>
+                                        {attachments.length > 0 && <span className="text-xs text-slate-500 ml-1">{attachments.length}</span>}
                                         {canAct && (
                                             <button onClick={() => fileInputRef.current && fileInputRef.current.click()}
                                                 disabled={uploadingFile}
@@ -4914,21 +5204,21 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                                         <img src={att.data} alt={att.name} className="w-10 h-10 rounded-lg object-cover shrink-0 border border-slate-200 dark:border-slate-700"/>
                                                     ) : (
                                                         <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
-                                                            <Icon name="FileText" size={16} className="text-slate-400"/>
+                                                            <Icon name="FileText" size={16} className="text-slate-500"/>
                                                         </div>
                                                     )}
                                                     <div className="flex-1 min-w-0">
                                                         <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{att.name}</p>
-                                                        <p className="text-xs text-slate-400">{formatFileSize(att.size)} · {att.uploadedBy} · {relativeTime(att.uploadedAt)}</p>
+                                                        <p className="text-xs text-slate-500">{formatFileSize(att.size)} · {att.uploadedBy} · {relativeTime(att.uploadedAt)}</p>
                                                     </div>
                                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                                         <button onClick={() => downloadFile(att)} title="Descargar"
-                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                                                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
                                                             <Icon name="ArrowRight" size={13}/>
                                                         </button>
                                                         {canAct && (
                                                             <button onClick={() => onRemoveAttachment(task, type, att.id)} title="Eliminar"
-                                                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+                                                                className="p-1.5 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
                                                                 <Icon name="X" size={13}/>
                                                             </button>
                                                         )}
@@ -4939,7 +5229,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                     )}
                                     {attachments.length === 0 && (
                                         <button onClick={() => canAct && fileInputRef.current && fileInputRef.current.click()}
-                                            className={`flex items-center gap-2 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors px-3 py-1 -mx-3 ${!canAct ? 'opacity-40 cursor-default' : ''}`}>
+                                            className={`flex items-center gap-2 text-sm text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors px-3 py-1 -mx-3 ${!canAct ? 'opacity-40 cursor-default' : ''}`}>
                                             <Icon name="Plus" size={13}/> Adjuntar archivo
                                         </button>
                                     )}
@@ -4950,8 +5240,8 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                         {/* Actividad — en el contenido principal, estilo Jira */}
                         <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
                             <div className="flex items-center gap-2 mb-5">
-                                <Icon name="MessageSquare" size={13} className="text-slate-400"/>
-                                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Actividad</p>
+                                <Icon name="MessageSquare" size={13} className="text-slate-500"/>
+                                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Actividad</p>
                                 {totalLoggedMs > 0 && (
                                     <span className="ml-auto text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                                         <Icon name="Clock" size={11}/>{formatDuration(totalLoggedMs)}
@@ -4977,7 +5267,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                     {/* @mention dropdown */}
                                     {mentionOpen && mentionSuggestions.length > 0 && (
                                         <div className="absolute left-0 bottom-full mb-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-52">
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-3 pt-1.5 pb-1">Mencionar</p>
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-3 pt-1.5 pb-1">Mencionar</p>
                                             {mentionSuggestions.map(p => (
                                                 <button key={p.id} onMouseDown={e => { e.preventDefault(); insertMention(p); }}
                                                     className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
@@ -5004,7 +5294,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                             {/* Feed */}
                             <div className="space-y-5">
                                 {activityFeed.length === 0 && (
-                                    <p className="text-sm text-slate-400 text-center py-4">Sin actividad aún</p>
+                                    <p className="text-sm text-slate-500 text-center py-4">Sin actividad aún</p>
                                 )}
                                 {activityFeed.map(item => item._kind === 'time' ? (
                                     <div key={item.id} className="flex gap-3 items-center">
@@ -5015,7 +5305,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                             <span className="font-bold text-slate-700 dark:text-slate-200">{item.authorName}</span>
                                             {' '}registró{' '}
                                             <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatDuration(item.durationMs)}</span>
-                                            <span className="text-slate-400 text-xs ml-2">{relativeTime(item.loggedAt)}</span>
+                                            <span className="text-slate-500 text-xs ml-2">{relativeTime(item.loggedAt)}</span>
                                         </p>
                                     </div>
                                 ) : (
@@ -5026,7 +5316,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-baseline gap-2 mb-1.5">
                                                 <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{item.authorName || 'Usuario'}</span>
-                                                <span className="text-xs text-slate-400">{relativeTime(item.createdAt)}</span>
+                                                <span className="text-xs text-slate-500">{relativeTime(item.createdAt)}</span>
                                             </div>
                                             <div className="bg-slate-50 dark:bg-slate-800 rounded-xl rounded-tl-none px-4 py-3 border border-slate-200 dark:border-slate-700">
                                                 <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words">{item.text.split(/(@\S+)/g).map((part, i) => part.startsWith('@') ? <span key={i} className="text-purple-600 dark:text-purple-400 font-bold">{part}</span> : part)}</p>
@@ -5043,11 +5333,11 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                 <div className="w-64 shrink-0 border-l border-slate-200 dark:border-slate-800 overflow-y-auto custom-scroll bg-slate-50 dark:bg-slate-900/50">
                     <div className="p-5 space-y-5">
 
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Detalles</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Detalles</p>
 
                         {/* Asignados */}
                         <div data-dropdown className="relative">
-                            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Asignados</p>
+                            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Asignados</p>
                             {/* Avatars row */}
                             <div className="flex items-center gap-1 flex-wrap min-h-[28px] py-0.5 -mx-1 px-1">
                                 {currentAssigneeIds.length > 0 ? currentAssigneeIds.map(uid => {
@@ -5061,23 +5351,23 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                             <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 leading-none">{person.name.split(' ')[0]}</span>
                                             {canAct && (
                                                 <button onClick={() => onChangeAssignees(task, type, currentAssigneeIds.filter(id => id !== uid))}
-                                                    className="ml-0.5 text-slate-400 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
+                                                    className="ml-0.5 text-slate-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
                                                     <Icon name="X" size={9}/>
                                                 </button>
                                             )}
                                         </div>
                                     );
-                                }) : <span className="text-sm text-slate-400 italic">Sin asignar</span>}
+                                }) : <span className="text-sm text-slate-500 italic">Sin asignar</span>}
                                 {canAct && (
                                     <button onClick={() => setAssigneeOpen(o => !o)}
-                                        className="w-6 h-6 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-400 hover:border-purple-400 hover:text-purple-500 transition-colors shrink-0">
+                                        className="w-6 h-6 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-500 hover:border-purple-400 hover:text-purple-500 transition-colors shrink-0">
                                         <Icon name="Plus" size={10}/>
                                     </button>
                                 )}
                             </div>
                             {assigneeOpen && canAct && (
                                 <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-52" data-dropdown>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Asignar a</p>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-4 pt-2 pb-1">Asignar a</p>
                                     {peoplePool.map(p => {
                                         const isChecked = currentAssigneeIds.includes(p.id);
                                         return (
@@ -5103,7 +5393,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                     })}
                                     {currentAssigneeIds.length > 0 && (
                                         <button onClick={() => { onChangeAssignees(task, type, []); setAssigneeOpen(false); }}
-                                            className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-t border-slate-100 dark:border-slate-700 mt-1">
+                                            className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-t border-slate-100 dark:border-slate-700 mt-1">
                                             <Icon name="UserX" size={13}/> Quitar todos
                                         </button>
                                     )}
@@ -5113,28 +5403,28 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
 
                         {/* Prioridad */}
                         <div data-dropdown className="relative">
-                            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Prioridad</p>
+                            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Prioridad</p>
                             <button onClick={() => canAct && setPriorityOpen(o => !o)}
                                 className={`flex items-center gap-2 w-full rounded-lg py-1 ${canAct ? 'hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer' : 'cursor-default'} transition-colors -mx-1 px-1`}>
                                 <FlagIcon color={currentPriority?.iconColor || '#94a3b8'} filled={!!currentPriority}/>
-                                <span className={`text-sm font-semibold ${currentPriority?.color || 'text-slate-400 italic'}`}>
+                                <span className={`text-sm font-semibold ${currentPriority?.color || 'text-slate-500 italic'}`}>
                                     {currentPriority?.label || 'Sin prioridad'}
                                 </span>
                             </button>
                             {priorityOpen && canAct && (
                                 <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-44" data-dropdown>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Prioridad</p>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-4 pt-2 pb-1">Prioridad</p>
                                     {PRIORITIES.map(p => (
                                         <button key={p.id} onClick={() => { onChangePriority(task, type, p.id); setPriorityOpen(false); }}
                                             className={`w-full flex items-center gap-3 px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left ${p.color}`}>
                                             <FlagIcon color={p.iconColor} filled size={14}/>
                                             {p.label}
-                                            {task.priority === p.id && <Icon name="Check" size={12} className="ml-auto text-slate-400"/>}
+                                            {task.priority === p.id && <Icon name="Check" size={12} className="ml-auto text-slate-500"/>}
                                         </button>
                                     ))}
                                     {task.priority && (
                                         <button onClick={() => { onChangePriority(task, type, null); setPriorityOpen(false); }}
-                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-t border-slate-100 dark:border-slate-700 mt-1">
+                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-t border-slate-100 dark:border-slate-700 mt-1">
                                             <Icon name="X" size={12}/> Quitar prioridad
                                         </button>
                                     )}
@@ -5144,10 +5434,10 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
 
                         {/* Fecha límite */}
                         <div>
-                            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Fecha límite</p>
+                            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Fecha límite</p>
                             <div className="flex items-center gap-2 py-1 -mx-1 px-1">
-                                <Icon name="CalendarDays" size={13} className="text-slate-400 shrink-0"/>
-                                <span className={`text-sm font-semibold ${task.date ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 italic'}`}>
+                                <Icon name="CalendarDays" size={13} className="text-slate-500 shrink-0"/>
+                                <span className={`text-sm font-semibold ${task.date ? 'text-slate-700 dark:text-slate-200' : 'text-slate-500 italic'}`}>
                                     {task.date || 'Sin fecha'}
                                 </span>
                             </div>
@@ -5155,34 +5445,34 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
 
                         {/* Cliente */}
                         <div>
-                            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Cliente</p>
+                            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cliente</p>
                             <div className="flex items-center gap-2 py-1 -mx-1 px-1">
                                 {client ? (
                                     <>
                                         <div className="w-5 h-5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-[9px] shrink-0">{client.name?.charAt(0).toUpperCase()}</div>
                                         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{client.name}</span>
                                     </>
-                                ) : <span className="text-sm text-slate-400 italic">Interno</span>}
+                                ) : <span className="text-sm text-slate-500 italic">Interno</span>}
                             </div>
                         </div>
 
                         {/* Jerarquía / Categoría */}
                         {type === 'editingTask' && (
                             <div>
-                                <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Jerarquía</p>
+                                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Jerarquía</p>
                                 <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800">{getEditingHierarchyId(task).toUpperCase()}</span>
                             </div>
                         )}
                         {type === 'managementTask' && task.category && (
                             <div>
-                                <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Categoría</p>
+                                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Categoría</p>
                                 <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{task.category}</span>
                             </div>
                         )}
 
                         {/* Tiempo */}
                         <div>
-                            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Tiempo registrado</p>
+                            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Tiempo registrado</p>
                             <div className="flex items-center gap-2">
                                 {timerRunning ? (
                                     <>
@@ -5196,8 +5486,8 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                     </>
                                 ) : (
                                     <>
-                                        <Icon name="Timer" size={13} className="text-slate-400"/>
-                                        <span className={`text-sm ${totalLoggedMs > 0 ? 'font-black text-emerald-600 dark:text-emerald-400' : 'text-slate-400 italic'}`}>
+                                        <Icon name="Timer" size={13} className="text-slate-500"/>
+                                        <span className={`text-sm ${totalLoggedMs > 0 ? 'font-black text-emerald-600 dark:text-emerald-400' : 'text-slate-500 italic'}`}>
                                             {totalLoggedMs > 0 ? formatDuration(totalLoggedMs) : 'Sin tiempo'}
                                         </span>
                                         {canAct && (
@@ -5212,7 +5502,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                             {timeEntries.length > 0 && (
                                 <div className="mt-2 space-y-1">
                                     {[...timeEntries].reverse().slice(0,3).map(e => (
-                                        <div key={e.id} className="flex items-center text-xs gap-2 text-slate-400">
+                                        <div key={e.id} className="flex items-center text-xs gap-2 text-slate-500">
                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"/>
                                             <span className="font-bold text-slate-600 dark:text-slate-300">{formatDuration(e.durationMs)}</span>
                                             <span className="truncate">{e.authorName}</span>
@@ -5226,7 +5516,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                         {/* Fecha creación */}
                         {task.createdAt && (
                             <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
-                                <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">Creado</p>
+                                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Creado</p>
                                 <p className="text-xs text-slate-500 dark:text-slate-400">
                                     {new Date(task.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
                                     <br/>{new Date(task.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
@@ -5243,6 +5533,8 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
 };
 
 const DayDetailsModal = ({ config, onClose, activities, clients, managers, editors, users, canEditActivity, onEdit, onDelete }) => {
+    const dialogRef = useDialogA11y(config.isOpen, onClose);
+    const dialogTitleId = useId();
     if (!config.isOpen) return null;
     const dayActivities = activities.filter(a => a.date === config.date);
     const modalTitles = { client: 'Cliente', manager: 'Account Manager', editor: 'Editor', event: 'Produccion', accountTask: 'Tarea de Account', editingTask: 'Tarea de Edicion', managementTask: 'Tarea de Gestion', user: 'Usuario' };
@@ -5255,13 +5547,13 @@ const DayDetailsModal = ({ config, onClose, activities, clients, managers, edito
 
     return (
         <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
-            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+            <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={dialogTitleId} tabIndex={-1} className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800 outline-none" onClick={e => e.stopPropagation()}>
                 <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
                     <div>
-                        <h3 className="font-black text-lg text-slate-800 dark:text-white capitalize">{displayDate}</h3>
+                        <h3 id={dialogTitleId} className="font-black text-lg text-slate-800 dark:text-white capitalize">{displayDate}</h3>
                         <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Detalle de Actividades</p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400"><Icon name="X" size={20} /></button>
+                    <button onClick={onClose} aria-label="Cerrar modal" className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400"><Icon name="X" size={20} /></button>
                 </div>
                 <div className="p-6 overflow-y-auto custom-scroll space-y-3">
                     {dayActivities.length === 0 ? (
@@ -5316,8 +5608,8 @@ const DayDetailsModal = ({ config, onClose, activities, clients, managers, edito
                                         </div>
                                     </div>
                                     {canEditActivity(act.collectionType) && <div className="flex items-center gap-1 opacity-100 md:opacity-60 md:hover:opacity-100 transition-opacity">
-                                        <button onClick={() => { onClose(); onEdit(act, act.collectionType); }} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Editar"><Icon name="Edit" size={18} /></button>
-                                        <button onClick={() => { onClose(); onDelete(act, act.collectionType); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Eliminar"><Icon name="Trash2" size={18} /></button>
+                                        <button onClick={() => { onClose(); onEdit(act, act.collectionType); }} className="p-2 text-slate-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Editar"><Icon name="Edit" size={18} /></button>
+                                        <button onClick={() => { onClose(); onDelete(act, act.collectionType); }} className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Eliminar"><Icon name="Trash2" size={18} /></button>
                                     </div>}
                                 </div>
                             )
@@ -5331,6 +5623,9 @@ const DayDetailsModal = ({ config, onClose, activities, clients, managers, edito
 
 const CreateTaskModal = ({ config, onClose, clients, managers, editors, managementUsers, actions }) => {
     const { type, data } = config;
+    const isTaskDialogOpen = config.isOpen && ['accountTask','editingTask','managementTask'].includes(type);
+    const dialogRef = useDialogA11y(isTaskDialogOpen, onClose);
+    const dialogTitleId = useId();
     const [title, setTitle] = useState('');
     const [notes, setNotes] = useState('');
     const [showDesc, setShowDesc] = useState(false);
@@ -5385,7 +5680,7 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
         return () => document.removeEventListener('mousedown', h);
     }, [assigneeOpen, clientOpen, priorityOpen]);
 
-    if (!config.isOpen || !['accountTask','editingTask','managementTask'].includes(type)) return null;
+    if (!isTaskDialogOpen) return null;
 
     const peoplePool = type === 'accountTask' ? managers : type === 'editingTask' ? editors : managementUsers;
     const assignee   = peoplePool.find(p => p.id === assigneeId);
@@ -5398,7 +5693,7 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
         { id: 'urgente', label: 'Urgente', iconColor: '#ef4444', color: 'text-red-500' },
         { id: 'alta',    label: 'Alta',    iconColor: '#fb923c', color: 'text-orange-400' },
         { id: 'normal',  label: 'Normal',  iconColor: '#60a5fa', color: 'text-blue-400' },
-        { id: 'baja',    label: 'Baja',    iconColor: '#94a3b8', color: 'text-slate-400' },
+        { id: 'baja',    label: 'Baja',    iconColor: '#94a3b8', color: 'text-slate-500' },
     ];
     const curPriority = TASK_PRIORITIES.find(p => p.id === priority);
 
@@ -5443,7 +5738,8 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
 
     return (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm z-[90] flex items-start justify-center pt-12 pb-8 px-4" onClick={onClose}>
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-visible" onClick={e => e.stopPropagation()}>
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={dialogTitleId} tabIndex={-1} className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-visible outline-none" onClick={e => e.stopPropagation()}>
+            <h2 id={dialogTitleId} className="sr-only">{config.isEdit ? `Editar ${typeLabel}` : `Nueva ${typeLabel}`}</h2>
 
             {/* Header */}
             <div className="flex items-center gap-2 px-6 pt-5 pb-2">
@@ -5451,12 +5747,12 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
                     <Icon name={iconName} size={11}/> {config.isEdit ? `Editar ${typeLabel}` : `Nueva ${typeLabel}`}
                 </div>
                 {displayDate && (
-                    <span className="text-xs text-slate-400 flex items-center gap-1">
+                    <span className="text-xs text-slate-500 flex items-center gap-1">
                         <Icon name="CalendarDays" size={11}/>{displayDate}
                     </span>
                 )}
                 <div className="flex-1"/>
-                <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <button onClick={onClose} aria-label="Cerrar modal" className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                     <Icon name="X" size={15}/>
                 </button>
             </div>
@@ -5480,7 +5776,7 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
                     />
                 ) : (
                     <button onClick={() => setShowDesc(true)}
-                        className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors py-1">
+                        className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors py-1">
                         <Icon name="AlignLeft" size={14}/> Agregar descripción
                     </button>
                 )}
@@ -5502,7 +5798,7 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
                     </Chip>
                     {assigneeOpen && (
                         <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-52" data-ctdrop>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 pt-2 pb-1">Asignar a</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-4 pt-2 pb-1">Asignar a</p>
                             {peoplePool.map(p => (
                                 <button key={p.id} onClick={() => { setAssigneeId(assigneeId === p.id ? '' : p.id); setAssigneeOpen(false); }}
                                     className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
@@ -5545,7 +5841,7 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
                                 <button key={p.id} onClick={() => { setPriority(priority === p.id ? '' : p.id); setPriorityOpen(false); }}
                                     className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left ${p.color}`}>
                                     <FlagIcon color={p.iconColor} filled size={13}/>{p.label}
-                                    {priority === p.id && <Icon name="Check" size={12} className="ml-auto text-slate-400"/>}
+                                    {priority === p.id && <Icon name="Check" size={12} className="ml-auto text-slate-500"/>}
                                 </button>
                             ))}
                         </div>
@@ -5562,19 +5858,19 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
                             {/* Search */}
                             <div className="px-3 pt-2.5 pb-1.5 border-b border-slate-100 dark:border-slate-700">
                                 <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg px-2.5 py-1.5">
-                                    <Icon name="Search" size={12} className="text-slate-400 shrink-0"/>
+                                    <Icon name="Search" size={12} className="text-slate-500 shrink-0"/>
                                     <input autoFocus value={clientSearch} onChange={e => setClientSearch(e.target.value)}
                                         placeholder="Buscar cliente..."
                                         className="flex-1 text-sm bg-transparent outline-none text-slate-700 dark:text-slate-200 placeholder-slate-400 min-w-0"
                                     />
-                                    {clientSearch && <button onClick={() => setClientSearch('')} className="text-slate-400 hover:text-slate-600"><Icon name="X" size={11}/></button>}
+                                    {clientSearch && <button onClick={() => setClientSearch('')} className="text-slate-500 hover:text-slate-600"><Icon name="X" size={11}/></button>}
                                 </div>
                             </div>
                             {/* List */}
                             <div className="overflow-y-auto" style={{maxHeight:'280px'}}>
                                 {!clientSearch && (
                                     <button onClick={() => { setClientId(''); setClientOpen(false); setClientSearch(''); }}
-                                        className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left border-b border-slate-100 dark:border-slate-700">
+                                        className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left border-b border-slate-100 dark:border-slate-700">
                                         <Icon name="X" size={13}/> Sin cliente (interno)
                                     </button>
                                 )}
@@ -5591,7 +5887,7 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
                                     ))
                                 }
                                 {clientSearch && clients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
-                                    <p className="px-4 py-3 text-sm text-slate-400 text-center">Sin resultados</p>
+                                    <p className="px-4 py-3 text-sm text-slate-500 text-center">Sin resultados</p>
                                 )}
                             </div>
                         </div>
@@ -5642,13 +5938,13 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
         {/* Popup confirmación sin fecha */}
         {confirmNoDate && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setConfirmNoDate(false)}>
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-sm p-6 flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+                <div role="alertdialog" aria-modal="true" aria-labelledby="confirm-no-date-title" className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-sm p-6 flex flex-col gap-4" onClick={e => e.stopPropagation()}>
                     <div className="flex items-start gap-3">
                         <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center shrink-0">
                             <Icon name="CalendarOff" size={18} className="text-amber-500"/>
                         </div>
                         <div>
-                            <p className="font-black text-slate-800 dark:text-white text-base">¿Sin fecha límite?</p>
+                            <p id="confirm-no-date-title" className="font-black text-slate-800 dark:text-white text-base">¿Sin fecha límite?</p>
                             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Esta tarea no tendrá una fecha de vencimiento asignada. Podrás agregarla después.</p>
                         </div>
                     </div>
@@ -5671,6 +5967,8 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
 
 const Modal = ({ config, onClose, clients, managers, editors, managementUsers, actions }) => {
     const { type, data, isEdit } = config;
+    const dialogRef = useDialogA11y(config.isOpen, onClose);
+    const dialogTitleId = useId();
     if(!config.isOpen) return null;
 
     const eventTitleMatch = type === 'event' && data?.title
@@ -5723,7 +6021,7 @@ const Modal = ({ config, onClose, clients, managers, editors, managementUsers, a
         user: 'Usuario'
     };
     const selectClassName = 'w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none';
-    const textareaClassName = 'w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 h-24 text-sm';
+    const textareaClassName = 'w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-500 h-24 text-sm';
     const submitColor = ['editingTask', 'editor'].includes(type)
         ? 'rose'
         : type === 'accountTask'
@@ -5741,18 +6039,18 @@ const Modal = ({ config, onClose, clients, managers, editors, managementUsers, a
     }
 
     return (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[90] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800">
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[90] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
+            <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={dialogTitleId} tabIndex={-1} className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800 outline-none" onClick={(event) => event.stopPropagation()}>
                 <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
-                    <h3 className="font-bold text-lg text-slate-800 dark:text-white">{isEdit ? 'Editar ' : 'Nuevo '}{titles[type]}</h3>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400"><Icon name="X" size={20} /></button>
+                    <h3 id={dialogTitleId} className="font-bold text-lg text-slate-800 dark:text-white">{isEdit ? 'Editar ' : 'Nuevo '}{titles[type]}</h3>
+                    <button onClick={onClose} aria-label="Cerrar modal" className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400"><Icon name="X" size={20} /></button>
                 </div>
                 <div className="p-6 overflow-y-auto custom-scroll">
                     <form onSubmit={onSubmit} className="space-y-4">
                         
                         {['event', 'accountTask', 'editingTask', 'managementTask'].includes(type) && !isEdit && (
                             <div className="text-center p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 mb-2">
-                                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">Para el día</p>
+                                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Para el día</p>
                                 <p className="text-lg font-black text-slate-800 dark:text-white capitalize">{displayDate}</p>
                             </div>
                         )}
@@ -5780,7 +6078,7 @@ const Modal = ({ config, onClose, clients, managers, editors, managementUsers, a
                                 {managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                             </select>
                             
-                            <textarea name="notes" placeholder="Notas, copies, ideas..." defaultValue={data?.notes} className="w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 h-24 text-sm"></textarea>
+                            <textarea name="notes" placeholder="Notas, copies, ideas..." defaultValue={data?.notes} className="w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-500 h-24 text-sm"></textarea>
                         </>}
                         
                         {type === 'editingTask' && <>
@@ -5810,7 +6108,7 @@ const Modal = ({ config, onClose, clients, managers, editors, managementUsers, a
                                 {editors.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                             </select>
                             
-                            <textarea name="notes" placeholder="Notas, links a drive..." defaultValue={data?.notes} className="w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 h-24 text-sm"></textarea>
+                            <textarea name="notes" placeholder="Notas, links a drive..." defaultValue={data?.notes} className="w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-500 h-24 text-sm"></textarea>
                         </>}
 
                         {type === 'managementTask' && <>
@@ -5876,33 +6174,42 @@ const Modal = ({ config, onClose, clients, managers, editors, managementUsers, a
     );
 };
 
-const DeleteConfirmModal = ({ config, onClose, onConfirm }) => (
-    <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
+const DeleteConfirmModal = ({ config, onClose, onConfirm }) => {
+    const dialogRef = useDialogA11y(config.isOpen, onClose);
+    const dialogTitleId = useId();
+    return (
+    <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={onClose}>
+        <div ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby={dialogTitleId} tabIndex={-1} className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 outline-none" onClick={(event) => event.stopPropagation()}>
             <div className="w-16 h-16 bg-red-100 dark:bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-400"><Icon name="AlertTriangle" size={32} /></div>
-            <h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">¿Eliminar {config.title}?</h3>
+            <h3 id={dialogTitleId} className="text-lg font-black text-slate-800 dark:text-white mb-2">¿Eliminar {config.title}?</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-8">Esta acción es permanente y no se puede deshacer.</p>
             <div className="flex gap-3"><button onClick={onClose} className="flex-1 py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Cancelar</button><button onClick={onConfirm} className="flex-1 py-4 bg-red-600 text-white font-bold rounded-2xl hover:bg-red-700 shadow-lg shadow-red-500/30 transition-colors">Confirmar</button></div>
         </div>
     </div>
-);
+    );
+};
 
-const Toast = ({ message, type }) => (<div className={`fixed bottom-6 right-6 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 fade-in z-[110] ${type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 dark:bg-white text-white dark:text-slate-900'}`}><Icon name={type === 'success' ? "CheckCircle2" : "AlertTriangle"} size={20} className={type === 'success' ? "text-green-400" : ""}/><span className="font-bold text-sm">{message}</span></div>);
+const Toast = ({ message, type }) => (
+    <div role={type === 'error' ? 'alert' : 'status'} className={`pointer-events-auto px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 fade-in ${type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 dark:bg-white text-white dark:text-slate-900'}`}>
+        <Icon name={type === 'success' ? "CheckCircle2" : "AlertTriangle"} size={20} className={type === 'success' ? "text-green-400" : ""}/>
+        <span className="font-bold text-sm">{message}</span>
+    </div>
+);
 
 const ReportStatCard = ({ label, value, color, icon, sub }) => (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col gap-2">
         <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase tracking-widest text-slate-400">{label}</span>
+            <span className="text-xs font-black uppercase tracking-widest text-slate-500">{label}</span>
             <div className={`w-8 h-8 rounded-xl bg-${color}-50 dark:bg-${color}-500/20 flex items-center justify-center`}>
                 <Icon name={icon} size={16} className={`text-${color}-500`} />
             </div>
         </div>
         <p className={`text-3xl font-black text-${color}-600 dark:text-${color}-400`}>{value}</p>
-        {sub && <p className="text-xs text-slate-400">{sub}</p>}
+        {sub && <p className="text-xs text-slate-500">{sub}</p>}
     </div>
 );
 
-const ReportsView = ({ accountTasks, editingTasks, managementTasks, clients, managers, editors }) => {
+const ReportsView = ({ accountTasks, editingTasks, managementTasks, clients, managers, editors, users = [] }) => {
     const todayStr = getHondurasTodayStr();
     const now = new Date();
     const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
@@ -5918,6 +6225,158 @@ const ReportsView = ({ accountTasks, editingTasks, managementTasks, clients, man
     const filteredAccountTasks = accountTasks.filter(t => inRange(t.date));
     const filteredEditingTasks = editingTasks.filter(t => inRange(t.date));
     const filteredManagementTasks = managementTasks.filter(t => inRange(t.date));
+
+    const managerById = new Map(managers.map((item) => [item.id, item]));
+    const editorById = new Map(editors.map((item) => [item.id, item]));
+    const userById = new Map(users.map((item) => [item.id, item]));
+    const userByManagerId = new Map(users.filter((item) => item.linkedManagerId).map((item) => [item.linkedManagerId, item]));
+    const userByEditorId = new Map(users.filter((item) => item.linkedEditorId).map((item) => [item.linkedEditorId, item]));
+    const performancePeopleByKey = new Map();
+    const roleLabelByKey = {
+        super_admin: 'Admin',
+        operations: 'Operaciones',
+        management: 'Gestion',
+        manager: 'Manager',
+        editor: 'Editor',
+        viewer: 'Viewer'
+    };
+    const addPerformancePerson = (key, data = {}) => {
+        if (!key) return null;
+        const current = performancePeopleByKey.get(key) || { id: key, name: '', email: '', roles: [] };
+        const roles = [...current.roles];
+        if (data.roleLabel && !roles.includes(data.roleLabel)) roles.push(data.roleLabel);
+        const nextPerson = {
+            id: key,
+            name: current.name || data.name || data.email || 'Usuario sin nombre',
+            email: current.email || data.email || '',
+            roles,
+            managerId: current.managerId || data.managerId || '',
+            editorId: current.editorId || data.editorId || ''
+        };
+        performancePeopleByKey.set(key, nextPerson);
+        return nextPerson;
+    };
+    users.forEach((item) => addPerformancePerson(item.id, {
+        name: item.name,
+        email: item.email,
+        roleLabel: roleLabelByKey[item.role] || item.role || 'Usuario',
+        managerId: item.linkedManagerId || '',
+        editorId: item.linkedEditorId || ''
+    }));
+    managers.forEach((item) => {
+        const linkedUser = userByManagerId.get(item.id) || (item.userId ? userById.get(item.userId) : null);
+        addPerformancePerson(linkedUser?.id || item.userId || item.id, {
+            name: item.name || linkedUser?.name,
+            email: item.email || linkedUser?.email,
+            roleLabel: 'Manager',
+            managerId: item.id
+        });
+    });
+    editors.forEach((item) => {
+        const linkedUser = userByEditorId.get(item.id) || (item.userId ? userById.get(item.userId) : null);
+        addPerformancePerson(linkedUser?.id || item.userId || item.id, {
+            name: item.name || linkedUser?.name,
+            email: item.email || linkedUser?.email,
+            roleLabel: 'Editor',
+            editorId: item.id
+        });
+    });
+    const resolveManagerPerformanceKey = (managerId = '', directUserId = '') => {
+        const manager = managerById.get(managerId) || (directUserId ? managers.find((item) => item.userId === directUserId) : null);
+        const linkedUser = manager ? (userByManagerId.get(manager.id) || (manager.userId ? userById.get(manager.userId) : null)) : null;
+        const directUser = directUserId ? userById.get(directUserId) : null;
+        const key = directUser?.id || directUserId || linkedUser?.id || manager?.userId || manager?.id || managerId;
+        addPerformancePerson(key, {
+            name: manager?.name || directUser?.name || linkedUser?.name,
+            email: manager?.email || directUser?.email || linkedUser?.email,
+            roleLabel: 'Manager',
+            managerId: manager?.id || managerId
+        });
+        return key;
+    };
+    const resolveEditorPerformanceKey = (editorId = '', directUserId = '') => {
+        const editor = editorById.get(editorId) || (directUserId ? editors.find((item) => item.userId === directUserId) : null);
+        const linkedUser = editor ? (userByEditorId.get(editor.id) || (editor.userId ? userById.get(editor.userId) : null)) : null;
+        const directUser = directUserId ? userById.get(directUserId) : null;
+        const key = directUser?.id || directUserId || linkedUser?.id || editor?.userId || editor?.id || editorId;
+        addPerformancePerson(key, {
+            name: editor?.name || directUser?.name || linkedUser?.name,
+            email: editor?.email || directUser?.email || linkedUser?.email,
+            roleLabel: 'Editor',
+            editorId: editor?.id || editorId
+        });
+        return key;
+    };
+    const resolveManagementPerformanceKey = (userId = '') => {
+        const record = userById.get(userId);
+        const key = record?.id || userId;
+        addPerformancePerson(key, {
+            name: record?.name,
+            email: record?.email,
+            roleLabel: roleLabelByKey[record?.role] || 'Gestion',
+            managerId: record?.linkedManagerId || '',
+            editorId: record?.linkedEditorId || ''
+        });
+        return key;
+    };
+    const getTaskAssigneeKeys = (task, type) => {
+        const explicitAssignees = Array.isArray(task.assignees) ? task.assignees.filter(Boolean) : [];
+        const keys = new Set();
+        if (type === 'account') explicitAssignees.forEach((id) => keys.add(resolveManagerPerformanceKey(id, '')));
+        if (type === 'editing') explicitAssignees.forEach((id) => keys.add(resolveEditorPerformanceKey(id, '')));
+        if (type === 'management') explicitAssignees.forEach((id) => keys.add(resolveManagementPerformanceKey(id)));
+        if (keys.size === 0 && type === 'account') keys.add(resolveManagerPerformanceKey(task.contextId, task.assigneeUserId));
+        if (keys.size === 0 && type === 'editing') keys.add(resolveEditorPerformanceKey(task.contextId, task.assigneeUserId));
+        if (keys.size === 0 && type === 'management') keys.add(resolveManagementPerformanceKey(task.assigneeUserId || task.contextId));
+        return [...keys].filter(Boolean);
+    };
+    const dailyPerformanceByKey = new Map();
+    const addDailyPerformanceTask = (task, type) => {
+        const date = normalizeDateOnlyString(task.date);
+        if (!date) return;
+        const areaKey = type === 'account' ? 'account' : type === 'editing' ? 'editing' : 'management';
+        const isDone = type === 'account'
+            ? task.status === 'publicado'
+            : type === 'editing'
+                ? ['aprobado', 'publicado'].includes(task.status)
+                : task.status === 'cerrado';
+        getTaskAssigneeKeys(task, type).forEach((personKey) => {
+            const person = performancePeopleByKey.get(personKey) || addPerformancePerson(personKey, {});
+            const rowKey = `${date}:${person.id}`;
+            const current = dailyPerformanceByKey.get(rowKey) || {
+                date,
+                userId: person.id,
+                name: person.name,
+                email: person.email,
+                roles: person.roles,
+                total: 0,
+                done: 0,
+                pending: 0,
+                areas: { account: 0, editing: 0, management: 0 }
+            };
+            current.name = person.name || current.name;
+            current.email = person.email || current.email;
+            current.roles = person.roles;
+            current.total += 1;
+            current.done += isDone ? 1 : 0;
+            current.pending += isDone ? 0 : 1;
+            current.areas[areaKey] += 1;
+            dailyPerformanceByKey.set(rowKey, current);
+        });
+    };
+    filteredAccountTasks.forEach((task) => addDailyPerformanceTask(task, 'account'));
+    filteredEditingTasks.forEach((task) => addDailyPerformanceTask(task, 'editing'));
+    filteredManagementTasks.forEach((task) => addDailyPerformanceTask(task, 'management'));
+    const dailyPerformanceStats = [...dailyPerformanceByKey.values()].sort((left, right) => (
+        compareDateOnlyStrings(right.date, left.date) || right.total - left.total || left.name.localeCompare(right.name)
+    ));
+    const dailyPerformanceTotals = dailyPerformanceStats.reduce((acc, row) => ({
+        total: acc.total + row.total,
+        done: acc.done + row.done,
+        pending: acc.pending + row.pending
+    }), { total: 0, done: 0, pending: 0 });
+    const dailyUserCount = new Set(dailyPerformanceStats.map((row) => row.userId)).size;
+    const dailyDateCount = new Set(dailyPerformanceStats.map((row) => row.date)).size;
 
     const accountPublished = filteredAccountTasks.filter(t => t.status === 'publicado').length;
     const editingPublished = filteredEditingTasks.filter(t => t.status === 'publicado').length;
@@ -5948,6 +6407,7 @@ const ReportsView = ({ accountTasks, editingTasks, managementTasks, clients, man
 
     const tabs = [
         { id: 'content', label: 'Piezas de Contenido' },
+        { id: 'daily', label: 'Diario por Usuario' },
         { id: 'managers', label: 'Por Manager' },
         { id: 'editors', label: 'Por Editor' },
         { id: 'management', label: 'Gestión' }
@@ -5961,11 +6421,11 @@ const ReportsView = ({ accountTasks, editingTasks, managementTasks, clients, man
                 <h2 className="text-2xl font-black text-slate-800 dark:text-white">Reportes</h2>
                 <div className="flex items-center gap-3 flex-wrap">
                     <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
-                        <span className="text-xs font-black text-slate-400 uppercase">Desde</span>
+                        <span className="text-xs font-black text-slate-500 uppercase">Desde</span>
                         <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" />
                     </div>
                     <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
-                        <span className="text-xs font-black text-slate-400 uppercase">Hasta</span>
+                        <span className="text-xs font-black text-slate-500 uppercase">Hasta</span>
                         <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" />
                     </div>
                 </div>
@@ -6007,7 +6467,7 @@ const ReportsView = ({ accountTasks, editingTasks, managementTasks, clients, man
                                             <span className={`w-2 h-2 rounded-full bg-${row.color}-500 shrink-0`} />
                                             <span className="text-sm text-slate-600 dark:text-slate-300 flex-1">{row.label}</span>
                                             <span className="font-black text-slate-800 dark:text-white">{count}</span>
-                                            <span className="text-xs text-slate-400 w-8 text-right">{pct}%</span>
+                                            <span className="text-xs text-slate-500 w-8 text-right">{pct}%</span>
                                         </div>
                                         <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                                             <div className={`h-full bg-${row.color}-500 rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
@@ -6042,7 +6502,7 @@ const ReportsView = ({ accountTasks, editingTasks, managementTasks, clients, man
                                             <span className={`w-2 h-2 rounded-full bg-${row.color}-500 shrink-0`} />
                                             <span className="text-sm text-slate-600 dark:text-slate-300 flex-1">{row.label}</span>
                                             <span className="font-black text-slate-800 dark:text-white">{count}</span>
-                                            <span className="text-xs text-slate-400 w-8 text-right">{pct}%</span>
+                                            <span className="text-xs text-slate-500 w-8 text-right">{pct}%</span>
                                         </div>
                                         <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                                             <div className={`h-full bg-${row.color}-500 rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
@@ -6059,18 +6519,85 @@ const ReportsView = ({ accountTasks, editingTasks, managementTasks, clients, man
                 </div>
             )}
 
+            {activeTab === 'daily' && (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <ReportStatCard label="Usuarios Activos" value={dailyUserCount} color="violet" icon="Users" sub={`${dailyDateCount} dias con actividad`} />
+                        <ReportStatCard label="Tareas del Rango" value={dailyPerformanceTotals.total} color="indigo" icon="LayoutList" sub="accounts + edicion + gestion" />
+                        <ReportStatCard label="Finalizadas" value={dailyPerformanceTotals.done} color="emerald" icon="CheckCircle2" sub={`${Math.round(dailyPerformanceTotals.total > 0 ? (dailyPerformanceTotals.done / dailyPerformanceTotals.total) * 100 : 0)}% completado`} />
+                        <ReportStatCard label="Pendientes" value={dailyPerformanceTotals.pending} color="amber" icon="Clock" sub="abiertas en el rango" />
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                        {dailyPerformanceStats.length === 0
+                            ? <div className="p-16 text-center text-slate-500 font-bold">Sin desempeno diario en este rango de fechas</div>
+                            : <div className="overflow-x-auto">
+                                <table className="w-full min-w-[800px]">
+                                    <thead>
+                                        <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                                            <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500">Fecha</th>
+                                            <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500">Usuario</th>
+                                            <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500">Rol</th>
+                                            <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Areas</th>
+                                            <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Total</th>
+                                            <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Finalizadas</th>
+                                            <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Pendientes</th>
+                                            <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Desempeno</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {dailyPerformanceStats.map((row, i) => {
+                                            const pct = row.total > 0 ? Math.round((row.done / row.total) * 100) : 0;
+                                            const performanceColor = pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500';
+                                            return (
+                                                <tr key={`${row.date}-${row.userId}`} className={`border-b border-slate-50 dark:border-slate-800/50 ${rowStyle(i)}`}>
+                                                    <td className="p-4 font-mono text-sm font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">{row.date}</td>
+                                                    <td className="p-4">
+                                                        <p className="font-bold text-slate-800 dark:text-white">{row.name}</p>
+                                                        {row.email && <p className="text-xs text-slate-500 dark:text-slate-400">{row.email}</p>}
+                                                    </td>
+                                                    <td className="p-4 text-sm text-slate-500 dark:text-slate-400">{row.roles?.length ? row.roles.join(' / ') : 'Usuario'}</td>
+                                                    <td className="p-4">
+                                                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                                            {row.areas.account > 0 && <span className="px-2 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[11px] font-black">Account {row.areas.account}</span>}
+                                                            {row.areas.editing > 0 && <span className="px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] font-black">Edicion {row.areas.editing}</span>}
+                                                            {row.areas.management > 0 && <span className="px-2 py-1 rounded-lg bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 text-[11px] font-black">Gestion {row.areas.management}</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 text-center font-black text-slate-800 dark:text-white">{row.total}</td>
+                                                    <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">{row.done}</td>
+                                                    <td className="p-4 text-center text-slate-500 dark:text-slate-400">{row.pending}</td>
+                                                    <td className="p-4">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <div className="w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                                <div className={`h-full rounded-full ${performanceColor}`} style={{ width: `${pct}%` }} />
+                                                            </div>
+                                                            <span className="w-10 text-right text-sm font-black text-slate-800 dark:text-white">{pct}%</span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                              </div>
+                        }
+                    </div>
+                </div>
+            )}
+
             {activeTab === 'managers' && (
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
                     {managerStats.length === 0
-                        ? <div className="p-16 text-center text-slate-400 font-bold">Sin datos en este rango de fechas</div>
+                        ? <div className="p-16 text-center text-slate-500 font-bold">Sin datos en este rango de fechas</div>
                         : <table className="w-full">
                             <thead>
                                 <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-                                    <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-400">Manager</th>
-                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">Total</th>
-                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">En Proceso</th>
-                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">Aprobadas</th>
-                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">Publicadas</th>
+                                    <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500">Manager</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Total</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">En Proceso</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Aprobadas</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Publicadas</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -6092,15 +6619,15 @@ const ReportsView = ({ accountTasks, editingTasks, managementTasks, clients, man
             {activeTab === 'editors' && (
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
                     {editorStats.length === 0
-                        ? <div className="p-16 text-center text-slate-400 font-bold">Sin datos en este rango de fechas</div>
+                        ? <div className="p-16 text-center text-slate-500 font-bold">Sin datos en este rango de fechas</div>
                         : <table className="w-full">
                             <thead>
                                 <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-                                    <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-400">Editor</th>
-                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">Total</th>
-                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">En Proceso</th>
-                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">Aprobadas</th>
-                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-400">Publicadas</th>
+                                    <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500">Editor</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Total</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">En Proceso</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Aprobadas</th>
+                                    <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Publicadas</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -6140,7 +6667,7 @@ const ReportsView = ({ accountTasks, editingTasks, managementTasks, clients, man
                                             <span className={`w-2 h-2 rounded-full bg-${row.color}-500 shrink-0`} />
                                             <span className="text-sm text-slate-600 dark:text-slate-300 flex-1">{row.label}</span>
                                             <span className="font-black text-slate-800 dark:text-white">{count}</span>
-                                            <span className="text-xs text-slate-400 w-8 text-right">{pct}%</span>
+                                            <span className="text-xs text-slate-500 w-8 text-right">{pct}%</span>
                                         </div>
                                         <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                                             <div className={`h-full bg-${row.color}-500 rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
