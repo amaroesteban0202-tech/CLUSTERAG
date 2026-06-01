@@ -5366,8 +5366,8 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                 )}
                             </div>
                             {assigneeOpen && canAct && (
-                                <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-52" data-dropdown>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-4 pt-2 pb-1">Asignar a</p>
+                                <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-52 max-h-60 overflow-y-auto" data-dropdown>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-4 pt-2 pb-1 sticky top-0 bg-white dark:bg-slate-800">Asignar a</p>
                                     {peoplePool.map(p => {
                                         const isChecked = currentAssigneeIds.includes(p.id);
                                         return (
@@ -5797,8 +5797,8 @@ const CreateTaskModal = ({ config, onClose, clients, managers, editors, manageme
                         ) : 'Persona asignada'}
                     </Chip>
                     {assigneeOpen && (
-                        <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-52" data-ctdrop>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-4 pt-2 pb-1">Asignar a</p>
+                        <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-52 max-h-60 overflow-y-auto" data-ctdrop>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-4 pt-2 pb-1 sticky top-0 bg-white dark:bg-slate-800">Asignar a</p>
                             {peoplePool.map(p => (
                                 <button key={p.id} onClick={() => { setAssigneeId(assigneeId === p.id ? '' : p.id); setAssigneeOpen(false); }}
                                     className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
