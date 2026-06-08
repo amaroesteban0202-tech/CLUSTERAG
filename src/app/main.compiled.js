@@ -285,8 +285,8 @@ var writePendingTaskStatusUpdates = (items = []) => {
   }
   window.localStorage.setItem(PENDING_TASK_STATUS_UPDATES_KEY, JSON.stringify(items));
 };
-var queuePendingTaskStatusUpdate = ({ collectionName, taskId, status, updatedAt = nowIso(), mutationId = `${taskId}:${updatedAt}:${status}` }) => {
-  const nextItems = readPendingTaskStatusUpdates().filter((item) => !(item.collectionName === collectionName && item.taskId === taskId)).concat({ collectionName, taskId, status, updatedAt, mutationId, queuedAt: nowIso() });
+var queuePendingTaskStatusUpdate = ({ collectionName, taskId, status, updatedAt = nowIso(), patch = {}, mutationId = `${taskId}:${updatedAt}:${status}` }) => {
+  const nextItems = readPendingTaskStatusUpdates().filter((item) => !(item.collectionName === collectionName && item.taskId === taskId)).concat({ collectionName, taskId, status, updatedAt, patch, mutationId, queuedAt: nowIso() });
   writePendingTaskStatusUpdates(nextItems);
   return mutationId;
 };
@@ -503,6 +503,265 @@ var getEditingHierarchyId = (task = {}) => {
   if (task.priority === "recurrente") return "p3";
   return "p2";
 };
+var DEFAULT_RANKING_SETTINGS = {
+  version: 2,
+  manager: {
+    taskPoints: { p1: 12, p2: 8, p3: 4, p4: 2 },
+    publishedBonus: 4,
+    onTimeBonus: 8,
+    earlyDeliveryBonus: 8,
+    earlyDeliveryCutoffHour: 12,
+    fastTurnaroundHours: 6,
+    fastTurnaroundBonus: 8,
+    overduePenalty: -12,
+    workflowStepPoints: 2,
+    batchDifferentClientCount: 4,
+    batchEarlyCompletedCount: 2,
+    batchEarlyBonus: 18,
+    planningLeadDays: 1,
+    planningTaskPoints: 3,
+    planningMaxPoints: 24,
+    creativityKeywordPoints: 4,
+    creativityMaxPoints: 20,
+    creativityKeywords: "idea,nuevo,nueva,propuesta,concepto,hook,creativo,creativa,innovacion"
+  },
+  editing: {
+    hierarchyScores: { p1: 440, p2: 300, p3: 170, p4: 90 },
+    priorityScores: { urgente: 150, alta: 100, normal: 60, baja: 15, recurrente: 35 },
+    dateScores: { overdue: 190, today: 130, tomorrow: 75, soon: 30 },
+    statusPenalties: { aprobado: -150, publicado: -260 },
+    earlyDeliveryBonus: 50,
+    earlyDeliveryCutoffHour: 12
+  }
+};
+var toConfigNumber = (value, fallback = 0) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+};
+var sanitizeNumberMap = (defaults = {}, values = {}) => Object.keys(defaults).reduce((acc, key) => ({
+  ...acc,
+  [key]: toConfigNumber(values?.[key], defaults[key])
+}), {});
+var sanitizeRankingSettings = (settings = {}) => {
+  const source = settings || {};
+  const manager = source.manager || {};
+  const editing = source.editing || {};
+  return {
+    version: DEFAULT_RANKING_SETTINGS.version,
+    manager: {
+      taskPoints: sanitizeNumberMap(DEFAULT_RANKING_SETTINGS.manager.taskPoints, manager.taskPoints),
+      publishedBonus: toConfigNumber(manager.publishedBonus, DEFAULT_RANKING_SETTINGS.manager.publishedBonus),
+      onTimeBonus: toConfigNumber(manager.onTimeBonus, DEFAULT_RANKING_SETTINGS.manager.onTimeBonus),
+      earlyDeliveryBonus: toConfigNumber(manager.earlyDeliveryBonus, DEFAULT_RANKING_SETTINGS.manager.earlyDeliveryBonus),
+      earlyDeliveryCutoffHour: toConfigNumber(manager.earlyDeliveryCutoffHour, DEFAULT_RANKING_SETTINGS.manager.earlyDeliveryCutoffHour),
+      fastTurnaroundHours: Math.max(0, toConfigNumber(manager.fastTurnaroundHours, DEFAULT_RANKING_SETTINGS.manager.fastTurnaroundHours)),
+      fastTurnaroundBonus: toConfigNumber(manager.fastTurnaroundBonus, DEFAULT_RANKING_SETTINGS.manager.fastTurnaroundBonus),
+      overduePenalty: -Math.abs(toConfigNumber(manager.overduePenalty, DEFAULT_RANKING_SETTINGS.manager.overduePenalty)),
+      workflowStepPoints: toConfigNumber(manager.workflowStepPoints, DEFAULT_RANKING_SETTINGS.manager.workflowStepPoints),
+      batchDifferentClientCount: Math.max(1, toConfigNumber(manager.batchDifferentClientCount, DEFAULT_RANKING_SETTINGS.manager.batchDifferentClientCount)),
+      batchEarlyCompletedCount: Math.max(1, toConfigNumber(manager.batchEarlyCompletedCount, DEFAULT_RANKING_SETTINGS.manager.batchEarlyCompletedCount)),
+      batchEarlyBonus: toConfigNumber(manager.batchEarlyBonus, DEFAULT_RANKING_SETTINGS.manager.batchEarlyBonus),
+      planningLeadDays: Math.max(0, toConfigNumber(manager.planningLeadDays, DEFAULT_RANKING_SETTINGS.manager.planningLeadDays)),
+      planningTaskPoints: toConfigNumber(manager.planningTaskPoints, DEFAULT_RANKING_SETTINGS.manager.planningTaskPoints),
+      planningMaxPoints: Math.max(0, toConfigNumber(manager.planningMaxPoints, DEFAULT_RANKING_SETTINGS.manager.planningMaxPoints)),
+      creativityKeywordPoints: toConfigNumber(manager.creativityKeywordPoints, DEFAULT_RANKING_SETTINGS.manager.creativityKeywordPoints),
+      creativityMaxPoints: Math.max(0, toConfigNumber(manager.creativityMaxPoints, DEFAULT_RANKING_SETTINGS.manager.creativityMaxPoints)),
+      creativityKeywords: String(manager.creativityKeywords || DEFAULT_RANKING_SETTINGS.manager.creativityKeywords)
+    },
+    editing: {
+      hierarchyScores: sanitizeNumberMap(DEFAULT_RANKING_SETTINGS.editing.hierarchyScores, editing.hierarchyScores),
+      priorityScores: sanitizeNumberMap(DEFAULT_RANKING_SETTINGS.editing.priorityScores, editing.priorityScores),
+      dateScores: sanitizeNumberMap(DEFAULT_RANKING_SETTINGS.editing.dateScores, editing.dateScores),
+      statusPenalties: sanitizeNumberMap(DEFAULT_RANKING_SETTINGS.editing.statusPenalties, editing.statusPenalties),
+      earlyDeliveryBonus: toConfigNumber(editing.earlyDeliveryBonus, DEFAULT_RANKING_SETTINGS.editing.earlyDeliveryBonus),
+      earlyDeliveryCutoffHour: toConfigNumber(editing.earlyDeliveryCutoffHour, DEFAULT_RANKING_SETTINGS.editing.earlyDeliveryCutoffHour)
+    }
+  };
+};
+var getAccountTaskHierarchyId = (task = {}) => {
+  if (task.hierarchy) return task.hierarchy;
+  if (task.priority === "urgente") return "p1";
+  if (task.priority === "recurrente") return "p3";
+  return "p2";
+};
+var getStatusTimestampPatch = (task = {}, newStatus = "", stamp = nowIso()) => {
+  const statusTimestamps = {
+    ...task.statusTimestamps || {},
+    [newStatus]: task.statusTimestamps?.[newStatus] || stamp
+  };
+  const patch = { lastStatusChangedAt: stamp, statusTimestamps };
+  if (newStatus === "publicado" && !task.publishedAt) patch.publishedAt = stamp;
+  if (newStatus === "aprobado" && !task.approvedAt) patch.approvedAt = stamp;
+  if (newStatus === "aprobado_internamente" && !task.internallyApprovedAt) patch.internallyApprovedAt = stamp;
+  if (newStatus === "cerrado" && !task.closedAt) patch.closedAt = stamp;
+  return patch;
+};
+var getTaskCompletionIso = (task = {}) => {
+  const status = task.status || "";
+  if (task.statusTimestamps?.[status]) return task.statusTimestamps[status];
+  if (status === "publicado") return task.publishedAt || task.updatedAt || "";
+  if (status === "aprobado") return task.approvedAt || task.updatedAt || "";
+  if (status === "aprobado_internamente") return task.internallyApprovedAt || task.updatedAt || "";
+  if (status === "cerrado") return task.closedAt || task.updatedAt || "";
+  return "";
+};
+var getHondurasDatePartsFromIso = (value = "") => {
+  if (!value) return null;
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) return null;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Tegucigalpa",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(parsedDate);
+    const getPart = (type) => parts.find((part) => part.type === type)?.value || "";
+    const year = getPart("year");
+    const month = getPart("month");
+    const day = getPart("day");
+    const hour = Number(getPart("hour"));
+    if (!year || !month || !day || !Number.isFinite(hour)) return null;
+    return { date: `${year}-${month}-${day}`, hour };
+  } catch (error) {
+    return null;
+  }
+};
+var getHondurasDateFromIso = (value = "") => getHondurasDatePartsFromIso(value)?.date || "";
+var getHoursBetween = (startValue = "", endValue = "") => {
+  const startMs = Date.parse(startValue);
+  const endMs = Date.parse(endValue);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return null;
+  return (endMs - startMs) / 36e5;
+};
+var isCompletionOnTime = (task = {}, completionIso = "") => {
+  const dueDate = normalizeDateOnlyString(task.date);
+  const completionDate = getHondurasDateFromIso(completionIso);
+  if (!dueDate || !completionDate) return false;
+  return compareDateOnlyStrings(completionDate, dueDate) <= 0;
+};
+var isCompletionEarly = (task = {}, completionIso = "", cutoffHour = 12) => {
+  const dueDate = normalizeDateOnlyString(task.date);
+  const completionParts = getHondurasDatePartsFromIso(completionIso);
+  if (!dueDate || !completionParts) return false;
+  const dateDelta = compareDateOnlyStrings(completionParts.date, dueDate);
+  return dateDelta < 0 || dateDelta === 0 && completionParts.hour <= cutoffHour;
+};
+var isTaskPlannedAhead = (task = {}, leadDays = 1) => {
+  const dueDate = normalizeDateOnlyString(task.date);
+  const createdDate = getHondurasDateFromIso(task.createdAt);
+  if (!dueDate || !createdDate) return false;
+  return getDateOnlyDiffDays(dueDate, createdDate) >= leadDays;
+};
+var getRankingKeywords = (value = "") => String(value || "").split(",").map((item) => normalizeNameKey(item)).filter(Boolean);
+var hasCreativitySignal = (task = {}, keywords = []) => {
+  if (keywords.length === 0) return false;
+  const commentText = Array.isArray(task.comments) ? task.comments.map((item) => item.text || "").join(" ") : "";
+  const checklistText = Array.isArray(task.checklist) ? task.checklist.map((item) => item.text || "").join(" ") : "";
+  const searchableText = normalizeNameKey([task.title, task.notes, commentText, checklistText].filter(Boolean).join(" "));
+  if (!searchableText) return false;
+  return keywords.some((keyword) => searchableText.includes(keyword));
+};
+var isAccountTaskDone = (task = {}) => ["aprobado_internamente", "publicado"].includes(task.status);
+var buildManagerRankingStats = ({ managers = [], clients = [], accountTasks = [], rankingSettings = DEFAULT_RANKING_SETTINGS }) => {
+  const rules = sanitizeRankingSettings(rankingSettings).manager;
+  const todayStr = getHondurasTodayStr();
+  const creativityKeywords = getRankingKeywords(rules.creativityKeywords);
+  return managers.map((manager) => {
+    const mTasks = accountTasks.filter((task) => task.contextId === manager.id);
+    const completedTasksArr = mTasks.filter(isAccountTaskDone);
+    let taskScore = 0;
+    let efficiencyScore = 0;
+    let onTimeCount = 0;
+    let earlyCount = 0;
+    let fastTurnaroundCount = 0;
+    let overdueCount = 0;
+    completedTasksArr.forEach((task) => {
+      const hierarchy = getAccountTaskHierarchyId(task);
+      taskScore += rules.taskPoints[hierarchy] ?? rules.taskPoints.p2;
+      if (task.status === "publicado") taskScore += rules.publishedBonus;
+      const completionIso = getTaskCompletionIso(task);
+      const onTime = isCompletionOnTime(task, completionIso);
+      if (onTime) {
+        efficiencyScore += rules.onTimeBonus;
+        onTimeCount++;
+      } else if (normalizeDateOnlyString(task.date) && completionIso) {
+        efficiencyScore += rules.overduePenalty;
+        overdueCount++;
+      }
+      if (isCompletionEarly(task, completionIso, rules.earlyDeliveryCutoffHour)) {
+        efficiencyScore += rules.earlyDeliveryBonus;
+        earlyCount++;
+      }
+      const turnaroundHours = getHoursBetween(task.createdAt, completionIso);
+      if (rules.fastTurnaroundHours > 0 && turnaroundHours !== null && turnaroundHours <= rules.fastTurnaroundHours) {
+        efficiencyScore += rules.fastTurnaroundBonus;
+        fastTurnaroundCount++;
+      }
+    });
+    mTasks.filter((task) => !isAccountTaskDone(task) && isDateBeforeDateString(task.date, todayStr)).forEach(() => {
+      efficiencyScore += rules.overduePenalty;
+      overdueCount++;
+    });
+    const tasksByDate = mTasks.reduce((acc, task) => {
+      const date = normalizeDateOnlyString(task.date);
+      if (!date) return acc;
+      if (!acc.has(date)) acc.set(date, []);
+      acc.get(date).push(task);
+      return acc;
+    }, /* @__PURE__ */ new Map());
+    let batchBonusCount = 0;
+    tasksByDate.forEach((items) => {
+      const differentClients = new Set(items.map((task) => task.clientId).filter(Boolean)).size;
+      if (differentClients < rules.batchDifferentClientCount) return;
+      const earlyCompleted = items.filter((task) => isAccountTaskDone(task) && isCompletionEarly(task, getTaskCompletionIso(task), rules.earlyDeliveryCutoffHour)).length;
+      if (earlyCompleted >= rules.batchEarlyCompletedCount) {
+        efficiencyScore += rules.batchEarlyBonus;
+        batchBonusCount++;
+      }
+    });
+    const mClients = clients.filter((client) => client.managerId === manager.id);
+    const workflowTotal = mClients.length * 4;
+    let workflowCompleted = 0;
+    mClients.forEach((client) => {
+      if (client.workflow?.week1) workflowCompleted++;
+      if (client.workflow?.week2) workflowCompleted++;
+      if (client.workflow?.week3) workflowCompleted++;
+      if (client.workflow?.week4) workflowCompleted++;
+    });
+    const clientScore = workflowCompleted * rules.workflowStepPoints;
+    const plannedTasks = mTasks.filter((task) => isTaskPlannedAhead(task, rules.planningLeadDays)).length;
+    const planningScore = Math.min(plannedTasks * rules.planningTaskPoints, rules.planningMaxPoints);
+    const creativitySignals = mTasks.filter((task) => hasCreativitySignal(task, creativityKeywords)).length;
+    const creativityScore = Math.min(creativitySignals * rules.creativityKeywordPoints, rules.creativityMaxPoints);
+    const finalScore = Math.round(taskScore + clientScore + efficiencyScore + planningScore + creativityScore);
+    const mappedColorName = LEGACY_COLOR_MAP[manager.color] || manager.color || "slate";
+    return {
+      ...manager,
+      mappedColor: mappedColorName,
+      totalTasks: mTasks.length,
+      completedTasks: completedTasksArr.length,
+      totalClients: mClients.length,
+      workflowTotal,
+      workflowCompleted,
+      taskScore,
+      clientScore,
+      efficiencyScore,
+      planningScore,
+      creativityScore,
+      score: finalScore,
+      onTimeCount,
+      earlyCount,
+      fastTurnaroundCount,
+      overdueCount,
+      batchBonusCount,
+      plannedTasks,
+      creativitySignals
+    };
+  }).sort((a, b) => b.score - a.score || b.efficiencyScore - a.efficiencyScore || a.name.localeCompare(b.name));
+};
 var isTaskAssignedToProfile = (task, profile, contextIds = []) => {
   const profileId = profile?.id;
   if (!profileId) return false;
@@ -624,6 +883,8 @@ function App() {
   const [managementTasks, setManagementTasks] = useState([]);
   const [appUsers, setAppUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [rankingSettings, setRankingSettings] = useState(DEFAULT_RANKING_SETTINGS);
+  const [rankingSettingsDocId, setRankingSettingsDocId] = useState("");
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedManager, setSelectedManager] = useState(null);
   const [selectedEditor, setSelectedEditor] = useState(null);
@@ -989,6 +1250,12 @@ function App() {
       onSnapshot(dataCollection("users"), (snapshot) => {
         setAppUsers(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
         setUsersLoaded(true);
+      }, errHandler),
+      onSnapshot(dataCollection("ranking_settings"), (snapshot) => {
+        const records = snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+        const activeSettings = records.find((item) => item.id === "default") || records[records.length - 1] || null;
+        setRankingSettingsDocId(activeSettings?.id || "");
+        setRankingSettings(sanitizeRankingSettings(activeSettings || DEFAULT_RANKING_SETTINGS));
       }, errHandler),
       onSnapshot(query(dataCollection("audit_logs"), orderBy("createdAt", "desc"), limit(120)), (snapshot) => setAuditLogs(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }))), errHandler)
     ];
@@ -1358,7 +1625,8 @@ function App() {
           try {
             await updateDoc(dataDoc(item.collectionName, item.taskId), {
               status: item.status,
-              updatedAt: item.updatedAt || nowIso()
+              updatedAt: item.updatedAt || nowIso(),
+              ...item.patch || {}
             });
             clearPendingTaskStatusUpdate({ collectionName: item.collectionName, taskId: item.taskId });
           } catch (error) {
@@ -1440,13 +1708,14 @@ function App() {
       return null;
     }
   };
-  const runQueuedTaskStatusMutation = async ({ collectionName, task, newStatus, permission, entityType, description, changes, successMessage = "", errorMessage = "No se pudo actualizar el estado", afterSuccess }) => {
+  const runQueuedTaskStatusMutation = async ({ collectionName, task, newStatus, permission, entityType, description, changes, statusPatch = {}, successMessage = "", errorMessage = "No se pudo actualizar el estado", afterSuccess }) => {
     if (!task?.id || !newStatus || !collectionName) return null;
     if (!await ensurePermission(permission, description)) return null;
     const stamp = nowIso();
-    const mutationId = queuePendingTaskStatusUpdate({ collectionName, taskId: task.id, status: newStatus, updatedAt: stamp });
+    const patch = typeof statusPatch === "function" ? statusPatch(stamp) : statusPatch || {};
+    const mutationId = queuePendingTaskStatusUpdate({ collectionName, taskId: task.id, status: newStatus, updatedAt: stamp, patch });
     try {
-      await updateDoc(dataDoc(collectionName, task.id), { status: newStatus, updatedAt: stamp });
+      await updateDoc(dataDoc(collectionName, task.id), { status: newStatus, updatedAt: stamp, ...patch });
       clearPendingTaskStatusUpdate({ collectionName, taskId: task.id, mutationId });
       await auditAction({ action: "status_change", entityType, entityId: task.id, description, changes });
       if (successMessage) showToast(successMessage);
@@ -2009,6 +2278,7 @@ function App() {
         entityType: "accountTask",
         description: `Mueve task ${task.title} a ${newStatus}`,
         changes: { previousStatus: task.status, nextStatus: newStatus },
+        statusPatch: (stamp) => getStatusTimestampPatch(task, newStatus, stamp),
         afterSuccess: () => {
           if (newStatus === "publicado") triggerConfetti();
         }
@@ -2052,6 +2322,7 @@ function App() {
         entityType: "editingTask",
         description: `Mueve video ${task.title} a ${newStatus}`,
         changes: { previousStatus: task.status, nextStatus: newStatus, hierarchy: getEditingHierarchyId(task) },
+        statusPatch: (stamp) => getStatusTimestampPatch(task, newStatus, stamp),
         afterSuccess: () => {
           if (newStatus === "aprobado" || newStatus === "publicado") triggerConfetti();
         }
@@ -2115,7 +2386,8 @@ function App() {
         permission: "manage_management_tasks",
         entityType: "managementTask",
         description: `Mueve tarea de gestion ${task.title} a ${newStatus}`,
-        changes: { previousStatus: task.status, nextStatus: newStatus }
+        changes: { previousStatus: task.status, nextStatus: newStatus },
+        statusPatch: (stamp) => getStatusTimestampPatch(task, newStatus, stamp)
       });
     }
   };
@@ -2393,6 +2665,31 @@ function App() {
       showToast("Usuario actualizado, pero no se pudo enviar el correo de acceso.", "error");
     }
   };
+  const saveRankingSettings = async (nextSettings) => {
+    const normalizedSettings = sanitizeRankingSettings(nextSettings);
+    const stamp = nowIso();
+    const payload = {
+      ...normalizedSettings,
+      updatedAt: stamp,
+      updatedBy: {
+        id: currentUserProfile?.id || "",
+        name: currentUserProfile?.name || "",
+        email: authEmail || ""
+      }
+    };
+    if (!rankingSettingsDocId) payload.createdAt = stamp;
+    await runMutation({
+      permission: "manage_ranking_settings",
+      action: rankingSettingsDocId ? "update" : "create",
+      entityType: "ranking_settings",
+      entityId: rankingSettingsDocId || "new",
+      description: "Actualiza reglas de ranking",
+      changes: normalizedSettings,
+      successMessage: "Reglas de ranking guardadas",
+      execute: () => rankingSettingsDocId ? updateDoc(dataDoc("ranking_settings", rankingSettingsDocId), payload) : addDoc(dataCollection("ranking_settings"), payload),
+      afterSuccess: () => setRankingSettings(normalizedSettings)
+    });
+  };
   const handleDelete = async () => {
     const { type, id } = deleteConfirm;
     const map = {
@@ -2464,7 +2761,7 @@ function App() {
       className: "p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
     },
     /* @__PURE__ */ React.createElement(Icon, { name: isMobileMenuOpen ? "X" : "Menu", size: 24 })
-  )), /* @__PURE__ */ React.createElement("div", { className: `fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm transition-opacity md:hidden ${isMobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`, onClick: () => setIsMobileMenuOpen(false) }), /* @__PURE__ */ React.createElement("aside", { className: `fixed md:relative z-50 h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col w-64 shrink-0 transition-transform duration-300 top-0 left-0 ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}` }, /* @__PURE__ */ React.createElement("div", { className: "p-8 hidden md:block" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 mb-1" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "w-8 h-8 text-lg" }), /* @__PURE__ */ React.createElement("h1", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "CLUSTER")), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] uppercase font-bold text-slate-500 pl-11" }, "Agency OS")), /* @__PURE__ */ React.createElement("nav", { className: "flex-1 px-4 space-y-1 pt-20 md:pt-4 overflow-y-auto custom-scroll", "aria-label": "Navegaci\xF3n principal" }, /* @__PURE__ */ React.createElement("div", { className: "pt-1 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider" }, "Principal"), canAccessView(currentUserProfile, "dashboard") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "dashboard", onClick: () => handleNavigate("dashboard"), icon: "LayoutDashboard", label: "Panel Central", color: "purple" }), /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2" }, "Clientes & equipo"), canAccessView(currentUserProfile, "clients") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "clients" || view === "client-detail", onClick: () => handleNavigate("clients"), icon: "Briefcase", label: "Clientes", color: "blue" }), canAccessView(currentUserProfile, "managers") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "managers" || view === "manager-detail", onClick: () => handleNavigate("managers"), icon: "Users", label: "Account Managers", color: "indigo" }), canAccessView(currentUserProfile, "editors") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "editors" || view === "editor-detail", onClick: () => handleNavigate("editors"), icon: "PenTool", label: "Editores", color: "rose" }), /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2" }, "Salas de trabajo"), canAccessView(currentUserProfile, "account-room") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "account-room", onClick: () => handleNavigate("account-room"), icon: "LayoutList", label: "Sala de Accounts", color: "indigo", badge: totalActiveAccountTasks > 0 ? totalActiveAccountTasks : null, badgeColor: pendingAccounts > 0 ? "bg-indigo-500 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300" }), canAccessView(currentUserProfile, "management-room") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "management-room", onClick: () => handleNavigate("management-room"), icon: "ShieldCheck", label: "Sala de Gesti\xF3n", color: "violet", badge: totalActiveManagementTasks > 0 ? totalActiveManagementTasks : null, badgeColor: pendingManagement > 0 ? "bg-violet-500 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300" }), canAccessView(currentUserProfile, "editions") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "editions", onClick: () => handleNavigate("editions"), icon: "Video", label: "Sala de Edici\xF3n", color: "amber", badge: totalActiveEditingTasks > 0 ? totalActiveEditingTasks : null, badgeColor: urgentEditions > 0 ? "bg-red-500 text-white animate-pulse" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300" }), /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2" }, "Calendario"), canAccessView(currentUserProfile, "general-calendar") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "general-calendar", onClick: () => handleNavigate("general-calendar"), icon: "CalendarDays", label: "Calendario General", color: "blue" }), canAccessView(currentUserProfile, "calendar") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "calendar", onClick: () => handleNavigate("calendar"), icon: "CalendarIcon", label: "Agenda Producci\xF3n", color: "emerald" }), canAccessView(currentUserProfile, "reports") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "reports", onClick: () => handleNavigate("reports"), icon: "BarChart3", label: "Reportes", color: "emerald" }), isAdminConfigVisible && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2" }, "Configuraci\xF3n"), canAccessView(currentUserProfile, "control-center") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "control-center", onClick: () => handleNavigate("control-center"), icon: "ClipboardList", label: "Usuarios y accesos", color: "purple" }))), /* @__PURE__ */ React.createElement("div", { className: "p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3" }, /* @__PURE__ */ React.createElement("div", { className: `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${profileBlocked ? "bg-red-500" : authEmail ? "bg-gradient-to-tr from-purple-500 to-indigo-500" : "bg-slate-500"}` }, (currentUserProfile?.name || "IN").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-700 dark:text-slate-200 truncate" }, currentUserProfile?.name || "Invitado"), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase truncate" }, sidebarFooterText))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: `text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${profileBlocked ? "bg-red-50 text-red-600 dark:bg-red-500/20 dark:text-red-400" : currentVerificationMeta.color === "emerald" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400" : currentVerificationMeta.color === "amber" ? "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" : currentVerificationMeta.color === "blue" ? "bg-blue-50 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"}` }, profileBlocked ? "Bloqueado" : authEmail ? currentVerificationMeta.label : "Invitado"), /* @__PURE__ */ React.createElement("button", { onClick: () => setIsDark(!isDark), "aria-label": isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro", title: isDark ? "Modo claro" : "Modo oscuro", className: "ml-auto p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300" }, /* @__PURE__ */ React.createElement(Icon, { name: isDark ? "Sun" : "Moon", size: 16 })), authEmail ? /* @__PURE__ */ React.createElement("button", { onClick: handleLogout, "aria-label": "Cerrar sesi\xF3n", title: "Cerrar sesi\xF3n", className: "p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300" }, /* @__PURE__ */ React.createElement(Icon, { name: "LogOut", size: 16 })) : /* @__PURE__ */ React.createElement("button", { onClick: handleGoogleSignIn, disabled: isSigningIn, "aria-label": "Iniciar sesi\xF3n", title: "Iniciar sesi\xF3n", className: "p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300 disabled:opacity-60" }, /* @__PURE__ */ React.createElement(Icon, { name: isSigningIn ? "Loader2" : "LogIn", size: 16, className: isSigningIn ? "animate-spin" : "" }))))), /* @__PURE__ */ React.createElement("main", { className: "flex-1 overflow-y-auto relative w-full h-full" }, /* @__PURE__ */ React.createElement("div", { className: "p-4 md:p-8 max-w-[1600px] mx-auto min-h-full pb-mobile-nav md:pb-20" }, view === "dashboard" && (isFirstTimeWorkspace ? /* @__PURE__ */ React.createElement(FirstTimeView, { role: currentUserProfile?.role, onNavigate: handleNavigate }) : /* @__PURE__ */ React.createElement(DashboardView, { clients, managers, events, tasks: editingTasks, accountTasks, managementTasks, currentUserProfile, onSignIn: handleGoogleSignIn })), view === "clients" && /* @__PURE__ */ React.createElement(ClientsView, { clients, onAdd: () => setModalConfig({ isOpen: true, type: "client" }), onSelect: (c) => {
+  )), /* @__PURE__ */ React.createElement("div", { className: `fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm transition-opacity md:hidden ${isMobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`, onClick: () => setIsMobileMenuOpen(false) }), /* @__PURE__ */ React.createElement("aside", { className: `fixed md:relative z-50 h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col w-64 shrink-0 transition-transform duration-300 top-0 left-0 ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}` }, /* @__PURE__ */ React.createElement("div", { className: "p-8 hidden md:block" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 mb-1" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "w-8 h-8 text-lg" }), /* @__PURE__ */ React.createElement("h1", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "CLUSTER")), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] uppercase font-bold text-slate-500 pl-11" }, "Agency OS")), /* @__PURE__ */ React.createElement("nav", { className: "flex-1 px-4 space-y-1 pt-20 md:pt-4 overflow-y-auto custom-scroll", "aria-label": "Navegaci\xF3n principal" }, /* @__PURE__ */ React.createElement("div", { className: "pt-1 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider" }, "Principal"), canAccessView(currentUserProfile, "dashboard") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "dashboard", onClick: () => handleNavigate("dashboard"), icon: "LayoutDashboard", label: "Panel Central", color: "purple" }), /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2" }, "Clientes & equipo"), canAccessView(currentUserProfile, "clients") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "clients" || view === "client-detail", onClick: () => handleNavigate("clients"), icon: "Briefcase", label: "Clientes", color: "blue" }), canAccessView(currentUserProfile, "managers") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "managers" || view === "manager-detail", onClick: () => handleNavigate("managers"), icon: "Users", label: "Account Managers", color: "indigo" }), canAccessView(currentUserProfile, "editors") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "editors" || view === "editor-detail", onClick: () => handleNavigate("editors"), icon: "PenTool", label: "Editores", color: "rose" }), /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2" }, "Salas de trabajo"), canAccessView(currentUserProfile, "account-room") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "account-room", onClick: () => handleNavigate("account-room"), icon: "LayoutList", label: "Sala de Accounts", color: "indigo", badge: totalActiveAccountTasks > 0 ? totalActiveAccountTasks : null, badgeColor: pendingAccounts > 0 ? "bg-indigo-500 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300" }), canAccessView(currentUserProfile, "management-room") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "management-room", onClick: () => handleNavigate("management-room"), icon: "ShieldCheck", label: "Sala de Gesti\xF3n", color: "violet", badge: totalActiveManagementTasks > 0 ? totalActiveManagementTasks : null, badgeColor: pendingManagement > 0 ? "bg-violet-500 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300" }), canAccessView(currentUserProfile, "editions") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "editions", onClick: () => handleNavigate("editions"), icon: "Video", label: "Sala de Edici\xF3n", color: "amber", badge: totalActiveEditingTasks > 0 ? totalActiveEditingTasks : null, badgeColor: urgentEditions > 0 ? "bg-red-500 text-white animate-pulse" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300" }), /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2" }, "Calendario"), canAccessView(currentUserProfile, "general-calendar") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "general-calendar", onClick: () => handleNavigate("general-calendar"), icon: "CalendarDays", label: "Calendario General", color: "blue" }), canAccessView(currentUserProfile, "calendar") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "calendar", onClick: () => handleNavigate("calendar"), icon: "CalendarIcon", label: "Agenda Producci\xF3n", color: "emerald" }), canAccessView(currentUserProfile, "reports") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "reports", onClick: () => handleNavigate("reports"), icon: "BarChart3", label: "Reportes", color: "emerald" }), isAdminConfigVisible && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2" }, "Configuraci\xF3n"), canAccessView(currentUserProfile, "control-center") && /* @__PURE__ */ React.createElement(SidebarItem, { active: view === "control-center", onClick: () => handleNavigate("control-center"), icon: "ClipboardList", label: "Usuarios y accesos", color: "purple" }))), /* @__PURE__ */ React.createElement("div", { className: "p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3" }, /* @__PURE__ */ React.createElement("div", { className: `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${profileBlocked ? "bg-red-500" : authEmail ? "bg-gradient-to-tr from-purple-500 to-indigo-500" : "bg-slate-500"}` }, (currentUserProfile?.name || "IN").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-700 dark:text-slate-200 truncate" }, currentUserProfile?.name || "Invitado"), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase truncate" }, sidebarFooterText))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: `text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${profileBlocked ? "bg-red-50 text-red-600 dark:bg-red-500/20 dark:text-red-400" : currentVerificationMeta.color === "emerald" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400" : currentVerificationMeta.color === "amber" ? "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" : currentVerificationMeta.color === "blue" ? "bg-blue-50 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"}` }, profileBlocked ? "Bloqueado" : authEmail ? currentVerificationMeta.label : "Invitado"), /* @__PURE__ */ React.createElement("button", { onClick: () => setIsDark(!isDark), "aria-label": isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro", title: isDark ? "Modo claro" : "Modo oscuro", className: "ml-auto p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300" }, /* @__PURE__ */ React.createElement(Icon, { name: isDark ? "Sun" : "Moon", size: 16 })), authEmail ? /* @__PURE__ */ React.createElement("button", { onClick: handleLogout, "aria-label": "Cerrar sesi\xF3n", title: "Cerrar sesi\xF3n", className: "p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300" }, /* @__PURE__ */ React.createElement(Icon, { name: "LogOut", size: 16 })) : /* @__PURE__ */ React.createElement("button", { onClick: handleGoogleSignIn, disabled: isSigningIn, "aria-label": "Iniciar sesi\xF3n", title: "Iniciar sesi\xF3n", className: "p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300 disabled:opacity-60" }, /* @__PURE__ */ React.createElement(Icon, { name: isSigningIn ? "Loader2" : "LogIn", size: 16, className: isSigningIn ? "animate-spin" : "" }))))), /* @__PURE__ */ React.createElement("main", { className: "flex-1 overflow-y-auto relative w-full h-full" }, /* @__PURE__ */ React.createElement("div", { className: "p-4 md:p-8 max-w-[1600px] mx-auto min-h-full pb-mobile-nav md:pb-20" }, view === "dashboard" && (isFirstTimeWorkspace ? /* @__PURE__ */ React.createElement(FirstTimeView, { role: currentUserProfile?.role, onNavigate: handleNavigate }) : /* @__PURE__ */ React.createElement(DashboardView, { clients, managers, events, tasks: editingTasks, accountTasks, managementTasks, currentUserProfile, onSignIn: handleGoogleSignIn, rankingSettings })), view === "clients" && /* @__PURE__ */ React.createElement(ClientsView, { clients, onAdd: () => setModalConfig({ isOpen: true, type: "client" }), onSelect: (c) => {
     setSelectedClient(c);
     handleNavigate("client-detail");
   } }), view === "client-detail" && selectedClient && /* @__PURE__ */ React.createElement(ClientDetail, { client: selectedClient, managers, onReassignManager: reassignClientManager, onBack: () => handleNavigate("clients"), onUpdate: updateClient, onDelete: () => setDeleteConfirm({ isOpen: true, type: "client", id: selectedClient.id, title: selectedClient.name }), onEdit: () => setModalConfig({ isOpen: true, type: "client", data: selectedClient, isEdit: true }) }), view === "managers" && /* @__PURE__ */ React.createElement(TeamView, { title: "Account Managers", team: managers, iconColor: "indigo", onAdd: () => setModalConfig({ isOpen: true, type: "manager" }), onSelect: (m) => {
@@ -2473,7 +2770,7 @@ function App() {
   }, onDelete: (m) => setDeleteConfirm({ isOpen: true, type: "manager", id: m.id, title: m.name }), onEdit: (m) => setModalConfig({ isOpen: true, type: "manager", data: m, isEdit: true }) }), view === "manager-detail" && selectedManager && /* @__PURE__ */ React.createElement(PersonCalendarDetail, { person: selectedManager, tasks: accountTasks, title: "Planificaci\xF3n de Cuentas", baseColor: LEGACY_COLOR_MAP[selectedManager.color] || selectedManager.color || "indigo", onBack: () => handleNavigate("managers"), onAddEvent: (dateStr) => setModalConfig({ isOpen: true, type: "accountTask", data: { date: dateStr, contextId: selectedManager.id } }), onEventClick: (e) => handleEventClick(e, "accountTask") }), view === "editors" && /* @__PURE__ */ React.createElement(TeamView, { title: "Editores", team: editors, iconColor: "rose", onAdd: () => setModalConfig({ isOpen: true, type: "editor" }), onSelect: (e) => {
     setSelectedEditor(e);
     handleNavigate("editor-detail");
-  }, onDelete: (e) => setDeleteConfirm({ isOpen: true, type: "editor", id: e.id, title: e.name }), onEdit: (e) => setModalConfig({ isOpen: true, type: "editor", data: e, isEdit: true }) }), view === "editor-detail" && selectedEditor && /* @__PURE__ */ React.createElement(PersonCalendarDetail, { person: selectedEditor, tasks: editingTasks, title: "Planificaci\xF3n de Edici\xF3n", baseColor: selectedEditor.color || "rose", onBack: () => handleNavigate("editors"), onAddEvent: (dateStr) => setModalConfig({ isOpen: true, type: "editingTask", data: { date: dateStr, contextId: selectedEditor.id } }), onEventClick: (e) => handleEventClick(e, "editingTask") }), view === "account-room" && /* @__PURE__ */ React.createElement(AccountRoomView, { tasks: accountTasks, managers, clients, currentUserProfile, onAdd: (dateStr) => setModalConfig({ isOpen: true, type: "accountTask", data: { date: dateStr } }), onEdit: (task) => setModalConfig({ isOpen: true, type: "accountTask", data: task, isEdit: true }), onChangeStatus: changeAccountTaskStatus, onDelete: (id) => setDeleteConfirm({ isOpen: true, type: "accountTask", id, title: "Tarea" }), onTaskClick: (t) => setTaskDetailConfig({ isOpen: true, task: t, type: "accountTask" }), legacyColorMap: LEGACY_COLOR_MAP }), view === "editions" && /* @__PURE__ */ React.createElement(EditionsRoomView, { tasks: editingTasks, editors, clients, currentUserProfile, onAdd: (dateStr) => setModalConfig({ isOpen: true, type: "editingTask", data: { date: dateStr } }), onEdit: (task) => setModalConfig({ isOpen: true, type: "editingTask", data: task, isEdit: true }), onChangeStatus: changeEditingTaskStatus, onDelete: (id) => setDeleteConfirm({ isOpen: true, type: "editingTask", id, title: "Tarea" }), onTaskClick: (t) => setTaskDetailConfig({ isOpen: true, task: t, type: "editingTask" }) }), view === "management-room" && /* @__PURE__ */ React.createElement(ManagementRoomView, { tasks: managementTasks, members: managementUsers, clients, currentUserProfile, onAdd: (dateStr) => setModalConfig({ isOpen: true, type: "managementTask", data: { date: dateStr, contextId: defaultManagementAssigneeId } }), onEdit: (task) => setModalConfig({ isOpen: true, type: "managementTask", data: task, isEdit: true }), onChangeStatus: changeManagementTaskStatus, onDelete: (id) => setDeleteConfirm({ isOpen: true, type: "managementTask", id, title: "Tarea de gestion" }), onTaskClick: (t) => setTaskDetailConfig({ isOpen: true, task: t, type: "managementTask" }) }), view === "control-center" && /* @__PURE__ */ React.createElement(UsersAccessView, { users: appUsers, managers, editors, auditLogs, currentUserProfile, onAdd: () => setModalConfig({ isOpen: true, type: "user" }), onEdit: (userRecord) => setModalConfig({ isOpen: true, type: "user", data: userRecord, isEdit: true }), onResendVerification: requestUserVerification }), view === "general-calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Calendario General"), /* @__PURE__ */ React.createElement("div", { className: "flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden" }, /* @__PURE__ */ React.createElement(
+  }, onDelete: (e) => setDeleteConfirm({ isOpen: true, type: "editor", id: e.id, title: e.name }), onEdit: (e) => setModalConfig({ isOpen: true, type: "editor", data: e, isEdit: true }) }), view === "editor-detail" && selectedEditor && /* @__PURE__ */ React.createElement(PersonCalendarDetail, { person: selectedEditor, tasks: editingTasks, title: "Planificaci\xF3n de Edici\xF3n", baseColor: selectedEditor.color || "rose", onBack: () => handleNavigate("editors"), onAddEvent: (dateStr) => setModalConfig({ isOpen: true, type: "editingTask", data: { date: dateStr, contextId: selectedEditor.id } }), onEventClick: (e) => handleEventClick(e, "editingTask") }), view === "account-room" && /* @__PURE__ */ React.createElement(AccountRoomView, { tasks: accountTasks, managers, clients, currentUserProfile, onAdd: (dateStr) => setModalConfig({ isOpen: true, type: "accountTask", data: { date: dateStr } }), onEdit: (task) => setModalConfig({ isOpen: true, type: "accountTask", data: task, isEdit: true }), onChangeStatus: changeAccountTaskStatus, onDelete: (id) => setDeleteConfirm({ isOpen: true, type: "accountTask", id, title: "Tarea" }), onTaskClick: (t) => setTaskDetailConfig({ isOpen: true, task: t, type: "accountTask" }), legacyColorMap: LEGACY_COLOR_MAP }), view === "editions" && /* @__PURE__ */ React.createElement(EditionsRoomView, { tasks: editingTasks, editors, clients, currentUserProfile, rankingSettings, onAdd: (dateStr) => setModalConfig({ isOpen: true, type: "editingTask", data: { date: dateStr } }), onEdit: (task) => setModalConfig({ isOpen: true, type: "editingTask", data: task, isEdit: true }), onChangeStatus: changeEditingTaskStatus, onDelete: (id) => setDeleteConfirm({ isOpen: true, type: "editingTask", id, title: "Tarea" }), onTaskClick: (t) => setTaskDetailConfig({ isOpen: true, task: t, type: "editingTask" }) }), view === "management-room" && /* @__PURE__ */ React.createElement(ManagementRoomView, { tasks: managementTasks, members: managementUsers, clients, currentUserProfile, onAdd: (dateStr) => setModalConfig({ isOpen: true, type: "managementTask", data: { date: dateStr, contextId: defaultManagementAssigneeId } }), onEdit: (task) => setModalConfig({ isOpen: true, type: "managementTask", data: task, isEdit: true }), onChangeStatus: changeManagementTaskStatus, onDelete: (id) => setDeleteConfirm({ isOpen: true, type: "managementTask", id, title: "Tarea de gestion" }), onTaskClick: (t) => setTaskDetailConfig({ isOpen: true, task: t, type: "managementTask" }) }), view === "control-center" && /* @__PURE__ */ React.createElement(UsersAccessView, { users: appUsers, managers, editors, auditLogs, currentUserProfile, rankingSettings, onSaveRankingSettings: saveRankingSettings, onAdd: () => setModalConfig({ isOpen: true, type: "user" }), onEdit: (userRecord) => setModalConfig({ isOpen: true, type: "user", data: userRecord, isEdit: true }), onResendVerification: requestUserVerification }), view === "general-calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Calendario General"), /* @__PURE__ */ React.createElement("div", { className: "flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden" }, /* @__PURE__ */ React.createElement(
     GeneralCalendarGrid,
     {
       activities: allActivities,
@@ -2694,7 +2991,7 @@ var ProgressOverviewChart = ({ completionPercent, completedTasks, totalTasks, gr
     return /* @__PURE__ */ React.createElement("div", { key: group.key, className: "min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "h-2.5 w-2.5 rounded-full", style: { backgroundColor: palette.solid } }), /* @__PURE__ */ React.createElement("span", { className: "break-words text-sm font-bold leading-tight text-slate-800 dark:text-slate-100" }, group.label)), /* @__PURE__ */ React.createElement("p", { className: "mt-1 break-words pr-2 text-xs leading-relaxed font-medium text-slate-500 dark:text-slate-400" }, group.note)), /* @__PURE__ */ React.createElement("div", { className: "w-16 shrink-0 text-right" }, /* @__PURE__ */ React.createElement("p", { className: "text-lg font-black", style: { color: palette.strong } }, group.percent, "%"), /* @__PURE__ */ React.createElement("p", { className: "break-words text-[10px] leading-tight font-semibold text-slate-500 dark:text-slate-400" }, group.completed, "/", group.total))), /* @__PURE__ */ React.createElement("div", { className: "mt-2.5 h-3 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement("div", { className: "h-full rounded-full transition-all duration-700", style: { width: `${group.percent}%`, background: `linear-gradient(90deg, ${palette.solid}, ${palette.strong})` } })));
   }), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-3 gap-2 pt-1" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-2.5 text-center dark:border-slate-800 dark:bg-slate-950/50" }, /* @__PURE__ */ React.createElement("p", { className: "break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400" }, "Total"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-lg font-black leading-none text-slate-900 dark:text-white" }, totalTasks)), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-2.5 text-center dark:border-slate-800 dark:bg-slate-950/50" }, /* @__PURE__ */ React.createElement("p", { className: "break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400" }, "Hechas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-lg font-black leading-none text-slate-900 dark:text-white" }, completedTasks)), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-2.5 text-center dark:border-slate-800 dark:bg-slate-950/50" }, /* @__PURE__ */ React.createElement("p", { className: "break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400" }, "Abiertas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-lg font-black leading-none text-slate-900 dark:text-white" }, pendingTasks)))));
 };
-var DashboardView = ({ clients, managers, events, tasks, accountTasks, managementTasks = [], currentUserProfile, onSignIn }) => {
+var DashboardView = ({ clients, managers, events, tasks, accountTasks, managementTasks = [], currentUserProfile, onSignIn, rankingSettings = DEFAULT_RANKING_SETTINGS }) => {
   const contentos = clients.filter((c) => c.mood === "Contento").length;
   const neutrales = clients.filter((c) => c.mood === "Neutral").length;
   const enRiesgo = clients.filter((c) => c.mood === "En Riesgo").length;
@@ -2721,46 +3018,13 @@ var DashboardView = ({ clients, managers, events, tasks, accountTasks, managemen
   ].sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 6);
   const dateOptions = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
   const formattedDate = (/* @__PURE__ */ new Date()).toLocaleDateString("es-HN", dateOptions);
-  const managerStats = managers.map((m) => {
-    const mTasks = accountTasks.filter((t) => t.contextId === m.id);
-    const mCompletedTasksArr = mTasks.filter((t) => t.status === "aprobado_internamente" || t.status === "publicado");
-    const mCompletedTasks = mCompletedTasksArr.length;
-    let taskScore = 0;
-    mCompletedTasksArr.forEach((t) => {
-      const h = t.hierarchy || (t.priority === "urgente" ? "p1" : t.priority === "recurrente" ? "p3" : "p2");
-      if (h === "p1") taskScore += 10;
-      else if (h === "p2") taskScore += 5;
-      else taskScore += 2;
-    });
-    const mClients = clients.filter((c) => c.managerId === m.id);
-    let workflowTotal = mClients.length * 4;
-    let workflowCompleted = 0;
-    mClients.forEach((c) => {
-      if (c.workflow?.week1) workflowCompleted++;
-      if (c.workflow?.week2) workflowCompleted++;
-      if (c.workflow?.week3) workflowCompleted++;
-      if (c.workflow?.week4) workflowCompleted++;
-    });
-    const clientScore = workflowCompleted * 3;
-    const finalScore = taskScore + clientScore;
-    let mappedColorName = LEGACY_COLOR_MAP[m.color] || m.color || "slate";
-    return {
-      ...m,
-      mappedColor: mappedColorName,
-      totalTasks: mTasks.length,
-      completedTasks: mCompletedTasks,
-      totalClients: mClients.length,
-      workflowTotal,
-      workflowCompleted,
-      taskScore,
-      clientScore,
-      score: finalScore
-    };
-  }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  const legacyManagerStats = false;
+  const managerStats = buildManagerRankingStats({ managers, clients, accountTasks, rankingSettings });
   const maxTaskScore = Math.max(...managerStats.map((s) => s.taskScore), 1);
   const maxClientScore = Math.max(...managerStats.map((s) => s.clientScore), 1);
-  const maxOverallScore = Math.max(...managerStats.map((s) => s.score), 1);
-  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 animate-in fade-in duration-500" }, /* @__PURE__ */ React.createElement("div", { className: "bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-700 rounded-3xl p-8 md:p-10 text-white shadow-xl relative overflow-hidden" }, /* @__PURE__ */ React.createElement("div", { className: "absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" }), /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-0 right-1/4 w-40 h-40 bg-purple-400 opacity-20 rounded-full blur-2xl translate-y-1/3" }), /* @__PURE__ */ React.createElement("div", { className: "relative z-10" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-2" }, /* @__PURE__ */ React.createElement("span", { className: "px-3 py-1 bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md border border-white/10" }, "Resumen Operativo")), /* @__PURE__ */ React.createElement("h2", { className: "text-3xl md:text-4xl font-black mb-2 tracking-tight" }, "\xA1Hola, Equipo Cluster! \u{1F44B}"), /* @__PURE__ */ React.createElement("p", { className: "text-purple-100 font-medium text-sm md:text-base max-w-xl leading-relaxed" }, "Hoy es ", /* @__PURE__ */ React.createElement("span", { className: "capitalize" }, formattedDate), ". Tienes ", /* @__PURE__ */ React.createElement("strong", { className: "text-white" }, urgentTasks.length), " tareas que requieren atenci\xF3n prioritaria. Mant\xE9n el ritmo, ya han completado ", completedTasks, " asignaciones en total.")), /* @__PURE__ */ React.createElement(Icon, { name: "Sparkles", size: 140, className: "absolute -right-8 -top-8 text-white opacity-10 rotate-12" })), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6" }, /* @__PURE__ */ React.createElement(StatCard, { title: "Clientes Activos", value: clients.length, icon: "Briefcase", color: "blue" }), /* @__PURE__ */ React.createElement(StatCard, { title: "Account Managers", value: managers.length, icon: "Users", color: "indigo" }), /* @__PURE__ */ React.createElement(StatCard, { title: "Tareas Accounts", value: accountTasks.filter((t) => t.status !== "publicado").length, icon: "LayoutList", color: "indigo" }), /* @__PURE__ */ React.createElement(StatCard, { title: "Pendientes Edici\xF3n", value: tasks.filter((t) => t.status !== "aprobado" && t.status !== "publicado").length, icon: "Video", color: "amber" })), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 xl:grid-cols-3 gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "xl:col-span-2 space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-6 h-full" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-black text-slate-800 dark:text-white mb-1" }, "Salud de la Cartera"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Distribuci\xF3n seg\xFAn satisfacci\xF3n actual")), /* @__PURE__ */ React.createElement(PortfolioHealthChart, { totalClients: realTotalClients, contentos, neutrales, enRiesgo }), /* @__PURE__ */ React.createElement("div", { className: "hidden" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-1 h-6 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-inner" }, /* @__PURE__ */ React.createElement("div", { style: { width: `${contentos / totalClients * 100}%` }, className: "bg-green-500 transition-all cursor-help", title: `Contentos: ${contentos}` }), /* @__PURE__ */ React.createElement("div", { style: { width: `${neutrales / totalClients * 100}%` }, className: "bg-amber-400 transition-all cursor-help", title: `Neutrales: ${neutrales}` }), /* @__PURE__ */ React.createElement("div", { style: { width: `${enRiesgo / totalClients * 100}%` }, className: "bg-red-500 animate-pulse transition-all cursor-help", title: `En Riesgo: ${enRiesgo}` })), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between mt-4 text-[10px] font-bold uppercase tracking-wider" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm" }), " ", /* @__PURE__ */ React.createElement("span", { className: "text-slate-600 dark:text-slate-300" }, "Sanos (", contentos, ")")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm" }), " ", /* @__PURE__ */ React.createElement("span", { className: "text-slate-600 dark:text-slate-300" }, "Neutral (", neutrales, ")")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm" }), " ", /* @__PURE__ */ React.createElement("span", { className: "text-slate-600 dark:text-slate-300" }, "Riesgo (", enRiesgo, ")"))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-black text-slate-800 dark:text-white mb-1" }, "Progreso Global"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Volumen completado vs general")), /* @__PURE__ */ React.createElement(ProgressOverviewChart, { completionPercent: compPercent, completedTasks, totalTasks, groups: progressGroups }), /* @__PURE__ */ React.createElement("div", { className: "hidden" }, /* @__PURE__ */ React.createElement("div", { className: "flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-6 overflow-hidden shadow-inner p-1" }, /* @__PURE__ */ React.createElement("div", { style: { width: `${compPercent}%` }, className: "bg-purple-600 h-full rounded-full flex items-center justify-end px-2 transition-all duration-1000 ease-out relative overflow-hidden" })), /* @__PURE__ */ React.createElement("span", { className: "text-3xl font-black text-purple-600 dark:text-purple-400 w-16 text-right" }, compPercent, "%"))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col min-h-[300px]" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-black text-slate-800 dark:text-white mb-1" }, "Atenci\xF3n Requerida"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Urgentes y atrasadas")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-black tracking-[0.12em] uppercase text-slate-500 dark:text-slate-400" }, urgentTasks.length), /* @__PURE__ */ React.createElement("div", { className: "p-2.5 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 18, className: "animate-pulse" })))), /* @__PURE__ */ React.createElement("div", { className: "flex-1 overflow-y-auto space-y-2 custom-scroll pr-2" }, urgentTasks.length === 0 ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "Smile", text: "\xA1Todo al d\xEDa! No hay urgencias." }) : urgentTasks.map((t) => /* @__PURE__ */ React.createElement("div", { key: t.id, className: "p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-start gap-3 group cursor-pointer min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: `mt-1 w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${isDateBeforeDateString(t.date, todayStr) ? "bg-red-500" : "bg-amber-500"}` }), /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "break-words text-sm font-bold leading-tight text-slate-800 dark:text-slate-100 group-hover:text-purple-600 transition-colors" }, t.title), /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-[0.14em]" }, t._type), /* @__PURE__ */ React.createElement("span", { className: `text-[9px] font-bold break-words ${isDateBeforeDateString(t.date, todayStr) ? "text-red-500" : "text-slate-500"}` }, "Vence: ", t.date)))))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm mt-6" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white mb-1 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trophy", size: 20, className: "text-yellow-500" }), " Ranking de Productividad por Account"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Rendimiento basado en tareas resueltas y avance en workflows."))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" }, managerStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "col-span-full" }, /* @__PURE__ */ React.createElement(EmptyState, { icon: "Users", text: "No hay Accounts para evaluar a\xFAn." })) : managerStats.map((ms, index) => {
+  const maxEfficiencyScore = Math.max(...managerStats.map((s) => Math.max(s.efficiencyScore, 0)), 1);
+  const maxPlanningCreativityScore = Math.max(...managerStats.map((s) => Math.max(s.planningScore + s.creativityScore, 0)), 1);
+  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 animate-in fade-in duration-500" }, /* @__PURE__ */ React.createElement("div", { className: "bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-700 rounded-3xl p-8 md:p-10 text-white shadow-xl relative overflow-hidden" }, /* @__PURE__ */ React.createElement("div", { className: "absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" }), /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-0 right-1/4 w-40 h-40 bg-purple-400 opacity-20 rounded-full blur-2xl translate-y-1/3" }), /* @__PURE__ */ React.createElement("div", { className: "relative z-10" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-2" }, /* @__PURE__ */ React.createElement("span", { className: "px-3 py-1 bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md border border-white/10" }, "Resumen Operativo")), /* @__PURE__ */ React.createElement("h2", { className: "text-3xl md:text-4xl font-black mb-2 tracking-tight" }, "\xA1Hola, Equipo Cluster! \u{1F44B}"), /* @__PURE__ */ React.createElement("p", { className: "text-purple-100 font-medium text-sm md:text-base max-w-xl leading-relaxed" }, "Hoy es ", /* @__PURE__ */ React.createElement("span", { className: "capitalize" }, formattedDate), ". Tienes ", /* @__PURE__ */ React.createElement("strong", { className: "text-white" }, urgentTasks.length), " tareas que requieren atenci\xF3n prioritaria. Mant\xE9n el ritmo, ya han completado ", completedTasks, " asignaciones en total.")), /* @__PURE__ */ React.createElement(Icon, { name: "Sparkles", size: 140, className: "absolute -right-8 -top-8 text-white opacity-10 rotate-12" })), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6" }, /* @__PURE__ */ React.createElement(StatCard, { title: "Clientes Activos", value: clients.length, icon: "Briefcase", color: "blue" }), /* @__PURE__ */ React.createElement(StatCard, { title: "Account Managers", value: managers.length, icon: "Users", color: "indigo" }), /* @__PURE__ */ React.createElement(StatCard, { title: "Tareas Accounts", value: accountTasks.filter((t) => t.status !== "publicado").length, icon: "LayoutList", color: "indigo" }), /* @__PURE__ */ React.createElement(StatCard, { title: "Pendientes Edici\xF3n", value: tasks.filter((t) => t.status !== "aprobado" && t.status !== "publicado").length, icon: "Video", color: "amber" })), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 xl:grid-cols-3 gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "xl:col-span-2 space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-6 h-full" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-black text-slate-800 dark:text-white mb-1" }, "Salud de la Cartera"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Distribuci\xF3n seg\xFAn satisfacci\xF3n actual")), /* @__PURE__ */ React.createElement(PortfolioHealthChart, { totalClients: realTotalClients, contentos, neutrales, enRiesgo }), /* @__PURE__ */ React.createElement("div", { className: "hidden" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-1 h-6 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-inner" }, /* @__PURE__ */ React.createElement("div", { style: { width: `${contentos / totalClients * 100}%` }, className: "bg-green-500 transition-all cursor-help", title: `Contentos: ${contentos}` }), /* @__PURE__ */ React.createElement("div", { style: { width: `${neutrales / totalClients * 100}%` }, className: "bg-amber-400 transition-all cursor-help", title: `Neutrales: ${neutrales}` }), /* @__PURE__ */ React.createElement("div", { style: { width: `${enRiesgo / totalClients * 100}%` }, className: "bg-red-500 animate-pulse transition-all cursor-help", title: `En Riesgo: ${enRiesgo}` })), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between mt-4 text-[10px] font-bold uppercase tracking-wider" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm" }), " ", /* @__PURE__ */ React.createElement("span", { className: "text-slate-600 dark:text-slate-300" }, "Sanos (", contentos, ")")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm" }), " ", /* @__PURE__ */ React.createElement("span", { className: "text-slate-600 dark:text-slate-300" }, "Neutral (", neutrales, ")")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm" }), " ", /* @__PURE__ */ React.createElement("span", { className: "text-slate-600 dark:text-slate-300" }, "Riesgo (", enRiesgo, ")"))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-black text-slate-800 dark:text-white mb-1" }, "Progreso Global"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Volumen completado vs general")), /* @__PURE__ */ React.createElement(ProgressOverviewChart, { completionPercent: compPercent, completedTasks, totalTasks, groups: progressGroups }), /* @__PURE__ */ React.createElement("div", { className: "hidden" }, /* @__PURE__ */ React.createElement("div", { className: "flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-6 overflow-hidden shadow-inner p-1" }, /* @__PURE__ */ React.createElement("div", { style: { width: `${compPercent}%` }, className: "bg-purple-600 h-full rounded-full flex items-center justify-end px-2 transition-all duration-1000 ease-out relative overflow-hidden" })), /* @__PURE__ */ React.createElement("span", { className: "text-3xl font-black text-purple-600 dark:text-purple-400 w-16 text-right" }, compPercent, "%"))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col min-h-[300px]" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-black text-slate-800 dark:text-white mb-1" }, "Atenci\xF3n Requerida"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Urgentes y atrasadas")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-black tracking-[0.12em] uppercase text-slate-500 dark:text-slate-400" }, urgentTasks.length), /* @__PURE__ */ React.createElement("div", { className: "p-2.5 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 18, className: "animate-pulse" })))), /* @__PURE__ */ React.createElement("div", { className: "flex-1 overflow-y-auto space-y-2 custom-scroll pr-2" }, urgentTasks.length === 0 ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "Smile", text: "\xA1Todo al d\xEDa! No hay urgencias." }) : urgentTasks.map((t) => /* @__PURE__ */ React.createElement("div", { key: t.id, className: "p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-start gap-3 group cursor-pointer min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: `mt-1 w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${isDateBeforeDateString(t.date, todayStr) ? "bg-red-500" : "bg-amber-500"}` }), /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "break-words text-sm font-bold leading-tight text-slate-800 dark:text-slate-100 group-hover:text-purple-600 transition-colors" }, t.title), /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-[0.14em]" }, t._type), /* @__PURE__ */ React.createElement("span", { className: `text-[9px] font-bold break-words ${isDateBeforeDateString(t.date, todayStr) ? "text-red-500" : "text-slate-500"}` }, "Vence: ", t.date)))))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm mt-6" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white mb-1 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trophy", size: 20, className: "text-yellow-500" }), " Ranking de Productividad por Account"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Rendimiento basado en entregas tempranas, eficiencia, planificacion e ideas."))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" }, managerStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "col-span-full" }, /* @__PURE__ */ React.createElement(EmptyState, { icon: "Users", text: "No hay Accounts para evaluar a\xFAn." })) : managerStats.map((ms, index) => {
     const isTop = index === 0;
     const isSecond = index === 1;
     const isThird = index === 2;
@@ -2777,7 +3041,7 @@ var DashboardView = ({ clients, managers, events, tasks, accountTasks, managemen
       medalColor = "text-amber-600";
       medalBg = "bg-amber-50 dark:bg-amber-600/10 ring-2 ring-amber-600/50";
     }
-    return /* @__PURE__ */ React.createElement("div", { key: ms.id, className: "p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/20 flex flex-col gap-4 hover:bg-white dark:hover:bg-slate-800 transition-colors shadow-sm relative overflow-hidden min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "absolute inset-x-0 top-0 h-1.5", style: { background: `linear-gradient(90deg, ${palette.solid}, ${palette.strong})` } }), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-start gap-3 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 flex-1 items-center gap-3" }, /* @__PURE__ */ React.createElement("div", { className: `w-8 h-8 shrink-0 flex items-center justify-center font-black rounded-full shadow-sm text-sm ${medalBg} ${medalColor}` }, "#", index + 1), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("h4", { className: "min-w-0 font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "truncate" }, ms.name), isTop && /* @__PURE__ */ React.createElement(Icon, { name: "Sparkles", size: 14, className: "text-yellow-500" })), /* @__PURE__ */ React.createElement("p", { className: "break-words text-[10px] leading-relaxed text-slate-500 font-medium" }, ms.completedTasks, "/", ms.totalTasks, " Tareas | ", ms.totalClients, " Clientes"))), /* @__PURE__ */ React.createElement("div", { className: "text-right shrink-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400" }, "Score"), /* @__PURE__ */ React.createElement("span", { className: "text-2xl font-black", style: { color: palette.strong } }, ms.score, " pts"))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800/80 dark:bg-slate-900/40" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400" }, "Tareas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.completedTasks, "/", ms.totalTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "resueltas")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400" }, "Workflow"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.workflowCompleted, "/", ms.workflowTotal), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "hitos activos"))), /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ React.createElement(
+    return /* @__PURE__ */ React.createElement("div", { key: ms.id, className: "p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/20 flex flex-col gap-4 hover:bg-white dark:hover:bg-slate-800 transition-colors shadow-sm relative overflow-hidden min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "absolute inset-x-0 top-0 h-1.5", style: { background: `linear-gradient(90deg, ${palette.solid}, ${palette.strong})` } }), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-start gap-3 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 flex-1 items-center gap-3" }, /* @__PURE__ */ React.createElement("div", { className: `w-8 h-8 shrink-0 flex items-center justify-center font-black rounded-full shadow-sm text-sm ${medalBg} ${medalColor}` }, "#", index + 1), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("h4", { className: "min-w-0 font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "truncate" }, ms.name), isTop && /* @__PURE__ */ React.createElement(Icon, { name: "Sparkles", size: 14, className: "text-yellow-500" })), /* @__PURE__ */ React.createElement("p", { className: "break-words text-[10px] leading-relaxed text-slate-500 font-medium" }, ms.completedTasks, "/", ms.totalTasks, " Tareas | ", ms.totalClients, " Clientes"))), /* @__PURE__ */ React.createElement("div", { className: "text-right shrink-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400" }, "Score"), /* @__PURE__ */ React.createElement("span", { className: "text-2xl font-black", style: { color: palette.strong } }, ms.score, " pts"))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800/80 dark:bg-slate-900/40" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400" }, "Tareas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.completedTasks, "/", ms.totalTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "resueltas")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400" }, "Temprano"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.earlyCount), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, ms.onTimeCount, " a tiempo")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400" }, "Planning"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.plannedTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "preparadas")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400" }, "Ideas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.creativitySignals), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "senales"))), /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ React.createElement(
       CompactMetricBar,
       {
         label: "Ejecucion",
@@ -2795,10 +3059,28 @@ var DashboardView = ({ clients, managers, events, tasks, accountTasks, managemen
         meta: `${ms.clientScore} pts`,
         helper: ms.workflowTotal > 0 ? `${ms.workflowCompleted} de ${ms.workflowTotal} hitos completados` : "Sin workflow activo"
       }
+    ), /* @__PURE__ */ React.createElement(
+      CompactMetricBar,
+      {
+        label: "Eficiencia",
+        value: Math.max(ms.efficiencyScore, 0) / maxEfficiencyScore * 100,
+        color: ms.mappedColor,
+        meta: `${ms.efficiencyScore} pts`,
+        helper: `${ms.earlyCount} tempranas, ${ms.fastTurnaroundCount} rapidas, ${ms.overdueCount} atrasos`
+      }
+    ), /* @__PURE__ */ React.createElement(
+      CompactMetricBar,
+      {
+        label: "Plan + ideas",
+        value: (ms.planningScore + ms.creativityScore) / maxPlanningCreativityScore * 100,
+        color: ms.mappedColor,
+        meta: `${ms.planningScore + ms.creativityScore} pts`,
+        helper: `${ms.planningScore} planificacion, ${ms.creativityScore} creatividad`
+      }
     )), /* @__PURE__ */ React.createElement("div", { className: "hidden" }, /* @__PURE__ */ React.createElement(
       "div",
       {
-        style: { width: `${ms.score / maxOverallScore * 100}%` },
+        style: { width: `${Math.max(ms.score, 0)}%` },
         className: `h-full rounded-full transition-all duration-1000 ease-out bg-${ms.mappedColor}-500 ${ms.score > 0 ? "min-w-[0.5rem]" : ""}`
       }
     )));
@@ -2981,7 +3263,7 @@ var AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, on
     );
   })));
 };
-var EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
+var EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, rankingSettings = DEFAULT_RANKING_SETTINGS, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
   const {
     currentDate,
     setCurrentDate,
@@ -3025,14 +3307,16 @@ var EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, on
     setFilterMode("date");
     onAdd(nextDate);
   };
+  const editingRankingRules = sanitizeRankingSettings(rankingSettings).editing;
   const rankedTasks2 = filteredTasks.map((task) => {
     const hierarchy = getEditingHierarchyId(task);
     const delta = task.date ? getDateOnlyDiffDays(task.date, todayStr) : 99;
-    const hierarchyScore = hierarchy === "p1" ? 400 : hierarchy === "p2" ? 280 : hierarchy === "p3" ? 170 : 90;
-    const priorityBonus = task.priority === "urgente" ? 130 : task.priority === "recurrente" ? 30 : 70;
-    const dateBonus = delta < 0 ? 180 : delta === 0 ? 120 : delta === 1 ? 70 : delta <= 3 ? 30 : 0;
-    const statusPenalty = task.status === "publicado" ? -250 : task.status === "aprobado" ? -150 : 0;
-    return { ...task, hierarchy, rankScore: hierarchyScore + priorityBonus + dateBonus + statusPenalty };
+    const hierarchyScore = editingRankingRules.hierarchyScores[hierarchy] ?? editingRankingRules.hierarchyScores.p2;
+    const priorityBonus = editingRankingRules.priorityScores[task.priority] ?? editingRankingRules.priorityScores.normal;
+    const dateBonus = delta < 0 ? editingRankingRules.dateScores.overdue : delta === 0 ? editingRankingRules.dateScores.today : delta === 1 ? editingRankingRules.dateScores.tomorrow : delta <= 3 ? editingRankingRules.dateScores.soon : 0;
+    const statusPenalty = editingRankingRules.statusPenalties[task.status] || 0;
+    const earlyDeliveryBonus = isCompletedStatus(task.status) && isCompletionEarly(task, getTaskCompletionIso(task), editingRankingRules.earlyDeliveryCutoffHour) ? editingRankingRules.earlyDeliveryBonus : 0;
+    return { ...task, hierarchy, rankScore: hierarchyScore + priorityBonus + dateBonus + statusPenalty + earlyDeliveryBonus };
   }).sort((a, b) => b.rankScore - a.rankScore || (a.date || "").localeCompare(b.date || "") || a.title.localeCompare(b.title));
   const rankingMap = rankedTasks2.reduce((acc, task, index) => ({ ...acc, [task.id]: index + 1 }), {});
   const handleDragStart = (e, taskId) => {
@@ -3285,12 +3569,90 @@ var ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd, 
     );
   })));
 };
-var UsersAccessView = ({ users, managers, editors, auditLogs, currentUserProfile, onAdd, onEdit, onResendVerification }) => {
+var RankingNumberField = ({ label, value, onChange, min, max, step = 1 }) => /* @__PURE__ */ React.createElement("label", { className: "block min-w-0" }, /* @__PURE__ */ React.createElement("span", { className: "block text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-1" }, label), /* @__PURE__ */ React.createElement(
+  "input",
+  {
+    type: "number",
+    value,
+    min,
+    max,
+    step,
+    onChange: (event) => onChange(toConfigNumber(event.target.value, 0)),
+    className: "w-full min-h-[42px] rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+  }
+));
+var RankingRulesPanel = ({ rankingSettings, currentUserProfile, onSave }) => {
+  const [draft, setDraft] = useState(() => sanitizeRankingSettings(rankingSettings));
+  const [saving, setSaving] = useState(false);
+  const canEdit = userHasPermission(currentUserProfile, "manage_ranking_settings");
+  useEffect(() => {
+    setDraft(sanitizeRankingSettings(rankingSettings));
+  }, [rankingSettings]);
+  if (!canEdit) return null;
+  const updateManagerValue = (key, value) => setDraft((current) => ({
+    ...current,
+    manager: { ...current.manager, [key]: value }
+  }));
+  const updateManagerMapValue = (group, key, value) => setDraft((current) => ({
+    ...current,
+    manager: {
+      ...current.manager,
+      [group]: { ...current.manager[group], [key]: value }
+    }
+  }));
+  const updateEditingValue = (key, value) => setDraft((current) => ({
+    ...current,
+    editing: { ...current.editing, [key]: value }
+  }));
+  const updateEditingMapValue = (group, key, value) => setDraft((current) => ({
+    ...current,
+    editing: {
+      ...current.editing,
+      [group]: { ...current.editing[group], [key]: value }
+    }
+  }));
+  const handleSave = async () => {
+    if (!onSave) return;
+    setSaving(true);
+    try {
+      await onSave(sanitizeRankingSettings(draft));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return /* @__PURE__ */ React.createElement("section", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-5" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col lg:flex-row lg:items-center justify-between gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trophy", size: 18, className: "text-yellow-500" }), " Reglas de ranking"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400 mt-1" }, "Pesos activos para productividad, tiempos, planificacion e ideas.")), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row gap-2" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => setDraft(sanitizeRankingSettings(DEFAULT_RANKING_SETTINGS)),
+      className: "min-h-[42px] rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+    },
+    "Defaults"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: handleSave,
+      disabled: saving,
+      className: "min-h-[42px] rounded-xl bg-purple-600 px-4 text-sm font-black text-white hover:bg-purple-700 disabled:opacity-60 flex items-center justify-center gap-2"
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: saving ? "Loader2" : "Save", size: 15, className: saving ? "animate-spin" : "" }),
+    "Guardar reglas"
+  ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 xl:grid-cols-3 gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3" }, "Entregas"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, Object.keys(draft.manager.taskPoints).map((key) => /* @__PURE__ */ React.createElement(RankingNumberField, { key, label: key.toUpperCase(), value: draft.manager.taskPoints[key], onChange: (value) => updateManagerMapValue("taskPoints", key, value) })), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Publicado", value: draft.manager.publishedBonus, onChange: (value) => updateManagerValue("publishedBonus", value) }), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Workflow", value: draft.manager.workflowStepPoints, onChange: (value) => updateManagerValue("workflowStepPoints", value) }))), /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3" }, "Tiempos"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement(RankingNumberField, { label: "A tiempo", value: draft.manager.onTimeBonus, onChange: (value) => updateManagerValue("onTimeBonus", value) }), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Temprano", value: draft.manager.earlyDeliveryBonus, onChange: (value) => updateManagerValue("earlyDeliveryBonus", value) }), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Hora temprana", value: draft.manager.earlyDeliveryCutoffHour, min: 0, max: 23, onChange: (value) => updateManagerValue("earlyDeliveryCutoffHour", value) }), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Atraso", value: draft.manager.overduePenalty, onChange: (value) => updateManagerValue("overduePenalty", value) }), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Horas rapidas", value: draft.manager.fastTurnaroundHours, min: 0, onChange: (value) => updateManagerValue("fastTurnaroundHours", value) }), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Rapidez", value: draft.manager.fastTurnaroundBonus, onChange: (value) => updateManagerValue("fastTurnaroundBonus", value) }))), /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3" }, "Lote temprano"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Cuentas", value: draft.manager.batchDifferentClientCount, min: 1, onChange: (value) => updateManagerValue("batchDifferentClientCount", value) }), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Entregas", value: draft.manager.batchEarlyCompletedCount, min: 1, onChange: (value) => updateManagerValue("batchEarlyCompletedCount", value) }), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Bonus lote", value: draft.manager.batchEarlyBonus, onChange: (value) => updateManagerValue("batchEarlyBonus", value) }))), /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3" }, "Planificacion"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Dias antes", value: draft.manager.planningLeadDays, min: 0, onChange: (value) => updateManagerValue("planningLeadDays", value) }), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Puntos", value: draft.manager.planningTaskPoints, onChange: (value) => updateManagerValue("planningTaskPoints", value) }), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Max", value: draft.manager.planningMaxPoints, min: 0, onChange: (value) => updateManagerValue("planningMaxPoints", value) }))), /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3" }, "Ideas"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Puntos", value: draft.manager.creativityKeywordPoints, onChange: (value) => updateManagerValue("creativityKeywordPoints", value) }), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Max", value: draft.manager.creativityMaxPoints, min: 0, onChange: (value) => updateManagerValue("creativityMaxPoints", value) })), /* @__PURE__ */ React.createElement("label", { className: "mt-3 block" }, /* @__PURE__ */ React.createElement("span", { className: "block text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-1" }, "Palabras clave"), /* @__PURE__ */ React.createElement(
+    "textarea",
+    {
+      value: draft.manager.creativityKeywords,
+      onChange: (event) => updateManagerValue("creativityKeywords", event.target.value),
+      className: "w-full min-h-[86px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none focus:ring-2 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3" }, "Sala de Edicion"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, Object.keys(draft.editing.hierarchyScores).map((key) => /* @__PURE__ */ React.createElement(RankingNumberField, { key: `h-${key}`, label: key.toUpperCase(), value: draft.editing.hierarchyScores[key], onChange: (value) => updateEditingMapValue("hierarchyScores", key, value) })), Object.keys(draft.editing.priorityScores).map((key) => /* @__PURE__ */ React.createElement(RankingNumberField, { key: `p-${key}`, label: key, value: draft.editing.priorityScores[key], onChange: (value) => updateEditingMapValue("priorityScores", key, value) })), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Edicion temprano", value: draft.editing.earlyDeliveryBonus, onChange: (value) => updateEditingValue("earlyDeliveryBonus", value) }), /* @__PURE__ */ React.createElement(RankingNumberField, { label: "Hora temprana", value: draft.editing.earlyDeliveryCutoffHour, min: 0, max: 23, onChange: (value) => updateEditingValue("earlyDeliveryCutoffHour", value) })))));
+};
+var UsersAccessView = ({ users, managers, editors, auditLogs, currentUserProfile, rankingSettings = DEFAULT_RANKING_SETTINGS, onSaveRankingSettings, onAdd, onEdit, onResendVerification }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const filteredUsers = users.filter((item) => `${item.name || ""} ${item.email || ""} ${item.role || ""}`.toLowerCase().includes(searchTerm.toLowerCase()));
   const verifiedUsers = users.filter((item) => getVerificationMeta(item).isVerified).length;
   const pendingVerificationUsers = users.filter((item) => normalizeEmail(item.email) && !getVerificationMeta(item).isVerified).length;
-  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row justify-between items-start md:items-center gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl md:text-3xl font-black text-slate-800 dark:text-white" }, "Usuarios y Accesos"), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400 mt-1" }, "Permisos por rol, accesos por correo y bitacora de actividad.")), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row w-full md:w-auto gap-3" }, /* @__PURE__ */ React.createElement(SearchBar, { searchTerm, setSearchTerm, placeholder: "Buscar usuario..." }), /* @__PURE__ */ React.createElement(Button, { onClick: onAdd, color: "purple", icon: "UserPlus" }, "Nuevo Usuario"))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" }, /* @__PURE__ */ React.createElement(StatCard, { title: "Usuarios Activos", value: users.filter((item) => item.isActive !== false).length, icon: "Users", color: "purple" }), /* @__PURE__ */ React.createElement(StatCard, { title: "Correos Verificados", value: verifiedUsers, icon: "ShieldCheck", color: "emerald" }), /* @__PURE__ */ React.createElement(StatCard, { title: "Pendientes Verificar", value: pendingVerificationUsers, icon: "Mail", color: "amber" }), /* @__PURE__ */ React.createElement(StatCard, { title: "Admins", value: users.filter((item) => item.isActive !== false && ["super_admin", "operations"].includes(item.role)).length, icon: "ClipboardList", color: "indigo" })), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 xl:grid-cols-[1.05fr,1.3fr] gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white" }, "Directorio"), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black uppercase tracking-wider text-slate-500" }, getRoleMeta(currentUserProfile?.role).label)), /* @__PURE__ */ React.createElement("div", { className: "space-y-3 max-h-[540px] overflow-y-auto custom-scroll pr-2" }, filteredUsers.length === 0 ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "Users", text: "No hay usuarios para este filtro." }) : filteredUsers.map((record) => {
+  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row justify-between items-start md:items-center gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl md:text-3xl font-black text-slate-800 dark:text-white" }, "Usuarios y Accesos"), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400 mt-1" }, "Permisos por rol, accesos por correo y bitacora de actividad.")), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row w-full md:w-auto gap-3" }, /* @__PURE__ */ React.createElement(SearchBar, { searchTerm, setSearchTerm, placeholder: "Buscar usuario..." }), /* @__PURE__ */ React.createElement(Button, { onClick: onAdd, color: "purple", icon: "UserPlus" }, "Nuevo Usuario"))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" }, /* @__PURE__ */ React.createElement(StatCard, { title: "Usuarios Activos", value: users.filter((item) => item.isActive !== false).length, icon: "Users", color: "purple" }), /* @__PURE__ */ React.createElement(StatCard, { title: "Correos Verificados", value: verifiedUsers, icon: "ShieldCheck", color: "emerald" }), /* @__PURE__ */ React.createElement(StatCard, { title: "Pendientes Verificar", value: pendingVerificationUsers, icon: "Mail", color: "amber" }), /* @__PURE__ */ React.createElement(StatCard, { title: "Admins", value: users.filter((item) => item.isActive !== false && ["super_admin", "operations"].includes(item.role)).length, icon: "ClipboardList", color: "indigo" })), /* @__PURE__ */ React.createElement(RankingRulesPanel, { rankingSettings, currentUserProfile, onSave: onSaveRankingSettings }), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 xl:grid-cols-[1.05fr,1.3fr] gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white" }, "Directorio"), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black uppercase tracking-wider text-slate-500" }, getRoleMeta(currentUserProfile?.role).label)), /* @__PURE__ */ React.createElement("div", { className: "space-y-3 max-h-[540px] overflow-y-auto custom-scroll pr-2" }, filteredUsers.length === 0 ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "Users", text: "No hay usuarios para este filtro." }) : filteredUsers.map((record) => {
     const verificationMeta = getVerificationMeta(record);
     const linkedManager = managers.find((item) => item.id === record.linkedManagerId);
     const linkedEditor = editors.find((item) => item.id === record.linkedEditorId);

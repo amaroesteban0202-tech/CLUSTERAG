@@ -186,10 +186,10 @@ const writePendingTaskStatusUpdates = (items = []) => {
     }
     window.localStorage.setItem(PENDING_TASK_STATUS_UPDATES_KEY, JSON.stringify(items));
 };
-const queuePendingTaskStatusUpdate = ({ collectionName, taskId, status, updatedAt = nowIso(), mutationId = `${taskId}:${updatedAt}:${status}` }) => {
+const queuePendingTaskStatusUpdate = ({ collectionName, taskId, status, updatedAt = nowIso(), patch = {}, mutationId = `${taskId}:${updatedAt}:${status}` }) => {
     const nextItems = readPendingTaskStatusUpdates()
         .filter((item) => !(item.collectionName === collectionName && item.taskId === taskId))
-        .concat({ collectionName, taskId, status, updatedAt, mutationId, queuedAt: nowIso() });
+        .concat({ collectionName, taskId, status, updatedAt, patch, mutationId, queuedAt: nowIso() });
     writePendingTaskStatusUpdates(nextItems);
     return mutationId;
 };
@@ -427,6 +427,299 @@ const getEditingHierarchyId = (task = {}) => {
     if (task.priority === 'recurrente') return 'p3';
     return 'p2';
 };
+
+const DEFAULT_RANKING_SETTINGS = {
+    version: 2,
+    manager: {
+        taskPoints: { p1: 12, p2: 8, p3: 4, p4: 2 },
+        publishedBonus: 4,
+        onTimeBonus: 8,
+        earlyDeliveryBonus: 8,
+        earlyDeliveryCutoffHour: 12,
+        fastTurnaroundHours: 6,
+        fastTurnaroundBonus: 8,
+        overduePenalty: -12,
+        workflowStepPoints: 2,
+        batchDifferentClientCount: 4,
+        batchEarlyCompletedCount: 2,
+        batchEarlyBonus: 18,
+        planningLeadDays: 1,
+        planningTaskPoints: 3,
+        planningMaxPoints: 24,
+        creativityKeywordPoints: 4,
+        creativityMaxPoints: 20,
+        creativityKeywords: 'idea,nuevo,nueva,propuesta,concepto,hook,creativo,creativa,innovacion'
+    },
+    editing: {
+        hierarchyScores: { p1: 440, p2: 300, p3: 170, p4: 90 },
+        priorityScores: { urgente: 150, alta: 100, normal: 60, baja: 15, recurrente: 35 },
+        dateScores: { overdue: 190, today: 130, tomorrow: 75, soon: 30 },
+        statusPenalties: { aprobado: -150, publicado: -260 },
+        earlyDeliveryBonus: 50,
+        earlyDeliveryCutoffHour: 12
+    }
+};
+
+const toConfigNumber = (value, fallback = 0) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : fallback;
+};
+
+const sanitizeNumberMap = (defaults = {}, values = {}) => (
+    Object.keys(defaults).reduce((acc, key) => ({
+        ...acc,
+        [key]: toConfigNumber(values?.[key], defaults[key])
+    }), {})
+);
+
+const sanitizeRankingSettings = (settings = {}) => {
+    const source = settings || {};
+    const manager = source.manager || {};
+    const editing = source.editing || {};
+    return {
+        version: DEFAULT_RANKING_SETTINGS.version,
+        manager: {
+            taskPoints: sanitizeNumberMap(DEFAULT_RANKING_SETTINGS.manager.taskPoints, manager.taskPoints),
+            publishedBonus: toConfigNumber(manager.publishedBonus, DEFAULT_RANKING_SETTINGS.manager.publishedBonus),
+            onTimeBonus: toConfigNumber(manager.onTimeBonus, DEFAULT_RANKING_SETTINGS.manager.onTimeBonus),
+            earlyDeliveryBonus: toConfigNumber(manager.earlyDeliveryBonus, DEFAULT_RANKING_SETTINGS.manager.earlyDeliveryBonus),
+            earlyDeliveryCutoffHour: toConfigNumber(manager.earlyDeliveryCutoffHour, DEFAULT_RANKING_SETTINGS.manager.earlyDeliveryCutoffHour),
+            fastTurnaroundHours: Math.max(0, toConfigNumber(manager.fastTurnaroundHours, DEFAULT_RANKING_SETTINGS.manager.fastTurnaroundHours)),
+            fastTurnaroundBonus: toConfigNumber(manager.fastTurnaroundBonus, DEFAULT_RANKING_SETTINGS.manager.fastTurnaroundBonus),
+            overduePenalty: -Math.abs(toConfigNumber(manager.overduePenalty, DEFAULT_RANKING_SETTINGS.manager.overduePenalty)),
+            workflowStepPoints: toConfigNumber(manager.workflowStepPoints, DEFAULT_RANKING_SETTINGS.manager.workflowStepPoints),
+            batchDifferentClientCount: Math.max(1, toConfigNumber(manager.batchDifferentClientCount, DEFAULT_RANKING_SETTINGS.manager.batchDifferentClientCount)),
+            batchEarlyCompletedCount: Math.max(1, toConfigNumber(manager.batchEarlyCompletedCount, DEFAULT_RANKING_SETTINGS.manager.batchEarlyCompletedCount)),
+            batchEarlyBonus: toConfigNumber(manager.batchEarlyBonus, DEFAULT_RANKING_SETTINGS.manager.batchEarlyBonus),
+            planningLeadDays: Math.max(0, toConfigNumber(manager.planningLeadDays, DEFAULT_RANKING_SETTINGS.manager.planningLeadDays)),
+            planningTaskPoints: toConfigNumber(manager.planningTaskPoints, DEFAULT_RANKING_SETTINGS.manager.planningTaskPoints),
+            planningMaxPoints: Math.max(0, toConfigNumber(manager.planningMaxPoints, DEFAULT_RANKING_SETTINGS.manager.planningMaxPoints)),
+            creativityKeywordPoints: toConfigNumber(manager.creativityKeywordPoints, DEFAULT_RANKING_SETTINGS.manager.creativityKeywordPoints),
+            creativityMaxPoints: Math.max(0, toConfigNumber(manager.creativityMaxPoints, DEFAULT_RANKING_SETTINGS.manager.creativityMaxPoints)),
+            creativityKeywords: String(manager.creativityKeywords || DEFAULT_RANKING_SETTINGS.manager.creativityKeywords)
+        },
+        editing: {
+            hierarchyScores: sanitizeNumberMap(DEFAULT_RANKING_SETTINGS.editing.hierarchyScores, editing.hierarchyScores),
+            priorityScores: sanitizeNumberMap(DEFAULT_RANKING_SETTINGS.editing.priorityScores, editing.priorityScores),
+            dateScores: sanitizeNumberMap(DEFAULT_RANKING_SETTINGS.editing.dateScores, editing.dateScores),
+            statusPenalties: sanitizeNumberMap(DEFAULT_RANKING_SETTINGS.editing.statusPenalties, editing.statusPenalties),
+            earlyDeliveryBonus: toConfigNumber(editing.earlyDeliveryBonus, DEFAULT_RANKING_SETTINGS.editing.earlyDeliveryBonus),
+            earlyDeliveryCutoffHour: toConfigNumber(editing.earlyDeliveryCutoffHour, DEFAULT_RANKING_SETTINGS.editing.earlyDeliveryCutoffHour)
+        }
+    };
+};
+
+const getAccountTaskHierarchyId = (task = {}) => {
+    if (task.hierarchy) return task.hierarchy;
+    if (task.priority === 'urgente') return 'p1';
+    if (task.priority === 'recurrente') return 'p3';
+    return 'p2';
+};
+
+const getStatusTimestampPatch = (task = {}, newStatus = '', stamp = nowIso()) => {
+    const statusTimestamps = {
+        ...(task.statusTimestamps || {}),
+        [newStatus]: task.statusTimestamps?.[newStatus] || stamp
+    };
+    const patch = { lastStatusChangedAt: stamp, statusTimestamps };
+    if (newStatus === 'publicado' && !task.publishedAt) patch.publishedAt = stamp;
+    if (newStatus === 'aprobado' && !task.approvedAt) patch.approvedAt = stamp;
+    if (newStatus === 'aprobado_internamente' && !task.internallyApprovedAt) patch.internallyApprovedAt = stamp;
+    if (newStatus === 'cerrado' && !task.closedAt) patch.closedAt = stamp;
+    return patch;
+};
+
+const getTaskCompletionIso = (task = {}) => {
+    const status = task.status || '';
+    if (task.statusTimestamps?.[status]) return task.statusTimestamps[status];
+    if (status === 'publicado') return task.publishedAt || task.updatedAt || '';
+    if (status === 'aprobado') return task.approvedAt || task.updatedAt || '';
+    if (status === 'aprobado_internamente') return task.internallyApprovedAt || task.updatedAt || '';
+    if (status === 'cerrado') return task.closedAt || task.updatedAt || '';
+    return '';
+};
+
+const getHondurasDatePartsFromIso = (value = '') => {
+    if (!value) return null;
+    const parsedDate = new Date(value);
+    if (Number.isNaN(parsedDate.getTime())) return null;
+    try {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Tegucigalpa',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            hourCycle: 'h23'
+        }).formatToParts(parsedDate);
+        const getPart = (type) => parts.find((part) => part.type === type)?.value || '';
+        const year = getPart('year');
+        const month = getPart('month');
+        const day = getPart('day');
+        const hour = Number(getPart('hour'));
+        if (!year || !month || !day || !Number.isFinite(hour)) return null;
+        return { date: `${year}-${month}-${day}`, hour };
+    } catch (error) {
+        return null;
+    }
+};
+
+const getHondurasDateFromIso = (value = '') => getHondurasDatePartsFromIso(value)?.date || '';
+
+const getHoursBetween = (startValue = '', endValue = '') => {
+    const startMs = Date.parse(startValue);
+    const endMs = Date.parse(endValue);
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return null;
+    return (endMs - startMs) / 3600000;
+};
+
+const isCompletionOnTime = (task = {}, completionIso = '') => {
+    const dueDate = normalizeDateOnlyString(task.date);
+    const completionDate = getHondurasDateFromIso(completionIso);
+    if (!dueDate || !completionDate) return false;
+    return compareDateOnlyStrings(completionDate, dueDate) <= 0;
+};
+
+const isCompletionEarly = (task = {}, completionIso = '', cutoffHour = 12) => {
+    const dueDate = normalizeDateOnlyString(task.date);
+    const completionParts = getHondurasDatePartsFromIso(completionIso);
+    if (!dueDate || !completionParts) return false;
+    const dateDelta = compareDateOnlyStrings(completionParts.date, dueDate);
+    return dateDelta < 0 || (dateDelta === 0 && completionParts.hour <= cutoffHour);
+};
+
+const isTaskPlannedAhead = (task = {}, leadDays = 1) => {
+    const dueDate = normalizeDateOnlyString(task.date);
+    const createdDate = getHondurasDateFromIso(task.createdAt);
+    if (!dueDate || !createdDate) return false;
+    return getDateOnlyDiffDays(dueDate, createdDate) >= leadDays;
+};
+
+const getRankingKeywords = (value = '') => String(value || '')
+    .split(',')
+    .map((item) => normalizeNameKey(item))
+    .filter(Boolean);
+
+const hasCreativitySignal = (task = {}, keywords = []) => {
+    if (keywords.length === 0) return false;
+    const commentText = Array.isArray(task.comments) ? task.comments.map((item) => item.text || '').join(' ') : '';
+    const checklistText = Array.isArray(task.checklist) ? task.checklist.map((item) => item.text || '').join(' ') : '';
+    const searchableText = normalizeNameKey([task.title, task.notes, commentText, checklistText].filter(Boolean).join(' '));
+    if (!searchableText) return false;
+    return keywords.some((keyword) => searchableText.includes(keyword));
+};
+
+const isAccountTaskDone = (task = {}) => ['aprobado_internamente', 'publicado'].includes(task.status);
+
+const buildManagerRankingStats = ({ managers = [], clients = [], accountTasks = [], rankingSettings = DEFAULT_RANKING_SETTINGS }) => {
+    const rules = sanitizeRankingSettings(rankingSettings).manager;
+    const todayStr = getHondurasTodayStr();
+    const creativityKeywords = getRankingKeywords(rules.creativityKeywords);
+
+    return managers.map((manager) => {
+        const mTasks = accountTasks.filter((task) => task.contextId === manager.id);
+        const completedTasksArr = mTasks.filter(isAccountTaskDone);
+        let taskScore = 0;
+        let efficiencyScore = 0;
+        let onTimeCount = 0;
+        let earlyCount = 0;
+        let fastTurnaroundCount = 0;
+        let overdueCount = 0;
+
+        completedTasksArr.forEach((task) => {
+            const hierarchy = getAccountTaskHierarchyId(task);
+            taskScore += rules.taskPoints[hierarchy] ?? rules.taskPoints.p2;
+            if (task.status === 'publicado') taskScore += rules.publishedBonus;
+
+            const completionIso = getTaskCompletionIso(task);
+            const onTime = isCompletionOnTime(task, completionIso);
+            if (onTime) {
+                efficiencyScore += rules.onTimeBonus;
+                onTimeCount++;
+            } else if (normalizeDateOnlyString(task.date) && completionIso) {
+                efficiencyScore += rules.overduePenalty;
+                overdueCount++;
+            }
+
+            if (isCompletionEarly(task, completionIso, rules.earlyDeliveryCutoffHour)) {
+                efficiencyScore += rules.earlyDeliveryBonus;
+                earlyCount++;
+            }
+
+            const turnaroundHours = getHoursBetween(task.createdAt, completionIso);
+            if (rules.fastTurnaroundHours > 0 && turnaroundHours !== null && turnaroundHours <= rules.fastTurnaroundHours) {
+                efficiencyScore += rules.fastTurnaroundBonus;
+                fastTurnaroundCount++;
+            }
+        });
+
+        mTasks
+            .filter((task) => !isAccountTaskDone(task) && isDateBeforeDateString(task.date, todayStr))
+            .forEach(() => {
+                efficiencyScore += rules.overduePenalty;
+                overdueCount++;
+            });
+
+        const tasksByDate = mTasks.reduce((acc, task) => {
+            const date = normalizeDateOnlyString(task.date);
+            if (!date) return acc;
+            if (!acc.has(date)) acc.set(date, []);
+            acc.get(date).push(task);
+            return acc;
+        }, new Map());
+        let batchBonusCount = 0;
+        tasksByDate.forEach((items) => {
+            const differentClients = new Set(items.map((task) => task.clientId).filter(Boolean)).size;
+            if (differentClients < rules.batchDifferentClientCount) return;
+            const earlyCompleted = items.filter((task) => isAccountTaskDone(task) && isCompletionEarly(task, getTaskCompletionIso(task), rules.earlyDeliveryCutoffHour)).length;
+            if (earlyCompleted >= rules.batchEarlyCompletedCount) {
+                efficiencyScore += rules.batchEarlyBonus;
+                batchBonusCount++;
+            }
+        });
+
+        const mClients = clients.filter((client) => client.managerId === manager.id);
+        const workflowTotal = mClients.length * 4;
+        let workflowCompleted = 0;
+        mClients.forEach((client) => {
+            if (client.workflow?.week1) workflowCompleted++;
+            if (client.workflow?.week2) workflowCompleted++;
+            if (client.workflow?.week3) workflowCompleted++;
+            if (client.workflow?.week4) workflowCompleted++;
+        });
+        const clientScore = workflowCompleted * rules.workflowStepPoints;
+
+        const plannedTasks = mTasks.filter((task) => isTaskPlannedAhead(task, rules.planningLeadDays)).length;
+        const planningScore = Math.min(plannedTasks * rules.planningTaskPoints, rules.planningMaxPoints);
+        const creativitySignals = mTasks.filter((task) => hasCreativitySignal(task, creativityKeywords)).length;
+        const creativityScore = Math.min(creativitySignals * rules.creativityKeywordPoints, rules.creativityMaxPoints);
+        const finalScore = Math.round(taskScore + clientScore + efficiencyScore + planningScore + creativityScore);
+        const mappedColorName = LEGACY_COLOR_MAP[manager.color] || manager.color || 'slate';
+
+        return {
+            ...manager,
+            mappedColor: mappedColorName,
+            totalTasks: mTasks.length,
+            completedTasks: completedTasksArr.length,
+            totalClients: mClients.length,
+            workflowTotal,
+            workflowCompleted,
+            taskScore,
+            clientScore,
+            efficiencyScore,
+            planningScore,
+            creativityScore,
+            score: finalScore,
+            onTimeCount,
+            earlyCount,
+            fastTurnaroundCount,
+            overdueCount,
+            batchBonusCount,
+            plannedTasks,
+            creativitySignals
+        };
+    }).sort((a, b) => b.score - a.score || b.efficiencyScore - a.efficiencyScore || a.name.localeCompare(b.name));
+};
 const isTaskAssignedToProfile = (task, profile, contextIds = []) => {
     const profileId = profile?.id;
     if (!profileId) return false;
@@ -563,6 +856,8 @@ function App() {
     const [managementTasks, setManagementTasks] = useState([]);
     const [appUsers, setAppUsers] = useState([]);
     const [auditLogs, setAuditLogs] = useState([]);
+    const [rankingSettings, setRankingSettings] = useState(DEFAULT_RANKING_SETTINGS);
+    const [rankingSettingsDocId, setRankingSettingsDocId] = useState('');
 
     const [selectedClient, setSelectedClient] = useState(null);
     const [selectedManager, setSelectedManager] = useState(null);
@@ -984,6 +1279,12 @@ function App() {
             onSnapshot(dataCollection('users'), (snapshot) => {
                 setAppUsers(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
                 setUsersLoaded(true);
+            }, errHandler),
+            onSnapshot(dataCollection('ranking_settings'), (snapshot) => {
+                const records = snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+                const activeSettings = records.find((item) => item.id === 'default') || records[records.length - 1] || null;
+                setRankingSettingsDocId(activeSettings?.id || '');
+                setRankingSettings(sanitizeRankingSettings(activeSettings || DEFAULT_RANKING_SETTINGS));
             }, errHandler),
             onSnapshot(query(dataCollection('audit_logs'), orderBy('createdAt', 'desc'), limit(120)), (snapshot) => setAuditLogs(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }))), errHandler)
         ];
@@ -1420,7 +1721,8 @@ function App() {
                     try {
                         await updateDoc(dataDoc(item.collectionName, item.taskId), {
                             status: item.status,
-                            updatedAt: item.updatedAt || nowIso()
+                            updatedAt: item.updatedAt || nowIso(),
+                            ...(item.patch || {})
                         });
                         clearPendingTaskStatusUpdate({ collectionName: item.collectionName, taskId: item.taskId });
                     } catch (error) {
@@ -1505,15 +1807,16 @@ function App() {
             return null;
         }
     };
-    const runQueuedTaskStatusMutation = async ({ collectionName, task, newStatus, permission, entityType, description, changes, successMessage = '', errorMessage = 'No se pudo actualizar el estado', afterSuccess }) => {
+    const runQueuedTaskStatusMutation = async ({ collectionName, task, newStatus, permission, entityType, description, changes, statusPatch = {}, successMessage = '', errorMessage = 'No se pudo actualizar el estado', afterSuccess }) => {
         if (!task?.id || !newStatus || !collectionName) return null;
         if (!(await ensurePermission(permission, description))) return null;
 
         const stamp = nowIso();
-        const mutationId = queuePendingTaskStatusUpdate({ collectionName, taskId: task.id, status: newStatus, updatedAt: stamp });
+        const patch = typeof statusPatch === 'function' ? statusPatch(stamp) : (statusPatch || {});
+        const mutationId = queuePendingTaskStatusUpdate({ collectionName, taskId: task.id, status: newStatus, updatedAt: stamp, patch });
 
         try {
-            await updateDoc(dataDoc(collectionName, task.id), { status: newStatus, updatedAt: stamp });
+            await updateDoc(dataDoc(collectionName, task.id), { status: newStatus, updatedAt: stamp, ...patch });
             clearPendingTaskStatusUpdate({ collectionName, taskId: task.id, mutationId });
             await auditAction({ action: 'status_change', entityType, entityId: task.id, description, changes });
             if (successMessage) showToast(successMessage);
@@ -2173,6 +2476,7 @@ function App() {
                 entityType: 'accountTask',
                 description: `Mueve task ${task.title} a ${newStatus}`,
                 changes: { previousStatus: task.status, nextStatus: newStatus },
+                statusPatch: (stamp) => getStatusTimestampPatch(task, newStatus, stamp),
                 afterSuccess: () => { if (newStatus === 'publicado') triggerConfetti(); }
             });
         }
@@ -2215,6 +2519,7 @@ function App() {
                 entityType: 'editingTask',
                 description: `Mueve video ${task.title} a ${newStatus}`,
                 changes: { previousStatus: task.status, nextStatus: newStatus, hierarchy: getEditingHierarchyId(task) },
+                statusPatch: (stamp) => getStatusTimestampPatch(task, newStatus, stamp),
                 afterSuccess: () => { if (newStatus === 'aprobado' || newStatus === 'publicado') triggerConfetti(); }
             });
         }
@@ -2279,7 +2584,8 @@ function App() {
                 permission: 'manage_management_tasks',
                 entityType: 'managementTask',
                 description: `Mueve tarea de gestion ${task.title} a ${newStatus}`,
-                changes: { previousStatus: task.status, nextStatus: newStatus }
+                changes: { previousStatus: task.status, nextStatus: newStatus },
+                statusPatch: (stamp) => getStatusTimestampPatch(task, newStatus, stamp)
             });
         }
     };
@@ -2576,6 +2882,35 @@ function App() {
         }
     };
 
+    const saveRankingSettings = async (nextSettings) => {
+        const normalizedSettings = sanitizeRankingSettings(nextSettings);
+        const stamp = nowIso();
+        const payload = {
+            ...normalizedSettings,
+            updatedAt: stamp,
+            updatedBy: {
+                id: currentUserProfile?.id || '',
+                name: currentUserProfile?.name || '',
+                email: authEmail || ''
+            }
+        };
+        if (!rankingSettingsDocId) payload.createdAt = stamp;
+
+        await runMutation({
+            permission: 'manage_ranking_settings',
+            action: rankingSettingsDocId ? 'update' : 'create',
+            entityType: 'ranking_settings',
+            entityId: rankingSettingsDocId || 'new',
+            description: 'Actualiza reglas de ranking',
+            changes: normalizedSettings,
+            successMessage: 'Reglas de ranking guardadas',
+            execute: () => rankingSettingsDocId
+                ? updateDoc(dataDoc('ranking_settings', rankingSettingsDocId), payload)
+                : addDoc(dataCollection('ranking_settings'), payload),
+            afterSuccess: () => setRankingSettings(normalizedSettings)
+        });
+    };
+
     const handleDelete = async () => {
         const { type, id } = deleteConfirm;
         const map = {
@@ -2728,7 +3063,7 @@ function App() {
                 <div className="p-4 md:p-8 max-w-[1600px] mx-auto min-h-full pb-mobile-nav md:pb-20">
                     {view === 'dashboard' && (isFirstTimeWorkspace
                         ? <FirstTimeView role={currentUserProfile?.role} onNavigate={handleNavigate} />
-                        : <DashboardView clients={clients} managers={managers} events={events} tasks={editingTasks} accountTasks={accountTasks} managementTasks={managementTasks} currentUserProfile={currentUserProfile} onSignIn={handleGoogleSignIn} />
+                        : <DashboardView clients={clients} managers={managers} events={events} tasks={editingTasks} accountTasks={accountTasks} managementTasks={managementTasks} currentUserProfile={currentUserProfile} onSignIn={handleGoogleSignIn} rankingSettings={rankingSettings} />
                     )}
                     {view === 'clients' && <ClientsView clients={clients} onAdd={() => setModalConfig({ isOpen: true, type: 'client' })} onSelect={(c) => { setSelectedClient(c); handleNavigate('client-detail'); }} />}
                     {view === 'client-detail' && selectedClient && <ClientDetail client={selectedClient} managers={managers} onReassignManager={reassignClientManager} onBack={() => handleNavigate('clients')} onUpdate={updateClient} onDelete={() => setDeleteConfirm({ isOpen: true, type: 'client', id: selectedClient.id, title: selectedClient.name })} onEdit={() => setModalConfig({ isOpen: true, type: 'client', data: selectedClient, isEdit: true })} />}
@@ -2737,9 +3072,9 @@ function App() {
                     {view === 'editors' && <TeamView title="Editores" team={editors} iconColor="rose" onAdd={() => setModalConfig({ isOpen: true, type: 'editor' })} onSelect={(e) => { setSelectedEditor(e); handleNavigate('editor-detail'); }} onDelete={(e) => setDeleteConfirm({ isOpen: true, type: 'editor', id: e.id, title: e.name })} onEdit={(e) => setModalConfig({ isOpen: true, type: 'editor', data: e, isEdit: true })} />}
                     {view === 'editor-detail' && selectedEditor && <PersonCalendarDetail person={selectedEditor} tasks={editingTasks} title="Planificación de Edición" baseColor={selectedEditor.color || 'rose'} onBack={() => handleNavigate('editors')} onAddEvent={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr, contextId: selectedEditor.id } })} onEventClick={(e) => handleEventClick(e, 'editingTask')} />}
                     {view === 'account-room' && <AccountRoomView tasks={accountTasks} managers={managers} clients={clients} currentUserProfile={currentUserProfile} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'accountTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'accountTask', data: task, isEdit: true })} onChangeStatus={changeAccountTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'accountTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'accountTask' })} legacyColorMap={LEGACY_COLOR_MAP} />}
-                    {view === 'editions' && <EditionsRoomView tasks={editingTasks} editors={editors} clients={clients} currentUserProfile={currentUserProfile} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'editingTask', data: task, isEdit: true })} onChangeStatus={changeEditingTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'editingTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'editingTask' })} />}
+                    {view === 'editions' && <EditionsRoomView tasks={editingTasks} editors={editors} clients={clients} currentUserProfile={currentUserProfile} rankingSettings={rankingSettings} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'editingTask', data: { date: dateStr } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'editingTask', data: task, isEdit: true })} onChangeStatus={changeEditingTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'editingTask', id, title: 'Tarea' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'editingTask' })} />}
                     {view === 'management-room' && <ManagementRoomView tasks={managementTasks} members={managementUsers} clients={clients} currentUserProfile={currentUserProfile} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'managementTask', data: { date: dateStr, contextId: defaultManagementAssigneeId } })} onEdit={(task) => setModalConfig({ isOpen: true, type: 'managementTask', data: task, isEdit: true })} onChangeStatus={changeManagementTaskStatus} onDelete={(id) => setDeleteConfirm({ isOpen: true, type: 'managementTask', id, title: 'Tarea de gestion' })} onTaskClick={(t) => setTaskDetailConfig({ isOpen: true, task: t, type: 'managementTask' })} />}
-                    {view === 'control-center' && <UsersAccessView users={appUsers} managers={managers} editors={editors} auditLogs={auditLogs} currentUserProfile={currentUserProfile} onAdd={() => setModalConfig({ isOpen: true, type: 'user' })} onEdit={(userRecord) => setModalConfig({ isOpen: true, type: 'user', data: userRecord, isEdit: true })} onResendVerification={requestUserVerification} />}
+                    {view === 'control-center' && <UsersAccessView users={appUsers} managers={managers} editors={editors} auditLogs={auditLogs} currentUserProfile={currentUserProfile} rankingSettings={rankingSettings} onSaveRankingSettings={saveRankingSettings} onAdd={() => setModalConfig({ isOpen: true, type: 'user' })} onEdit={(userRecord) => setModalConfig({ isOpen: true, type: 'user', data: userRecord, isEdit: true })} onResendVerification={requestUserVerification} />}
                     {view === 'general-calendar' && (
                         <div className="h-full flex flex-col space-y-6 fade-in">
                             <h2 className="text-2xl font-black text-slate-800 dark:text-white">Calendario General</h2>
@@ -3265,7 +3600,7 @@ const ProgressOverviewChart = ({ completionPercent, completedTasks, totalTasks, 
 };
 
 // --- DASHBOARD PRINCIPAL CON RANKING ---
-const DashboardView = ({ clients, managers, events, tasks, accountTasks, managementTasks = [], currentUserProfile, onSignIn }) => {
+const DashboardView = ({ clients, managers, events, tasks, accountTasks, managementTasks = [], currentUserProfile, onSignIn, rankingSettings = DEFAULT_RANKING_SETTINGS }) => {
     const contentos = clients.filter(c => c.mood === 'Contento').length;
     const neutrales = clients.filter(c => c.mood === 'Neutral').length;
     const enRiesgo = clients.filter(c => c.mood === 'En Riesgo').length;
@@ -3301,7 +3636,7 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
     const formattedDate = new Date().toLocaleDateString('es-HN', dateOptions);
 
     // LOGICA DEL RANKING DE ACCOUNT MANAGERS
-    const managerStats = managers.map(m => {
+    const legacyManagerStats = false && managers.map(m => {
         // Tareas
         const mTasks = accountTasks.filter(t => t.contextId === m.id);
         const mCompletedTasksArr = mTasks.filter(t => t.status === 'aprobado_internamente' || t.status === 'publicado');
@@ -3345,9 +3680,11 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
         };
     }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 
+    const managerStats = buildManagerRankingStats({ managers, clients, accountTasks, rankingSettings });
     const maxTaskScore = Math.max(...managerStats.map(s => s.taskScore), 1);
     const maxClientScore = Math.max(...managerStats.map(s => s.clientScore), 1);
-    const maxOverallScore = Math.max(...managerStats.map(s => s.score), 1);
+    const maxEfficiencyScore = Math.max(...managerStats.map(s => Math.max(s.efficiencyScore, 0)), 1);
+    const maxPlanningCreativityScore = Math.max(...managerStats.map(s => Math.max(s.planningScore + s.creativityScore, 0)), 1);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -3456,7 +3793,7 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
                         <h3 className="text-lg font-black text-slate-800 dark:text-white mb-1 flex items-center gap-2">
                             <Icon name="Trophy" size={20} className="text-yellow-500" /> Ranking de Productividad por Account
                         </h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Rendimiento basado en tareas resueltas y avance en workflows.</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Rendimiento basado en entregas tempranas, eficiencia, planificacion e ideas.</p>
                     </div>
                 </div>
 
@@ -3507,9 +3844,19 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
                                             <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">resueltas</p>
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Workflow</p>
-                                            <p className="mt-1 text-base font-black text-slate-900 dark:text-white">{ms.workflowCompleted}/{ms.workflowTotal}</p>
-                                            <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">hitos activos</p>
+                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Temprano</p>
+                                            <p className="mt-1 text-base font-black text-slate-900 dark:text-white">{ms.earlyCount}</p>
+                                            <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">{ms.onTimeCount} a tiempo</p>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Planning</p>
+                                            <p className="mt-1 text-base font-black text-slate-900 dark:text-white">{ms.plannedTasks}</p>
+                                            <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">preparadas</p>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Ideas</p>
+                                            <p className="mt-1 text-base font-black text-slate-900 dark:text-white">{ms.creativitySignals}</p>
+                                            <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">senales</p>
                                         </div>
                                     </div>
 
@@ -3528,11 +3875,25 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
                                             meta={`${ms.clientScore} pts`}
                                             helper={ms.workflowTotal > 0 ? `${ms.workflowCompleted} de ${ms.workflowTotal} hitos completados` : 'Sin workflow activo'}
                                         />
+                                        <CompactMetricBar
+                                            label="Eficiencia"
+                                            value={(Math.max(ms.efficiencyScore, 0) / maxEfficiencyScore) * 100}
+                                            color={ms.mappedColor}
+                                            meta={`${ms.efficiencyScore} pts`}
+                                            helper={`${ms.earlyCount} tempranas, ${ms.fastTurnaroundCount} rapidas, ${ms.overdueCount} atrasos`}
+                                        />
+                                        <CompactMetricBar
+                                            label="Plan + ideas"
+                                            value={((ms.planningScore + ms.creativityScore) / maxPlanningCreativityScore) * 100}
+                                            color={ms.mappedColor}
+                                            meta={`${ms.planningScore + ms.creativityScore} pts`}
+                                            helper={`${ms.planningScore} planificacion, ${ms.creativityScore} creatividad`}
+                                        />
                                     </div>
 
                                     <div className="hidden">
                                         <div 
-                                            style={{width: `${(ms.score / maxOverallScore) * 100}%`}} 
+                                            style={{width: `${Math.max(ms.score, 0)}%`}} 
                                             className={`h-full rounded-full transition-all duration-1000 ease-out bg-${ms.mappedColor}-500 ${ms.score > 0 ? 'min-w-[0.5rem]' : ''}`}
                                         ></div>
                                     </div>
@@ -3887,7 +4248,7 @@ const AccountRoomView = ({ tasks, managers, clients, currentUserProfile, onAdd, 
     );
 };
 
-const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
+const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, rankingSettings = DEFAULT_RANKING_SETTINGS, onAdd, onEdit, onChangeStatus, onDelete, onTaskClick }) => {
     const {
         currentDate,
         setCurrentDate,
@@ -3934,15 +4295,27 @@ const EditionsRoomView = ({ tasks, editors, clients, currentUserProfile, onAdd, 
         setFilterMode('date');
         onAdd(nextDate);
     };
+    const editingRankingRules = sanitizeRankingSettings(rankingSettings).editing;
     const rankedTasks = filteredTasks
         .map((task) => {
             const hierarchy = getEditingHierarchyId(task);
             const delta = task.date ? getDateOnlyDiffDays(task.date, todayStr) : 99;
-            const hierarchyScore = hierarchy === 'p1' ? 400 : hierarchy === 'p2' ? 280 : hierarchy === 'p3' ? 170 : 90;
-            const priorityBonus = task.priority === 'urgente' ? 130 : task.priority === 'recurrente' ? 30 : 70;
-            const dateBonus = delta < 0 ? 180 : delta === 0 ? 120 : delta === 1 ? 70 : delta <= 3 ? 30 : 0;
-            const statusPenalty = task.status === 'publicado' ? -250 : task.status === 'aprobado' ? -150 : 0;
-            return { ...task, hierarchy, rankScore: hierarchyScore + priorityBonus + dateBonus + statusPenalty };
+            const hierarchyScore = editingRankingRules.hierarchyScores[hierarchy] ?? editingRankingRules.hierarchyScores.p2;
+            const priorityBonus = editingRankingRules.priorityScores[task.priority] ?? editingRankingRules.priorityScores.normal;
+            const dateBonus = delta < 0
+                ? editingRankingRules.dateScores.overdue
+                : delta === 0
+                  ? editingRankingRules.dateScores.today
+                  : delta === 1
+                    ? editingRankingRules.dateScores.tomorrow
+                    : delta <= 3
+                      ? editingRankingRules.dateScores.soon
+                      : 0;
+            const statusPenalty = editingRankingRules.statusPenalties[task.status] || 0;
+            const earlyDeliveryBonus = isCompletedStatus(task.status) && isCompletionEarly(task, getTaskCompletionIso(task), editingRankingRules.earlyDeliveryCutoffHour)
+                ? editingRankingRules.earlyDeliveryBonus
+                : 0;
+            return { ...task, hierarchy, rankScore: hierarchyScore + priorityBonus + dateBonus + statusPenalty + earlyDeliveryBonus };
         })
         .sort((a, b) => b.rankScore - a.rankScore || (a.date || '').localeCompare(b.date || '') || a.title.localeCompare(b.title));
     const rankingMap = rankedTasks.reduce((acc, task, index) => ({ ...acc, [task.id]: index + 1 }), {});
@@ -4376,7 +4749,171 @@ const ManagementRoomView = ({ tasks, members, clients, currentUserProfile, onAdd
     );
 };
 
-const UsersAccessView = ({ users, managers, editors, auditLogs, currentUserProfile, onAdd, onEdit, onResendVerification }) => {
+const RankingNumberField = ({ label, value, onChange, min, max, step = 1 }) => (
+    <label className="block min-w-0">
+        <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-1">{label}</span>
+        <input
+            type="number"
+            value={value}
+            min={min}
+            max={max}
+            step={step}
+            onChange={(event) => onChange(toConfigNumber(event.target.value, 0))}
+            className="w-full min-h-[42px] rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+        />
+    </label>
+);
+
+const RankingRulesPanel = ({ rankingSettings, currentUserProfile, onSave }) => {
+    const [draft, setDraft] = useState(() => sanitizeRankingSettings(rankingSettings));
+    const [saving, setSaving] = useState(false);
+    const canEdit = userHasPermission(currentUserProfile, 'manage_ranking_settings');
+
+    useEffect(() => {
+        setDraft(sanitizeRankingSettings(rankingSettings));
+    }, [rankingSettings]);
+
+    if (!canEdit) return null;
+
+    const updateManagerValue = (key, value) => setDraft((current) => ({
+        ...current,
+        manager: { ...current.manager, [key]: value }
+    }));
+    const updateManagerMapValue = (group, key, value) => setDraft((current) => ({
+        ...current,
+        manager: {
+            ...current.manager,
+            [group]: { ...current.manager[group], [key]: value }
+        }
+    }));
+    const updateEditingValue = (key, value) => setDraft((current) => ({
+        ...current,
+        editing: { ...current.editing, [key]: value }
+    }));
+    const updateEditingMapValue = (group, key, value) => setDraft((current) => ({
+        ...current,
+        editing: {
+            ...current.editing,
+            [group]: { ...current.editing[group], [key]: value }
+        }
+    }));
+
+    const handleSave = async () => {
+        if (!onSave) return;
+        setSaving(true);
+        try {
+            await onSave(sanitizeRankingSettings(draft));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                    <h3 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+                        <Icon name="Trophy" size={18} className="text-yellow-500" /> Reglas de ranking
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Pesos activos para productividad, tiempos, planificacion e ideas.</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setDraft(sanitizeRankingSettings(DEFAULT_RANKING_SETTINGS))}
+                        className="min-h-[42px] rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                        Defaults
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="min-h-[42px] rounded-xl bg-purple-600 px-4 text-sm font-black text-white hover:bg-purple-700 disabled:opacity-60 flex items-center justify-center gap-2"
+                    >
+                        <Icon name={saving ? 'Loader2' : 'Save'} size={15} className={saving ? 'animate-spin' : ''} />
+                        Guardar reglas
+                    </button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">Entregas</p>
+                    <div className="grid grid-cols-2 gap-3">
+                        {Object.keys(draft.manager.taskPoints).map((key) => (
+                            <RankingNumberField key={key} label={key.toUpperCase()} value={draft.manager.taskPoints[key]} onChange={(value) => updateManagerMapValue('taskPoints', key, value)} />
+                        ))}
+                        <RankingNumberField label="Publicado" value={draft.manager.publishedBonus} onChange={(value) => updateManagerValue('publishedBonus', value)} />
+                        <RankingNumberField label="Workflow" value={draft.manager.workflowStepPoints} onChange={(value) => updateManagerValue('workflowStepPoints', value)} />
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">Tiempos</p>
+                    <div className="grid grid-cols-2 gap-3">
+                        <RankingNumberField label="A tiempo" value={draft.manager.onTimeBonus} onChange={(value) => updateManagerValue('onTimeBonus', value)} />
+                        <RankingNumberField label="Temprano" value={draft.manager.earlyDeliveryBonus} onChange={(value) => updateManagerValue('earlyDeliveryBonus', value)} />
+                        <RankingNumberField label="Hora temprana" value={draft.manager.earlyDeliveryCutoffHour} min={0} max={23} onChange={(value) => updateManagerValue('earlyDeliveryCutoffHour', value)} />
+                        <RankingNumberField label="Atraso" value={draft.manager.overduePenalty} onChange={(value) => updateManagerValue('overduePenalty', value)} />
+                        <RankingNumberField label="Horas rapidas" value={draft.manager.fastTurnaroundHours} min={0} onChange={(value) => updateManagerValue('fastTurnaroundHours', value)} />
+                        <RankingNumberField label="Rapidez" value={draft.manager.fastTurnaroundBonus} onChange={(value) => updateManagerValue('fastTurnaroundBonus', value)} />
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">Lote temprano</p>
+                    <div className="grid grid-cols-2 gap-3">
+                        <RankingNumberField label="Cuentas" value={draft.manager.batchDifferentClientCount} min={1} onChange={(value) => updateManagerValue('batchDifferentClientCount', value)} />
+                        <RankingNumberField label="Entregas" value={draft.manager.batchEarlyCompletedCount} min={1} onChange={(value) => updateManagerValue('batchEarlyCompletedCount', value)} />
+                        <RankingNumberField label="Bonus lote" value={draft.manager.batchEarlyBonus} onChange={(value) => updateManagerValue('batchEarlyBonus', value)} />
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">Planificacion</p>
+                    <div className="grid grid-cols-2 gap-3">
+                        <RankingNumberField label="Dias antes" value={draft.manager.planningLeadDays} min={0} onChange={(value) => updateManagerValue('planningLeadDays', value)} />
+                        <RankingNumberField label="Puntos" value={draft.manager.planningTaskPoints} onChange={(value) => updateManagerValue('planningTaskPoints', value)} />
+                        <RankingNumberField label="Max" value={draft.manager.planningMaxPoints} min={0} onChange={(value) => updateManagerValue('planningMaxPoints', value)} />
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">Ideas</p>
+                    <div className="grid grid-cols-2 gap-3">
+                        <RankingNumberField label="Puntos" value={draft.manager.creativityKeywordPoints} onChange={(value) => updateManagerValue('creativityKeywordPoints', value)} />
+                        <RankingNumberField label="Max" value={draft.manager.creativityMaxPoints} min={0} onChange={(value) => updateManagerValue('creativityMaxPoints', value)} />
+                    </div>
+                    <label className="mt-3 block">
+                        <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-1">Palabras clave</span>
+                        <textarea
+                            value={draft.manager.creativityKeywords}
+                            onChange={(event) => updateManagerValue('creativityKeywords', event.target.value)}
+                            className="w-full min-h-[86px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none focus:ring-2 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                        />
+                    </label>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">Sala de Edicion</p>
+                    <div className="grid grid-cols-2 gap-3">
+                        {Object.keys(draft.editing.hierarchyScores).map((key) => (
+                            <RankingNumberField key={`h-${key}`} label={key.toUpperCase()} value={draft.editing.hierarchyScores[key]} onChange={(value) => updateEditingMapValue('hierarchyScores', key, value)} />
+                        ))}
+                        {Object.keys(draft.editing.priorityScores).map((key) => (
+                            <RankingNumberField key={`p-${key}`} label={key} value={draft.editing.priorityScores[key]} onChange={(value) => updateEditingMapValue('priorityScores', key, value)} />
+                        ))}
+                        <RankingNumberField label="Edicion temprano" value={draft.editing.earlyDeliveryBonus} onChange={(value) => updateEditingValue('earlyDeliveryBonus', value)} />
+                        <RankingNumberField label="Hora temprana" value={draft.editing.earlyDeliveryCutoffHour} min={0} max={23} onChange={(value) => updateEditingValue('earlyDeliveryCutoffHour', value)} />
+                    </div>
+                </div>
+            </div>
+        </section>
+    );
+};
+
+const UsersAccessView = ({ users, managers, editors, auditLogs, currentUserProfile, rankingSettings = DEFAULT_RANKING_SETTINGS, onSaveRankingSettings, onAdd, onEdit, onResendVerification }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const filteredUsers = users.filter((item) => `${item.name || ''} ${item.email || ''} ${item.role || ''}`.toLowerCase().includes(searchTerm.toLowerCase()));
     const verifiedUsers = users.filter((item) => getVerificationMeta(item).isVerified).length;
@@ -4400,6 +4937,7 @@ const UsersAccessView = ({ users, managers, editors, auditLogs, currentUserProfi
                 <StatCard title="Pendientes Verificar" value={pendingVerificationUsers} icon="Mail" color="amber" />
                 <StatCard title="Admins" value={users.filter((item) => item.isActive !== false && ['super_admin', 'operations'].includes(item.role)).length} icon="ClipboardList" color="indigo" />
             </div>
+            <RankingRulesPanel rankingSettings={rankingSettings} currentUserProfile={currentUserProfile} onSave={onSaveRankingSettings} />
             <div className="grid grid-cols-1 xl:grid-cols-[1.05fr,1.3fr] gap-6">
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
                     <div className="flex items-center justify-between mb-4">

@@ -153,5 +153,11 @@ export const COLLECTION_PERMISSIONS = {
         create: 'view_dashboard',
         update: 'manage_users',
         delete: 'manage_users'
+    },
+    ranking_settings: {
+        read: 'view_dashboard',
+        create: 'manage_ranking_settings',
+        update: 'manage_ranking_settings',
+        delete: 'manage_ranking_settings'
     }
 };
