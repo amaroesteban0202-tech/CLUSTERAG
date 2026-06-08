@@ -831,7 +831,16 @@ function App() {
     const [toast, setToast] = useState(null); 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    const [isDark, setIsDark] = useState(() => localStorage.getItem('cluster_theme') === 'dark');
+    const [isDark, setIsDark] = useState(() => {
+        const darkDefaultVersion = '2026-06-login-dark-default';
+        const appliedDefaultVersion = localStorage.getItem('cluster_theme_default_version');
+        if (appliedDefaultVersion !== darkDefaultVersion) {
+            localStorage.setItem('cluster_theme', 'dark');
+            localStorage.setItem('cluster_theme_default_version', darkDefaultVersion);
+            return true;
+        }
+        return localStorage.getItem('cluster_theme') !== 'light';
+    });
     const [view, setView] = useState(() => localStorage.getItem('cluster_os_view') || 'dashboard');
     const [isSigningIn, setIsSigningIn] = useState(false);
     const [loginEmail, setLoginEmail] = useState('');
@@ -3285,60 +3294,75 @@ const MobileBottomNav = ({ view, onNavigate, currentUserProfile }) => {
     );
 };
 
-const LoginScreen = ({ isDark, onToggleTheme, onGoogleSignIn, isSigningIn, email, onEmailChange, onEmailSubmit, isSendingLoginLink }) => (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col font-sans">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-            <div className="flex items-center gap-3">
-                <AgencyLogo className="w-9 h-9 text-lg" />
+const LoginScreen = ({ onGoogleSignIn, isSigningIn, email, onEmailChange, onEmailSubmit, isSendingLoginLink }) => (
+    <div className="min-h-screen bg-[#050713] text-white font-sans">
+        <header className="flex min-h-[72px] items-center border-b border-white/10 px-6 sm:px-10 lg:px-16">
+            <div className="flex items-center gap-2.5">
+                <AgencyLogo className="h-8 w-8 rounded-md text-sm shadow-lg shadow-violet-950/40" />
                 <div>
-                    <h1 className="font-black text-lg leading-none">CLUSTER</h1>
-                    <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mt-1">Agency OS</p>
+                    <p className="text-base font-black leading-none text-white">CLUSTER</p>
+                    <p className="mt-0.5 text-[9px] font-bold uppercase text-slate-500">Agency OS</p>
                 </div>
             </div>
-            <button onClick={onToggleTheme} aria-label={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'} title={isDark ? 'Modo claro' : 'Modo oscuro'} className="p-2 rounded-full bg-white/10 text-slate-200 border border-white/10">
-                <Icon name={isDark ? 'Sun' : 'Moon'} size={18} />
-            </button>
-        </div>
+        </header>
 
-        <main className="flex-1 grid place-items-center px-5 py-8">
-            <section className="w-full max-w-md">
-                <div className="mb-8">
-                    <p className="text-xs font-black uppercase tracking-wider text-purple-300 mb-3">Acceso privado</p>
-                    <h2 className="text-3xl font-black leading-tight">Inicia sesion para entrar al panel</h2>
-                    <p className="text-sm text-slate-500 mt-3 leading-6">Usa tu cuenta autorizada de Cluster para gestionar clientes, tareas y calendario.</p>
+        <main className="flex min-h-[calc(100vh-72px)] items-start justify-center px-5 pb-12 pt-16 sm:pt-20">
+            <section className="w-full max-w-[380px]" aria-labelledby="login-title">
+                <div className="mb-7">
+                    <h1 id="login-title" className="text-[34px] font-semibold leading-tight tracking-normal text-white">
+                        Login
+                    </h1>
+                    <p className="mt-2 text-sm font-medium text-slate-400">Hola, bienvenido</p>
                 </div>
 
-                <div className="space-y-3">
-                    <button
-                        onClick={onGoogleSignIn}
-                        disabled={isSigningIn || isSendingLoginLink}
-                        className="w-full min-h-[52px] rounded-xl bg-white text-slate-900 font-black flex items-center justify-center gap-3 disabled:opacity-60"
-                    >
-                        <Icon name={isSigningIn ? 'Loader2' : 'LogIn'} size={18} className={isSigningIn ? 'animate-spin' : ''} />
-                        Entrar con Google
-                    </button>
+                <button
+                    onClick={onGoogleSignIn}
+                    disabled={isSigningIn || isSendingLoginLink}
+                    className="inline-flex min-h-[46px] w-full items-center justify-center gap-3 rounded-md border border-white/10 bg-white px-4 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                    {isSigningIn ? (
+                        <Icon name="Loader2" size={17} className="animate-spin" />
+                    ) : (
+                        <span className="text-base font-black text-blue-600" aria-hidden="true">G</span>
+                    )}
+                    Login with Google
+                </button>
 
-                    <form onSubmit={onEmailSubmit} className="space-y-3">
+                <div className="my-6 flex items-center gap-4">
+                    <div className="h-px flex-1 bg-white/10" />
+                    <span className="text-xs font-medium text-slate-500">or Login with Email</span>
+                    <div className="h-px flex-1 bg-white/10" />
+                </div>
+
+                <form onSubmit={onEmailSubmit} className="space-y-4">
+                    <div>
+                        <label htmlFor="login-email" className="mb-2 block text-sm font-medium text-white">
+                            Email
+                        </label>
                         <input
                             id="login-email"
                             type="email"
                             value={email}
                             onChange={(event) => onEmailChange(event.target.value)}
-                            placeholder="correo@cluster.com"
-                            aria-label="Correo autorizado"
+                            placeholder="Ej. correo@cluster.com"
                             autoComplete="email"
-                            className="w-full min-h-[52px] rounded-xl bg-white/10 border border-white/10 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-400 placeholder:text-slate-500"
+                            className="min-h-[46px] w-full rounded-md border border-white/10 bg-[#0D1220] px-4 text-sm font-medium text-white outline-none transition placeholder:text-slate-600 focus:border-violet-400 focus:ring-2 focus:ring-violet-400/30"
                         />
-                        <button
-                            type="submit"
-                            disabled={isSigningIn || isSendingLoginLink}
-                            className="w-full min-h-[52px] rounded-xl bg-purple-600 hover:bg-purple-700 font-black flex items-center justify-center gap-3 disabled:opacity-60"
-                        >
-                            <Icon name={isSendingLoginLink ? 'Loader2' : 'Mail'} size={18} className={isSendingLoginLink ? 'animate-spin' : ''} />
-                            Enviarme enlace
-                        </button>
-                    </form>
-                </div>
+                    </div>
+
+                    <button
+                        type="submit"
+                        disabled={isSigningIn || isSendingLoginLink}
+                        className="inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-md bg-violet-600 px-4 text-sm font-semibold text-white shadow-lg shadow-violet-950/30 transition hover:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-300 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        <Icon name={isSendingLoginLink ? 'Loader2' : 'Send'} size={17} className={isSendingLoginLink ? 'animate-spin' : ''} />
+                        {isSendingLoginLink ? 'Enviando enlace' : 'Enviar enlace'}
+                    </button>
+                </form>
+
+                <p className="mt-6 text-center text-sm font-medium text-slate-500">
+                    Acceso solo con cuenta autorizada.
+                </p>
             </section>
         </main>
     </div>
@@ -5562,11 +5586,11 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
     );
 
     return (
-        <div className="fixed inset-0 z-[80] bg-black/60 dark:bg-black/75 flex items-start justify-center pt-8 pb-6 px-4 overflow-y-auto" onClick={onClose}>
-        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={dialogTitleId} tabIndex={-1} className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col border border-slate-200 dark:border-slate-800 overflow-hidden outline-none" style={{maxHeight:'90vh'}} onClick={function(e){e.stopPropagation()}}>
+        <div className="fixed inset-0 z-[80] bg-slate-950/70 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto" onClick={onClose}>
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={dialogTitleId} tabIndex={-1} className="bg-white dark:bg-slate-950 rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col border border-slate-200 dark:border-slate-800 overflow-hidden outline-none" style={{maxHeight:'92vh'}} onClick={function(e){e.stopPropagation()}}>
 
             {/* Top bar — slim, tipo Jira */}
-            <div className="h-11 border-b border-slate-200 dark:border-slate-800 flex items-center px-4 gap-2 shrink-0">
+            <div className="min-h-[56px] border-b border-slate-200 dark:border-slate-800 flex items-center px-4 md:px-5 gap-2 shrink-0 bg-white/95 dark:bg-slate-950/95">
                 <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wide bg-${tagColor}-100 dark:bg-${tagColor}-500/20 text-${tagColor}-700 dark:text-${tagColor}-400`}>
                     <Icon name={iconName} size={11}/>{typeLabel}
                 </div>
@@ -5574,33 +5598,33 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                 <span className="text-xs text-slate-500 font-mono">{task.id?.slice(0,8)}</span>
                 <div className="flex-1"/>
                 {canAct && <>
-                    <button onClick={() => onEdit(task, type)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                        <Icon name="Pencil" size={11}/> Editar
+                    <button onClick={() => onEdit(task, type)} aria-label={`Editar ${task.title || 'tarea'}`} title="Editar" className="min-h-[40px] flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
+                        <Icon name="Pencil" size={11}/> <span className="hidden sm:inline">Editar</span>
                     </button>
-                    <button onClick={() => onDelete(task, type)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
-                        <Icon name="Trash2" size={11}/> Eliminar
+                    <button onClick={() => onDelete(task, type)} aria-label={`Eliminar ${task.title || 'tarea'}`} title="Eliminar" className="min-h-[40px] flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+                        <Icon name="Trash2" size={11}/> <span className="hidden sm:inline">Eliminar</span>
                     </button>
                 </>}
-                <button onClick={onClose} aria-label="Cerrar modal" className="ml-2 p-1.5 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <button onClick={onClose} aria-label="Cerrar modal" className="ml-1 min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors">
                     <Icon name="X" size={16}/>
                 </button>
             </div>
 
             {/* Body — layout Jira: left=content, right=details */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
 
                 {/* LEFT — Contenido principal */}
-                <div className="flex-1 overflow-y-auto custom-scroll bg-white dark:bg-slate-900">
-                    <div className="max-w-3xl mx-auto px-8 pt-7 pb-12">
+                <div className="flex-1 min-w-0 overflow-y-auto custom-scroll bg-white dark:bg-slate-950">
+                    <div className="max-w-3xl mx-auto px-5 md:px-8 pt-6 md:pt-7 pb-10">
 
                         {/* Title */}
-                        <h1 id={dialogTitleId} className="text-[22px] font-black text-slate-900 dark:text-white leading-snug mb-5 pr-4">{task.title}</h1>
+                        <h1 id={dialogTitleId} className="text-xl md:text-[24px] font-black text-slate-900 dark:text-white leading-snug mb-4 pr-4 break-words">{task.title}</h1>
 
                         {/* Estado pill prominente bajo el título */}
-                        <div className="flex items-center gap-3 mb-7" data-dropdown>
+                        <div className="flex flex-wrap items-center gap-3 mb-6" data-dropdown>
                             <div className="relative">
                                 <button onClick={() => canAct && setStatusOpen(o => !o)}
-                                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border ${STATUS_COLOR_CLASSES[currentStatus?.color || 'slate']} ${canAct ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} transition-opacity`}>
+                                    className={`min-h-[34px] flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border shadow-sm ${STATUS_COLOR_CLASSES[currentStatus?.color || 'slate']} ${canAct ? 'cursor-pointer hover:opacity-90' : 'cursor-default'} transition-opacity`}>
                                     {currentStatus?.label || task.status}
                                     {canAct && <Icon name="ChevronDown" size={10}/>}
                                 </button>
@@ -5618,7 +5642,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                 )}
                             </div>
                             {task.createdAt && (
-                                <span className="text-xs text-slate-500 flex items-center gap-1">
+                                <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
                                     <Icon name="Clock" size={11}/>
                                     Creado el {new Date(task.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} a las {new Date(task.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                                 </span>
@@ -5626,13 +5650,14 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                         </div>
 
                         {/* Descripción */}
-                        <div className="mb-8">
-                            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Descripción</p>
+                        <div className="mb-7">
+                            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 mb-2">Descripción</p>
                             {task.notes
-                                ? <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{task.notes}</p>
+                                ? <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 px-4 py-3"><p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{task.notes}</p></div>
                                 : <button onClick={canAct ? () => onEdit(task, type) : undefined}
-                                    className={`w-full text-left px-4 py-3 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 text-sm text-slate-500 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-500 transition-colors ${canAct ? 'cursor-pointer' : ''}`}>
-                                    {canAct ? '+ Agregar descripción' : 'Sin descripción...'}
+                                    className={`w-full min-h-[54px] flex items-center gap-2 text-left px-4 py-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/60 text-sm text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600 hover:text-slate-700 dark:hover:text-slate-200 transition-colors ${canAct ? 'cursor-pointer' : ''}`}>
+                                    <Icon name="Plus" size={14} className="shrink-0" />
+                                    {canAct ? 'Agregar descripción' : 'Sin descripción'}
                                   </button>
                             }
                         </div>
@@ -5650,10 +5675,10 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                 setNewCheckItem(''); setAddingCheck(false);
                             };
                             return (
-                                <div className="mb-8">
+                                <div className="mb-7">
                                     <div className="flex items-center gap-2 mb-3">
                                         <Icon name="CheckSquare" size={13} className="text-slate-500"/>
-                                        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Lista de control</p>
+                                        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Lista de control</p>
                                         {checklist.length > 0 && <span className="text-xs text-slate-500 ml-1">{done}/{checklist.length}</span>}
                                         {checklist.length > 0 && <span className="ml-auto text-xs font-bold text-slate-500">{pct}%</span>}
                                     </div>
@@ -5664,7 +5689,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                     )}
                                     <div className="space-y-0.5">
                                         {checklist.map(item => (
-                                            <div key={item.id} className="flex items-center gap-3 group py-1.5 px-3 -mx-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                            <div key={item.id} className="flex items-center gap-3 group py-2 px-3 rounded-xl border border-transparent hover:border-slate-200 dark:hover:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/70 transition-colors">
                                                 <button onClick={() => toggleItem(item.id)}
                                                     className={`w-[18px] h-[18px] rounded-[4px] border-2 shrink-0 flex items-center justify-center transition-all ${item.done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600 hover:border-emerald-400'}`}>
                                                     {item.done && <Icon name="Check" size={11} className="text-white"/>}
@@ -5688,7 +5713,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                         </div>
                                     ) : (
                                         <button onClick={() => canAct && setAddingCheck(true)}
-                                            className={`flex items-center gap-2 mt-2 text-sm text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors px-3 py-1 -mx-3 ${!canAct ? 'opacity-40 cursor-default' : ''}`}>
+                                            className={`flex items-center gap-2 mt-3 min-h-[42px] rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/60 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:border-emerald-300 dark:hover:border-emerald-600 transition-colors px-4 py-2 w-full ${!canAct ? 'opacity-40 cursor-default' : ''}`}>
                                             <Icon name="Plus" size={13}/> Agregar elemento
                                         </button>
                                     )}
@@ -5719,12 +5744,12 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                             };
                             const isImage = (att) => att.type && att.type.startsWith('image/');
                             return (
-                                <div className="mb-8">
+                                <div className="mb-7">
                                     <div className="flex items-center gap-2 mb-3">
                                         <Icon name="Inbox" size={13} className="text-slate-500"/>
-                                        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Adjuntos</p>
+                                        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Adjuntos</p>
                                         {attachments.length > 0 && <span className="text-xs text-slate-500 ml-1">{attachments.length}</span>}
-                                        {canAct && (
+                                        {canAct && attachments.length > 0 && (
                                             <button onClick={() => fileInputRef.current && fileInputRef.current.click()}
                                                 disabled={uploadingFile}
                                                 className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50">
@@ -5767,7 +5792,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                     )}
                                     {attachments.length === 0 && (
                                         <button onClick={() => canAct && fileInputRef.current && fileInputRef.current.click()}
-                                            className={`flex items-center gap-2 text-sm text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors px-3 py-1 -mx-3 ${!canAct ? 'opacity-40 cursor-default' : ''}`}>
+                                            className={`w-full min-h-[58px] flex items-center gap-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/60 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:border-blue-300 dark:hover:border-blue-600 transition-colors px-4 py-3 ${!canAct ? 'opacity-40 cursor-default' : ''}`}>
                                             <Icon name="Plus" size={13}/> Adjuntar archivo
                                         </button>
                                     )}
@@ -5779,7 +5804,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                         <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
                             <div className="flex items-center gap-2 mb-5">
                                 <Icon name="MessageSquare" size={13} className="text-slate-500"/>
-                                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Actividad</p>
+                                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Actividad</p>
                                 {totalLoggedMs > 0 && (
                                     <span className="ml-auto text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                                         <Icon name="Clock" size={11}/>{formatDuration(totalLoggedMs)}
@@ -5800,7 +5825,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                         }}
                                         placeholder="Escribe un comentario... usa @ para mencionar (Ctrl+Enter para enviar)"
                                         rows={commentText ? 3 : 1}
-                                        className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 resize-none text-slate-700 dark:text-slate-200 placeholder-slate-400 transition-all"
+                                        className="w-full min-h-[46px] px-4 py-3 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500/70 resize-none text-slate-700 dark:text-slate-200 placeholder-slate-400 transition-all"
                                     />
                                     {/* @mention dropdown */}
                                     {mentionOpen && mentionSuggestions.length > 0 && (
@@ -5832,7 +5857,10 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                             {/* Feed */}
                             <div className="space-y-5">
                                 {activityFeed.length === 0 && (
-                                    <p className="text-sm text-slate-500 text-center py-4">Sin actividad aún</p>
+                                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 px-4 py-5 text-center">
+                                        <Icon name="MessageSquare" size={18} className="mx-auto mb-2 text-slate-400" />
+                                        <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Sin actividad aún</p>
+                                    </div>
                                 )}
                                 {activityFeed.map(item => item._kind === 'time' ? (
                                     <div key={item.id} className="flex gap-3 items-center">
@@ -5868,21 +5896,21 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                 </div>
 
                 {/* RIGHT — Panel de detalles estilo Jira */}
-                <div className="w-64 shrink-0 border-l border-slate-200 dark:border-slate-800 overflow-y-auto custom-scroll bg-slate-50 dark:bg-slate-900/50">
+                <div className="w-full lg:w-72 shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 overflow-y-auto custom-scroll bg-slate-50/80 dark:bg-slate-950/70 max-h-72 lg:max-h-none">
                     <div className="p-5 space-y-5">
 
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Detalles</p>
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Detalles</p>
 
                         {/* Asignados */}
                         <div data-dropdown className="relative">
-                            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Asignados</p>
+                            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2">Asignados</p>
                             {/* Avatars row */}
                             <div className="flex items-center gap-1 flex-wrap min-h-[28px] py-0.5 -mx-1 px-1">
                                 {currentAssigneeIds.length > 0 ? currentAssigneeIds.map(uid => {
                                     const person = peoplePool.find(p => p.id === uid);
                                     if (!person) return null;
                                     return (
-                                        <div key={uid} className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-full pl-0.5 pr-2 py-0.5 group">
+                                        <div key={uid} className="min-h-[34px] flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full pl-1 pr-2 py-1 group">
                                             <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[8px] shrink-0">
                                                 {person.name.slice(0,2).toUpperCase()}
                                             </div>
@@ -5898,8 +5926,8 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                                 }) : <span className="text-sm text-slate-500 italic">Sin asignar</span>}
                                 {canAct && (
                                     <button onClick={() => setAssigneeOpen(o => !o)}
-                                        className="w-6 h-6 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-500 hover:border-purple-400 hover:text-purple-500 transition-colors shrink-0">
-                                        <Icon name="Plus" size={10}/>
+                                        className="w-8 h-8 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-500 hover:border-purple-400 hover:text-purple-500 transition-colors shrink-0">
+                                        <Icon name="Plus" size={12}/>
                                     </button>
                                 )}
                             </div>
@@ -5941,9 +5969,9 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
 
                         {/* Prioridad */}
                         <div data-dropdown className="relative">
-                            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Prioridad</p>
+                            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2">Prioridad</p>
                             <button onClick={() => canAct && setPriorityOpen(o => !o)}
-                                className={`flex items-center gap-2 w-full rounded-lg py-1 ${canAct ? 'hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer' : 'cursor-default'} transition-colors -mx-1 px-1`}>
+                                className={`min-h-[38px] flex items-center gap-2 w-full rounded-xl py-1.5 ${canAct ? 'hover:bg-white dark:hover:bg-slate-900 cursor-pointer' : 'cursor-default'} transition-colors -mx-1 px-2`}>
                                 <FlagIcon color={currentPriority?.iconColor || '#94a3b8'} filled={!!currentPriority}/>
                                 <span className={`text-sm font-semibold ${currentPriority?.color || 'text-slate-500 italic'}`}>
                                     {currentPriority?.label || 'Sin prioridad'}
@@ -5972,8 +6000,8 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
 
                         {/* Fecha límite */}
                         <div>
-                            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Fecha límite</p>
-                            <div className="flex items-center gap-2 py-1 -mx-1 px-1">
+                            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2">Fecha límite</p>
+                            <div className="min-h-[38px] flex items-center gap-2 py-1 -mx-1 px-2 rounded-xl">
                                 <Icon name="CalendarDays" size={13} className="text-slate-500 shrink-0"/>
                                 <span className={`text-sm font-semibold ${task.date ? 'text-slate-700 dark:text-slate-200' : 'text-slate-500 italic'}`}>
                                     {task.date || 'Sin fecha'}
@@ -5983,8 +6011,8 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
 
                         {/* Cliente */}
                         <div>
-                            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cliente</p>
-                            <div className="flex items-center gap-2 py-1 -mx-1 px-1">
+                            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2">Cliente</p>
+                            <div className="min-h-[38px] flex items-center gap-2 py-1 -mx-1 px-2 rounded-xl">
                                 {client ? (
                                     <>
                                         <div className="w-5 h-5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-[9px] shrink-0">{client.name?.charAt(0).toUpperCase()}</div>
@@ -5997,21 +6025,21 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                         {/* Jerarquía / Categoría */}
                         {type === 'editingTask' && (
                             <div>
-                                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Jerarquía</p>
+                                <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2">Jerarquía</p>
                                 <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800">{getEditingHierarchyId(task).toUpperCase()}</span>
                             </div>
                         )}
                         {type === 'managementTask' && task.category && (
                             <div>
-                                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Categoría</p>
+                                <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2">Categoría</p>
                                 <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{task.category}</span>
                             </div>
                         )}
 
                         {/* Tiempo */}
                         <div>
-                            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Tiempo registrado</p>
-                            <div className="flex items-center gap-2">
+                            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2">Tiempo registrado</p>
+                            <div className="min-h-[38px] flex items-center gap-2">
                                 {timerRunning ? (
                                     <>
                                         <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0"/>
@@ -6054,7 +6082,7 @@ const TaskDetailModal = ({ config, onClose, clients, managers, editors, users, c
                         {/* Fecha creación */}
                         {task.createdAt && (
                             <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
-                                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Creado</p>
+                                <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2">Creado</p>
                                 <p className="text-xs text-slate-500 dark:text-slate-400">
                                     {new Date(task.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
                                     <br/>{new Date(task.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
