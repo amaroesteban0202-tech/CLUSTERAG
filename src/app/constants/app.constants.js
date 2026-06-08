@@ -130,6 +130,7 @@ export const ROLE_DEFINITIONS = {
         color: 'rose',
         permissions: [
             'view_dashboard',
+            'view_managers',
             'view_account_room',
             'create_account_tasks',
             'view_editors',

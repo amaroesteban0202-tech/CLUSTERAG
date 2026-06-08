@@ -3828,7 +3828,7 @@ var TaskDetailModal = ({ config, onClose, clients, managers, editors, users, can
       className: "w-6 h-6 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-500 hover:border-purple-400 hover:text-purple-500 transition-colors shrink-0"
     },
     /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 10 })
-  )), assigneeOpen && canAct && /* @__PURE__ */ React.createElement("div", { className: "absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-52", "data-dropdown": true }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 px-4 pt-2 pb-1" }, "Asignar a"), peoplePool.map((p) => {
+  )), assigneeOpen && canAct && /* @__PURE__ */ React.createElement("div", { className: "absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 py-1 w-52 max-h-60 overflow-y-auto", "data-dropdown": true }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 px-4 pt-2 pb-1 sticky top-0 bg-white dark:bg-slate-800" }, "Asignar a"), peoplePool.map((p) => {
     const isChecked = currentAssigneeIds.includes(p.id);
     return /* @__PURE__ */ React.createElement(
       "button",
@@ -4110,7 +4110,7 @@ var CreateTaskModal = ({ config, onClose, clients, managers, editors, management
       onClick: () => setAssigneeOpen((o) => !o)
     },
     assignee ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[8px]" }, assignee.name.slice(0, 2).toUpperCase()), assignee.name) : "Persona asignada"
-  ), assigneeOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-52", "data-ctdrop": true }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 px-4 pt-2 pb-1" }, "Asignar a"), peoplePool.map((p) => /* @__PURE__ */ React.createElement(
+  ), assigneeOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-52 max-h-60 overflow-y-auto", "data-ctdrop": true }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 px-4 pt-2 pb-1 sticky top-0 bg-white dark:bg-slate-800" }, "Asignar a"), peoplePool.map((p) => /* @__PURE__ */ React.createElement(
     "button",
     {
       key: p.id,
