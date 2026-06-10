@@ -79,6 +79,7 @@ export const ROLE_DEFINITIONS = {
             'manage_management_tasks',
             'view_general_calendar',
             'view_calendar',
+            'create_calendar_events',
             'manage_calendar',
             'view_users',
             'manage_users',
@@ -139,7 +140,9 @@ export const ROLE_DEFINITIONS = {
             'manage_editing_tasks',
             'view_management_room',
             'create_management_tasks',
-            'view_general_calendar'
+            'view_general_calendar',
+            'view_calendar',
+            'create_calendar_events'
         ]
     },
     viewer: {

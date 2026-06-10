@@ -2704,7 +2704,7 @@ function App() {
 
     const addEvent = async (data) => {
         await runMutation({
-            permission: 'manage_calendar',
+            permission: 'create_calendar_events',
             action: 'create',
             entityType: 'event',
             description: `Crea evento ${data.title}`,
@@ -3102,7 +3102,7 @@ function App() {
                         </div>
                     )}
                     {view === 'calendar' && (
-                        <div className="h-full flex flex-col space-y-6 fade-in"><h2 className="text-2xl font-black text-slate-800 dark:text-white">Agenda de Producciones</h2><div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden"><CalendarGrid events={events.filter(e => e.type === 'production')} baseColor="emerald" onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'event', data: { date: dateStr, type: 'production' } })} onEventClick={(e) => handleEventClick(e, 'event')} /></div></div>
+                        <div className="h-full flex flex-col space-y-6 fade-in"><h2 className="text-2xl font-black text-slate-800 dark:text-white">Agenda de Producciones</h2><div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden"><CalendarGrid events={events.filter(e => e.type === 'production')} baseColor="emerald" canAdd={userHasPermission(currentUserProfile, 'create_calendar_events')} onAdd={(dateStr) => setModalConfig({ isOpen: true, type: 'event', data: { date: dateStr, type: 'production' } })} onEventClick={(e) => handleEventClick(e, 'event')} /></div></div>
                     )}
                     {view === 'reports' && <ReportsView accountTasks={accountTasks} editingTasks={editingTasks} managementTasks={managementTasks} clients={clients} managers={managers} editors={editors} users={managementUsers} />}
                 </div>
@@ -5140,7 +5140,7 @@ const ClientDetail = ({ client, managers, onReassignManager, onBack, onUpdate, o
     </div>
 );
 
-const CalendarGrid = ({ events, onAdd, onEventClick, baseColor = "emerald" }) => {
+const CalendarGrid = ({ events, onAdd, onEventClick, baseColor = "emerald", canAdd = true }) => {
     const [date, setDate] = useState(new Date());
     const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
     const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
@@ -5163,7 +5163,7 @@ const CalendarGrid = ({ events, onAdd, onEventClick, baseColor = "emerald" }) =>
                     const dayEvents = events.filter(e => e.date === dStr);
                     
                     return (
-                        <div key={d} onClick={() => onAdd(dStr)} className="border-r border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 min-h-[120px] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group relative">
+                        <div key={d} onClick={() => { if (canAdd) onAdd(dStr); }} className={`border-r border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 min-h-[120px] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group relative ${canAdd ? 'cursor-pointer' : 'cursor-default'}`}>
                             <span className={`text-xs font-bold text-slate-500 dark:text-slate-400 group-hover:text-purple-500 dark:group-hover:text-purple-400`}>{d}</span>
                             <div className="mt-2 space-y-1.5">
                                 {dayEvents.map(e => {
@@ -5182,7 +5182,7 @@ const CalendarGrid = ({ events, onAdd, onEventClick, baseColor = "emerald" }) =>
                                     )
                                 })}
                             </div>
-                            <Icon name="Plus" className={`absolute bottom-2 right-2 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity`} size={16}/>
+                            {canAdd && <Icon name="Plus" className={`absolute bottom-2 right-2 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity`} size={16}/>}
                         </div>
                     );
                 })}
