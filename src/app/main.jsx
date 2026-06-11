@@ -6952,15 +6952,24 @@ const DashboardView = ({
               />
             </div>
           ) : (
-            managerStats.map((ms, index) => {
-              const isTop = index === 0;
-              const isSecond = index === 1;
-              const isThird = index === 2;
+            (() => {
+              const RANKING_MIN_TASKS = 5;
+              let qualifiedRank = 0;
+              return managerStats.map((ms) => {
+              const hasEnoughTasks = ms.totalTasks >= RANKING_MIN_TASKS;
+              if (hasEnoughTasks) qualifiedRank++;
+              const rank = hasEnoughTasks ? qualifiedRank : null;
+              const isTop = rank === 1;
+              const isSecond = rank === 2;
+              const isThird = rank === 3;
               const palette = getDashboardPalette(ms.mappedColor);
 
-              let medalColor = "text-slate-500";
+              let medalColor = "text-slate-400";
               let medalBg = "bg-slate-100 dark:bg-slate-800";
-              if (isTop) {
+              if (!hasEnoughTasks) {
+                medalColor = "text-slate-400";
+                medalBg = "bg-slate-100 dark:bg-slate-800 opacity-60";
+              } else if (isTop) {
                 medalColor = "text-yellow-500";
                 medalBg =
                   "bg-yellow-50 dark:bg-yellow-500/10 ring-2 ring-yellow-400/50";
@@ -6977,7 +6986,7 @@ const DashboardView = ({
               return (
                 <div
                   key={ms.id}
-                  className="p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/20 flex flex-col gap-4 hover:bg-white dark:hover:bg-slate-800 transition-colors shadow-sm relative overflow-hidden min-w-0"
+                  className={`p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/20 flex flex-col gap-4 hover:bg-white dark:hover:bg-slate-800 transition-colors shadow-sm relative overflow-hidden min-w-0${!hasEnoughTasks ? " opacity-60" : ""}`}
                 >
                   <div
                     className="absolute inset-x-0 top-0 h-1.5"
@@ -6989,8 +6998,9 @@ const DashboardView = ({
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                       <div
                         className={`w-8 h-8 shrink-0 flex items-center justify-center font-black rounded-full shadow-sm text-sm ${medalBg} ${medalColor}`}
+                        title={!hasEnoughTasks ? `Mínimo ${RANKING_MIN_TASKS} tareas para clasificar` : undefined}
                       >
-                        #{index + 1}
+                        {hasEnoughTasks ? `#${rank}` : "—"}
                       </div>
                       <div className="min-w-0 flex-1">
                         <h4 className="min-w-0 font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight flex items-center gap-1.5">
@@ -7007,6 +7017,11 @@ const DashboardView = ({
                           {ms.completedTasks}/{ms.totalTasks} tareas del mes |{" "}
                           {ms.totalClients} clientes
                         </p>
+                        {!hasEnoughTasks && (
+                          <span className="inline-block mt-0.5 text-[9px] font-black uppercase tracking-wider text-slate-400 bg-slate-100 dark:bg-slate-800 dark:text-slate-500 rounded px-1.5 py-0.5">
+                            Datos insuficientes
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -7116,7 +7131,8 @@ const DashboardView = ({
                   </div>
                 </div>
               );
-            })
+            });
+            })()
           )}
         </div>
       </div>
