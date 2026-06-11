@@ -595,6 +595,37 @@ const isTaskPlannedAhead = (task = {}, leadDays = 1) => {
     return getDateOnlyDiffDays(dueDate, createdDate) >= leadDays;
 };
 
+const getRankingMonthPeriod = (referenceDate = getHondurasTodayStr()) => {
+    const normalizedDate = normalizeDateOnlyString(referenceDate) || getHondurasTodayStr();
+    const [yearValue, monthValue] = normalizedDate.split('-').map(Number);
+    const year = Number.isFinite(yearValue) ? yearValue : new Date().getFullYear();
+    const month = Number.isFinite(monthValue) ? Math.max(1, Math.min(12, monthValue)) : 1;
+    const monthText = String(month).padStart(2, '0');
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+    return {
+        year,
+        month,
+        start: `${year}-${monthText}-01`,
+        end: `${year}-${monthText}-${String(lastDay).padStart(2, '0')}`,
+        label: `${MONTH_NAMES[month - 1]} ${year}`
+    };
+};
+
+const isDateWithinPeriod = (value = '', period = getRankingMonthPeriod()) => {
+    const normalizedDate = normalizeDateOnlyString(value);
+    if (!normalizedDate) return false;
+    return compareDateOnlyStrings(normalizedDate, period.start) >= 0
+        && compareDateOnlyStrings(normalizedDate, period.end) <= 0;
+};
+
+const toKpiPercent = (value = 0, maxValue = 0) => {
+    const numericValue = Number(value);
+    const numericMax = Number(maxValue);
+    if (!Number.isFinite(numericValue) || !Number.isFinite(numericMax) || numericMax <= 0) return 0;
+    return Math.max(0, Math.min(100, Math.round((numericValue / numericMax) * 100)));
+};
+
 const getRankingKeywords = (value = '') => String(value || '')
     .split(',')
     .map((item) => normalizeNameKey(item))
@@ -611,25 +642,38 @@ const hasCreativitySignal = (task = {}, keywords = []) => {
 
 const isAccountTaskDone = (task = {}) => ['aprobado_internamente', 'publicado'].includes(task.status);
 
-const buildManagerRankingStats = ({ managers = [], clients = [], accountTasks = [], rankingSettings = DEFAULT_RANKING_SETTINGS }) => {
+const buildManagerRankingStats = ({ managers = [], clients = [], accountTasks = [], rankingSettings = DEFAULT_RANKING_SETTINGS, rankingPeriod = getRankingMonthPeriod() }) => {
     const rules = sanitizeRankingSettings(rankingSettings).manager;
     const todayStr = getHondurasTodayStr();
     const creativityKeywords = getRankingKeywords(rules.creativityKeywords);
 
     return managers.map((manager) => {
-        const mTasks = accountTasks.filter((task) => task.contextId === manager.id);
+        const mTasks = accountTasks.filter((task) => task.contextId === manager.id && isDateWithinPeriod(task.date, rankingPeriod));
         const completedTasksArr = mTasks.filter(isAccountTaskDone);
         let taskScore = 0;
+        let taskScoreMax = 0;
+        let completionScore = 0;
+        let completionScoreMax = 0;
         let efficiencyScore = 0;
+        let efficiencyScoreMax = 0;
         let onTimeCount = 0;
         let earlyCount = 0;
         let fastTurnaroundCount = 0;
         let overdueCount = 0;
 
+        mTasks.forEach((task) => {
+            const hierarchy = getAccountTaskHierarchyId(task);
+            taskScoreMax += Math.max(0, rules.taskPoints[hierarchy] ?? rules.taskPoints.p2);
+            taskScoreMax += Math.max(0, rules.publishedBonus);
+            completionScoreMax += Math.max(0, rules.workflowStepPoints);
+            efficiencyScoreMax += Math.max(0, rules.onTimeBonus) + Math.max(0, rules.earlyDeliveryBonus) + Math.max(0, rules.fastTurnaroundBonus);
+        });
+
         completedTasksArr.forEach((task) => {
             const hierarchy = getAccountTaskHierarchyId(task);
             taskScore += rules.taskPoints[hierarchy] ?? rules.taskPoints.p2;
             if (task.status === 'publicado') taskScore += rules.publishedBonus;
+            completionScore += rules.workflowStepPoints;
 
             const completionIso = getTaskCompletionIso(task);
             const onTime = isCompletionOnTime(task, completionIso);
@@ -671,6 +715,9 @@ const buildManagerRankingStats = ({ managers = [], clients = [], accountTasks = 
         tasksByDate.forEach((items) => {
             const differentClients = new Set(items.map((task) => task.clientId).filter(Boolean)).size;
             if (differentClients < rules.batchDifferentClientCount) return;
+            if (items.length >= rules.batchEarlyCompletedCount) {
+                efficiencyScoreMax += Math.max(0, rules.batchEarlyBonus);
+            }
             const earlyCompleted = items.filter((task) => isAccountTaskDone(task) && isCompletionEarly(task, getTaskCompletionIso(task), rules.earlyDeliveryCutoffHour)).length;
             if (earlyCompleted >= rules.batchEarlyCompletedCount) {
                 efficiencyScore += rules.batchEarlyBonus;
@@ -678,22 +725,19 @@ const buildManagerRankingStats = ({ managers = [], clients = [], accountTasks = 
             }
         });
 
-        const mClients = clients.filter((client) => client.managerId === manager.id);
-        const workflowTotal = mClients.length * 4;
-        let workflowCompleted = 0;
-        mClients.forEach((client) => {
-            if (client.workflow?.week1) workflowCompleted++;
-            if (client.workflow?.week2) workflowCompleted++;
-            if (client.workflow?.week3) workflowCompleted++;
-            if (client.workflow?.week4) workflowCompleted++;
-        });
-        const clientScore = workflowCompleted * rules.workflowStepPoints;
+        const monthlyClientCount = new Set(mTasks.map((task) => task.clientId).filter(Boolean)).size;
+        const workflowTotal = mTasks.length;
+        const workflowCompleted = completedTasksArr.length;
 
         const plannedTasks = mTasks.filter((task) => isTaskPlannedAhead(task, rules.planningLeadDays)).length;
         const planningScore = Math.min(plannedTasks * rules.planningTaskPoints, rules.planningMaxPoints);
+        const planningScoreMax = Math.min(mTasks.length * Math.max(0, rules.planningTaskPoints), Math.max(0, rules.planningMaxPoints));
         const creativitySignals = mTasks.filter((task) => hasCreativitySignal(task, creativityKeywords)).length;
         const creativityScore = Math.min(creativitySignals * rules.creativityKeywordPoints, rules.creativityMaxPoints);
-        const finalScore = Math.round(taskScore + clientScore + efficiencyScore + planningScore + creativityScore);
+        const creativityScoreMax = Math.min(mTasks.length * Math.max(0, rules.creativityKeywordPoints), Math.max(0, rules.creativityMaxPoints));
+        const rawScore = Math.round(taskScore + completionScore + efficiencyScore + planningScore + creativityScore);
+        const maxScore = Math.round(taskScoreMax + completionScoreMax + efficiencyScoreMax + planningScoreMax + creativityScoreMax);
+        const finalScore = toKpiPercent(rawScore, maxScore);
         const mappedColorName = LEGACY_COLOR_MAP[manager.color] || manager.color || 'slate';
 
         return {
@@ -701,24 +745,36 @@ const buildManagerRankingStats = ({ managers = [], clients = [], accountTasks = 
             mappedColor: mappedColorName,
             totalTasks: mTasks.length,
             completedTasks: completedTasksArr.length,
-            totalClients: mClients.length,
+            totalClients: monthlyClientCount,
             workflowTotal,
             workflowCompleted,
             taskScore,
-            clientScore,
+            taskScoreMax,
+            completionScore,
+            completionScoreMax,
             efficiencyScore,
+            efficiencyScoreMax,
             planningScore,
+            planningScoreMax,
             creativityScore,
+            creativityScoreMax,
+            rawScore,
+            maxScore,
             score: finalScore,
+            taskPercent: toKpiPercent(taskScore, taskScoreMax),
+            completionPercent: toKpiPercent(completionScore, completionScoreMax),
+            efficiencyPercent: toKpiPercent(efficiencyScore, efficiencyScoreMax),
+            planningCreativityPercent: toKpiPercent(planningScore + creativityScore, planningScoreMax + creativityScoreMax),
             onTimeCount,
             earlyCount,
             fastTurnaroundCount,
             overdueCount,
             batchBonusCount,
             plannedTasks,
-            creativitySignals
+            creativitySignals,
+            rankingPeriod
         };
-    }).sort((a, b) => b.score - a.score || b.efficiencyScore - a.efficiencyScore || a.name.localeCompare(b.name));
+    }).sort((a, b) => b.score - a.score || b.rawScore - a.rawScore || b.efficiencyScore - a.efficiencyScore || a.name.localeCompare(b.name));
 };
 const isTaskAssignedToProfile = (task, profile, contextIds = []) => {
     const profileId = profile?.id;
@@ -3659,56 +3715,8 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
     const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     const formattedDate = new Date().toLocaleDateString('es-HN', dateOptions);
 
-    // LOGICA DEL RANKING DE ACCOUNT MANAGERS
-    const legacyManagerStats = false && managers.map(m => {
-        // Tareas
-        const mTasks = accountTasks.filter(t => t.contextId === m.id);
-        const mCompletedTasksArr = mTasks.filter(t => t.status === 'aprobado_internamente' || t.status === 'publicado');
-        const mCompletedTasks = mCompletedTasksArr.length;
-        let taskScore = 0;
-        mCompletedTasksArr.forEach(t => {
-            const h = t.hierarchy || (t.priority === 'urgente' ? 'p1' : (t.priority === 'recurrente' ? 'p3' : 'p2'));
-            if (h === 'p1') taskScore += 10;
-            else if (h === 'p2') taskScore += 5;
-            else taskScore += 2;
-        });
-
-        // Clientes
-        const mClients = clients.filter(c => c.managerId === m.id);
-        let workflowTotal = mClients.length * 4;
-        let workflowCompleted = 0;
-        mClients.forEach(c => {
-            if(c.workflow?.week1) workflowCompleted++;
-            if(c.workflow?.week2) workflowCompleted++;
-            if(c.workflow?.week3) workflowCompleted++;
-            if(c.workflow?.week4) workflowCompleted++;
-        });
-        const clientScore = workflowCompleted * 3;
-
-        // Puntuación Combinada
-        const finalScore = taskScore + clientScore;
-
-        let mappedColorName = LEGACY_COLOR_MAP[m.color] || m.color || 'slate';
-
-        return {
-            ...m,
-            mappedColor: mappedColorName,
-            totalTasks: mTasks.length,
-            completedTasks: mCompletedTasks,
-            totalClients: mClients.length,
-            workflowTotal,
-            workflowCompleted,
-            taskScore,
-            clientScore,
-            score: finalScore
-        };
-    }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
-
-    const managerStats = buildManagerRankingStats({ managers, clients, accountTasks, rankingSettings });
-    const maxTaskScore = Math.max(...managerStats.map(s => s.taskScore), 1);
-    const maxClientScore = Math.max(...managerStats.map(s => s.clientScore), 1);
-    const maxEfficiencyScore = Math.max(...managerStats.map(s => Math.max(s.efficiencyScore, 0)), 1);
-    const maxPlanningCreativityScore = Math.max(...managerStats.map(s => Math.max(s.planningScore + s.creativityScore, 0)), 1);
+    const rankingPeriod = getRankingMonthPeriod(todayStr);
+    const managerStats = buildManagerRankingStats({ managers, clients, accountTasks, rankingSettings, rankingPeriod });
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -3815,9 +3823,9 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
                 <div className="mb-6 flex items-center justify-between">
                     <div>
                         <h3 className="text-lg font-black text-slate-800 dark:text-white mb-1 flex items-center gap-2">
-                            <Icon name="Trophy" size={20} className="text-yellow-500" /> Ranking de Productividad por Account
+                            <Icon name="Trophy" size={20} className="text-yellow-500" /> KPI mensual por Account
                         </h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Rendimiento basado en entregas tempranas, eficiencia, planificacion e ideas.</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Periodo: {rankingPeriod.label}. Ranking 0-100% basado solo en tareas del mes, tiempos, planificacion e ideas.</p>
                     </div>
                 </div>
 
@@ -3851,13 +3859,13 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
                                                     {isTop && <Icon name="Sparkles" size={14} className="text-yellow-500"/>}
                                                 </h4>
                                                 <p className="break-words text-[10px] leading-relaxed text-slate-500 font-medium">
-                                                    {ms.completedTasks}/{ms.totalTasks} Tareas | {ms.totalClients} Clientes
+                                                    {ms.completedTasks}/{ms.totalTasks} tareas del mes | {ms.totalClients} clientes
                                                 </p>
                                             </div>
                                         </div>
                                         <div className="text-right shrink-0">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Score</p>
-                                            <span className="text-2xl font-black" style={{ color: palette.strong }}>{ms.score} pts</span>
+                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">KPI</p>
+                                            <span className="text-2xl font-black" style={{ color: palette.strong }}>{ms.score}%</span>
                                         </div>
                                     </div>
                                     
@@ -3887,30 +3895,30 @@ const DashboardView = ({ clients, managers, events, tasks, accountTasks, managem
                                     <div className="space-y-3">
                                         <CompactMetricBar
                                             label="Ejecucion"
-                                            value={(ms.taskScore / maxTaskScore) * 100}
+                                            value={ms.taskPercent}
                                             color={ms.mappedColor}
-                                            meta={`${ms.taskScore} pts`}
+                                            meta={`${ms.taskPercent}%`}
                                             helper={ms.totalTasks > 0 ? `${ms.completedTasks} de ${ms.totalTasks} tareas cerradas` : 'Sin tareas asignadas'}
                                         />
                                         <CompactMetricBar
-                                            label="Workflow"
-                                            value={(ms.clientScore / maxClientScore) * 100}
+                                            label="Cumplimiento"
+                                            value={ms.completionPercent}
                                             color={ms.mappedColor}
-                                            meta={`${ms.clientScore} pts`}
-                                            helper={ms.workflowTotal > 0 ? `${ms.workflowCompleted} de ${ms.workflowTotal} hitos completados` : 'Sin workflow activo'}
+                                            meta={`${ms.completionPercent}%`}
+                                            helper={ms.workflowTotal > 0 ? `${ms.workflowCompleted} de ${ms.workflowTotal} tareas del mes completadas` : 'Sin tareas del mes'}
                                         />
                                         <CompactMetricBar
                                             label="Eficiencia"
-                                            value={(Math.max(ms.efficiencyScore, 0) / maxEfficiencyScore) * 100}
+                                            value={ms.efficiencyPercent}
                                             color={ms.mappedColor}
-                                            meta={`${ms.efficiencyScore} pts`}
+                                            meta={`${ms.efficiencyPercent}%`}
                                             helper={`${ms.earlyCount} tempranas, ${ms.fastTurnaroundCount} rapidas, ${ms.overdueCount} atrasos`}
                                         />
                                         <CompactMetricBar
                                             label="Plan + ideas"
-                                            value={((ms.planningScore + ms.creativityScore) / maxPlanningCreativityScore) * 100}
+                                            value={ms.planningCreativityPercent}
                                             color={ms.mappedColor}
-                                            meta={`${ms.planningScore + ms.creativityScore} pts`}
+                                            meta={`${ms.planningCreativityPercent}%`}
                                             helper={`${ms.planningScore} planificacion, ${ms.creativityScore} creatividad`}
                                         />
                                     </div>
@@ -4869,7 +4877,7 @@ const RankingRulesPanel = ({ rankingSettings, currentUserProfile, onSave }) => {
                             <RankingNumberField key={key} label={key.toUpperCase()} value={draft.manager.taskPoints[key]} onChange={(value) => updateManagerMapValue('taskPoints', key, value)} />
                         ))}
                         <RankingNumberField label="Publicado" value={draft.manager.publishedBonus} onChange={(value) => updateManagerValue('publishedBonus', value)} />
-                        <RankingNumberField label="Workflow" value={draft.manager.workflowStepPoints} onChange={(value) => updateManagerValue('workflowStepPoints', value)} />
+                        <RankingNumberField label="Cumplimiento" value={draft.manager.workflowStepPoints} onChange={(value) => updateManagerValue('workflowStepPoints', value)} />
                     </div>
                 </div>
 
