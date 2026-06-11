@@ -5339,6 +5339,19 @@ var DashboardView = ({
   onSignIn,
   rankingSettings = DEFAULT_RANKING_SETTINGS
 }) => {
+  const [rankingRefDate, setRankingRefDate] = React.useState(getHondurasTodayStr());
+  const goToPrevMonth = () => {
+    const p = getRankingMonthPeriod(rankingRefDate);
+    const prev = new Date(Date.UTC(p.year, p.month - 2, 1));
+    setRankingRefDate(`${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, "0")}-01`);
+  };
+  const goToNextMonth = () => {
+    const p = getRankingMonthPeriod(rankingRefDate);
+    const next = new Date(Date.UTC(p.year, p.month, 1));
+    const todayPeriod = getRankingMonthPeriod(getHondurasTodayStr());
+    if (p.year === todayPeriod.year && p.month === todayPeriod.month) return;
+    setRankingRefDate(`${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-01`);
+  };
   const contentos = clients.filter((c) => c.mood === "Contento").length;
   const neutrales = clients.filter((c) => c.mood === "Neutral").length;
   const enRiesgo = clients.filter((c) => c.mood === "En Riesgo").length;
@@ -5407,7 +5420,11 @@ var DashboardView = ({
     day: "numeric"
   };
   const formattedDate = (/* @__PURE__ */ new Date()).toLocaleDateString("es-HN", dateOptions);
-  const rankingPeriod = getRankingMonthPeriod(todayStr);
+  const rankingPeriod = getRankingMonthPeriod(rankingRefDate);
+  const isCurrentMonth = (() => {
+    const tp = getRankingMonthPeriod(todayStr);
+    return rankingPeriod.year === tp.year && rankingPeriod.month === tp.month;
+  })();
   const managerStats = buildManagerRankingStats({
     managers,
     users,
@@ -5520,7 +5537,24 @@ var DashboardView = ({
       "Vence: ",
       t.date
     )))
-  ))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm mt-6" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white mb-1 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trophy", size: 20, className: "text-yellow-500" }), " KPI mensual por Account"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Periodo: ", rankingPeriod.label, ". Ranking 0-100% basado solo en tareas del mes, tiempos, planificacion e ideas."))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" }, managerStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "col-span-full" }, /* @__PURE__ */ React.createElement(
+  ))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm mt-6" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white mb-1 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trophy", size: 20, className: "text-yellow-500" }), " KPI mensual por Account"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Ranking 0-100% basado en tareas, tiempos, planificacion e ideas.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: goToPrevMonth,
+      className: "w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm",
+      title: "Mes anterior"
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "ChevronLeft", size: 16 })
+  ), /* @__PURE__ */ React.createElement("span", { className: "text-sm font-black text-slate-700 dark:text-slate-200 min-w-[110px] text-center" }, rankingPeriod.label), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: goToNextMonth,
+      disabled: isCurrentMonth,
+      className: `w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 transition-colors shadow-sm ${isCurrentMonth ? "opacity-30 cursor-not-allowed text-slate-400" : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"}`,
+      title: "Mes siguiente"
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "ChevronRight", size: 16 })
+  ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" }, managerStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "col-span-full" }, /* @__PURE__ */ React.createElement(
     EmptyState,
     {
       icon: "Users",

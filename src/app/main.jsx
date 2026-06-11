@@ -6624,6 +6624,21 @@ const DashboardView = ({
   onSignIn,
   rankingSettings = DEFAULT_RANKING_SETTINGS,
 }) => {
+  const [rankingRefDate, setRankingRefDate] = React.useState(getHondurasTodayStr());
+
+  const goToPrevMonth = () => {
+    const p = getRankingMonthPeriod(rankingRefDate);
+    const prev = new Date(Date.UTC(p.year, p.month - 2, 1));
+    setRankingRefDate(`${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, "0")}-01`);
+  };
+  const goToNextMonth = () => {
+    const p = getRankingMonthPeriod(rankingRefDate);
+    const next = new Date(Date.UTC(p.year, p.month, 1));
+    const todayPeriod = getRankingMonthPeriod(getHondurasTodayStr());
+    if (p.year === todayPeriod.year && p.month === todayPeriod.month) return;
+    setRankingRefDate(`${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-01`);
+  };
+
   const contentos = clients.filter((c) => c.mood === "Contento").length;
   const neutrales = clients.filter((c) => c.mood === "Neutral").length;
   const enRiesgo = clients.filter((c) => c.mood === "En Riesgo").length;
@@ -6714,7 +6729,8 @@ const DashboardView = ({
   };
   const formattedDate = new Date().toLocaleDateString("es-HN", dateOptions);
 
-  const rankingPeriod = getRankingMonthPeriod(todayStr);
+  const rankingPeriod = getRankingMonthPeriod(rankingRefDate);
+  const isCurrentMonth = (() => { const tp = getRankingMonthPeriod(todayStr); return rankingPeriod.year === tp.year && rankingPeriod.month === tp.month; })();
   const managerStats = buildManagerRankingStats({
     managers,
     users,
@@ -6937,9 +6953,28 @@ const DashboardView = ({
               mensual por Account
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Periodo: {rankingPeriod.label}. Ranking 0-100% basado solo en
-              tareas del mes, tiempos, planificacion e ideas.
+              Ranking 0-100% basado en tareas, tiempos, planificacion e ideas.
             </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={goToPrevMonth}
+              className="w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+              title="Mes anterior"
+            >
+              <Icon name="ChevronLeft" size={16} />
+            </button>
+            <span className="text-sm font-black text-slate-700 dark:text-slate-200 min-w-[110px] text-center">
+              {rankingPeriod.label}
+            </span>
+            <button
+              onClick={goToNextMonth}
+              disabled={isCurrentMonth}
+              className={`w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 transition-colors shadow-sm ${isCurrentMonth ? "opacity-30 cursor-not-allowed text-slate-400" : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"}`}
+              title="Mes siguiente"
+            >
+              <Icon name="ChevronRight" size={16} />
+            </button>
           </div>
         </div>
 
