@@ -3859,10 +3859,8 @@ function App() {
           managerId: fd.managerId || "",
           managerUserId: manager?.userId || "",
           status: "Activo",
-          mood: "Contento",
           createdAt: getHondurasTodayStr(),
           updatedAt: nowIso(),
-          workflow: { week1: false, week2: false, week3: false, week4: false },
         }),
       afterSuccess: closeModal,
     });
@@ -5170,6 +5168,9 @@ function App() {
           {view === "clients" && (
             <ClientsView
               clients={clients}
+              managers={managers}
+              legacyColorMap={LEGACY_COLOR_MAP}
+              onReassignManager={reassignClientManager}
               onAdd={() => setModalConfig({ isOpen: true, type: "client" })}
               onSelect={(c) => {
                 setSelectedClient(c);
@@ -5181,6 +5182,7 @@ function App() {
             <ClientDetail
               client={selectedClient}
               managers={managers}
+              legacyColorMap={LEGACY_COLOR_MAP}
               onReassignManager={reassignClientManager}
               onBack={() => handleNavigate("clients")}
               onUpdate={updateClient}
@@ -6447,43 +6449,37 @@ const CompactMetricBar = ({ label, value, color = "slate", meta, helper }) => {
 
 const PortfolioHealthChart = ({
   totalClients,
-  contentos,
-  neutrales,
-  enRiesgo,
+  activos,
+  pausados,
+  inactivos,
 }) => {
   const segments = [
     {
-      key: "healthy",
-      label: "Sanos",
-      value: contentos,
+      key: "activo",
+      label: "Activos",
+      value: activos,
       color: "#22c55e",
       strong: "#15803d",
     },
     {
-      key: "neutral",
-      label: "Neutral",
-      value: neutrales,
+      key: "pausado",
+      label: "Pausados",
+      value: pausados,
       color: "#f59e0b",
       strong: "#b45309",
     },
     {
-      key: "risk",
-      label: "Riesgo",
-      value: enRiesgo,
-      color: "#ef4444",
-      strong: "#b91c1c",
+      key: "inactivo",
+      label: "Inactivos",
+      value: inactivos,
+      color: "#94a3b8",
+      strong: "#475569",
     },
   ];
   const ringSegments = buildRingSegments(segments);
   const healthScore =
-    totalClients > 0
-      ? Math.round(
-          ((contentos * 1 + neutrales * 0.55 + enRiesgo * 0.15) /
-            totalClients) *
-            100,
-        )
-      : 0;
-  const attentionCount = neutrales + enRiesgo;
+    totalClients > 0 ? Math.round((activos / totalClients) * 100) : 0;
+  const attentionCount = pausados + inactivos;
   const dominantSegment = [...segments].sort(
     (left, right) => right.value - left.value,
   )[0];
@@ -6491,10 +6487,10 @@ const PortfolioHealthChart = ({
     totalClients === 0
       ? "Sin datos"
       : healthScore >= 75
-        ? "Estable"
+        ? "Saludable"
         : healthScore >= 45
           ? "Mixta"
-          : "Fragil";
+          : "Baja";
 
   return (
     <div className="mt-5 grid grid-cols-1 gap-5">
@@ -6537,7 +6533,7 @@ const PortfolioHealthChart = ({
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="h-24 w-24 rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col items-center justify-center text-center">
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-              Indice
+              Activos
             </span>
             <span className="mt-1 text-3xl font-black leading-none text-slate-900 dark:text-white">
               {healthScore}
@@ -6578,7 +6574,7 @@ const PortfolioHealthChart = ({
               {totalClients > 0
                 ? Math.round((attentionCount / totalClients) * 100)
                 : 0}
-              % con seguimiento cercano
+              % pausados o inactivos
             </p>
           </div>
         </div>
@@ -6809,9 +6805,11 @@ const DashboardView = ({
     setRankingRefDate(`${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-01`);
   };
 
-  const contentos = clients.filter((c) => c.mood === "Contento").length;
-  const neutrales = clients.filter((c) => c.mood === "Neutral").length;
-  const enRiesgo = clients.filter((c) => c.mood === "En Riesgo").length;
+  const activos = clients.filter(
+    (c) => (c.status || "Activo") === "Activo",
+  ).length;
+  const pausados = clients.filter((c) => c.status === "Pausado").length;
+  const inactivos = clients.filter((c) => c.status === "Inactivo").length;
   const realTotalClients = clients.length;
   const totalClients = realTotalClients || 1;
 
@@ -6978,57 +6976,18 @@ const DashboardView = ({
             <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start">
               <div>
                 <h3 className="text-sm font-black text-slate-800 dark:text-white mb-1">
-                  Salud de la Cartera
+                  Estado de la Cartera
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Distribución según satisfacción actual
+                  Distribución por estado de cliente
                 </p>
               </div>
               <PortfolioHealthChart
                 totalClients={realTotalClients}
-                contentos={contentos}
-                neutrales={neutrales}
-                enRiesgo={enRiesgo}
+                activos={activos}
+                pausados={pausados}
+                inactivos={inactivos}
               />
-              <div className="hidden">
-                <div className="flex gap-1 h-6 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-inner">
-                  <div
-                    style={{ width: `${(contentos / totalClients) * 100}%` }}
-                    className="bg-green-500 transition-all cursor-help"
-                    title={`Contentos: ${contentos}`}
-                  ></div>
-                  <div
-                    style={{ width: `${(neutrales / totalClients) * 100}%` }}
-                    className="bg-amber-400 transition-all cursor-help"
-                    title={`Neutrales: ${neutrales}`}
-                  ></div>
-                  <div
-                    style={{ width: `${(enRiesgo / totalClients) * 100}%` }}
-                    className="bg-red-500 animate-pulse transition-all cursor-help"
-                    title={`En Riesgo: ${enRiesgo}`}
-                  ></div>
-                </div>
-                <div className="flex justify-between mt-4 text-[10px] font-bold uppercase tracking-wider">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm"></span>{" "}
-                    <span className="text-slate-600 dark:text-slate-300">
-                      Sanos ({contentos})
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm"></span>{" "}
-                    <span className="text-slate-600 dark:text-slate-300">
-                      Neutral ({neutrales})
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"></span>{" "}
-                    <span className="text-slate-600 dark:text-slate-300">
-                      Riesgo ({enRiesgo})
-                    </span>
-                  </div>
-                </div>
-              </div>
             </div>
             <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start">
               <div>
@@ -7707,6 +7666,68 @@ const buildAssignee = (person, legacyColorMap = {}) => {
     photo: person.photo || "",
   };
 };
+
+// Avatar de persona reutilizable: muestra la foto si existe, o las iniciales.
+const PersonAvatar = ({ person, size = 24, legacyColorMap = {}, className = "" }) => {
+  const dim = { width: size, height: size };
+  if (!person) {
+    return (
+      <span
+        style={dim}
+        className={`rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-500 shrink-0 ${className}`}
+      >
+        <Icon name="User" size={Math.round(size * 0.55)} />
+      </span>
+    );
+  }
+  const meta = buildAssignee(person, legacyColorMap);
+  if (meta.photo) {
+    return (
+      <img
+        src={meta.photo}
+        alt={meta.name}
+        style={dim}
+        className={`rounded-full object-cover shrink-0 border border-black/5 dark:border-white/10 ${className}`}
+      />
+    );
+  }
+  return (
+    <span
+      style={{ ...dim, fontSize: Math.round(size * 0.4) }}
+      className={`rounded-full flex items-center justify-center font-bold shrink-0 ${meta.className} ${className}`}
+    >
+      {meta.initials}
+    </span>
+  );
+};
+
+// Estados operativos del cliente (reemplazan el "mood" subjetivo).
+const CLIENT_STATUSES = [
+  {
+    id: "Activo",
+    label: "Activo",
+    dot: "bg-emerald-500",
+    text: "text-emerald-600 dark:text-emerald-400",
+    bg: "bg-emerald-500/10",
+  },
+  {
+    id: "Pausado",
+    label: "Pausado",
+    dot: "bg-amber-500",
+    text: "text-amber-600 dark:text-amber-400",
+    bg: "bg-amber-500/10",
+  },
+  {
+    id: "Inactivo",
+    label: "Inactivo",
+    dot: "bg-slate-400",
+    text: "text-slate-500 dark:text-slate-400",
+    bg: "bg-slate-500/10",
+  },
+];
+const getClientStatus = (client) =>
+  CLIENT_STATUSES.find((s) => s.id === (client?.status || "Activo")) ||
+  CLIENT_STATUSES[0];
 
 // Menú "⋯" con acciones de tarjeta (avanzar, volver, editar, eliminar).
 const CardMenu = ({ items = [] }) => {
@@ -9794,16 +9815,182 @@ const UsersAccessView = ({
   );
 };
 
-const ClientsView = ({ clients, onAdd, onSelect }) => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const filteredClients = clients.filter(
-    (c) =>
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.niche?.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+// Selector de Account Manager con avatares (foto o iniciales).
+const ManagerPicker = ({
+  managers = [],
+  value = "",
+  onChange,
+  legacyColorMap = {},
+  buttonClassName = "",
+  align = "left",
+  placeholder = "Sin asignar",
+}) => {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 240 });
+  const [q, setQ] = useState("");
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = (e) => {
+      if (
+        menuRef.current?.contains(e.target) ||
+        btnRef.current?.contains(e.target)
+      )
+        return;
+      setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [open]);
+
+  const current = managers.find((m) => m.id === value) || null;
+
+  const toggle = (e) => {
+    e.stopPropagation();
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const width = Math.max(240, r.width);
+      let left = align === "right" ? r.right - width : r.left;
+      if (left + width > window.innerWidth - 8)
+        left = window.innerWidth - width - 8;
+      if (left < 8) left = 8;
+      setCoords({ top: r.bottom + 6, left, width });
+      setQ("");
+    }
+    setOpen((o) => !o);
+  };
+
+  const pick = (e, id) => {
+    e.stopPropagation();
+    setOpen(false);
+    if (id !== value) onChange?.(id);
+  };
+
+  const filtered = q
+    ? managers.filter((m) =>
+        (m.name || "").toLowerCase().includes(q.toLowerCase()),
+      )
+    : managers;
 
   return (
-    <div className="space-y-6 fade-in">
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={toggle}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={buttonClassName}
+      >
+        <PersonAvatar person={current} size={22} legacyColorMap={legacyColorMap} />
+        <span className="truncate">{current ? current.name : placeholder}</span>
+        <Icon name="ChevronDown" size={14} className="shrink-0 opacity-60" />
+      </button>
+      {open && (
+        <div
+          ref={menuRef}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: "fixed",
+            top: coords.top,
+            left: coords.left,
+            width: coords.width,
+            zIndex: 9999,
+          }}
+          className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl shadow-black/10 dark:shadow-black/50 overflow-hidden fade-in"
+        >
+          {managers.length > 6 && (
+            <div className="p-2 border-b border-slate-100 dark:border-slate-800">
+              <input
+                autoFocus
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Buscar manager..."
+                className="w-full text-sm px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 outline-none text-slate-700 dark:text-slate-200"
+              />
+            </div>
+          )}
+          <div className="max-h-60 overflow-y-auto custom-scroll py-1">
+            <button
+              type="button"
+              onClick={(e) => pick(e, "")}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-[13px] font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              <PersonAvatar person={null} size={22} /> Sin asignar
+            </button>
+            {filtered.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={(e) => pick(e, m.id)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-[13px] font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 ${m.id === value ? "text-blue-600 dark:text-blue-400" : "text-slate-700 dark:text-slate-200"}`}
+              >
+                <PersonAvatar
+                  person={m}
+                  size={22}
+                  legacyColorMap={legacyColorMap}
+                />
+                <span className="truncate flex-1">{m.name}</span>
+                {m.id === value && (
+                  <Icon name="Check" size={15} className="shrink-0" />
+                )}
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <p className="px-3 py-3 text-xs text-slate-400 text-center">
+                Sin resultados
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+const ClientsView = ({
+  clients,
+  managers = [],
+  legacyColorMap = {},
+  onAdd,
+  onSelect,
+  onReassignManager,
+}) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const statusFilters = [
+    { id: "all", label: "Todos" },
+    { id: "Activo", label: "Activos" },
+    { id: "Pausado", label: "Pausados" },
+    { id: "Inactivo", label: "Inactivos" },
+  ];
+  const filteredClients = clients.filter((c) => {
+    const term = searchTerm.toLowerCase();
+    const matchesSearch =
+      c.name.toLowerCase().includes(term) ||
+      (c.niche || "").toLowerCase().includes(term);
+    if (!matchesSearch) return false;
+    if (statusFilter !== "all" && (c.status || "Activo") !== statusFilter)
+      return false;
+    return true;
+  });
+
+  return (
+    <div className="space-y-5 fade-in">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h2 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white">
           Cartera de Clientes
@@ -9819,6 +10006,24 @@ const ClientsView = ({ clients, onAdd, onSelect }) => {
           </Button>
         </div>
       </div>
+
+      <div className="flex items-center gap-3 overflow-x-auto kanban-mobile-scroll">
+        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0">
+          {statusFilters.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setStatusFilter(f.id)}
+              className={`shrink-0 px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all ${statusFilter === f.id ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs font-medium text-slate-400 dark:text-slate-500 shrink-0">
+          {filteredClients.length} de {clients.length}
+        </span>
+      </div>
+
       {filteredClients.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 h-64">
           <EmptyState icon="Briefcase" text="No hay clientes que coincidan." />
@@ -9826,33 +10031,14 @@ const ClientsView = ({ clients, onAdd, onSelect }) => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredClients.map((c) => {
-            const mood = c.mood || "";
-            const status =
-              mood === "En Riesgo"
-                ? {
-                    label: "En riesgo",
-                    dot: "bg-red-500",
-                    text: "text-red-600 dark:text-red-400",
-                    bg: "bg-red-500/10",
-                  }
-                : mood === "Neutral"
-                  ? {
-                      label: "Neutral",
-                      dot: "bg-amber-400",
-                      text: "text-amber-600 dark:text-amber-400",
-                      bg: "bg-amber-500/10",
-                    }
-                  : {
-                      label: "Activo",
-                      dot: "bg-emerald-500",
-                      text: "text-emerald-600 dark:text-emerald-400",
-                      bg: "bg-emerald-500/10",
-                    };
+            const status = getClientStatus(c);
+            const manager = managers.find((m) => m.id === c.managerId) || null;
+            const inactive = status.id === "Inactivo";
             return (
               <div
                 key={c.id}
                 onClick={() => onSelect(c)}
-                className="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600/60 hover:-translate-y-0.5 transition-all cursor-pointer"
+                className={`group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600/60 hover:-translate-y-0.5 transition-all cursor-pointer ${inactive ? "opacity-70 hover:opacity-100" : ""}`}
               >
                 <div className="flex items-start justify-between gap-3 mb-4">
                   {c.photo ? (
@@ -9885,16 +10071,26 @@ const ClientsView = ({ clients, onAdd, onSelect }) => {
                   </span>
                 )}
                 <div className="pt-4 border-t border-slate-100 dark:border-slate-800 mt-4 flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 truncate min-w-0">
-                    <Icon
-                      name="UserCircle2"
-                      size={16}
-                      className="text-blue-400 dark:text-blue-500 shrink-0"
+                  {onReassignManager ? (
+                    <ManagerPicker
+                      managers={managers}
+                      value={c.managerId || ""}
+                      legacyColorMap={legacyColorMap}
+                      onChange={(id) => onReassignManager(c, id)}
+                      buttonClassName="flex items-center gap-2 min-w-0 max-w-full text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-lg px-1.5 py-1 -ml-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     />
-                    <span className="truncate">
-                      {c.manager || "Sin asignar"}
+                  ) : (
+                    <span className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 truncate min-w-0">
+                      <PersonAvatar
+                        person={manager}
+                        size={22}
+                        legacyColorMap={legacyColorMap}
+                      />
+                      <span className="truncate">
+                        {manager ? manager.name : c.manager || "Sin asignar"}
+                      </span>
                     </span>
-                  </span>
+                  )}
                   {c.instagram && (
                     <span
                       className="text-slate-400 dark:text-slate-500 group-hover:text-pink-500 transition-colors shrink-0"
@@ -9916,6 +10112,7 @@ const ClientsView = ({ clients, onAdd, onSelect }) => {
 const ClientDetail = ({
   client,
   managers,
+  legacyColorMap = {},
   onReassignManager,
   onBack,
   onUpdate,
@@ -9960,58 +10157,44 @@ const ClientDetail = ({
           <div>
             <h1 className="text-2xl md:text-3xl font-black">{client.name}</h1>
 
-            <div className="flex items-center gap-2 mt-2 bg-white/5 px-3 py-1.5 rounded-lg inline-flex border border-white/10 relative transition-all hover:bg-white/10">
-              <Icon name="UserCircle2" size={14} className="text-blue-300" />
-              <select
+            <div className="mt-2">
+              <ManagerPicker
+                managers={managers}
                 value={client.managerId || ""}
-                onChange={(e) => onReassignManager(client, e.target.value)}
-                className="bg-transparent text-white font-bold text-xs outline-none cursor-pointer appearance-none pr-6 z-10 w-full"
-              >
-                <option value="" className="text-slate-800">
-                  Asignar Account Manager...
-                </option>
-                {managers.map((m) => (
-                  <option key={m.id} value={m.id} className="text-slate-800">
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-              <Icon
-                name="ChevronDown"
-                size={12}
-                className="text-blue-300 absolute right-3 pointer-events-none"
+                legacyColorMap={legacyColorMap}
+                onChange={(id) => onReassignManager(client, id)}
+                placeholder="Asignar Account Manager..."
+                buttonClassName="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 text-white font-bold text-xs transition-all max-w-full"
               />
             </div>
           </div>
         </div>
 
-        <div className="flex gap-2 bg-white/10 p-1 rounded-xl shrink-0 mt-4 md:mt-0">
-          {["Contento", "Neutral", "En Riesgo"].map((m) => (
-            <button
-              key={m}
-              onClick={() => onUpdate(client.id, { mood: m })}
-              aria-label={`Marcar cliente como ${m}`}
-              aria-pressed={client.mood === m}
-              className={`p-2 rounded-lg ${client.mood === m ? "bg-white/20" : "opacity-50 hover:opacity-100"}`}
-            >
-              <Icon
-                name={
-                  m === "Contento" ? "Smile" : m === "Neutral" ? "Meh" : "Frown"
-                }
-                className={
-                  m === "Contento"
-                    ? "text-green-400"
-                    : m === "Neutral"
-                      ? "text-yellow-400"
-                      : "text-red-400"
-                }
-              />
-            </button>
-          ))}
+        <div className="flex flex-col items-start md:items-end gap-1.5 shrink-0 mt-4 md:mt-0">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
+            Estado
+          </span>
+          <div className="flex gap-1 bg-white/10 p-1 rounded-xl">
+            {CLIENT_STATUSES.map((s) => {
+              const active = (client.status || "Activo") === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => onUpdate(client.id, { status: s.id })}
+                  aria-label={`Marcar cliente como ${s.label}`}
+                  aria-pressed={active}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${active ? "bg-white text-slate-800 shadow-sm" : "text-white/70 hover:text-white hover:bg-white/10"}`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${s.dot}`} />
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-slate-100 dark:divide-slate-800">
-        <div className="lg:col-span-2 p-6 md:p-8 space-y-8">
+      <div>
+        <div className="p-6 md:p-8 space-y-8">
           <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800">
             <h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
               <Icon name="Instagram" size={14} /> Redes
@@ -10040,25 +10223,6 @@ const ClientDetail = ({
           >
             <Icon name="Trash2" size={14} /> ELIMINAR CLIENTE
           </button>
-        </div>
-        <div className="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50">
-          <h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-            <Icon name="CheckCircle2" size={14} /> Workflow
-          </h3>
-          <div className="space-y-3">
-            {["week1", "week2", "week3", "week4"].map((w, i) => (
-              <CheckItem
-                key={w}
-                label={["Estrategia", "Producción", "Aprobación", "Reporte"][i]}
-                checked={client.workflow?.[w] || false}
-                onToggle={() =>
-                  onUpdate(client.id, {
-                    [`workflow.${w}`]: !client.workflow?.[w],
-                  })
-                }
-              />
-            ))}
-          </div>
         </div>
       </div>
     </div>

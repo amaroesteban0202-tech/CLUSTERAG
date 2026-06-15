@@ -3113,10 +3113,8 @@ function App() {
         managerId: fd.managerId || "",
         managerUserId: manager?.userId || "",
         status: "Activo",
-        mood: "Contento",
         createdAt: getHondurasTodayStr(),
-        updatedAt: nowIso(),
-        workflow: { week1: false, week2: false, week3: false, week4: false }
+        updatedAt: nowIso()
       }),
       afterSuccess: closeModal
     });
@@ -4266,6 +4264,9 @@ function App() {
     ClientsView,
     {
       clients,
+      managers,
+      legacyColorMap: LEGACY_COLOR_MAP,
+      onReassignManager: reassignClientManager,
       onAdd: () => setModalConfig({ isOpen: true, type: "client" }),
       onSelect: (c) => {
         setSelectedClient(c);
@@ -4277,6 +4278,7 @@ function App() {
     {
       client: selectedClient,
       managers,
+      legacyColorMap: LEGACY_COLOR_MAP,
       onReassignManager: reassignClientManager,
       onBack: () => handleNavigate("clients"),
       onUpdate: updateClient,
@@ -5185,15 +5187,6 @@ var PhotoUploader = ({
     }
   ), /* @__PURE__ */ React.createElement("input", { type: "hidden", name, value: photo }));
 };
-var CheckItem = ({ label, checked, onToggle }) => /* @__PURE__ */ React.createElement(
-  "button",
-  {
-    onClick: onToggle,
-    className: `w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${checked ? "bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30 text-green-800 dark:text-green-400" : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600"}`
-  },
-  /* @__PURE__ */ React.createElement("span", { className: "font-bold text-sm" }, label),
-  checked ? /* @__PURE__ */ React.createElement(Icon, { name: "CheckCircle2", size: 20, className: "text-green-500" }) : /* @__PURE__ */ React.createElement(Icon, { name: "Circle", size: 20 })
-);
 var clampPercent = (value = 0) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
@@ -5281,42 +5274,40 @@ var CompactMetricBar = ({ label, value, color = "slate", meta, helper }) => {
 };
 var PortfolioHealthChart = ({
   totalClients,
-  contentos,
-  neutrales,
-  enRiesgo
+  activos,
+  pausados,
+  inactivos
 }) => {
   const segments = [
     {
-      key: "healthy",
-      label: "Sanos",
-      value: contentos,
+      key: "activo",
+      label: "Activos",
+      value: activos,
       color: "#22c55e",
       strong: "#15803d"
     },
     {
-      key: "neutral",
-      label: "Neutral",
-      value: neutrales,
+      key: "pausado",
+      label: "Pausados",
+      value: pausados,
       color: "#f59e0b",
       strong: "#b45309"
     },
     {
-      key: "risk",
-      label: "Riesgo",
-      value: enRiesgo,
-      color: "#ef4444",
-      strong: "#b91c1c"
+      key: "inactivo",
+      label: "Inactivos",
+      value: inactivos,
+      color: "#94a3b8",
+      strong: "#475569"
     }
   ];
   const ringSegments = buildRingSegments(segments);
-  const healthScore = totalClients > 0 ? Math.round(
-    (contentos * 1 + neutrales * 0.55 + enRiesgo * 0.15) / totalClients * 100
-  ) : 0;
-  const attentionCount = neutrales + enRiesgo;
+  const healthScore = totalClients > 0 ? Math.round(activos / totalClients * 100) : 0;
+  const attentionCount = pausados + inactivos;
   const dominantSegment = [...segments].sort(
     (left, right) => right.value - left.value
   )[0];
-  const healthLabel = totalClients === 0 ? "Sin datos" : healthScore >= 75 ? "Estable" : healthScore >= 45 ? "Mixta" : "Fragil";
+  const healthLabel = totalClients === 0 ? "Sin datos" : healthScore >= 75 ? "Saludable" : healthScore >= 45 ? "Mixta" : "Baja";
   return /* @__PURE__ */ React.createElement("div", { className: "mt-5 grid grid-cols-1 gap-5" }, /* @__PURE__ */ React.createElement("div", { className: "relative mx-auto h-44 w-44" }, /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 220 220", className: "h-full w-full" }, /* @__PURE__ */ React.createElement(
     "circle",
     {
@@ -5354,9 +5345,9 @@ var PortfolioHealthChart = ({
       strokeWidth: "1.5",
       strokeDasharray: "4 8"
     }
-  )), /* @__PURE__ */ React.createElement("div", { className: "absolute inset-0 flex items-center justify-center" }, /* @__PURE__ */ React.createElement("div", { className: "h-24 w-24 rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col items-center justify-center text-center" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400" }, "Indice"), /* @__PURE__ */ React.createElement("span", { className: "mt-1 text-3xl font-black leading-none text-slate-900 dark:text-white" }, healthScore), /* @__PURE__ */ React.createElement("span", { className: "mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400" }, healthLabel)))), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 space-y-3" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 gap-3 sm:grid-cols-2" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-950/50" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400" }, "Pulso actual"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 break-words text-lg font-black leading-tight text-slate-900 dark:text-white" }, dominantSegment?.label || "Sin datos"), /* @__PURE__ */ React.createElement("p", { className: "break-words text-xs leading-relaxed font-medium text-slate-500 dark:text-slate-400" }, totalClients > 0 ? Math.round(
+  )), /* @__PURE__ */ React.createElement("div", { className: "absolute inset-0 flex items-center justify-center" }, /* @__PURE__ */ React.createElement("div", { className: "h-24 w-24 rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col items-center justify-center text-center" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400" }, "Activos"), /* @__PURE__ */ React.createElement("span", { className: "mt-1 text-3xl font-black leading-none text-slate-900 dark:text-white" }, healthScore), /* @__PURE__ */ React.createElement("span", { className: "mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400" }, healthLabel)))), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 space-y-3" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 gap-3 sm:grid-cols-2" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-950/50" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400" }, "Pulso actual"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 break-words text-lg font-black leading-tight text-slate-900 dark:text-white" }, dominantSegment?.label || "Sin datos"), /* @__PURE__ */ React.createElement("p", { className: "break-words text-xs leading-relaxed font-medium text-slate-500 dark:text-slate-400" }, totalClients > 0 ? Math.round(
     (dominantSegment?.value || 0) / totalClients * 100
-  ) : 0, "% de la cartera")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-950/50" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400" }, "En foco"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-lg font-black text-slate-900 dark:text-white" }, attentionCount), /* @__PURE__ */ React.createElement("p", { className: "break-words text-xs leading-relaxed font-medium text-slate-500 dark:text-slate-400" }, totalClients > 0 ? Math.round(attentionCount / totalClients * 100) : 0, "% con seguimiento cercano"))), segments.map((segment) => {
+  ) : 0, "% de la cartera")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-950/50" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400" }, "En foco"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-lg font-black text-slate-900 dark:text-white" }, attentionCount), /* @__PURE__ */ React.createElement("p", { className: "break-words text-xs leading-relaxed font-medium text-slate-500 dark:text-slate-400" }, totalClients > 0 ? Math.round(attentionCount / totalClients * 100) : 0, "% pausados o inactivos"))), segments.map((segment) => {
     const percent = totalClients > 0 ? Math.round(segment.value / totalClients * 100) : 0;
     return /* @__PURE__ */ React.createElement(
       "div",
@@ -5502,9 +5493,11 @@ var DashboardView = ({
     if (p.year === todayPeriod.year && p.month === todayPeriod.month) return;
     setRankingRefDate(`${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-01`);
   };
-  const contentos = clients.filter((c) => c.mood === "Contento").length;
-  const neutrales = clients.filter((c) => c.mood === "Neutral").length;
-  const enRiesgo = clients.filter((c) => c.mood === "En Riesgo").length;
+  const activos = clients.filter(
+    (c) => (c.status || "Activo") === "Activo"
+  ).length;
+  const pausados = clients.filter((c) => c.status === "Pausado").length;
+  const inactivos = clients.filter((c) => c.status === "Inactivo").length;
   const realTotalClients = clients.length;
   const totalClients = realTotalClients || 1;
   const completedEditingTasks = tasks.filter(
@@ -5624,36 +5617,15 @@ var DashboardView = ({
       icon: "Video",
       color: "amber"
     }
-  )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 xl:grid-cols-3 gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "xl:col-span-2 space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-6 h-full" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-black text-slate-800 dark:text-white mb-1" }, "Salud de la Cartera"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Distribuci\xF3n seg\xFAn satisfacci\xF3n actual")), /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 xl:grid-cols-3 gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "xl:col-span-2 space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-6 h-full" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-black text-slate-800 dark:text-white mb-1" }, "Estado de la Cartera"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Distribuci\xF3n por estado de cliente")), /* @__PURE__ */ React.createElement(
     PortfolioHealthChart,
     {
       totalClients: realTotalClients,
-      contentos,
-      neutrales,
-      enRiesgo
+      activos,
+      pausados,
+      inactivos
     }
-  ), /* @__PURE__ */ React.createElement("div", { className: "hidden" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-1 h-6 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-inner" }, /* @__PURE__ */ React.createElement(
-    "div",
-    {
-      style: { width: `${contentos / totalClients * 100}%` },
-      className: "bg-green-500 transition-all cursor-help",
-      title: `Contentos: ${contentos}`
-    }
-  ), /* @__PURE__ */ React.createElement(
-    "div",
-    {
-      style: { width: `${neutrales / totalClients * 100}%` },
-      className: "bg-amber-400 transition-all cursor-help",
-      title: `Neutrales: ${neutrales}`
-    }
-  ), /* @__PURE__ */ React.createElement(
-    "div",
-    {
-      style: { width: `${enRiesgo / totalClients * 100}%` },
-      className: "bg-red-500 animate-pulse transition-all cursor-help",
-      title: `En Riesgo: ${enRiesgo}`
-    }
-  )), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between mt-4 text-[10px] font-bold uppercase tracking-wider" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm" }), " ", /* @__PURE__ */ React.createElement("span", { className: "text-slate-600 dark:text-slate-300" }, "Sanos (", contentos, ")")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm" }), " ", /* @__PURE__ */ React.createElement("span", { className: "text-slate-600 dark:text-slate-300" }, "Neutral (", neutrales, ")")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm" }), " ", /* @__PURE__ */ React.createElement("span", { className: "text-slate-600 dark:text-slate-300" }, "Riesgo (", enRiesgo, ")"))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-black text-slate-800 dark:text-white mb-1" }, "Progreso Global"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Volumen completado vs general")), /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-black text-slate-800 dark:text-white mb-1" }, "Progreso Global"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Volumen completado vs general")), /* @__PURE__ */ React.createElement(
     ProgressOverviewChart,
     {
       completionPercent: compPercent,
@@ -6069,6 +6041,63 @@ var buildAssignee = (person, legacyColorMap = {}) => {
     photo: person.photo || ""
   };
 };
+var PersonAvatar = ({ person, size = 24, legacyColorMap = {}, className = "" }) => {
+  const dim = { width: size, height: size };
+  if (!person) {
+    return /* @__PURE__ */ React.createElement(
+      "span",
+      {
+        style: dim,
+        className: `rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-500 shrink-0 ${className}`
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "User", size: Math.round(size * 0.55) })
+    );
+  }
+  const meta = buildAssignee(person, legacyColorMap);
+  if (meta.photo) {
+    return /* @__PURE__ */ React.createElement(
+      "img",
+      {
+        src: meta.photo,
+        alt: meta.name,
+        style: dim,
+        className: `rounded-full object-cover shrink-0 border border-black/5 dark:border-white/10 ${className}`
+      }
+    );
+  }
+  return /* @__PURE__ */ React.createElement(
+    "span",
+    {
+      style: { ...dim, fontSize: Math.round(size * 0.4) },
+      className: `rounded-full flex items-center justify-center font-bold shrink-0 ${meta.className} ${className}`
+    },
+    meta.initials
+  );
+};
+var CLIENT_STATUSES = [
+  {
+    id: "Activo",
+    label: "Activo",
+    dot: "bg-emerald-500",
+    text: "text-emerald-600 dark:text-emerald-400",
+    bg: "bg-emerald-500/10"
+  },
+  {
+    id: "Pausado",
+    label: "Pausado",
+    dot: "bg-amber-500",
+    text: "text-amber-600 dark:text-amber-400",
+    bg: "bg-amber-500/10"
+  },
+  {
+    id: "Inactivo",
+    label: "Inactivo",
+    dot: "bg-slate-400",
+    text: "text-slate-500 dark:text-slate-400",
+    bg: "bg-slate-500/10"
+  }
+];
+var getClientStatus = (client) => CLIENT_STATUSES.find((s) => s.id === (client?.status || "Activo")) || CLIENT_STATUSES[0];
 var CardMenu = ({ items = [] }) => {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
@@ -7555,42 +7584,181 @@ var UsersAccessView = ({
     /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-800 dark:text-white truncate" }, log.description || `${log.action} \xB7 ${log.entityType}`), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap gap-2 mt-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300" }, log.action), /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-blue-50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400" }, log.entityType), log.status === "error" && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-red-50 text-red-600 dark:bg-red-500/20 dark:text-red-400" }, "Error"), log.status === "denied" && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" }, "Denegado"))), /* @__PURE__ */ React.createElement("div", { className: "text-right" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-bold text-slate-500 dark:text-slate-400" }, log.actor?.name || "Sistema"), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] text-slate-500 dark:text-slate-400" }, log.createdAt || "")))
   ))))));
 };
-var ClientsView = ({ clients, onAdd, onSelect }) => {
+var ManagerPicker = ({
+  managers = [],
+  value = "",
+  onChange,
+  legacyColorMap = {},
+  buttonClassName = "",
+  align = "left",
+  placeholder = "Sin asignar"
+}) => {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 240 });
+  const [q, setQ] = useState("");
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+  useEffect(() => {
+    if (!open) return void 0;
+    const onDoc = (e) => {
+      if (menuRef.current?.contains(e.target) || btnRef.current?.contains(e.target))
+        return;
+      setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [open]);
+  const current = managers.find((m) => m.id === value) || null;
+  const toggle = (e) => {
+    e.stopPropagation();
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const width = Math.max(240, r.width);
+      let left = align === "right" ? r.right - width : r.left;
+      if (left + width > window.innerWidth - 8)
+        left = window.innerWidth - width - 8;
+      if (left < 8) left = 8;
+      setCoords({ top: r.bottom + 6, left, width });
+      setQ("");
+    }
+    setOpen((o) => !o);
+  };
+  const pick = (e, id) => {
+    e.stopPropagation();
+    setOpen(false);
+    if (id !== value) onChange?.(id);
+  };
+  const filtered = q ? managers.filter(
+    (m) => (m.name || "").toLowerCase().includes(q.toLowerCase())
+  ) : managers;
+  return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      ref: btnRef,
+      type: "button",
+      onClick: toggle,
+      "aria-haspopup": "listbox",
+      "aria-expanded": open,
+      className: buttonClassName
+    },
+    /* @__PURE__ */ React.createElement(PersonAvatar, { person: current, size: 22, legacyColorMap }),
+    /* @__PURE__ */ React.createElement("span", { className: "truncate" }, current ? current.name : placeholder),
+    /* @__PURE__ */ React.createElement(Icon, { name: "ChevronDown", size: 14, className: "shrink-0 opacity-60" })
+  ), open && /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      ref: menuRef,
+      onClick: (e) => e.stopPropagation(),
+      style: {
+        position: "fixed",
+        top: coords.top,
+        left: coords.left,
+        width: coords.width,
+        zIndex: 9999
+      },
+      className: "rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl shadow-black/10 dark:shadow-black/50 overflow-hidden fade-in"
+    },
+    managers.length > 6 && /* @__PURE__ */ React.createElement("div", { className: "p-2 border-b border-slate-100 dark:border-slate-800" }, /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        autoFocus: true,
+        value: q,
+        onChange: (e) => setQ(e.target.value),
+        placeholder: "Buscar manager...",
+        className: "w-full text-sm px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 outline-none text-slate-700 dark:text-slate-200"
+      }
+    )),
+    /* @__PURE__ */ React.createElement("div", { className: "max-h-60 overflow-y-auto custom-scroll py-1" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        onClick: (e) => pick(e, ""),
+        className: "w-full flex items-center gap-2.5 px-3 py-2 text-left text-[13px] font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+      },
+      /* @__PURE__ */ React.createElement(PersonAvatar, { person: null, size: 22 }),
+      " Sin asignar"
+    ), filtered.map((m) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: m.id,
+        type: "button",
+        onClick: (e) => pick(e, m.id),
+        className: `w-full flex items-center gap-2.5 px-3 py-2 text-left text-[13px] font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 ${m.id === value ? "text-blue-600 dark:text-blue-400" : "text-slate-700 dark:text-slate-200"}`
+      },
+      /* @__PURE__ */ React.createElement(
+        PersonAvatar,
+        {
+          person: m,
+          size: 22,
+          legacyColorMap
+        }
+      ),
+      /* @__PURE__ */ React.createElement("span", { className: "truncate flex-1" }, m.name),
+      m.id === value && /* @__PURE__ */ React.createElement(Icon, { name: "Check", size: 15, className: "shrink-0" })
+    )), filtered.length === 0 && /* @__PURE__ */ React.createElement("p", { className: "px-3 py-3 text-xs text-slate-400 text-center" }, "Sin resultados"))
+  ));
+};
+var ClientsView = ({
+  clients,
+  managers = [],
+  legacyColorMap = {},
+  onAdd,
+  onSelect,
+  onReassignManager
+}) => {
   const [searchTerm, setSearchTerm] = useState("");
-  const filteredClients = clients.filter(
-    (c) => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.niche?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row justify-between items-start md:items-center gap-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl md:text-3xl font-bold text-slate-800 dark:text-white" }, "Cartera de Clientes"), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row w-full md:w-auto gap-3" }, /* @__PURE__ */ React.createElement(
+  const [statusFilter, setStatusFilter] = useState("all");
+  const statusFilters = [
+    { id: "all", label: "Todos" },
+    { id: "Activo", label: "Activos" },
+    { id: "Pausado", label: "Pausados" },
+    { id: "Inactivo", label: "Inactivos" }
+  ];
+  const filteredClients = clients.filter((c) => {
+    const term = searchTerm.toLowerCase();
+    const matchesSearch = c.name.toLowerCase().includes(term) || (c.niche || "").toLowerCase().includes(term);
+    if (!matchesSearch) return false;
+    if (statusFilter !== "all" && (c.status || "Activo") !== statusFilter)
+      return false;
+    return true;
+  });
+  return /* @__PURE__ */ React.createElement("div", { className: "space-y-5 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row justify-between items-start md:items-center gap-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl md:text-3xl font-bold text-slate-800 dark:text-white" }, "Cartera de Clientes"), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row w-full md:w-auto gap-3" }, /* @__PURE__ */ React.createElement(
     SearchBar,
     {
       searchTerm,
       setSearchTerm,
       placeholder: "Buscar cliente o rubro..."
     }
-  ), /* @__PURE__ */ React.createElement(Button, { onClick: onAdd, color: "blue", icon: "Plus" }, "Nuevo Cliente"))), filteredClients.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 h-64" }, /* @__PURE__ */ React.createElement(EmptyState, { icon: "Briefcase", text: "No hay clientes que coincidan." })) : /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" }, filteredClients.map((c) => {
-    const mood = c.mood || "";
-    const status = mood === "En Riesgo" ? {
-      label: "En riesgo",
-      dot: "bg-red-500",
-      text: "text-red-600 dark:text-red-400",
-      bg: "bg-red-500/10"
-    } : mood === "Neutral" ? {
-      label: "Neutral",
-      dot: "bg-amber-400",
-      text: "text-amber-600 dark:text-amber-400",
-      bg: "bg-amber-500/10"
-    } : {
-      label: "Activo",
-      dot: "bg-emerald-500",
-      text: "text-emerald-600 dark:text-emerald-400",
-      bg: "bg-emerald-500/10"
-    };
+  ), /* @__PURE__ */ React.createElement(Button, { onClick: onAdd, color: "blue", icon: "Plus" }, "Nuevo Cliente"))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 overflow-x-auto kanban-mobile-scroll" }, /* @__PURE__ */ React.createElement("div", { className: "flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0" }, statusFilters.map((f) => /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      key: f.id,
+      onClick: () => setStatusFilter(f.id),
+      className: `shrink-0 px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all ${statusFilter === f.id ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`
+    },
+    f.label
+  ))), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-medium text-slate-400 dark:text-slate-500 shrink-0" }, filteredClients.length, " de ", clients.length)), filteredClients.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 h-64" }, /* @__PURE__ */ React.createElement(EmptyState, { icon: "Briefcase", text: "No hay clientes que coincidan." })) : /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" }, filteredClients.map((c) => {
+    const status = getClientStatus(c);
+    const manager = managers.find((m) => m.id === c.managerId) || null;
+    const inactive = status.id === "Inactivo";
     return /* @__PURE__ */ React.createElement(
       "div",
       {
         key: c.id,
         onClick: () => onSelect(c),
-        className: "group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600/60 hover:-translate-y-0.5 transition-all cursor-pointer"
+        className: `group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600/60 hover:-translate-y-0.5 transition-all cursor-pointer ${inactive ? "opacity-70 hover:opacity-100" : ""}`
       },
       /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-3 mb-4" }, c.photo ? /* @__PURE__ */ React.createElement(
         "img",
@@ -7610,14 +7778,23 @@ var ClientsView = ({ clients, onAdd, onSelect }) => {
       /* @__PURE__ */ React.createElement("h3", { className: "text-base font-bold text-slate-800 dark:text-white truncate" }, c.name),
       /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate mt-0.5" }, c.niche || "Sin rubro"),
       c.package && /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-1 mt-3 text-[11px] font-semibold text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg" }, /* @__PURE__ */ React.createElement(Icon, { name: "Sparkles", size: 11 }), " ", c.package),
-      /* @__PURE__ */ React.createElement("div", { className: "pt-4 border-t border-slate-100 dark:border-slate-800 mt-4 flex items-center justify-between gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 truncate min-w-0" }, /* @__PURE__ */ React.createElement(
-        Icon,
+      /* @__PURE__ */ React.createElement("div", { className: "pt-4 border-t border-slate-100 dark:border-slate-800 mt-4 flex items-center justify-between gap-2" }, onReassignManager ? /* @__PURE__ */ React.createElement(
+        ManagerPicker,
         {
-          name: "UserCircle2",
-          size: 16,
-          className: "text-blue-400 dark:text-blue-500 shrink-0"
+          managers,
+          value: c.managerId || "",
+          legacyColorMap,
+          onChange: (id) => onReassignManager(c, id),
+          buttonClassName: "flex items-center gap-2 min-w-0 max-w-full text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-lg px-1.5 py-1 -ml-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
         }
-      ), /* @__PURE__ */ React.createElement("span", { className: "truncate" }, c.manager || "Sin asignar")), c.instagram && /* @__PURE__ */ React.createElement(
+      ) : /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 truncate min-w-0" }, /* @__PURE__ */ React.createElement(
+        PersonAvatar,
+        {
+          person: manager,
+          size: 22,
+          legacyColorMap
+        }
+      ), /* @__PURE__ */ React.createElement("span", { className: "truncate" }, manager ? manager.name : c.manager || "Sin asignar")), c.instagram && /* @__PURE__ */ React.createElement(
         "span",
         {
           className: "text-slate-400 dark:text-slate-500 group-hover:text-pink-500 transition-colors shrink-0",
@@ -7631,6 +7808,7 @@ var ClientsView = ({ clients, onAdd, onSelect }) => {
 var ClientDetail = ({
   client,
   managers,
+  legacyColorMap = {},
   onReassignManager,
   onBack,
   onUpdate,
@@ -7667,39 +7845,31 @@ var ClientDetail = ({
     alt: client.name,
     className: "h-20 w-20 rounded-2xl object-cover shadow-inner shrink-0 border border-white/10"
   }
-) : /* @__PURE__ */ React.createElement("div", { className: "h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl font-black shadow-inner shrink-0" }, client.name ? client.name.charAt(0).toUpperCase() : "C"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { className: "text-2xl md:text-3xl font-black" }, client.name), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mt-2 bg-white/5 px-3 py-1.5 rounded-lg inline-flex border border-white/10 relative transition-all hover:bg-white/10" }, /* @__PURE__ */ React.createElement(Icon, { name: "UserCircle2", size: 14, className: "text-blue-300" }), /* @__PURE__ */ React.createElement(
-  "select",
+) : /* @__PURE__ */ React.createElement("div", { className: "h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl font-black shadow-inner shrink-0" }, client.name ? client.name.charAt(0).toUpperCase() : "C"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { className: "text-2xl md:text-3xl font-black" }, client.name), /* @__PURE__ */ React.createElement("div", { className: "mt-2" }, /* @__PURE__ */ React.createElement(
+  ManagerPicker,
   {
+    managers,
     value: client.managerId || "",
-    onChange: (e) => onReassignManager(client, e.target.value),
-    className: "bg-transparent text-white font-bold text-xs outline-none cursor-pointer appearance-none pr-6 z-10 w-full"
-  },
-  /* @__PURE__ */ React.createElement("option", { value: "", className: "text-slate-800" }, "Asignar Account Manager..."),
-  managers.map((m) => /* @__PURE__ */ React.createElement("option", { key: m.id, value: m.id, className: "text-slate-800" }, m.name))
-), /* @__PURE__ */ React.createElement(
-  Icon,
-  {
-    name: "ChevronDown",
-    size: 12,
-    className: "text-blue-300 absolute right-3 pointer-events-none"
+    legacyColorMap,
+    onChange: (id) => onReassignManager(client, id),
+    placeholder: "Asignar Account Manager...",
+    buttonClassName: "flex items-center gap-2 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 text-white font-bold text-xs transition-all max-w-full"
   }
-)))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 bg-white/10 p-1 rounded-xl shrink-0 mt-4 md:mt-0" }, ["Contento", "Neutral", "En Riesgo"].map((m) => /* @__PURE__ */ React.createElement(
-  "button",
-  {
-    key: m,
-    onClick: () => onUpdate(client.id, { mood: m }),
-    "aria-label": `Marcar cliente como ${m}`,
-    "aria-pressed": client.mood === m,
-    className: `p-2 rounded-lg ${client.mood === m ? "bg-white/20" : "opacity-50 hover:opacity-100"}`
-  },
-  /* @__PURE__ */ React.createElement(
-    Icon,
+)))), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-start md:items-end gap-1.5 shrink-0 mt-4 md:mt-0" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-bold uppercase tracking-widest text-white/50" }, "Estado"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-1 bg-white/10 p-1 rounded-xl" }, CLIENT_STATUSES.map((s) => {
+  const active = (client.status || "Activo") === s.id;
+  return /* @__PURE__ */ React.createElement(
+    "button",
     {
-      name: m === "Contento" ? "Smile" : m === "Neutral" ? "Meh" : "Frown",
-      className: m === "Contento" ? "text-green-400" : m === "Neutral" ? "text-yellow-400" : "text-red-400"
-    }
-  )
-)))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-slate-100 dark:divide-slate-800" }, /* @__PURE__ */ React.createElement("div", { className: "lg:col-span-2 p-6 md:p-8 space-y-8" }, /* @__PURE__ */ React.createElement("div", { className: "bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Instagram", size: 14 }), " Redes"), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row gap-2" }, /* @__PURE__ */ React.createElement(
+      key: s.id,
+      onClick: () => onUpdate(client.id, { status: s.id }),
+      "aria-label": `Marcar cliente como ${s.label}`,
+      "aria-pressed": active,
+      className: `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${active ? "bg-white text-slate-800 shadow-sm" : "text-white/70 hover:text-white hover:bg-white/10"}`
+    },
+    /* @__PURE__ */ React.createElement("span", { className: `w-2 h-2 rounded-full ${s.dot}` }),
+    s.label
+  );
+})))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "p-6 md:p-8 space-y-8" }, /* @__PURE__ */ React.createElement("div", { className: "bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Instagram", size: 14 }), " Redes"), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row gap-2" }, /* @__PURE__ */ React.createElement(
   "input",
   {
     defaultValue: client.instagram,
@@ -7724,17 +7894,7 @@ var ClientDetail = ({
   },
   /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 14 }),
   " ELIMINAR CLIENTE"
-)), /* @__PURE__ */ React.createElement("div", { className: "p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "CheckCircle2", size: 14 }), " Workflow"), /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, ["week1", "week2", "week3", "week4"].map((w, i) => /* @__PURE__ */ React.createElement(
-  CheckItem,
-  {
-    key: w,
-    label: ["Estrategia", "Producci\xF3n", "Aprobaci\xF3n", "Reporte"][i],
-    checked: client.workflow?.[w] || false,
-    onToggle: () => onUpdate(client.id, {
-      [`workflow.${w}`]: !client.workflow?.[w]
-    })
-  }
-)))))));
+)))));
 var CalendarGrid = ({
   events,
   onAdd,
