@@ -9805,7 +9805,7 @@ const ClientsView = ({ clients, onAdd, onSelect }) => {
   return (
     <div className="space-y-6 fade-in">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">
+        <h2 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white">
           Cartera de Clientes
         </h2>
         <div className="flex flex-col md:flex-row w-full md:w-auto gap-3">
@@ -9825,36 +9825,88 @@ const ClientsView = ({ clients, onAdd, onSelect }) => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredClients.map((c) => (
-            <div
-              key={c.id}
-              onClick={() => onSelect(c)}
-              className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-xl hover:border-blue-300 dark:hover:border-blue-600 transition-all cursor-pointer relative"
-            >
-              <div className="flex justify-between mb-4">
-                <div className="h-14 w-14 bg-blue-50 dark:bg-blue-500/20 rounded-2xl flex items-center justify-center text-2xl font-black text-blue-600 dark:text-blue-400">
-                  {c.name ? c.name.charAt(0).toUpperCase() : "C"}
+          {filteredClients.map((c) => {
+            const mood = c.mood || "";
+            const status =
+              mood === "En Riesgo"
+                ? {
+                    label: "En riesgo",
+                    dot: "bg-red-500",
+                    text: "text-red-600 dark:text-red-400",
+                    bg: "bg-red-500/10",
+                  }
+                : mood === "Neutral"
+                  ? {
+                      label: "Neutral",
+                      dot: "bg-amber-400",
+                      text: "text-amber-600 dark:text-amber-400",
+                      bg: "bg-amber-500/10",
+                    }
+                  : {
+                      label: "Activo",
+                      dot: "bg-emerald-500",
+                      text: "text-emerald-600 dark:text-emerald-400",
+                      bg: "bg-emerald-500/10",
+                    };
+            return (
+              <div
+                key={c.id}
+                onClick={() => onSelect(c)}
+                className="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600/60 hover:-translate-y-0.5 transition-all cursor-pointer"
+              >
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  {c.photo ? (
+                    <img
+                      src={c.photo}
+                      alt={c.name}
+                      className="h-14 w-14 rounded-2xl object-cover border border-black/5 dark:border-white/10 shrink-0"
+                    />
+                  ) : (
+                    <div className="h-14 w-14 bg-blue-50 dark:bg-blue-500/15 rounded-2xl flex items-center justify-center text-2xl font-bold text-blue-600 dark:text-blue-400 shrink-0">
+                      {c.name ? c.name.charAt(0).toUpperCase() : "C"}
+                    </div>
+                  )}
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full shrink-0 ${status.bg} ${status.text}`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
+                    {status.label}
+                  </span>
                 </div>
-                <div
-                  className={`w-3 h-3 rounded-full shadow-sm border border-white dark:border-slate-900 ${c.mood === "En Riesgo" ? "bg-red-500 animate-pulse" : c.mood === "Neutral" ? "bg-amber-400" : "bg-green-500"}`}
-                ></div>
+                <h3 className="text-base font-bold text-slate-800 dark:text-white truncate">
+                  {c.name}
+                </h3>
+                <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate mt-0.5">
+                  {c.niche || "Sin rubro"}
+                </p>
+                {c.package && (
+                  <span className="inline-flex items-center gap-1 mt-3 text-[11px] font-semibold text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
+                    <Icon name="Sparkles" size={11} /> {c.package}
+                  </span>
+                )}
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 mt-4 flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 truncate min-w-0">
+                    <Icon
+                      name="UserCircle2"
+                      size={16}
+                      className="text-blue-400 dark:text-blue-500 shrink-0"
+                    />
+                    <span className="truncate">
+                      {c.manager || "Sin asignar"}
+                    </span>
+                  </span>
+                  {c.instagram && (
+                    <span
+                      className="text-slate-400 dark:text-slate-500 group-hover:text-pink-500 transition-colors shrink-0"
+                      title="Instagram"
+                    >
+                      <Icon name="Instagram" size={16} />
+                    </span>
+                  )}
+                </div>
               </div>
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white pr-4 truncate">
-                {c.name}
-              </h3>
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
-                {c.niche || "Sin rubro"}
-              </p>
-              <div className="pt-4 border-t border-slate-50 dark:border-slate-800 mt-4 flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 truncate">
-                <Icon
-                  name="UserCircle2"
-                  size={16}
-                  className="text-blue-400 dark:text-blue-500 shrink-0"
-                />{" "}
-                {c.manager || "Sin asignar"}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -9894,9 +9946,17 @@ const ClientDetail = ({
         </button>
 
         <div className="flex items-start md:items-center gap-6">
-          <div className="h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl font-black shadow-inner shrink-0">
-            {client.name ? client.name.charAt(0).toUpperCase() : "C"}
-          </div>
+          {client.photo ? (
+            <img
+              src={client.photo}
+              alt={client.name}
+              className="h-20 w-20 rounded-2xl object-cover shadow-inner shrink-0 border border-white/10"
+            />
+          ) : (
+            <div className="h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl font-black shadow-inner shrink-0">
+              {client.name ? client.name.charAt(0).toUpperCase() : "C"}
+            </div>
+          )}
           <div>
             <h1 className="text-2xl md:text-3xl font-black">{client.name}</h1>
 
@@ -12765,6 +12825,7 @@ const Modal = ({
           package: fd.package || "",
           instagram: fd.instagram || "",
           managerId: fd.managerId || "",
+          photo: fd.photo || "",
         });
       if (type === "manager")
         actions.updateManager(data.id, {
@@ -12830,6 +12891,7 @@ const Modal = ({
           package: fd.package || "",
           instagram: fd.instagram || "",
           managerId: fd.managerId || "",
+          photo: fd.photo || "",
         });
       if (type === "manager")
         actions.addManager({
@@ -12977,6 +13039,10 @@ const Modal = ({
 
             {type === "client" && (
               <>
+                <PhotoUploader
+                  defaultValue={data?.photo}
+                  label="Logo / Foto del cliente"
+                />
                 <Input
                   name="name"
                   placeholder="Nombre"

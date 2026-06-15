@@ -7560,37 +7560,73 @@ var ClientsView = ({ clients, onAdd, onSelect }) => {
   const filteredClients = clients.filter(
     (c) => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.niche?.toLowerCase().includes(searchTerm.toLowerCase())
   );
-  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row justify-between items-start md:items-center gap-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl md:text-3xl font-black text-slate-800 dark:text-white" }, "Cartera de Clientes"), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row w-full md:w-auto gap-3" }, /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row justify-between items-start md:items-center gap-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl md:text-3xl font-bold text-slate-800 dark:text-white" }, "Cartera de Clientes"), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row w-full md:w-auto gap-3" }, /* @__PURE__ */ React.createElement(
     SearchBar,
     {
       searchTerm,
       setSearchTerm,
       placeholder: "Buscar cliente o rubro..."
     }
-  ), /* @__PURE__ */ React.createElement(Button, { onClick: onAdd, color: "blue", icon: "Plus" }, "Nuevo Cliente"))), filteredClients.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 h-64" }, /* @__PURE__ */ React.createElement(EmptyState, { icon: "Briefcase", text: "No hay clientes que coincidan." })) : /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" }, filteredClients.map((c) => /* @__PURE__ */ React.createElement(
-    "div",
-    {
-      key: c.id,
-      onClick: () => onSelect(c),
-      className: "bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-xl hover:border-blue-300 dark:hover:border-blue-600 transition-all cursor-pointer relative"
-    },
-    /* @__PURE__ */ React.createElement("div", { className: "flex justify-between mb-4" }, /* @__PURE__ */ React.createElement("div", { className: "h-14 w-14 bg-blue-50 dark:bg-blue-500/20 rounded-2xl flex items-center justify-center text-2xl font-black text-blue-600 dark:text-blue-400" }, c.name ? c.name.charAt(0).toUpperCase() : "C"), /* @__PURE__ */ React.createElement(
+  ), /* @__PURE__ */ React.createElement(Button, { onClick: onAdd, color: "blue", icon: "Plus" }, "Nuevo Cliente"))), filteredClients.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 h-64" }, /* @__PURE__ */ React.createElement(EmptyState, { icon: "Briefcase", text: "No hay clientes que coincidan." })) : /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" }, filteredClients.map((c) => {
+    const mood = c.mood || "";
+    const status = mood === "En Riesgo" ? {
+      label: "En riesgo",
+      dot: "bg-red-500",
+      text: "text-red-600 dark:text-red-400",
+      bg: "bg-red-500/10"
+    } : mood === "Neutral" ? {
+      label: "Neutral",
+      dot: "bg-amber-400",
+      text: "text-amber-600 dark:text-amber-400",
+      bg: "bg-amber-500/10"
+    } : {
+      label: "Activo",
+      dot: "bg-emerald-500",
+      text: "text-emerald-600 dark:text-emerald-400",
+      bg: "bg-emerald-500/10"
+    };
+    return /* @__PURE__ */ React.createElement(
       "div",
       {
-        className: `w-3 h-3 rounded-full shadow-sm border border-white dark:border-slate-900 ${c.mood === "En Riesgo" ? "bg-red-500 animate-pulse" : c.mood === "Neutral" ? "bg-amber-400" : "bg-green-500"}`
-      }
-    )),
-    /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-bold text-slate-800 dark:text-white pr-4 truncate" }, c.name),
-    /* @__PURE__ */ React.createElement("p", { className: "text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate" }, c.niche || "Sin rubro"),
-    /* @__PURE__ */ React.createElement("div", { className: "pt-4 border-t border-slate-50 dark:border-slate-800 mt-4 flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 truncate" }, /* @__PURE__ */ React.createElement(
-      Icon,
-      {
-        name: "UserCircle2",
-        size: 16,
-        className: "text-blue-400 dark:text-blue-500 shrink-0"
-      }
-    ), " ", c.manager || "Sin asignar")
-  ))));
+        key: c.id,
+        onClick: () => onSelect(c),
+        className: "group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600/60 hover:-translate-y-0.5 transition-all cursor-pointer"
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-3 mb-4" }, c.photo ? /* @__PURE__ */ React.createElement(
+        "img",
+        {
+          src: c.photo,
+          alt: c.name,
+          className: "h-14 w-14 rounded-2xl object-cover border border-black/5 dark:border-white/10 shrink-0"
+        }
+      ) : /* @__PURE__ */ React.createElement("div", { className: "h-14 w-14 bg-blue-50 dark:bg-blue-500/15 rounded-2xl flex items-center justify-center text-2xl font-bold text-blue-600 dark:text-blue-400 shrink-0" }, c.name ? c.name.charAt(0).toUpperCase() : "C"), /* @__PURE__ */ React.createElement(
+        "span",
+        {
+          className: `inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full shrink-0 ${status.bg} ${status.text}`
+        },
+        /* @__PURE__ */ React.createElement("span", { className: `w-1.5 h-1.5 rounded-full ${status.dot}` }),
+        status.label
+      )),
+      /* @__PURE__ */ React.createElement("h3", { className: "text-base font-bold text-slate-800 dark:text-white truncate" }, c.name),
+      /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate mt-0.5" }, c.niche || "Sin rubro"),
+      c.package && /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-1 mt-3 text-[11px] font-semibold text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg" }, /* @__PURE__ */ React.createElement(Icon, { name: "Sparkles", size: 11 }), " ", c.package),
+      /* @__PURE__ */ React.createElement("div", { className: "pt-4 border-t border-slate-100 dark:border-slate-800 mt-4 flex items-center justify-between gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 truncate min-w-0" }, /* @__PURE__ */ React.createElement(
+        Icon,
+        {
+          name: "UserCircle2",
+          size: 16,
+          className: "text-blue-400 dark:text-blue-500 shrink-0"
+        }
+      ), /* @__PURE__ */ React.createElement("span", { className: "truncate" }, c.manager || "Sin asignar")), c.instagram && /* @__PURE__ */ React.createElement(
+        "span",
+        {
+          className: "text-slate-400 dark:text-slate-500 group-hover:text-pink-500 transition-colors shrink-0",
+          title: "Instagram"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "Instagram", size: 16 })
+      ))
+    );
+  })));
 };
 var ClientDetail = ({
   client,
@@ -7624,7 +7660,14 @@ var ClientDetail = ({
     className: "absolute top-4 right-4 text-slate-500 hover:text-white p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
   },
   /* @__PURE__ */ React.createElement(Icon, { name: "Edit", size: 18 })
-), /* @__PURE__ */ React.createElement("div", { className: "flex items-start md:items-center gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl font-black shadow-inner shrink-0" }, client.name ? client.name.charAt(0).toUpperCase() : "C"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { className: "text-2xl md:text-3xl font-black" }, client.name), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mt-2 bg-white/5 px-3 py-1.5 rounded-lg inline-flex border border-white/10 relative transition-all hover:bg-white/10" }, /* @__PURE__ */ React.createElement(Icon, { name: "UserCircle2", size: 14, className: "text-blue-300" }), /* @__PURE__ */ React.createElement(
+), /* @__PURE__ */ React.createElement("div", { className: "flex items-start md:items-center gap-6" }, client.photo ? /* @__PURE__ */ React.createElement(
+  "img",
+  {
+    src: client.photo,
+    alt: client.name,
+    className: "h-20 w-20 rounded-2xl object-cover shadow-inner shrink-0 border border-white/10"
+  }
+) : /* @__PURE__ */ React.createElement("div", { className: "h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl font-black shadow-inner shrink-0" }, client.name ? client.name.charAt(0).toUpperCase() : "C"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { className: "text-2xl md:text-3xl font-black" }, client.name), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mt-2 bg-white/5 px-3 py-1.5 rounded-lg inline-flex border border-white/10 relative transition-all hover:bg-white/10" }, /* @__PURE__ */ React.createElement(Icon, { name: "UserCircle2", size: 14, className: "text-blue-300" }), /* @__PURE__ */ React.createElement(
   "select",
   {
     value: client.managerId || "",
@@ -9791,7 +9834,8 @@ var Modal = ({
           niche: fd.niche || "",
           package: fd.package || "",
           instagram: fd.instagram || "",
-          managerId: fd.managerId || ""
+          managerId: fd.managerId || "",
+          photo: fd.photo || ""
         });
       if (type === "manager")
         actions.updateManager(data.id, {
@@ -9856,7 +9900,8 @@ var Modal = ({
           niche: fd.niche || "",
           package: fd.package || "",
           instagram: fd.instagram || "",
-          managerId: fd.managerId || ""
+          managerId: fd.managerId || "",
+          photo: fd.photo || ""
         });
       if (type === "manager")
         actions.addManager({
@@ -9980,6 +10025,12 @@ var Modal = ({
       /* @__PURE__ */ React.createElement("div", { className: "p-6 overflow-y-auto custom-scroll" }, /* @__PURE__ */ React.createElement("form", { onSubmit, className: "space-y-4" }, ["event", "accountTask", "editingTask", "managementTask"].includes(
         type
       ) && !isEdit && /* @__PURE__ */ React.createElement("div", { className: "text-center p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 mb-2" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-bold text-slate-500 dark:text-slate-400 uppercase" }, "Para el d\xEDa"), /* @__PURE__ */ React.createElement("p", { className: "text-lg font-black text-slate-800 dark:text-white capitalize" }, displayDate)), type === "client" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
+        PhotoUploader,
+        {
+          defaultValue: data?.photo,
+          label: "Logo / Foto del cliente"
+        }
+      ), /* @__PURE__ */ React.createElement(
         Input,
         {
           name: "name",
