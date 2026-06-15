@@ -4673,6 +4673,31 @@ function App() {
     }
   };
 
+  // Edición del perfil propio: cualquier usuario activo puede cambiar su
+  // nombre, profesión y foto (el backend limita los campos permitidos).
+  const updateMyProfile = async (data) => {
+    if (!currentUserProfile?.id) {
+      showToast("No hay un perfil para editar", "error");
+      return;
+    }
+    await runMutation({
+      permission: null,
+      action: "update",
+      entityType: "user",
+      entityId: currentUserProfile.id,
+      description: "Actualiza su propio perfil",
+      changes: { name: data.name, profession: data.profession },
+      successMessage: "Perfil actualizado",
+      execute: () =>
+        updateDoc(dataDoc("users", currentUserProfile.id), {
+          name: data.name || currentUserProfile.name || "",
+          profession: data.profession || "",
+          photo: data.photo || "",
+          updatedAt: nowIso(),
+        }),
+    });
+  };
+
   const saveRankingSettings = async (nextSettings) => {
     const normalizedSettings = sanitizeRankingSettings(nextSettings);
     const stamp = nowIso();
@@ -4996,26 +5021,39 @@ function App() {
             />
           )}
 
-          {isAdminConfigVisible && (
+          {currentUserProfile && (
             <>
               <div className="pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2">
                 Configuración
               </div>
-              {canAccessView(currentUserProfile, "control-center") && (
-                <SidebarItem
-                  active={view === "control-center"}
-                  onClick={() => handleNavigate("control-center")}
-                  icon="ClipboardList"
-                  label="Usuarios y accesos"
-                  color="purple"
-                />
-              )}
+              <SidebarItem
+                active={view === "settings"}
+                onClick={() => handleNavigate("settings")}
+                icon="User"
+                label="Mi Perfil"
+                color="purple"
+              />
+              {isAdminConfigVisible &&
+                canAccessView(currentUserProfile, "control-center") && (
+                  <SidebarItem
+                    active={view === "control-center"}
+                    onClick={() => handleNavigate("control-center")}
+                    icon="ClipboardList"
+                    label="Usuarios y accesos"
+                    color="purple"
+                  />
+                )}
             </>
           )}
         </nav>
 
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
-          <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => handleNavigate("settings")}
+            aria-label="Editar mi perfil"
+            className="w-full flex items-center gap-3 p-1 -m-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors text-left"
+          >
             {currentUserProfile?.photo ? (
               <img
                 src={currentUserProfile.photo}
@@ -5029,7 +5067,7 @@ function App() {
                 {(currentUserProfile?.name || "IN").slice(0, 2).toUpperCase()}
               </div>
             )}
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">
                 {currentUserProfile?.name || "Invitado"}
               </p>
@@ -5042,7 +5080,12 @@ function App() {
                 {sidebarFooterText}
               </p>
             </div>
-          </div>
+            <Icon
+              name="ChevronRight"
+              size={16}
+              className="text-slate-400 dark:text-slate-500 shrink-0"
+            />
+          </button>
           <div className="flex items-center gap-2">
             <span
               className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${
@@ -5394,6 +5437,17 @@ function App() {
                 })
               }
               onResendVerification={requestUserVerification}
+            />
+          )}
+          {view === "settings" && (
+            <ProfileSettingsView
+              profile={currentUserProfile}
+              roleLabel={
+                ROLE_DEFINITIONS[currentUserProfile?.role]?.label ||
+                currentUserProfile?.role ||
+                ""
+              }
+              onSave={updateMyProfile}
             />
           )}
           {view === "general-calendar" && (
@@ -7286,6 +7340,86 @@ const DashboardView = ({
             })()
           )}
         </div>
+      </div>
+    </div>
+  );
+};
+
+// Vista "Configuración" con la sección de Perfil (editar perfil propio).
+const ProfileSettingsView = ({ profile, roleLabel, onSave }) => {
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(e.currentTarget).entries());
+    onSave({
+      name: fd.name || "",
+      profession: fd.profession || "",
+      photo: fd.photo || "",
+    });
+  };
+  return (
+    <div className="space-y-6 fade-in max-w-2xl">
+      <div>
+        <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">
+          Configuración
+        </h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          Administra tu perfil personal.
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-300">
+          <Icon name="User" size={15} /> Perfil
+        </span>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+        {!profile?.id ? (
+          <EmptyState icon="User" text="Inicia sesión para editar tu perfil." />
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <PhotoUploader defaultValue={profile.photo} />
+            <Input
+              name="name"
+              label="Nombre"
+              placeholder="Tu nombre"
+              defaultValue={profile.name}
+              required
+            />
+            <Input
+              name="profession"
+              label="Profesión / Cargo"
+              placeholder="ej. Director de agencia"
+              defaultValue={profile.profession}
+            />
+            <div>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">
+                Correo
+              </label>
+              <div className="w-full p-3 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-500 dark:text-slate-400 text-sm flex items-center gap-2">
+                <Icon name="Mail" size={15} />
+                <span className="truncate">{profile.email || "—"}</span>
+                <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
+                  No editable
+                </span>
+              </div>
+            </div>
+            {roleLabel && (
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">
+                  Rol
+                </label>
+                <div className="w-full p-3 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-500 dark:text-slate-400 text-sm flex items-center gap-2">
+                  <Icon name="ShieldCheck" size={15} />
+                  {roleLabel}
+                </div>
+              </div>
+            )}
+            <Button type="submit" full color="purple" icon="Save">
+              Guardar cambios
+            </Button>
+          </form>
+        )}
       </div>
     </div>
   );

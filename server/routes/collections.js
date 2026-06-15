@@ -40,6 +40,25 @@ const ensureCollectionPermission = (req, action) => {
     return { userRecord, collectionName };
 };
 
+// Campos que un usuario puede editar de su propio perfil (sin ser admin).
+const PROFILE_SELF_FIELDS = new Set(['name', 'profession', 'photo', 'updatedAt']);
+
+const canUpdateOwnUser = (userRecord, existing = null) => {
+    if (!existing) return false;
+    const userId = String(userRecord?.id || '');
+    if (userId && String(existing.id || '') === userId) return true;
+    const userEmail = normalizeEmail(userRecord?.email);
+    return Boolean(userEmail && existing.email && normalizeEmail(existing.email) === userEmail);
+};
+
+const pickSelfProfileFields = (payload = {}) => {
+    const next = {};
+    for (const key of Object.keys(payload || {})) {
+        if (PROFILE_SELF_FIELDS.has(key)) next[key] = payload[key];
+    }
+    return next;
+};
+
 const canUpdateOwnManagementTask = (userRecord, existing = null) => {
     if (!existing || !hasPermission(userRecord, 'create_management_tasks')) return false;
     const userId = String(userRecord?.id || '');
@@ -67,7 +86,12 @@ const ensureCollectionUpdatePermission = async (req, recordId) => {
     }
 
     if (hasPermission(userRecord, permission) || (collectionName === 'management_tasks' && canUpdateOwnManagementTask(userRecord, existing))) {
-        return { userRecord, collectionName, existing };
+        return { userRecord, collectionName, existing, selfEdit: false };
+    }
+
+    // Cualquier usuario activo puede editar su propio perfil (campos limitados).
+    if (collectionName === 'users' && canUpdateOwnUser(userRecord, existing)) {
+        return { userRecord, collectionName, existing, selfEdit: true };
     }
 
     throw createHttpError(403, 'No tienes permisos para esta accion.', 'auth/insufficient-permission');
@@ -218,30 +242,32 @@ router.post('/:collectionName', asyncHandler(async (req, res) => {
 }));
 
 router.put('/:collectionName/:recordId', asyncHandler(async (req, res) => {
-    const { collectionName, userRecord, existing } = await ensureCollectionUpdatePermission(req, req.params.recordId);
+    const { collectionName, userRecord, existing, selfEdit } = await ensureCollectionUpdatePermission(req, req.params.recordId);
+    const rawPayload = req.body?.data || {};
     const record = await upsertRecord({
         collectionName,
         recordId: req.params.recordId,
         payload: prepareCollectionPayload({
             collectionName,
-            payload: req.body?.data || {},
+            payload: selfEdit ? pickSelfProfileFields(rawPayload) : rawPayload,
             existing,
             actor: userRecord,
             isCreate: false
         }),
-        merge: req.body?.merge !== false
+        merge: selfEdit ? true : (req.body?.merge !== false)
     });
     res.json({ record });
 }));
 
 router.patch('/:collectionName/:recordId', asyncHandler(async (req, res) => {
-    const { collectionName, userRecord, existing } = await ensureCollectionUpdatePermission(req, req.params.recordId);
+    const { collectionName, userRecord, existing, selfEdit } = await ensureCollectionUpdatePermission(req, req.params.recordId);
+    const rawPayload = req.body?.data || {};
     const record = await upsertRecord({
         collectionName,
         recordId: req.params.recordId,
         payload: prepareCollectionPayload({
             collectionName,
-            payload: req.body?.data || {},
+            payload: selfEdit ? pickSelfProfileFields(rawPayload) : rawPayload,
             existing,
             actor: userRecord,
             isCreate: false
