@@ -3723,6 +3723,8 @@ function App() {
         email,
         role: requestedRole,
         isActive: nextActive,
+        profession: data.profession || "",
+        photo: data.photo || "",
         createdAt: requestedAt,
         updatedAt: requestedAt,
         lastSeenAt: "",
@@ -3818,6 +3820,8 @@ function App() {
         role: nextRole,
         managementKey: nextManagementKey,
         isActive: nextActive,
+        profession: data.profession || "",
+        photo: data.photo || "",
         emailVerified: nextEmailVerified,
         emailVerification: nextVerification,
         updatedAt: nowIso()
@@ -4007,14 +4011,14 @@ function App() {
     {
       className: `fixed md:relative z-50 h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col w-64 shrink-0 transition-transform duration-300 top-0 left-0 ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`
     },
-    /* @__PURE__ */ React.createElement("div", { className: "p-8 hidden md:block" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 mb-1" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "w-8 h-8 text-lg" }), /* @__PURE__ */ React.createElement("h1", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "CLUSTER")), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] uppercase font-bold text-slate-500 pl-11" }, "Agency OS")),
+    /* @__PURE__ */ React.createElement("div", { className: "px-5 pt-6 pb-3 hidden md:block" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "w-9 h-9 text-lg" }), /* @__PURE__ */ React.createElement("div", { className: "leading-none" }, /* @__PURE__ */ React.createElement("h1", { className: "text-xl font-bold text-slate-800 dark:text-white tracking-tight" }, "CLUSTER"), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] uppercase font-semibold text-slate-400 dark:text-slate-500 tracking-widest mt-1" }, "Agency OS")))),
     /* @__PURE__ */ React.createElement(
       "nav",
       {
         className: "flex-1 px-4 space-y-1 pt-20 md:pt-4 overflow-y-auto custom-scroll",
         "aria-label": "Navegaci\xF3n principal"
       },
-      /* @__PURE__ */ React.createElement("div", { className: "pt-1 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider" }, "Principal"),
+      /* @__PURE__ */ React.createElement("div", { className: "pt-1 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest" }, "Principal"),
       canAccessView(currentUserProfile, "dashboard") && /* @__PURE__ */ React.createElement(
         SidebarItem,
         {
@@ -4025,7 +4029,7 @@ function App() {
           color: "purple"
         }
       ),
-      /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2" }, "Clientes & equipo"),
+      /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2" }, "Clientes & equipo"),
       canAccessView(currentUserProfile, "clients") && /* @__PURE__ */ React.createElement(
         SidebarItem,
         {
@@ -4056,7 +4060,7 @@ function App() {
           color: "rose"
         }
       ),
-      /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2" }, "Salas de trabajo"),
+      /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2" }, "Salas de trabajo"),
       canAccessView(currentUserProfile, "account-room") && /* @__PURE__ */ React.createElement(
         SidebarItem,
         {
@@ -4093,7 +4097,7 @@ function App() {
           badgeColor: urgentEditions > 0 ? "bg-red-500 text-white animate-pulse" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
         }
       ),
-      /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2" }, "Calendario"),
+      /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2" }, "Calendario"),
       canAccessView(currentUserProfile, "general-calendar") && /* @__PURE__ */ React.createElement(
         SidebarItem,
         {
@@ -4124,7 +4128,7 @@ function App() {
           color: "emerald"
         }
       ),
-      isAdminConfigVisible && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2" }, "Configuraci\xF3n"), canAccessView(currentUserProfile, "control-center") && /* @__PURE__ */ React.createElement(
+      isAdminConfigVisible && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2" }, "Configuraci\xF3n"), canAccessView(currentUserProfile, "control-center") && /* @__PURE__ */ React.createElement(
         SidebarItem,
         {
           active: view === "control-center",
@@ -4135,13 +4139,20 @@ function App() {
         }
       ))
     ),
-    /* @__PURE__ */ React.createElement("div", { className: "p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3" }, /* @__PURE__ */ React.createElement(
+    /* @__PURE__ */ React.createElement("div", { className: "p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3" }, currentUserProfile?.photo ? /* @__PURE__ */ React.createElement(
+      "img",
+      {
+        src: currentUserProfile.photo,
+        alt: currentUserProfile?.name || "Perfil",
+        className: "w-10 h-10 rounded-full object-cover border border-black/5 dark:border-white/10 shrink-0"
+      }
+    ) : /* @__PURE__ */ React.createElement(
       "div",
       {
-        className: `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${profileBlocked ? "bg-red-500" : authEmail ? "bg-gradient-to-tr from-purple-500 to-indigo-500" : "bg-slate-500"}`
+        className: `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${profileBlocked ? "bg-red-500" : authEmail ? "bg-gradient-to-tr from-purple-500 to-indigo-500" : "bg-slate-500"}`
       },
       (currentUserProfile?.name || "IN").slice(0, 2).toUpperCase()
-    ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-700 dark:text-slate-200 truncate" }, currentUserProfile?.name || "Invitado"), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase truncate" }, sidebarFooterText))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-700 dark:text-slate-200 truncate" }, currentUserProfile?.name || "Invitado"), currentUserProfile?.profession && /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-semibold text-slate-500 dark:text-slate-400 truncate" }, currentUserProfile.profession), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase truncate" }, sidebarFooterText))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
       "span",
       {
         className: `text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${profileBlocked ? "bg-red-50 text-red-600 dark:bg-red-500/20 dark:text-red-400" : currentVerificationMeta.color === "emerald" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400" : currentVerificationMeta.color === "amber" ? "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" : currentVerificationMeta.color === "blue" ? "bg-blue-50 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"}`
@@ -4646,30 +4657,22 @@ var SidebarItem = ({
   {
     onClick,
     "aria-current": active ? "page" : void 0,
-    className: `w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 group ${active ? `bg-${color}-50 dark:bg-${color}-500/20 text-${color}-700 dark:text-${color}-300 shadow-sm border-${color}-100 dark:border-${color}-500/30` : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200 border-transparent"}`
+    className: `relative w-full flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-lg transition-colors group ${active ? `bg-${color}-500/10 text-${color}-700 dark:text-${color}-300` : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-800 dark:hover:text-slate-200"}`
   },
-  /* @__PURE__ */ React.createElement(
-    "div",
-    {
-      className: `transition-transform duration-200 ${active ? "scale-110" : "group-hover:scale-110"} text-[inherit]`
-    },
-    /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 20 })
-  ),
-  /* @__PURE__ */ React.createElement("span", { className: "font-bold text-sm flex-1 text-left text-[inherit]" }, label),
-  badge && /* @__PURE__ */ React.createElement(
+  active && /* @__PURE__ */ React.createElement(
     "span",
     {
-      className: `text-[10px] font-black px-2 py-0.5 rounded-full ${badgeColor}`
+      className: `absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-${color}-500`
+    }
+  ),
+  /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 19, className: "shrink-0 text-[inherit]" }),
+  /* @__PURE__ */ React.createElement("span", { className: "font-semibold text-[13.5px] flex-1 text-left text-[inherit] truncate" }, label),
+  badge != null && /* @__PURE__ */ React.createElement(
+    "span",
+    {
+      className: `text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor}`
     },
     badge
-  ),
-  active && !badge && /* @__PURE__ */ React.createElement(
-    Icon,
-    {
-      name: "ChevronRight",
-      size: 14,
-      className: `ml-auto text-${color}-400 dark:text-${color}-500`
-    }
   )
 );
 var Button = ({
@@ -5039,6 +5042,94 @@ var Input = ({ label, id, className = "", ...props }) => {
     }
   ));
 };
+var PhotoUploader = ({
+  name = "photo",
+  defaultValue = "",
+  label = "Foto de perfil"
+}) => {
+  const [photo, setPhoto] = useState(defaultValue || "");
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef(null);
+  const handleFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    setBusy(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 240;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          setPhoto(canvas.toDataURL("image/jpeg", 0.82));
+        } catch (err) {
+          setPhoto(ev.target.result);
+        }
+        setBusy(false);
+      };
+      img.onerror = () => setBusy(false);
+      img.src = ev.target.result;
+    };
+    reader.onerror = () => setBusy(false);
+    reader.readAsDataURL(file);
+  };
+  return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1" }, label), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "w-16 h-16 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0" }, photo ? /* @__PURE__ */ React.createElement(
+    "img",
+    {
+      src: photo,
+      alt: "Foto de perfil",
+      className: "w-full h-full object-cover"
+    }
+  ) : /* @__PURE__ */ React.createElement(
+    Icon,
+    {
+      name: "User",
+      size: 26,
+      className: "text-slate-400 dark:text-slate-500"
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-2" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => fileRef.current?.click(),
+      className: "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+    },
+    /* @__PURE__ */ React.createElement(
+      Icon,
+      {
+        name: busy ? "Loader2" : "UserPlus",
+        size: 15,
+        className: busy ? "animate-spin" : ""
+      }
+    ),
+    photo ? "Cambiar foto" : "Subir foto"
+  ), photo && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => setPhoto(""),
+      className: "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 15 }),
+    " Quitar"
+  ))), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      ref: fileRef,
+      type: "file",
+      accept: "image/*",
+      onChange: handleFile,
+      className: "hidden"
+    }
+  ), /* @__PURE__ */ React.createElement("input", { type: "hidden", name, value: photo }));
+};
 var CheckItem = ({ label, checked, onToggle }) => /* @__PURE__ */ React.createElement(
   "button",
   {
@@ -5115,7 +5206,7 @@ var buildRingSegments = (segments, startAngle = -90, totalAngle = 360, gapAngle 
 var CompactMetricBar = ({ label, value, color = "slate", meta, helper }) => {
   const palette = getDashboardPalette(color);
   const safeValue = clampPercent(value);
-  return /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "mb-1.5 flex items-start justify-between gap-3" }, /* @__PURE__ */ React.createElement("span", { className: "min-w-0 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400" }, label), /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "mb-1.5 flex items-start justify-between gap-3" }, /* @__PURE__ */ React.createElement("span", { className: "min-w-0 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, label), /* @__PURE__ */ React.createElement(
     "span",
     {
       className: "shrink-0 text-[11px] font-bold",
@@ -5533,7 +5624,7 @@ var DashboardView = ({
         className: `mt-1 w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${isDateBeforeDateString(t.date, todayStr) ? "bg-red-500" : "bg-amber-500"}`
       }
     ),
-    /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "break-words text-sm font-bold leading-tight text-slate-800 dark:text-slate-100 group-hover:text-purple-600 transition-colors" }, t.title), /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-[0.14em]" }, t._type), /* @__PURE__ */ React.createElement(
+    /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "break-words text-sm font-bold leading-tight text-slate-800 dark:text-slate-100 group-hover:text-purple-600 transition-colors" }, t.title), /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-widest" }, t._type), /* @__PURE__ */ React.createElement(
       "span",
       {
         className: `text-[9px] font-bold break-words ${isDateBeforeDateString(t.date, todayStr) ? "text-red-500" : "text-slate-500"}`
@@ -5628,7 +5719,7 @@ var DashboardView = ({
           ms.score,
           "%"
         ))),
-        /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800/80 dark:bg-slate-900/40" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400" }, "Tareas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.completedTasks, "/", ms.totalTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "resueltas")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400" }, "Temprano"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.earlyCount), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, ms.onTimeCount, " a tiempo")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400" }, "Planning"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.plannedTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "preparadas")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400" }, "Ideas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.creativitySignals), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "senales"))),
+        /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800/80 dark:bg-slate-900/40" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Tareas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.completedTasks, "/", ms.totalTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "resueltas")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Temprano"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.earlyCount), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, ms.onTimeCount, " a tiempo")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Planning"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.plannedTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "preparadas")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Ideas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.creativitySignals), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "senales"))),
         /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ React.createElement(
           CompactMetricBar,
           {
@@ -5732,13 +5823,20 @@ var TeamView = ({
         },
         /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 16 })
       )),
-      /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-4" }, /* @__PURE__ */ React.createElement(
+      /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-4" }, person.photo ? /* @__PURE__ */ React.createElement(
+        "img",
+        {
+          src: person.photo,
+          alt: person.name,
+          className: "h-14 w-14 rounded-xl object-cover shadow-sm border border-black/5 dark:border-white/5 shrink-0"
+        }
+      ) : /* @__PURE__ */ React.createElement(
         "div",
         {
-          className: `h-14 w-14 ${style.bg} rounded-xl flex items-center justify-center text-2xl font-black ${style.text} shadow-sm border border-black/5 dark:border-white/5`
+          className: `h-14 w-14 ${style.bg} rounded-xl flex items-center justify-center text-2xl font-black ${style.text} shadow-sm border border-black/5 dark:border-white/5 shrink-0`
         },
         person.name ? person.name.charAt(0).toUpperCase() : "?"
-      ), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "font-bold text-lg text-slate-800 dark:text-white pr-16 md:pr-12 truncate" }, person.name), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400 truncate" }, person.email || "Miembro del equipo")))
+      ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("h3", { className: "font-bold text-lg text-slate-800 dark:text-white pr-16 md:pr-12 truncate" }, person.name), person.profession && /* @__PURE__ */ React.createElement("p", { className: "text-xs font-semibold text-slate-600 dark:text-slate-300 truncate" }, person.profession), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400 truncate" }, person.email || "Miembro del equipo")))
     );
   })));
 };
@@ -5883,7 +5981,8 @@ var buildAssignee = (person, legacyColorMap = {}) => {
   return {
     name: person.name || "Sin asignar",
     initials: getInitials(person.name),
-    className: `bg-${family}-600 text-white`
+    className: `bg-${family}-600 text-white`,
+    photo: person.photo || ""
   };
 };
 var CardMenu = ({ items = [] }) => {
@@ -6012,7 +6111,15 @@ var KanbanCard = ({
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "CalendarDays", size: 12, className: "shrink-0" }),
       due.label
-    ) : /* @__PURE__ */ React.createElement("span", null), assignee ? /* @__PURE__ */ React.createElement(
+    ) : /* @__PURE__ */ React.createElement("span", null), assignee ? assignee.photo ? /* @__PURE__ */ React.createElement(
+      "img",
+      {
+        src: assignee.photo,
+        alt: assignee.name,
+        title: assignee.name,
+        className: "w-6 h-6 rounded-full object-cover shrink-0 border border-black/5 dark:border-white/10"
+      }
+    ) : /* @__PURE__ */ React.createElement(
       "span",
       {
         title: assignee.name,
@@ -6959,7 +7066,8 @@ var ManagementRoomView = ({
             assignee: member ? {
               name: member.name,
               initials: getInitials(member.name),
-              className: `bg-${AVATAR_FAMILY[member.color] || "violet"}-600 text-white`
+              className: `bg-${AVATAR_FAMILY[member.color] || "violet"}-600 text-white`,
+              photo: member.photo || ""
             } : null,
             menuItems
           }
@@ -9604,12 +9712,16 @@ var Modal = ({
       if (type === "manager")
         actions.updateManager(data.id, {
           name: fd.name || "",
-          email: fd.email || ""
+          email: fd.email || "",
+          profession: fd.profession || "",
+          photo: fd.photo || ""
         });
       if (type === "editor")
         actions.updateEditor(data.id, {
           name: fd.name || "",
-          email: fd.email || ""
+          email: fd.email || "",
+          profession: fd.profession || "",
+          photo: fd.photo || ""
         });
       if (type === "event")
         actions.updateEvent(data.id, {
@@ -9649,7 +9761,9 @@ var Modal = ({
           name: fd.name || "",
           email: fd.email || "",
           role: fd.role || "viewer",
-          isActive: fd.isActive === "true"
+          isActive: fd.isActive === "true",
+          profession: fd.profession || "",
+          photo: fd.photo || ""
         });
     } else {
       if (type === "client")
@@ -9664,10 +9778,17 @@ var Modal = ({
         actions.addManager({
           name: fd.name || "",
           email: fd.email || "",
+          profession: fd.profession || "",
+          photo: fd.photo || "",
           assignedAccounts: []
         });
       if (type === "editor")
-        actions.addEditor({ name: fd.name || "", email: fd.email || "" });
+        actions.addEditor({
+          name: fd.name || "",
+          email: fd.email || "",
+          profession: fd.profession || "",
+          photo: fd.photo || ""
+        });
       if (type === "event")
         actions.addEvent({
           date: data.date,
@@ -9710,7 +9831,9 @@ var Modal = ({
           name: fd.name || "",
           email: fd.email || "",
           role: fd.role || "viewer",
-          isActive: fd.isActive === "true"
+          isActive: fd.isActive === "true",
+          profession: fd.profession || "",
+          photo: fd.photo || ""
         });
     }
   };
@@ -9812,7 +9935,7 @@ var Modal = ({
         },
         /* @__PURE__ */ React.createElement("option", { value: "" }, "Asignar Manager (Opcional)"),
         managers.map((m) => /* @__PURE__ */ React.createElement("option", { key: m.id, value: m.id }, m.name))
-      )), type === "manager" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
+      )), type === "manager" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(PhotoUploader, { defaultValue: data?.photo }), /* @__PURE__ */ React.createElement(
         Input,
         {
           name: "name",
@@ -9823,19 +9946,33 @@ var Modal = ({
       ), /* @__PURE__ */ React.createElement(
         Input,
         {
+          name: "profession",
+          placeholder: "Profesi\xF3n / Cargo (ej. Account Manager)",
+          defaultValue: data?.profession
+        }
+      ), /* @__PURE__ */ React.createElement(
+        Input,
+        {
           name: "email",
           type: "email",
           placeholder: "Correo",
           defaultValue: data?.email,
           required: true
         }
-      )), type === "editor" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
+      )), type === "editor" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(PhotoUploader, { defaultValue: data?.photo }), /* @__PURE__ */ React.createElement(
         Input,
         {
           name: "name",
           placeholder: "Nombre del Editor",
           defaultValue: data?.name,
           required: true
+        }
+      ), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          name: "profession",
+          placeholder: "Profesi\xF3n / Cargo (ej. Editor de video)",
+          defaultValue: data?.profession
         }
       ), /* @__PURE__ */ React.createElement(
         Input,
@@ -10066,7 +10203,7 @@ var Modal = ({
           defaultChecked: data?.notificationsEnabled !== false,
           className: "w-4 h-4 accent-violet-600"
         }
-      ), /* @__PURE__ */ React.createElement("div", { className: "flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-700 dark:text-slate-200" }, "Recordar por correo"), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] text-slate-500 dark:text-slate-400" }, "Envia avisos al asignado 8 horas antes, al vencer y cada 24 horas si sigue abierta."))), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] text-slate-500 dark:text-slate-400 -mt-2" }, "El integrante asignado debe tener correo para que esta automatizacion funcione.")), type === "user" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
+      ), /* @__PURE__ */ React.createElement("div", { className: "flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-700 dark:text-slate-200" }, "Recordar por correo"), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] text-slate-500 dark:text-slate-400" }, "Envia avisos al asignado 8 horas antes, al vencer y cada 24 horas si sigue abierta."))), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] text-slate-500 dark:text-slate-400 -mt-2" }, "El integrante asignado debe tener correo para que esta automatizacion funcione.")), type === "user" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(PhotoUploader, { defaultValue: data?.photo }), /* @__PURE__ */ React.createElement(
         Input,
         {
           name: "name",
@@ -10074,6 +10211,13 @@ var Modal = ({
           defaultValue: data?.name,
           required: true,
           autoFocus: true
+        }
+      ), /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          name: "profession",
+          placeholder: "Profesi\xF3n / Cargo",
+          defaultValue: data?.profession
         }
       ), /* @__PURE__ */ React.createElement(
         Input,

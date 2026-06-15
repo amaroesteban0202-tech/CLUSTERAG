@@ -4516,6 +4516,8 @@ function App() {
           email,
           role: requestedRole,
           isActive: nextActive,
+          profession: data.profession || "",
+          photo: data.photo || "",
           createdAt: requestedAt,
           updatedAt: requestedAt,
           lastSeenAt: "",
@@ -4628,6 +4630,8 @@ function App() {
           role: nextRole,
           managementKey: nextManagementKey,
           isActive: nextActive,
+          profession: data.profession || "",
+          photo: data.photo || "",
           emailVerified: nextEmailVerified,
           emailVerification: nextVerification,
           updatedAt: nowIso(),
@@ -4842,23 +4846,25 @@ function App() {
       <aside
         className={`fixed md:relative z-50 h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col w-64 shrink-0 transition-transform duration-300 top-0 left-0 ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >
-        <div className="p-8 hidden md:block">
-          <div className="flex items-center gap-3 mb-1">
-            <AgencyLogo className="w-8 h-8 text-lg" />
-            <h1 className="text-2xl font-black text-slate-800 dark:text-white">
-              CLUSTER
-            </h1>
+        <div className="px-5 pt-6 pb-3 hidden md:block">
+          <div className="flex items-center gap-3">
+            <AgencyLogo className="w-9 h-9 text-lg" />
+            <div className="leading-none">
+              <h1 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">
+                CLUSTER
+              </h1>
+              <p className="text-[10px] uppercase font-semibold text-slate-400 dark:text-slate-500 tracking-widest mt-1">
+                Agency OS
+              </p>
+            </div>
           </div>
-          <p className="text-[10px] uppercase font-bold text-slate-500 pl-11">
-            Agency OS
-          </p>
         </div>
 
         <nav
           className="flex-1 px-4 space-y-1 pt-20 md:pt-4 overflow-y-auto custom-scroll"
           aria-label="Navegación principal"
         >
-          <div className="pt-1 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <div className="pt-1 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
             Principal
           </div>
           {canAccessView(currentUserProfile, "dashboard") && (
@@ -4871,7 +4877,7 @@ function App() {
             />
           )}
 
-          <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">
+          <div className="pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2">
             Clientes & equipo
           </div>
           {canAccessView(currentUserProfile, "clients") && (
@@ -4902,7 +4908,7 @@ function App() {
             />
           )}
 
-          <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">
+          <div className="pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2">
             Salas de trabajo
           </div>
           {canAccessView(currentUserProfile, "account-room") && (
@@ -4959,7 +4965,7 @@ function App() {
             />
           )}
 
-          <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">
+          <div className="pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2">
             Calendario
           </div>
           {canAccessView(currentUserProfile, "general-calendar") && (
@@ -4992,7 +4998,7 @@ function App() {
 
           {isAdminConfigVisible && (
             <>
-              <div className="pt-4 pb-2 pl-4 text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">
+              <div className="pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2">
                 Configuración
               </div>
               {canAccessView(currentUserProfile, "control-center") && (
@@ -5010,15 +5016,28 @@ function App() {
 
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
           <div className="flex items-center gap-3">
-            <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${profileBlocked ? "bg-red-500" : authEmail ? "bg-gradient-to-tr from-purple-500 to-indigo-500" : "bg-slate-500"}`}
-            >
-              {(currentUserProfile?.name || "IN").slice(0, 2).toUpperCase()}
-            </div>
+            {currentUserProfile?.photo ? (
+              <img
+                src={currentUserProfile.photo}
+                alt={currentUserProfile?.name || "Perfil"}
+                className="w-10 h-10 rounded-full object-cover border border-black/5 dark:border-white/10 shrink-0"
+              />
+            ) : (
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${profileBlocked ? "bg-red-500" : authEmail ? "bg-gradient-to-tr from-purple-500 to-indigo-500" : "bg-slate-500"}`}
+              >
+                {(currentUserProfile?.name || "IN").slice(0, 2).toUpperCase()}
+              </div>
+            )}
             <div className="min-w-0">
               <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">
                 {currentUserProfile?.name || "Invitado"}
               </p>
+              {currentUserProfile?.profession && (
+                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 truncate">
+                  {currentUserProfile.profession}
+                </p>
+              )}
               <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase truncate">
                 {sidebarFooterText}
               </p>
@@ -5623,29 +5642,23 @@ const SidebarItem = ({
   <button
     onClick={onClick}
     aria-current={active ? "page" : undefined}
-    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 group ${active ? `bg-${color}-50 dark:bg-${color}-500/20 text-${color}-700 dark:text-${color}-300 shadow-sm border-${color}-100 dark:border-${color}-500/30` : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200 border-transparent"}`}
+    className={`relative w-full flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-lg transition-colors group ${active ? `bg-${color}-500/10 text-${color}-700 dark:text-${color}-300` : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-800 dark:hover:text-slate-200"}`}
   >
-    <div
-      className={`transition-transform duration-200 ${active ? "scale-110" : "group-hover:scale-110"} text-[inherit]`}
-    >
-      <Icon name={icon} size={20} />
-    </div>
-    <span className="font-bold text-sm flex-1 text-left text-[inherit]">
+    {active && (
+      <span
+        className={`absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-${color}-500`}
+      />
+    )}
+    <Icon name={icon} size={19} className="shrink-0 text-[inherit]" />
+    <span className="font-semibold text-[13.5px] flex-1 text-left text-[inherit] truncate">
       {label}
     </span>
-    {badge && (
+    {badge != null && (
       <span
-        className={`text-[10px] font-black px-2 py-0.5 rounded-full ${badgeColor}`}
+        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor}`}
       >
         {badge}
       </span>
-    )}
-    {active && !badge && (
-      <Icon
-        name="ChevronRight"
-        size={14}
-        className={`ml-auto text-${color}-400 dark:text-${color}-500`}
-      />
     )}
   </button>
 );
@@ -6150,6 +6163,105 @@ const Input = ({ label, id, className = "", ...props }) => {
   );
 };
 
+// Subida de foto de perfil: comprime a un JPEG pequeño (data URL) en el
+// navegador y lo expone como <input hidden name="photo"> para el FormData.
+const PhotoUploader = ({
+  name = "photo",
+  defaultValue = "",
+  label = "Foto de perfil",
+}) => {
+  const [photo, setPhoto] = useState(defaultValue || "");
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef(null);
+
+  const handleFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    setBusy(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 240;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          setPhoto(canvas.toDataURL("image/jpeg", 0.82));
+        } catch (err) {
+          setPhoto(ev.target.result);
+        }
+        setBusy(false);
+      };
+      img.onerror = () => setBusy(false);
+      img.src = ev.target.result;
+    };
+    reader.onerror = () => setBusy(false);
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div>
+      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">
+        {label}
+      </label>
+      <div className="flex items-center gap-4">
+        <div className="w-16 h-16 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+          {photo ? (
+            <img
+              src={photo}
+              alt="Foto de perfil"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <Icon
+              name="User"
+              size={26}
+              className="text-slate-400 dark:text-slate-500"
+            />
+          )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+          >
+            <Icon
+              name={busy ? "Loader2" : "UserPlus"}
+              size={15}
+              className={busy ? "animate-spin" : ""}
+            />
+            {photo ? "Cambiar foto" : "Subir foto"}
+          </button>
+          {photo && (
+            <button
+              type="button"
+              onClick={() => setPhoto("")}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+            >
+              <Icon name="Trash2" size={15} /> Quitar
+            </button>
+          )}
+        </div>
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFile}
+        className="hidden"
+      />
+      <input type="hidden" name={name} value={photo} />
+    </div>
+  );
+};
+
 const CheckItem = ({ label, checked, onToggle }) => (
   <button
     onClick={onToggle}
@@ -6251,7 +6363,7 @@ const CompactMetricBar = ({ label, value, color = "slate", meta, helper }) => {
   return (
     <div className="min-w-0">
       <div className="mb-1.5 flex items-start justify-between gap-3">
-        <span className="min-w-0 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+        <span className="min-w-0 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
           {label}
         </span>
         <span
@@ -6931,7 +7043,7 @@ const DashboardView = ({
                       {t.title}
                     </p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-[0.14em]">
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                         {t._type}
                       </span>
                       <span
@@ -7078,7 +7190,7 @@ const DashboardView = ({
 
                   <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800/80 dark:bg-slate-900/40">
                     <div className="min-w-0">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                         Tareas
                       </p>
                       <p className="mt-1 text-base font-black text-slate-900 dark:text-white">
@@ -7089,7 +7201,7 @@ const DashboardView = ({
                       </p>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                         Temprano
                       </p>
                       <p className="mt-1 text-base font-black text-slate-900 dark:text-white">
@@ -7100,7 +7212,7 @@ const DashboardView = ({
                       </p>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                         Planning
                       </p>
                       <p className="mt-1 text-base font-black text-slate-900 dark:text-white">
@@ -7111,7 +7223,7 @@ const DashboardView = ({
                       </p>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                         Ideas
                       </p>
                       <p className="mt-1 text-base font-black text-slate-900 dark:text-white">
@@ -7251,15 +7363,28 @@ const TeamView = ({
                   </button>
                 </div>
                 <div className="flex items-center gap-4">
-                  <div
-                    className={`h-14 w-14 ${style.bg} rounded-xl flex items-center justify-center text-2xl font-black ${style.text} shadow-sm border border-black/5 dark:border-white/5`}
-                  >
-                    {person.name ? person.name.charAt(0).toUpperCase() : "?"}
-                  </div>
-                  <div>
+                  {person.photo ? (
+                    <img
+                      src={person.photo}
+                      alt={person.name}
+                      className="h-14 w-14 rounded-xl object-cover shadow-sm border border-black/5 dark:border-white/5 shrink-0"
+                    />
+                  ) : (
+                    <div
+                      className={`h-14 w-14 ${style.bg} rounded-xl flex items-center justify-center text-2xl font-black ${style.text} shadow-sm border border-black/5 dark:border-white/5 shrink-0`}
+                    >
+                      {person.name ? person.name.charAt(0).toUpperCase() : "?"}
+                    </div>
+                  )}
+                  <div className="min-w-0">
                     <h3 className="font-bold text-lg text-slate-800 dark:text-white pr-16 md:pr-12 truncate">
                       {person.name}
                     </h3>
+                    {person.profession && (
+                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 truncate">
+                        {person.profession}
+                      </p>
+                    )}
                     <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                       {person.email || "Miembro del equipo"}
                     </p>
@@ -7445,6 +7570,7 @@ const buildAssignee = (person, legacyColorMap = {}) => {
     name: person.name || "Sin asignar",
     initials: getInitials(person.name),
     className: `bg-${family}-600 text-white`,
+    photo: person.photo || "",
   };
 };
 
@@ -7640,12 +7766,21 @@ const KanbanCard = ({
           <span />
         )}
         {assignee ? (
-          <span
-            title={assignee.name}
-            className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${assignee.className}`}
-          >
-            {assignee.initials}
-          </span>
+          assignee.photo ? (
+            <img
+              src={assignee.photo}
+              alt={assignee.name}
+              title={assignee.name}
+              className="w-6 h-6 rounded-full object-cover shrink-0 border border-black/5 dark:border-white/10"
+            />
+          ) : (
+            <span
+              title={assignee.name}
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${assignee.className}`}
+            >
+              {assignee.initials}
+            </span>
+          )
         ) : (
           <span className="w-6 h-6 rounded-full border border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-300 dark:text-slate-600 shrink-0">
             <Icon name="User" size={11} />
@@ -8906,6 +9041,7 @@ const ManagementRoomView = ({
                             name: member.name,
                             initials: getInitials(member.name),
                             className: `bg-${AVATAR_FAMILY[member.color] || "violet"}-600 text-white`,
+                            photo: member.photo || "",
                           }
                         : null
                     }
@@ -12500,11 +12636,15 @@ const Modal = ({
         actions.updateManager(data.id, {
           name: fd.name || "",
           email: fd.email || "",
+          profession: fd.profession || "",
+          photo: fd.photo || "",
         });
       if (type === "editor")
         actions.updateEditor(data.id, {
           name: fd.name || "",
           email: fd.email || "",
+          profession: fd.profession || "",
+          photo: fd.photo || "",
         });
       if (type === "event")
         actions.updateEvent(data.id, {
@@ -12545,6 +12685,8 @@ const Modal = ({
           email: fd.email || "",
           role: fd.role || "viewer",
           isActive: fd.isActive === "true",
+          profession: fd.profession || "",
+          photo: fd.photo || "",
         });
     } else {
       if (type === "client")
@@ -12559,10 +12701,17 @@ const Modal = ({
         actions.addManager({
           name: fd.name || "",
           email: fd.email || "",
+          profession: fd.profession || "",
+          photo: fd.photo || "",
           assignedAccounts: [],
         });
       if (type === "editor")
-        actions.addEditor({ name: fd.name || "", email: fd.email || "" });
+        actions.addEditor({
+          name: fd.name || "",
+          email: fd.email || "",
+          profession: fd.profession || "",
+          photo: fd.photo || "",
+        });
       if (type === "event")
         actions.addEvent({
           date: data.date,
@@ -12606,6 +12755,8 @@ const Modal = ({
           email: fd.email || "",
           role: fd.role || "viewer",
           isActive: fd.isActive === "true",
+          profession: fd.profession || "",
+          photo: fd.photo || "",
         });
     }
   };
@@ -12732,11 +12883,17 @@ const Modal = ({
 
             {type === "manager" && (
               <>
+                <PhotoUploader defaultValue={data?.photo} />
                 <Input
                   name="name"
                   placeholder="Nombre Completo"
                   defaultValue={data?.name}
                   required
+                />
+                <Input
+                  name="profession"
+                  placeholder="Profesión / Cargo (ej. Account Manager)"
+                  defaultValue={data?.profession}
                 />
                 <Input
                   name="email"
@@ -12750,11 +12907,17 @@ const Modal = ({
 
             {type === "editor" && (
               <>
+                <PhotoUploader defaultValue={data?.photo} />
                 <Input
                   name="name"
                   placeholder="Nombre del Editor"
                   defaultValue={data?.name}
                   required
+                />
+                <Input
+                  name="profession"
+                  placeholder="Profesión / Cargo (ej. Editor de video)"
+                  defaultValue={data?.profession}
                 />
                 <Input
                   name="email"
@@ -13039,12 +13202,18 @@ const Modal = ({
 
             {type === "user" && (
               <>
+                <PhotoUploader defaultValue={data?.photo} />
                 <Input
                   name="name"
                   placeholder="Nombre completo"
                   defaultValue={data?.name}
                   required
                   autoFocus
+                />
+                <Input
+                  name="profession"
+                  placeholder="Profesión / Cargo"
+                  defaultValue={data?.profession}
                 />
                 <Input
                   name="email"
