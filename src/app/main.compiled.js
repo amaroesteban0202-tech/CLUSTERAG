@@ -69,7 +69,9 @@ import {
   User,
   UserX,
   Zap,
-  PauseCircle
+  PauseCircle,
+  MoreHorizontal,
+  GripVertical
 } from "lucide-react";
 import {
   signInAnonymously,
@@ -186,7 +188,9 @@ var IconsMap = {
   User,
   UserX,
   Zap,
-  PauseCircle
+  PauseCircle,
+  MoreHorizontal,
+  GripVertical
 };
 var Icon = ({ name, size = 18, className = "", ...props }) => {
   const LucideIcon = IconsMap[name];
@@ -5782,6 +5786,271 @@ var PersonCalendarDetail = ({
     }
   )));
 };
+var SHORT_MONTHS_ES = [
+  "ene",
+  "feb",
+  "mar",
+  "abr",
+  "may",
+  "jun",
+  "jul",
+  "ago",
+  "sep",
+  "oct",
+  "nov",
+  "dic"
+];
+var formatShortDate = (dateStr) => {
+  if (!dateStr) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr));
+  if (!m) return String(dateStr);
+  const month = SHORT_MONTHS_ES[parseInt(m[2], 10) - 1] || "";
+  return `${parseInt(m[3], 10)} ${month}`;
+};
+var PILL_TONES = {
+  red: "bg-red-500/10 text-red-600 dark:text-red-400",
+  orange: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+  amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  yellow: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
+  emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  teal: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
+  sky: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+  blue: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
+  violet: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  purple: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+  pink: "bg-pink-500/10 text-pink-600 dark:text-pink-400",
+  slate: "bg-slate-500/10 text-slate-600 dark:text-slate-300"
+};
+var ACCENT_BORDER = {
+  red: "border-l-red-500",
+  orange: "border-l-orange-500",
+  amber: "border-l-amber-500",
+  emerald: "border-l-emerald-500",
+  teal: "border-l-teal-500",
+  blue: "border-l-blue-500",
+  indigo: "border-l-indigo-500",
+  violet: "border-l-violet-500",
+  slate: "border-l-slate-300 dark:border-l-slate-600"
+};
+var AVATAR_FAMILY = {
+  purple: "purple",
+  indigo: "indigo",
+  blue: "blue",
+  cyan: "cyan",
+  amber: "amber",
+  orange: "orange",
+  fuchsia: "fuchsia",
+  violet: "violet",
+  stone: "stone",
+  emerald: "emerald",
+  teal: "teal",
+  slate: "slate",
+  red: "red",
+  pink: "pink",
+  rose: "rose",
+  sky: "sky",
+  green: "green",
+  yellow: "amber",
+  c1: "purple",
+  c2: "blue",
+  c3: "emerald",
+  c4: "amber",
+  c5: "fuchsia",
+  c6: "violet",
+  c7: "cyan",
+  c8: "orange",
+  c9: "indigo",
+  c10: "teal",
+  c21: "red",
+  c22: "blue",
+  c23: "emerald",
+  c24: "amber",
+  c25: "purple",
+  c26: "pink"
+};
+var getInitials = (name) => {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+};
+var buildAssignee = (person, legacyColorMap = {}) => {
+  if (!person) return null;
+  let key = person.color;
+  if (legacyColorMap && legacyColorMap[key]) key = legacyColorMap[key];
+  const family = AVATAR_FAMILY[key] || "slate";
+  return {
+    name: person.name || "Sin asignar",
+    initials: getInitials(person.name),
+    className: `bg-${family}-600 text-white`
+  };
+};
+var CardMenu = ({ items = [] }) => {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+  useEffect(() => {
+    if (!open) return void 0;
+    const onDoc = (e) => {
+      if (menuRef.current?.contains(e.target) || btnRef.current?.contains(e.target))
+        return;
+      setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [open]);
+  if (!items.length) return null;
+  const toggle = (e) => {
+    e.stopPropagation();
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const menuWidth = 190;
+      let left = r.right - menuWidth;
+      if (left < 8) left = 8;
+      setCoords({ top: r.bottom + 6, left });
+    }
+    setOpen((o) => !o);
+  };
+  return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      ref: btnRef,
+      onClick: toggle,
+      "aria-label": "M\xE1s acciones",
+      "aria-haspopup": "true",
+      "aria-expanded": open,
+      className: "p-1 rounded-md text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "MoreHorizontal", size: 16 })
+  ), open && /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      ref: menuRef,
+      onClick: (e) => e.stopPropagation(),
+      style: {
+        position: "fixed",
+        top: coords.top,
+        left: coords.left,
+        width: 190,
+        zIndex: 9999
+      },
+      className: "py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl shadow-black/10 dark:shadow-black/50 fade-in"
+    },
+    items.map((it) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: it.key,
+        disabled: it.disabled,
+        onClick: (e) => {
+          e.stopPropagation();
+          setOpen(false);
+          it.onClick?.();
+        },
+        className: `w-full flex items-center gap-2.5 px-3 py-2 text-left text-[13px] font-semibold transition-colors disabled:opacity-40 ${it.danger ? "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10" : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"}`
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: it.icon, size: 15 }),
+      " ",
+      it.label
+    ))
+  ));
+};
+var KanbanCard = ({
+  onClick,
+  draggable,
+  onDragStart,
+  onDragEnd,
+  accentTone,
+  isOverdue,
+  client,
+  rank,
+  badges = [],
+  title,
+  notes,
+  due,
+  assignee,
+  menuItems = []
+}) => {
+  const accent = isOverdue ? "border-l-red-500" : ACCENT_BORDER[accentTone] || "border-l-transparent";
+  return /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      onClick,
+      draggable: draggable ? "true" : void 0,
+      onDragStart,
+      onDragEnd,
+      className: `group relative bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 border-l-[3px] ${accent} shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer p-3 ${isOverdue ? "ring-1 ring-red-400/40 dark:ring-red-500/30" : ""}`
+    },
+    /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-2 mb-1.5 min-h-[20px]" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, client && /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-1 max-w-full text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded" }, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 10, className: "shrink-0" }), /* @__PURE__ */ React.createElement("span", { className: "truncate" }, client))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-0.5 shrink-0" }, rank != null && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 rounded px-1.5 py-0.5" }, "#", rank), menuItems.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "opacity-70 group-hover:opacity-100 transition-opacity" }, /* @__PURE__ */ React.createElement(CardMenu, { items: menuItems })))),
+    /* @__PURE__ */ React.createElement("p", { className: "text-[13.5px] font-semibold text-slate-800 dark:text-slate-100 leading-snug mb-2 line-clamp-2" }, title),
+    badges.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap gap-1.5 mb-2" }, badges.map((b, i) => /* @__PURE__ */ React.createElement(
+      "span",
+      {
+        key: i,
+        className: `text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${b.className || PILL_TONES[b.tone] || PILL_TONES.slate}`
+      },
+      b.label
+    ))),
+    notes && /* @__PURE__ */ React.createElement("p", { className: "text-[11.5px] text-slate-400 dark:text-slate-500 leading-snug line-clamp-2 mb-2" }, notes),
+    /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800" }, due ? /* @__PURE__ */ React.createElement(
+      "span",
+      {
+        className: `inline-flex items-center gap-1 text-[11px] font-semibold ${due.tone === "red" ? "text-red-500 dark:text-red-400" : due.tone === "amber" ? "text-amber-600 dark:text-amber-400" : "text-slate-400 dark:text-slate-500"}`
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "CalendarDays", size: 12, className: "shrink-0" }),
+      due.label
+    ) : /* @__PURE__ */ React.createElement("span", null), assignee ? /* @__PURE__ */ React.createElement(
+      "span",
+      {
+        title: assignee.name,
+        className: `w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${assignee.className}`
+      },
+      assignee.initials
+    ) : /* @__PURE__ */ React.createElement("span", { className: "w-6 h-6 rounded-full border border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-300 dark:text-slate-600 shrink-0" }, /* @__PURE__ */ React.createElement(Icon, { name: "User", size: 11 })))
+  );
+};
+var KanbanColumn = ({
+  dotColor = "slate",
+  title,
+  count,
+  onAdd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  isEmpty,
+  children
+}) => /* @__PURE__ */ React.createElement(
+  "div",
+  {
+    className: "flex flex-col shrink-0 w-[82vw] sm:w-72 md:w-auto md:shrink bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200 dark:border-slate-800/80 h-full overflow-hidden snap-start transition-colors",
+    onDragOver,
+    onDragLeave,
+    onDrop
+  },
+  /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 px-3 py-2.5 shrink-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 min-w-0" }, /* @__PURE__ */ React.createElement("span", { className: `w-2 h-2 rounded-full shrink-0 bg-${dotColor}-500` }), /* @__PURE__ */ React.createElement("span", { className: "text-[13px] font-bold text-slate-700 dark:text-slate-200 truncate" }, title), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] font-semibold text-slate-400 dark:text-slate-500 bg-slate-200/70 dark:bg-slate-800 rounded-full px-2 py-0.5 shrink-0" }, count))),
+  /* @__PURE__ */ React.createElement("div", { className: "px-2.5 pb-2.5 flex-1 overflow-y-auto space-y-2.5 custom-scroll" }, isEmpty && /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-center justify-center gap-2 py-10 text-slate-300 dark:text-slate-600 select-none" }, /* @__PURE__ */ React.createElement(Icon, { name: "Inbox", size: 22 }), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] font-semibold" }, "Sin tareas")), children, onAdd && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: onAdd,
+      className: "w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-semibold text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800/60 transition-colors"
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 14 }),
+    " A\xF1adir tarea"
+  ))
+);
 var DateHeader = ({
   currentDate,
   setCurrentDate,
@@ -5815,25 +6084,27 @@ var DateHeader = ({
     if (compareDateOnlyStrings(val, effectiveRangeStart) < 0)
       setRangeStart(val);
   };
-  return /* @__PURE__ */ React.createElement("div", { className: "flex flex-col 2xl:flex-row justify-between items-start 2xl:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col lg:flex-row lg:flex-wrap items-start lg:items-center gap-4 w-full min-w-0 2xl:w-auto" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 shrink-0" }, /* @__PURE__ */ React.createElement(
-    Icon,
+  const segBase = "shrink-0 px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all flex items-center gap-1.5";
+  const segActive = "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm";
+  const segIdle = "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200";
+  return /* @__PURE__ */ React.createElement("div", { className: "flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-white dark:bg-slate-900 px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-3 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2.5 shrink-0" }, /* @__PURE__ */ React.createElement(
+    "span",
     {
-      name: "LayoutList",
-      className: `text-${btnColor}-500 dark:text-${btnColor}-400 hidden md:block`,
-      size: 28
-    }
-  ), /* @__PURE__ */ React.createElement("h2", { className: "text-xl font-black text-slate-800 dark:text-white" }, title)), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col lg:flex-row lg:flex-wrap gap-3 w-full min-w-0 lg:w-auto" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-0.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 px-1" }, "Fecha"), /* @__PURE__ */ React.createElement("div", { className: "flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto max-w-full overflow-x-auto custom-scroll" }, /* @__PURE__ */ React.createElement(
+      className: `w-9 h-9 rounded-xl flex items-center justify-center bg-${btnColor}-500/10 text-${btnColor}-600 dark:text-${btnColor}-400`
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: btnIcon, size: 18 })
+  ), /* @__PURE__ */ React.createElement("h2", { className: "text-lg font-bold text-slate-800 dark:text-white truncate" }, title)), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-2 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl max-w-full overflow-x-auto kanban-mobile-scroll" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setFilterMode("date"),
-      className: `shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === "date" ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`
+      className: `${segBase} ${filterMode === "date" ? segActive : segIdle}`
     },
     "D\xEDa espec\xEDfico"
   ), hasRangeSupport && /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setFilterMode("range"),
-      className: `shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-1.5 ${filterMode === "range" ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`
+      className: `${segBase} ${filterMode === "range" ? segActive : segIdle}`
     },
     /* @__PURE__ */ React.createElement(Icon, { name: "CalendarRange", size: 14 }),
     "Rango"
@@ -5841,7 +6112,7 @@ var DateHeader = ({
     "button",
     {
       onClick: () => setFilterMode("overdue"),
-      className: `shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${filterMode === "overdue" ? `bg-red-500 text-white shadow-sm` : "text-slate-500 dark:text-slate-400 hover:text-red-500"}`
+      className: `${segBase} ${filterMode === "overdue" ? "bg-red-500 text-white shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-red-500"}`
     },
     "Atrasadas ",
     /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 14 })
@@ -5849,49 +6120,49 @@ var DateHeader = ({
     "button",
     {
       onClick: () => setFilterMode("all"),
-      className: `shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${filterMode === "all" ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`
+      className: `${segBase} ${filterMode === "all" ? segActive : segIdle}`
     },
-    "Todas las fechas"
-  ))), setOwnershipFilter && /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-0.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 px-1" }, "Asignaci\xF3n"), /* @__PURE__ */ React.createElement("div", { className: "flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto max-w-full overflow-x-auto custom-scroll" }, /* @__PURE__ */ React.createElement(
+    "Todas"
+  )), setOwnershipFilter && /* @__PURE__ */ React.createElement("div", { className: "flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl max-w-full overflow-x-auto kanban-mobile-scroll" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setOwnershipFilter("all"),
-      className: `shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === "all" ? `bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm` : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`
+      className: `${segBase} ${ownershipFilter === "all" ? segActive : segIdle}`
     },
     "Todo el equipo"
   ), /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setOwnershipFilter("mine"),
-      className: `shrink-0 px-4 py-2 text-sm font-bold rounded-lg transition-all ${ownershipFilter === "mine" ? `bg-${btnColor}-500 text-white shadow-sm` : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`
+      className: `${segBase} ${ownershipFilter === "mine" ? `bg-${btnColor}-500 text-white shadow-sm` : segIdle}`
     },
     "Asignadas a m\xED"
-  )))), filterMode === "date" && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 w-full sm:w-auto" }, /* @__PURE__ */ React.createElement(
+  )), filterMode === "date" && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
     "input",
     {
       type: "date",
       value: currentDate,
       onChange: (e) => setCurrentDate(e.target.value),
-      className: "min-h-[46px] w-full sm:w-auto text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 outline-none"
+      className: "min-h-[40px] text-[13px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none"
     }
-  ), currentDate === today && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 font-bold px-2 py-1 rounded-full shrink-0" }, "Hoy")), filterMode === "range" && hasRangeSupport && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 w-full sm:w-auto flex-wrap" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0" }, "Desde"), /* @__PURE__ */ React.createElement(
+  ), currentDate === today && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 font-bold px-2 py-1 rounded-full shrink-0" }, "Hoy")), filterMode === "range" && hasRangeSupport && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 flex-wrap" }, /* @__PURE__ */ React.createElement(
     "input",
     {
       type: "date",
       value: effectiveRangeStart,
       onChange: handleRangeStartChange,
-      className: "min-h-[46px] w-full sm:w-auto text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 outline-none"
+      className: "min-h-[40px] text-[13px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none"
     }
-  )), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0" }, "Hasta"), /* @__PURE__ */ React.createElement(
+  ), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-semibold text-slate-400" }, "\u2192"), /* @__PURE__ */ React.createElement(
     "input",
     {
       type: "date",
       value: effectiveRangeEnd,
       min: effectiveRangeStart,
       onChange: handleRangeEndChange,
-      className: "min-h-[46px] w-full sm:w-auto text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 outline-none"
+      className: "min-h-[40px] text-[13px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none"
     }
-  )))), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row sm:flex-wrap w-full 2xl:w-auto gap-3 items-stretch sm:items-center" }, /* @__PURE__ */ React.createElement(
+  )))), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row sm:flex-wrap w-full xl:w-auto gap-2.5 items-stretch sm:items-center shrink-0" }, /* @__PURE__ */ React.createElement(
     SearchBar,
     {
       searchTerm,
@@ -6036,7 +6307,8 @@ var AccountRoomView = ({
         onChangeStatus(task, targetStatus);
     }
   };
-  return /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-6 fade-in" }, /* @__PURE__ */ React.createElement(
+  const defaultAddDate = filterMode === "date" ? currentDate : filterMode === "range" ? effectiveRangeStart : todayStr;
+  return /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement(
     DateHeader,
     {
       currentDate,
@@ -6048,7 +6320,7 @@ var AccountRoomView = ({
       title: "Sala de Accounts",
       onAdd: handleAddTask,
       btnColor: "indigo",
-      btnIcon: "Plus",
+      btnIcon: "Briefcase",
       searchTerm,
       setSearchTerm,
       rangeStart,
@@ -6056,120 +6328,84 @@ var AccountRoomView = ({
       rangeEnd,
       setRangeEnd
     }
-  ), false, /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-4 gap-4 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
+  ), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-4 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
     const colTasks = filteredTasks.filter((t) => t.status === col.id);
     const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
     const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
     const prevLabel = colIndex > 0 ? columns[colIndex - 1].title : "";
+    const nextLabel = colIndex < columns.length - 1 ? columns[colIndex + 1].title : "";
     return /* @__PURE__ */ React.createElement(
-      "div",
+      KanbanColumn,
       {
         key: col.id,
-        className: "flex flex-col shrink-0 w-[85vw] sm:w-72 md:w-auto md:shrink bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300 snap-start",
+        dotColor: col.color,
+        title: col.title,
+        count: colTasks.length,
+        onAdd: () => handleAddTask(defaultAddDate),
         onDragOver: handleDragOver,
         onDragLeave: handleDragLeave,
-        onDrop: (e) => handleDrop(e, col.id)
+        onDrop: (e) => handleDrop(e, col.id),
+        isEmpty: colTasks.length === 0
       },
-      /* @__PURE__ */ React.createElement(
-        "div",
-        {
-          className: `p-3 font-black text-[11px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`
-        },
-        /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: col.icon, size: 13 }), col.title),
-        " ",
-        /* @__PURE__ */ React.createElement("span", { className: "bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full text-slate-500 dark:text-slate-400 shadow-sm" }, colTasks.length)
-      ),
-      /* @__PURE__ */ React.createElement("div", { className: "p-3 flex-1 overflow-y-auto space-y-3 custom-scroll" }, colTasks.length === 0 ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "Inbox", text: "Vac\xEDo" }) : colTasks.map((t) => {
+      colTasks.map((t) => {
         const manager = managers.find((m) => m.id === t.contextId);
         const client = clients.find((c) => c.id === t.clientId);
-        let mappedColorName = legacyColorMap[manager?.color] || manager?.color;
-        const mStyles = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
         const isOverdue = isDateBeforeDateString(t.date, todayStr) && col.id !== "publicado";
+        const menuItems = [];
+        if (nextStatus)
+          menuItems.push({
+            key: "next",
+            label: nextStatus === "publicado" ? "Publicar" : `Avanzar a ${nextLabel}`,
+            icon: nextStatus === "publicado" ? "CheckCircle2" : "ArrowRight",
+            onClick: () => onChangeStatus(t, nextStatus)
+          });
+        if (prevStatus)
+          menuItems.push({
+            key: "prev",
+            label: `Volver a ${prevLabel}`,
+            icon: "ChevronLeft",
+            onClick: () => onChangeStatus(t, prevStatus)
+          });
+        menuItems.push({
+          key: "edit",
+          label: "Editar",
+          icon: "Edit",
+          onClick: () => onEdit(t)
+        });
+        menuItems.push({
+          key: "delete",
+          label: "Eliminar",
+          icon: "Trash2",
+          danger: true,
+          onClick: () => onDelete(t.id)
+        });
         return /* @__PURE__ */ React.createElement(
-          "div",
+          KanbanCard,
           {
             key: t.id,
             onClick: () => onTaskClick(t),
-            draggable: "true",
+            draggable: true,
             onDragStart: (e) => handleDragStart(e, t.id),
             onDragEnd: (e) => handleDragEnd(e, t.id),
-            className: `bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all group cursor-grab active:cursor-grabbing border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${isOverdue ? "border-l-red-500 dark:bg-red-950/20" : "border-l-indigo-500"}`
-          },
-          /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-start mb-2" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-1.5 items-start" }, client && /* @__PURE__ */ React.createElement("span", { className: "text-[9px] font-black uppercase bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800 flex items-center gap-1 max-w-[140px] truncate" }, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 10 }), " ", client.name), /* @__PURE__ */ React.createElement(
-            "span",
-            {
-              className: `text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border border-black/5 dark:border-white/5 ${mStyles.bg} ${mStyles.text}`
-            },
-            manager ? manager.name : "Sin asignar"
-          )), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" }, /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: (e) => {
-                e.stopPropagation();
-                onEdit(t);
-              },
-              "aria-label": `Editar ${t.title || "tarea"}`,
-              title: "Editar",
-              className: "text-slate-500 hover:text-blue-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            },
-            /* @__PURE__ */ React.createElement(Icon, { name: "Edit", size: 16 })
-          ), /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: (e) => {
-                e.stopPropagation();
-                onDelete(t.id);
-              },
-              "aria-label": `Eliminar ${t.title || "tarea"}`,
-              title: "Eliminar",
-              className: "text-slate-500 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            },
-            /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 16 })
-          ))),
-          /* @__PURE__ */ React.createElement("p", { className: "font-bold text-slate-700 dark:text-slate-200 text-sm mb-3 pr-2 leading-tight" }, t.title),
-          isOverdue && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-11 right-2 flex items-center gap-1 text-[9px] font-black text-red-500 bg-red-50 dark:bg-red-900/50 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800" }, "Atrasado", " ", /* @__PURE__ */ React.createElement(
-            Icon,
-            {
-              name: "Flame",
-              size: 10,
-              className: "animate-pulse"
-            }
-          )),
-          /* @__PURE__ */ React.createElement("div", { className: "flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800" }, prevStatus && /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: (e) => {
-                e.stopPropagation();
-                onChangeStatus(t, prevStatus);
-              },
-              "aria-label": `Volver a ${prevLabel}`,
-              className: `flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`
-            },
-            /* @__PURE__ */ React.createElement(Icon, { name: "ChevronLeft", size: 12 }),
-            " Volver a",
-            " ",
-            prevLabel
-          ), nextStatus && /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: (e) => {
-                e.stopPropagation();
-                onChangeStatus(t, nextStatus);
-              },
-              className: `flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-${col.color}-50 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-400 hover:bg-${col.color}-100 dark:hover:bg-${col.color}-500/30 transition-colors`
-            },
-            nextStatus === "publicado" ? "Publicar" : "Avanzar",
-            " ",
-            /* @__PURE__ */ React.createElement(
-              Icon,
+            accentTone: col.color,
+            isOverdue,
+            client: client?.name,
+            title: t.title,
+            badges: t.priority ? [
               {
-                name: nextStatus === "publicado" ? "CheckCircle2" : "ChevronRight",
-                size: 12
+                label: t.priority,
+                tone: t.priority === "urgente" ? "red" : t.priority === "recurrente" ? "emerald" : "amber"
               }
-            )
-          ))
+            ] : [],
+            due: {
+              label: formatShortDate(t.date) + (isOverdue ? " \xB7 atrasada" : ""),
+              tone: isOverdue ? "red" : "slate"
+            },
+            assignee: buildAssignee(manager, legacyColorMap),
+            menuItems
+          }
         );
-      }))
+      })
     );
   })));
 };
@@ -6250,7 +6486,7 @@ var EditionsRoomView = ({
     onAdd(nextDate);
   };
   const editingRankingRules = sanitizeRankingSettings(rankingSettings).editing;
-  const rankedTasks2 = filteredTasks.map((task) => {
+  const rankedTasks = filteredTasks.map((task) => {
     const hierarchy = getEditingHierarchyId(task);
     const delta = task.date ? getDateOnlyDiffDays(task.date, todayStr) : 99;
     const hierarchyScore = editingRankingRules.hierarchyScores[hierarchy] ?? editingRankingRules.hierarchyScores.p2;
@@ -6270,7 +6506,7 @@ var EditionsRoomView = ({
   }).sort(
     (a, b) => b.rankScore - a.rankScore || (a.date || "").localeCompare(b.date || "") || a.title.localeCompare(b.title)
   );
-  const rankingMap = rankedTasks2.reduce(
+  const rankingMap = rankedTasks.reduce(
     (acc, task, index) => ({ ...acc, [task.id]: index + 1 }),
     {}
   );
@@ -6326,7 +6562,8 @@ var EditionsRoomView = ({
         onChangeStatus(task, targetStatus);
     }
   };
-  return /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-6 fade-in" }, /* @__PURE__ */ React.createElement(
+  const defaultAddDate = filterMode === "date" ? currentDate : todayStr;
+  return /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement(
     DateHeader,
     {
       currentDate,
@@ -6342,137 +6579,89 @@ var EditionsRoomView = ({
       searchTerm,
       setSearchTerm
     }
-  ), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-5 gap-4 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
+  ), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-5 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
     const colTasks = filteredTasks.filter((t) => t.status === col.id);
     const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
     const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
     const prevLabel = colIndex > 0 ? columns[colIndex - 1].title : "";
+    const nextLabel = colIndex < columns.length - 1 ? columns[colIndex + 1].title : "";
     return /* @__PURE__ */ React.createElement(
-      "div",
+      KanbanColumn,
       {
         key: col.id,
-        className: "flex flex-col shrink-0 w-[85vw] sm:w-72 md:w-auto md:shrink bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden transition-all duration-300 snap-start",
+        dotColor: col.color,
+        title: col.title,
+        count: colTasks.length,
+        onAdd: canManageEditingTasks ? () => handleAddTask(defaultAddDate) : void 0,
         onDragOver: handleDragOver,
         onDragLeave: handleDragLeave,
-        onDrop: (e) => handleDrop(e, col.id)
+        onDrop: (e) => handleDrop(e, col.id),
+        isEmpty: colTasks.length === 0
       },
-      /* @__PURE__ */ React.createElement(
-        "div",
-        {
-          className: `p-3 font-black text-[11px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-${col.color}-50 dark:bg-${col.color}-500/10 text-${col.color}-700 dark:text-${col.color}-400`
-        },
-        /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: col.icon, size: 13 }), col.title),
-        " ",
-        /* @__PURE__ */ React.createElement("span", { className: "bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full text-slate-500 dark:text-slate-400 shadow-sm" }, colTasks.length)
-      ),
-      /* @__PURE__ */ React.createElement("div", { className: "p-3 flex-1 overflow-y-auto space-y-3 custom-scroll" }, colTasks.length === 0 ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "Inbox", text: "Vac\xEDo" }) : colTasks.map((t) => {
+      colTasks.map((t) => {
         const editor = editors.find((e) => e.id === t.contextId);
         const client = clients.find((c) => c.id === t.clientId);
-        const pStyle = priorityStyles[t.priority] || priorityStyles.normal;
-        const hStyle = hierarchyStyles[t.hierarchy] || hierarchyStyles[getEditingHierarchyId(t)] || hierarchyStyles.p2;
-        const eStyles = PERSON_COLORS[editor?.color] || PERSON_COLORS.slate;
         const isOverdue = isDateBeforeDateString(t.date, todayStr) && col.id !== "publicado";
         const hierarchyId = t.hierarchy || getEditingHierarchyId(t);
-        const borderLeftColor = isOverdue ? "border-l-red-600" : hierarchyId === "p1" ? "border-l-red-500" : hierarchyId === "p2" ? "border-l-amber-500" : hierarchyId === "p3" ? "border-l-emerald-500" : "border-l-slate-400";
+        const hierTone = hierarchyId === "p1" ? "red" : hierarchyId === "p2" ? "amber" : hierarchyId === "p3" ? "emerald" : "slate";
+        const prioTone = t.priority === "urgente" ? "red" : t.priority === "recurrente" ? "emerald" : "amber";
+        const menuItems = [];
+        if (canManageEditingTasks) {
+          if (nextStatus)
+            menuItems.push({
+              key: "next",
+              label: nextStatus === "publicado" ? "Publicar" : `Avanzar a ${nextLabel}`,
+              icon: nextStatus === "publicado" ? "CheckCircle2" : "ArrowRight",
+              onClick: () => onChangeStatus(t, nextStatus)
+            });
+          if (prevStatus)
+            menuItems.push({
+              key: "prev",
+              label: `Volver a ${prevLabel}`,
+              icon: "ChevronLeft",
+              onClick: () => onChangeStatus(t, prevStatus)
+            });
+          menuItems.push({
+            key: "edit",
+            label: "Editar",
+            icon: "Edit",
+            onClick: () => onEdit(t)
+          });
+          menuItems.push({
+            key: "delete",
+            label: "Eliminar",
+            icon: "Trash2",
+            danger: true,
+            onClick: () => onDelete(t.id)
+          });
+        }
         return /* @__PURE__ */ React.createElement(
-          "div",
+          KanbanCard,
           {
             key: t.id,
             onClick: () => onTaskClick(t),
-            draggable: "true",
+            draggable: true,
             onDragStart: (e) => handleDragStart(e, t.id),
             onDragEnd: (e) => handleDragEnd(e, t.id),
-            className: `bg-white dark:bg-slate-900 p-4 rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all group cursor-grab active:cursor-grabbing border-y border-r border-slate-200 dark:border-slate-700 relative overflow-hidden ${borderLeftColor} ${isOverdue ? "dark:bg-red-950/10" : ""}`
-          },
-          /* @__PURE__ */ React.createElement("div", { className: "absolute top-3 right-3 text-[10px] font-black px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300" }, "#", rankingMap[t.id]),
-          /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-start mb-2 pr-12" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-start gap-1.5" }, client && /* @__PURE__ */ React.createElement("span", { className: "text-[9px] font-black uppercase bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800 flex items-center gap-1 max-w-[140px] truncate" }, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 10 }), " ", client.name), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
-            "span",
-            {
-              className: `text-[9px] font-black px-2 py-0.5 rounded uppercase border ${hStyle}`
+            accentTone: hierTone,
+            isOverdue,
+            client: client?.name,
+            rank: rankingMap[t.id],
+            title: t.title,
+            notes: t.notes,
+            badges: [
+              { label: hierarchyId.toUpperCase(), tone: hierTone },
+              { label: t.priority || "Normal", tone: prioTone }
+            ],
+            due: {
+              label: formatShortDate(t.date) + (isOverdue ? " \xB7 atrasada" : ""),
+              tone: isOverdue ? "red" : "slate"
             },
-            hierarchyId.toUpperCase()
-          ), /* @__PURE__ */ React.createElement(
-            "span",
-            {
-              className: `text-[9px] font-bold px-2 py-0.5 rounded uppercase border ${pStyle}`
-            },
-            t.priority || "Normal"
-          ), /* @__PURE__ */ React.createElement(
-            "span",
-            {
-              className: `text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border border-black/5 dark:border-white/5 ${eStyles.bg} ${eStyles.text}`
-            },
-            editor ? editor.name : "Sin asignar"
-          ))), canManageEditingTasks && /* @__PURE__ */ React.createElement("div", { className: "flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" }, /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: (e) => {
-                e.stopPropagation();
-                onEdit(t);
-              },
-              "aria-label": `Editar ${t.title || "tarea"}`,
-              title: "Editar",
-              className: "text-slate-500 hover:text-blue-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            },
-            /* @__PURE__ */ React.createElement(Icon, { name: "Edit", size: 16 })
-          ), /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: (e) => {
-                e.stopPropagation();
-                onDelete(t.id);
-              },
-              "aria-label": `Eliminar ${t.title || "tarea"}`,
-              title: "Eliminar",
-              className: "text-slate-500 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            },
-            /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 16 })
-          ))),
-          /* @__PURE__ */ React.createElement("p", { className: "font-bold text-slate-800 dark:text-slate-100 text-sm mb-1 leading-tight" }, t.title),
-          t.notes && /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400 mb-3 truncate max-w-[80%]" }, t.notes),
-          isOverdue && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-12 right-2 flex items-center gap-1 text-[9px] font-black text-red-500 bg-red-50 dark:bg-red-900/50 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800" }, "Atrasado", " ", /* @__PURE__ */ React.createElement(
-            Icon,
-            {
-              name: "Flame",
-              size: 10,
-              className: "animate-pulse"
-            }
-          )),
-          canManageEditingTasks && /* @__PURE__ */ React.createElement("div", { className: "flex gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800" }, prevStatus && /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: (e) => {
-                e.stopPropagation();
-                onChangeStatus(t, prevStatus);
-              },
-              "aria-label": `Volver a ${prevLabel}`,
-              className: `flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`
-            },
-            /* @__PURE__ */ React.createElement(Icon, { name: "ChevronLeft", size: 12 }),
-            " Volver a",
-            " ",
-            prevLabel
-          ), nextStatus && /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: (e) => {
-                e.stopPropagation();
-                onChangeStatus(t, nextStatus);
-              },
-              className: `flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-${col.color}-50 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-400 hover:bg-${col.color}-100 dark:hover:bg-${col.color}-500/30 transition-colors`
-            },
-            nextStatus === "publicado" ? "Publicar" : "Avanzar",
-            " ",
-            /* @__PURE__ */ React.createElement(
-              Icon,
-              {
-                name: nextStatus === "publicado" ? "CheckCircle2" : "ChevronRight",
-                size: 12
-              }
-            )
-          ))
+            assignee: buildAssignee(editor),
+            menuItems
+          }
         );
-      }))
+      })
     );
   })));
 };
@@ -6687,162 +6876,95 @@ var ManagementRoomView = ({
       )),
       openCount > 0 && /* @__PURE__ */ React.createElement("span", { className: "shrink-0 text-[10px] font-black bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-1 rounded-full" }, openCount, " activas")
     );
-  })), (filterMode !== "all" || ownershipFilter !== "all" || searchTerm) && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 flex-wrap" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Filtros activos:"), filterMode === "date" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "Calendar", size: 9 }), "Fecha: ", currentDate), filterMode === "overdue" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 9 }), "Solo atrasadas"), ownershipFilter === "mine" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "User", size: 9 }), "Solo mis tareas"), searchTerm && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700" }, /* @__PURE__ */ React.createElement(Icon, { name: "Search", size: 9 }), '"', searchTerm, '"'), /* @__PURE__ */ React.createElement("span", { className: "text-[10px] text-slate-500" }, "\u2014 mostrando ", filteredTasks.length, " de ", tasks.length, " tareas")), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-4 gap-4 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
+  })), (filterMode !== "all" || ownershipFilter !== "all" || searchTerm) && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 flex-wrap" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Filtros activos:"), filterMode === "date" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "Calendar", size: 9 }), "Fecha: ", currentDate), filterMode === "overdue" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 9 }), "Solo atrasadas"), ownershipFilter === "mine" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "User", size: 9 }), "Solo mis tareas"), searchTerm && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700" }, /* @__PURE__ */ React.createElement(Icon, { name: "Search", size: 9 }), '"', searchTerm, '"'), /* @__PURE__ */ React.createElement("span", { className: "text-[10px] text-slate-500" }, "\u2014 mostrando ", filteredTasks.length, " de ", tasks.length, " tareas")), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-4 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
     const colTasks = filteredTasks.filter(
       (task) => task.status === col.id
     );
     const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
     const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
     const prevLabel = colIndex > 0 ? columns[colIndex - 1].title : "";
+    const nextLabel = colIndex < columns.length - 1 ? columns[colIndex + 1].title : "";
     return /* @__PURE__ */ React.createElement(
-      "div",
+      KanbanColumn,
       {
         key: col.id,
-        className: "flex flex-col shrink-0 w-[85vw] sm:w-72 md:w-auto md:shrink bg-slate-100/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-800 h-full overflow-hidden snap-start",
+        dotColor: col.color,
+        title: col.title,
+        count: colTasks.length,
+        onAdd: () => handleAddTask(filterMode === "date" ? currentDate : todayStr),
         onDragOver: handleDragOver,
         onDragLeave: handleDragLeave,
-        onDrop: (e) => handleDrop(e, col.id)
+        onDrop: (e) => handleDrop(e, col.id),
+        isEmpty: colTasks.length === 0
       },
-      /* @__PURE__ */ React.createElement(
-        "div",
-        {
-          className: `h-1 w-full bg-${col.color}-500 dark:bg-${col.color}-400 shrink-0`
-        }
-      ),
-      /* @__PURE__ */ React.createElement("div", { className: "px-4 py-3 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 shrink-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
-        Icon,
-        {
-          name: col.icon,
-          size: 13,
-          className: `text-${col.color}-500 dark:text-${col.color}-400`
-        }
-      ), /* @__PURE__ */ React.createElement(
-        "span",
-        {
-          className: `font-black text-[11px] uppercase tracking-widest text-${col.color}-700 dark:text-${col.color}-400`
-        },
-        col.title
-      )), /* @__PURE__ */ React.createElement(
-        "span",
-        {
-          className: `text-xs font-black px-2 py-0.5 rounded-full bg-${col.color}-100 dark:bg-${col.color}-500/20 text-${col.color}-700 dark:text-${col.color}-300`
-        },
-        colTasks.length
-      )),
-      /* @__PURE__ */ React.createElement("div", { className: "p-3 flex-1 overflow-y-auto space-y-3 custom-scroll" }, colTasks.length === 0 ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "Inbox", text: "Vac\xEDo" }) : colTasks.map((task) => {
+      colTasks.map((task) => {
         const member = members.find((m) => m.id === task.contextId);
         const client = clients.find((c) => c.id === task.clientId);
         const isOverdue = isDateBeforeDateString(task.date, todayStr) && col.id !== "cerrado";
-        const badge = computeManagementDueBadge(task);
+        const dueBadge = computeManagementDueBadge(task);
+        const badges = [];
+        if (task.category)
+          badges.push({
+            label: task.category,
+            className: getMgmtCategoryColor(task.category)
+          });
+        if (dueBadge && col.id !== "cerrado")
+          badges.push({ label: dueBadge.label, tone: dueBadge.tone });
+        const menuItems = [];
+        if (nextStatus)
+          menuItems.push({
+            key: "next",
+            label: nextStatus === "cerrado" ? "Cerrar tarea" : `Avanzar a ${nextLabel}`,
+            icon: nextStatus === "cerrado" ? "Check" : "ArrowRight",
+            onClick: () => onChangeStatus(task, nextStatus)
+          });
+        if (prevStatus)
+          menuItems.push({
+            key: "prev",
+            label: `Volver a ${prevLabel}`,
+            icon: "ChevronLeft",
+            onClick: () => onChangeStatus(task, prevStatus)
+          });
+        menuItems.push({
+          key: "edit",
+          label: "Editar",
+          icon: "Edit",
+          onClick: () => onEdit(task)
+        });
+        menuItems.push({
+          key: "delete",
+          label: "Eliminar",
+          icon: "Trash2",
+          danger: true,
+          onClick: () => onDelete(task.id)
+        });
         return /* @__PURE__ */ React.createElement(
-          "div",
+          KanbanCard,
           {
             key: task.id,
-            draggable: "true",
+            onClick: () => onTaskClick(task),
+            draggable: true,
             onDragStart: (e) => handleDragStart(e, task.id),
             onDragEnd: handleDragEnd,
-            onClick: () => onTaskClick(task),
-            className: `bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group overflow-hidden border border-slate-200 dark:border-slate-700 ${isOverdue ? "ring-1 ring-red-400/60 dark:ring-red-500/40" : ""}`
-          },
-          /* @__PURE__ */ React.createElement(
-            "div",
-            {
-              className: `h-0.5 w-full ${isOverdue ? "bg-red-500" : `bg-${col.color}-400 dark:bg-${col.color}-500`}`
-            }
-          ),
-          /* @__PURE__ */ React.createElement("div", { className: "p-4 space-y-2.5" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 min-h-[20px]" }, task.category ? /* @__PURE__ */ React.createElement(
-            "span",
-            {
-              className: `text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${getMgmtCategoryColor(task.category)}`
+            accentTone: col.color,
+            isOverdue,
+            client: client?.name,
+            title: task.title,
+            notes: task.notes,
+            badges,
+            due: {
+              label: formatShortDate(task.date) + (task.time ? ` \xB7 ${task.time}` : "") + (isOverdue ? " \xB7 vencida" : ""),
+              tone: isOverdue ? "red" : "slate"
             },
-            task.category
-          ) : /* @__PURE__ */ React.createElement("span", null), badge && col.id !== "cerrado" && /* @__PURE__ */ React.createElement(
-            "span",
-            {
-              className: `flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${badgeToneMap[badge.tone] || badgeToneMap.slate}`
-            },
-            /* @__PURE__ */ React.createElement(
-              Icon,
-              {
-                name: badge.tone === "red" ? "AlertTriangle" : "Clock",
-                size: 9
-              }
-            ),
-            badge.label
-          )), /* @__PURE__ */ React.createElement("p", { className: "font-black text-slate-800 dark:text-white text-sm leading-snug" }, task.title), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap gap-1.5" }, member && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 rounded border border-violet-100 dark:border-violet-500/20 max-w-[130px] truncate" }, /* @__PURE__ */ React.createElement(Icon, { name: "UserCircle2", size: 9 }), member.name), client && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800 max-w-[130px] truncate" }, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 9 }), client.name)), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement(
-            Icon,
-            {
-              name: "CalendarDays",
-              size: 10,
-              className: isOverdue ? "text-red-400" : "text-slate-500 dark:text-slate-400"
-            }
-          ), /* @__PURE__ */ React.createElement(
-            "span",
-            {
-              className: `text-[10px] font-bold ${isOverdue ? "text-red-500 dark:text-red-400" : "text-slate-500 dark:text-slate-400"}`
-            },
-            task.date,
-            task.time ? ` \xB7 ${task.time}` : ""
-          ), isOverdue && /* @__PURE__ */ React.createElement("span", { className: "text-[9px] font-black text-red-500 dark:text-red-400 uppercase tracking-wider" }, "Vencida")), task.notes && /* @__PURE__ */ React.createElement("p", { className: "text-[11px] text-slate-500 dark:text-slate-400 leading-snug line-clamp-2" }, task.notes)),
-          /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-1 px-3 py-2.5 border-t border-slate-100 dark:border-slate-800" }, prevStatus ? /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: (e) => {
-                e.stopPropagation();
-                onChangeStatus(task, prevStatus);
-              },
-              "aria-label": `Volver a ${prevLabel}`,
-              className: "flex items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            },
-            /* @__PURE__ */ React.createElement(Icon, { name: "ChevronLeft", size: 11 }),
-            " Volver a",
-            " ",
-            prevLabel
-          ) : /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-0.5" }, /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: (e) => {
-                e.stopPropagation();
-                onEdit(task);
-              },
-              "aria-label": `Editar ${task.title || "tarea"}`,
-              title: "Editar",
-              className: "p-1.5 rounded-lg text-slate-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors opacity-60 group-hover:opacity-100"
-            },
-            /* @__PURE__ */ React.createElement(Icon, { name: "Edit", size: 13 })
-          ), /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: (e) => {
-                e.stopPropagation();
-                onDelete(task.id);
-              },
-              "aria-label": `Eliminar ${task.title || "tarea"}`,
-              title: "Eliminar",
-              className: "p-1.5 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors opacity-60 group-hover:opacity-100"
-            },
-            /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 13 })
-          ), nextStatus && /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: (e) => {
-                e.stopPropagation();
-                onChangeStatus(task, nextStatus);
-              },
-              className: `flex items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-${col.color}-500 hover:bg-${col.color}-600 text-white transition-colors ml-1`
-            },
-            nextStatus === "cerrado" ? "Cerrar" : "Avanzar",
-            " ",
-            /* @__PURE__ */ React.createElement(
-              Icon,
-              {
-                name: nextStatus === "cerrado" ? "Check" : "ChevronRight",
-                size: 11
-              }
-            )
-          )))
+            assignee: member ? {
+              name: member.name,
+              initials: getInitials(member.name),
+              className: `bg-${AVATAR_FAMILY[member.color] || "violet"}-600 text-white`
+            } : null,
+            menuItems
+          }
         );
-      }))
+      })
     );
   })));
 };
