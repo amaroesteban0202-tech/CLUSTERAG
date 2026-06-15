@@ -3858,6 +3858,27 @@ function App() {
       );
     }
   };
+  const updateMyProfile = async (data) => {
+    if (!currentUserProfile?.id) {
+      showToast("No hay un perfil para editar", "error");
+      return;
+    }
+    await runMutation({
+      permission: null,
+      action: "update",
+      entityType: "user",
+      entityId: currentUserProfile.id,
+      description: "Actualiza su propio perfil",
+      changes: { name: data.name, profession: data.profession },
+      successMessage: "Perfil actualizado",
+      execute: () => updateDoc(dataDoc("users", currentUserProfile.id), {
+        name: data.name || currentUserProfile.name || "",
+        profession: data.profession || "",
+        photo: data.photo || "",
+        updatedAt: nowIso()
+      })
+    });
+  };
   const saveRankingSettings = async (nextSettings) => {
     const normalizedSettings = sanitizeRankingSettings(nextSettings);
     const stamp = nowIso();
@@ -4128,7 +4149,16 @@ function App() {
           color: "emerald"
         }
       ),
-      isAdminConfigVisible && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2" }, "Configuraci\xF3n"), canAccessView(currentUserProfile, "control-center") && /* @__PURE__ */ React.createElement(
+      currentUserProfile && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2" }, "Configuraci\xF3n"), /* @__PURE__ */ React.createElement(
+        SidebarItem,
+        {
+          active: view === "settings",
+          onClick: () => handleNavigate("settings"),
+          icon: "User",
+          label: "Mi Perfil",
+          color: "purple"
+        }
+      ), isAdminConfigVisible && canAccessView(currentUserProfile, "control-center") && /* @__PURE__ */ React.createElement(
         SidebarItem,
         {
           active: view === "control-center",
@@ -4139,20 +4169,38 @@ function App() {
         }
       ))
     ),
-    /* @__PURE__ */ React.createElement("div", { className: "p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3" }, currentUserProfile?.photo ? /* @__PURE__ */ React.createElement(
-      "img",
+    /* @__PURE__ */ React.createElement("div", { className: "p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3" }, /* @__PURE__ */ React.createElement(
+      "button",
       {
-        src: currentUserProfile.photo,
-        alt: currentUserProfile?.name || "Perfil",
-        className: "w-10 h-10 rounded-full object-cover border border-black/5 dark:border-white/10 shrink-0"
-      }
-    ) : /* @__PURE__ */ React.createElement(
-      "div",
-      {
-        className: `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${profileBlocked ? "bg-red-500" : authEmail ? "bg-gradient-to-tr from-purple-500 to-indigo-500" : "bg-slate-500"}`
+        type: "button",
+        onClick: () => handleNavigate("settings"),
+        "aria-label": "Editar mi perfil",
+        className: "w-full flex items-center gap-3 p-1 -m-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors text-left"
       },
-      (currentUserProfile?.name || "IN").slice(0, 2).toUpperCase()
-    ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-700 dark:text-slate-200 truncate" }, currentUserProfile?.name || "Invitado"), currentUserProfile?.profession && /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-semibold text-slate-500 dark:text-slate-400 truncate" }, currentUserProfile.profession), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase truncate" }, sidebarFooterText))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+      currentUserProfile?.photo ? /* @__PURE__ */ React.createElement(
+        "img",
+        {
+          src: currentUserProfile.photo,
+          alt: currentUserProfile?.name || "Perfil",
+          className: "w-10 h-10 rounded-full object-cover border border-black/5 dark:border-white/10 shrink-0"
+        }
+      ) : /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          className: `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${profileBlocked ? "bg-red-500" : authEmail ? "bg-gradient-to-tr from-purple-500 to-indigo-500" : "bg-slate-500"}`
+        },
+        (currentUserProfile?.name || "IN").slice(0, 2).toUpperCase()
+      ),
+      /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-700 dark:text-slate-200 truncate" }, currentUserProfile?.name || "Invitado"), currentUserProfile?.profession && /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-semibold text-slate-500 dark:text-slate-400 truncate" }, currentUserProfile.profession), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase truncate" }, sidebarFooterText)),
+      /* @__PURE__ */ React.createElement(
+        Icon,
+        {
+          name: "ChevronRight",
+          size: 16,
+          className: "text-slate-400 dark:text-slate-500 shrink-0"
+        }
+      )
+    ), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
       "span",
       {
         className: `text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${profileBlocked ? "bg-red-50 text-red-600 dark:bg-red-500/20 dark:text-red-400" : currentVerificationMeta.color === "emerald" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400" : currentVerificationMeta.color === "amber" ? "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" : currentVerificationMeta.color === "blue" ? "bg-blue-50 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"}`
@@ -4439,6 +4487,13 @@ function App() {
         isEdit: true
       }),
       onResendVerification: requestUserVerification
+    }
+  ), view === "settings" && /* @__PURE__ */ React.createElement(
+    ProfileSettingsView,
+    {
+      profile: currentUserProfile,
+      roleLabel: ROLE_DEFINITIONS[currentUserProfile?.role]?.label || currentUserProfile?.role || "",
+      onSave: updateMyProfile
     }
   ), view === "general-calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Calendario General"), /* @__PURE__ */ React.createElement("div", { className: "flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden" }, /* @__PURE__ */ React.createElement(
     GeneralCalendarGrid,
@@ -5767,6 +5822,35 @@ var DashboardView = ({
       );
     });
   })())));
+};
+var ProfileSettingsView = ({ profile, roleLabel, onSave }) => {
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(e.currentTarget).entries());
+    onSave({
+      name: fd.name || "",
+      profession: fd.profession || "",
+      photo: fd.photo || ""
+    });
+  };
+  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in max-w-2xl" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl md:text-3xl font-black text-slate-800 dark:text-white" }, "Configuraci\xF3n"), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400 mt-1" }, "Administra tu perfil personal.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-300" }, /* @__PURE__ */ React.createElement(Icon, { name: "User", size: 15 }), " Perfil")), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6" }, !profile?.id ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "User", text: "Inicia sesi\xF3n para editar tu perfil." }) : /* @__PURE__ */ React.createElement("form", { onSubmit: handleSubmit, className: "space-y-5" }, /* @__PURE__ */ React.createElement(PhotoUploader, { defaultValue: profile.photo }), /* @__PURE__ */ React.createElement(
+    Input,
+    {
+      name: "name",
+      label: "Nombre",
+      placeholder: "Tu nombre",
+      defaultValue: profile.name,
+      required: true
+    }
+  ), /* @__PURE__ */ React.createElement(
+    Input,
+    {
+      name: "profession",
+      label: "Profesi\xF3n / Cargo",
+      placeholder: "ej. Director de agencia",
+      defaultValue: profile.profession
+    }
+  ), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1" }, "Correo"), /* @__PURE__ */ React.createElement("div", { className: "w-full p-3 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-500 dark:text-slate-400 text-sm flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Mail", size: 15 }), /* @__PURE__ */ React.createElement("span", { className: "truncate" }, profile.email || "\u2014"), /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0" }, "No editable"))), roleLabel && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1" }, "Rol"), /* @__PURE__ */ React.createElement("div", { className: "w-full p-3 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-500 dark:text-slate-400 text-sm flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "ShieldCheck", size: 15 }), roleLabel)), /* @__PURE__ */ React.createElement(Button, { type: "submit", full: true, color: "purple", icon: "Save" }, "Guardar cambios"))));
 };
 var TeamView = ({
   title,
