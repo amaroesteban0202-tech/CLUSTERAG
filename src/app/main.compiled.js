@@ -121,6 +121,14 @@ import {
   normalizeDateOnlyString,
   resolveStoredTaskRoomDate
 } from "/src/app/utils/date.js";
+import {
+  KPI_MIN_TASKS,
+  buildManagerKpiStats,
+  isEditingDelivered,
+  isWorkflowCompleted,
+  normalizeEditingWorkflowStatus,
+  rankPendingEditingTasks
+} from "/src/app/utils/kpi.js";
 var IconsMap = {
   LayoutDashboard,
   Users,
@@ -619,188 +627,7 @@ var getEditingHierarchyId = (task = {}) => {
   if (task.priority === "recurrente") return "p3";
   return "p2";
 };
-var DEFAULT_RANKING_SETTINGS = {
-  version: 2,
-  manager: {
-    taskPoints: { p1: 12, p2: 8, p3: 4, p4: 2 },
-    publishedBonus: 4,
-    onTimeBonus: 8,
-    earlyDeliveryBonus: 8,
-    earlyDeliveryCutoffHour: 12,
-    fastTurnaroundHours: 6,
-    fastTurnaroundBonus: 8,
-    overduePenalty: -12,
-    workflowStepPoints: 2,
-    batchDifferentClientCount: 4,
-    batchEarlyCompletedCount: 2,
-    batchEarlyBonus: 18,
-    planningLeadDays: 1,
-    planningTaskPoints: 3,
-    planningMaxPoints: 24,
-    creativityKeywordPoints: 4,
-    creativityMaxPoints: 20,
-    creativityKeywords: "idea,nuevo,nueva,propuesta,concepto,hook,creativo,creativa,innovacion"
-  },
-  editing: {
-    hierarchyScores: { p1: 440, p2: 300, p3: 170, p4: 90 },
-    priorityScores: {
-      urgente: 150,
-      alta: 100,
-      normal: 60,
-      baja: 15,
-      recurrente: 35
-    },
-    dateScores: { overdue: 190, today: 130, tomorrow: 75, soon: 30 },
-    statusPenalties: { aprobado: -150, publicado: -260 },
-    earlyDeliveryBonus: 50,
-    earlyDeliveryCutoffHour: 12
-  }
-};
-var toConfigNumber = (value, fallback = 0) => {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
-};
-var sanitizeNumberMap = (defaults = {}, values = {}) => Object.keys(defaults).reduce(
-  (acc, key) => ({
-    ...acc,
-    [key]: toConfigNumber(values?.[key], defaults[key])
-  }),
-  {}
-);
-var sanitizeRankingSettings = (settings = {}) => {
-  const source = settings || {};
-  const manager = source.manager || {};
-  const editing = source.editing || {};
-  return {
-    version: DEFAULT_RANKING_SETTINGS.version,
-    manager: {
-      taskPoints: sanitizeNumberMap(
-        DEFAULT_RANKING_SETTINGS.manager.taskPoints,
-        manager.taskPoints
-      ),
-      publishedBonus: toConfigNumber(
-        manager.publishedBonus,
-        DEFAULT_RANKING_SETTINGS.manager.publishedBonus
-      ),
-      onTimeBonus: toConfigNumber(
-        manager.onTimeBonus,
-        DEFAULT_RANKING_SETTINGS.manager.onTimeBonus
-      ),
-      earlyDeliveryBonus: toConfigNumber(
-        manager.earlyDeliveryBonus,
-        DEFAULT_RANKING_SETTINGS.manager.earlyDeliveryBonus
-      ),
-      earlyDeliveryCutoffHour: toConfigNumber(
-        manager.earlyDeliveryCutoffHour,
-        DEFAULT_RANKING_SETTINGS.manager.earlyDeliveryCutoffHour
-      ),
-      fastTurnaroundHours: Math.max(
-        0,
-        toConfigNumber(
-          manager.fastTurnaroundHours,
-          DEFAULT_RANKING_SETTINGS.manager.fastTurnaroundHours
-        )
-      ),
-      fastTurnaroundBonus: toConfigNumber(
-        manager.fastTurnaroundBonus,
-        DEFAULT_RANKING_SETTINGS.manager.fastTurnaroundBonus
-      ),
-      overduePenalty: -Math.abs(
-        toConfigNumber(
-          manager.overduePenalty,
-          DEFAULT_RANKING_SETTINGS.manager.overduePenalty
-        )
-      ),
-      workflowStepPoints: toConfigNumber(
-        manager.workflowStepPoints,
-        DEFAULT_RANKING_SETTINGS.manager.workflowStepPoints
-      ),
-      batchDifferentClientCount: Math.max(
-        1,
-        toConfigNumber(
-          manager.batchDifferentClientCount,
-          DEFAULT_RANKING_SETTINGS.manager.batchDifferentClientCount
-        )
-      ),
-      batchEarlyCompletedCount: Math.max(
-        1,
-        toConfigNumber(
-          manager.batchEarlyCompletedCount,
-          DEFAULT_RANKING_SETTINGS.manager.batchEarlyCompletedCount
-        )
-      ),
-      batchEarlyBonus: toConfigNumber(
-        manager.batchEarlyBonus,
-        DEFAULT_RANKING_SETTINGS.manager.batchEarlyBonus
-      ),
-      planningLeadDays: Math.max(
-        0,
-        toConfigNumber(
-          manager.planningLeadDays,
-          DEFAULT_RANKING_SETTINGS.manager.planningLeadDays
-        )
-      ),
-      planningTaskPoints: toConfigNumber(
-        manager.planningTaskPoints,
-        DEFAULT_RANKING_SETTINGS.manager.planningTaskPoints
-      ),
-      planningMaxPoints: Math.max(
-        0,
-        toConfigNumber(
-          manager.planningMaxPoints,
-          DEFAULT_RANKING_SETTINGS.manager.planningMaxPoints
-        )
-      ),
-      creativityKeywordPoints: toConfigNumber(
-        manager.creativityKeywordPoints,
-        DEFAULT_RANKING_SETTINGS.manager.creativityKeywordPoints
-      ),
-      creativityMaxPoints: Math.max(
-        0,
-        toConfigNumber(
-          manager.creativityMaxPoints,
-          DEFAULT_RANKING_SETTINGS.manager.creativityMaxPoints
-        )
-      ),
-      creativityKeywords: String(
-        manager.creativityKeywords || DEFAULT_RANKING_SETTINGS.manager.creativityKeywords
-      )
-    },
-    editing: {
-      hierarchyScores: sanitizeNumberMap(
-        DEFAULT_RANKING_SETTINGS.editing.hierarchyScores,
-        editing.hierarchyScores
-      ),
-      priorityScores: sanitizeNumberMap(
-        DEFAULT_RANKING_SETTINGS.editing.priorityScores,
-        editing.priorityScores
-      ),
-      dateScores: sanitizeNumberMap(
-        DEFAULT_RANKING_SETTINGS.editing.dateScores,
-        editing.dateScores
-      ),
-      statusPenalties: sanitizeNumberMap(
-        DEFAULT_RANKING_SETTINGS.editing.statusPenalties,
-        editing.statusPenalties
-      ),
-      earlyDeliveryBonus: toConfigNumber(
-        editing.earlyDeliveryBonus,
-        DEFAULT_RANKING_SETTINGS.editing.earlyDeliveryBonus
-      ),
-      earlyDeliveryCutoffHour: toConfigNumber(
-        editing.earlyDeliveryCutoffHour,
-        DEFAULT_RANKING_SETTINGS.editing.earlyDeliveryCutoffHour
-      )
-    }
-  };
-};
-var getAccountTaskHierarchyId = (task = {}) => {
-  if (task.hierarchy) return task.hierarchy;
-  if (task.priority === "urgente") return "p1";
-  if (task.priority === "recurrente") return "p3";
-  return "p2";
-};
-var getStatusTimestampPatch = (task = {}, newStatus = "", stamp = nowIso()) => {
+var getStatusTimestampPatch = (task = {}, newStatus = "", stamp = nowIso(), actorUserId = "", workflowType = "") => {
   const statusTimestamps = {
     ...task.statusTimestamps || {},
     [newStatus]: task.statusTimestamps?.[newStatus] || stamp
@@ -811,68 +638,37 @@ var getStatusTimestampPatch = (task = {}, newStatus = "", stamp = nowIso()) => {
   if (newStatus === "aprobado_internamente" && !task.internallyApprovedAt)
     patch.internallyApprovedAt = stamp;
   if (newStatus === "cerrado" && !task.closedAt) patch.closedAt = stamp;
-  return patch;
-};
-var getTaskCompletionIso = (task = {}) => {
-  const status = task.status || "";
-  if (task.statusTimestamps?.[status]) return task.statusTimestamps[status];
-  if (status === "publicado") return task.publishedAt || task.updatedAt || "";
-  if (status === "aprobado") return task.approvedAt || task.updatedAt || "";
-  if (status === "aprobado_internamente")
-    return task.internallyApprovedAt || task.updatedAt || "";
-  if (status === "cerrado") return task.closedAt || task.updatedAt || "";
-  return "";
-};
-var getHondurasDatePartsFromIso = (value = "") => {
-  if (!value) return null;
-  const parsedDate = new Date(value);
-  if (Number.isNaN(parsedDate.getTime())) return null;
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/Tegucigalpa",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      hourCycle: "h23"
-    }).formatToParts(parsedDate);
-    const getPart = (type) => parts.find((part) => part.type === type)?.value || "";
-    const year = getPart("year");
-    const month = getPart("month");
-    const day = getPart("day");
-    const hour = Number(getPart("hour"));
-    if (!year || !month || !day || !Number.isFinite(hour)) return null;
-    return { date: `${year}-${month}-${day}`, hour };
-  } catch (error) {
-    return null;
+  if (isWorkflowCompleted(newStatus) && !task.completedAt) {
+    patch.completedAt = stamp;
+    patch.completedByUserId = actorUserId || "";
+    patch.ownerAtCompletionId = task.contextId || task.assigneeUserId || "";
+    patch.dueDateAtCompletion = normalizeDateOnlyString(task.date);
   }
-};
-var getHondurasDateFromIso = (value = "") => getHondurasDatePartsFromIso(value)?.date || "";
-var getHoursBetween = (startValue = "", endValue = "") => {
-  const startMs = Date.parse(startValue);
-  const endMs = Date.parse(endValue);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs)
-    return null;
-  return (endMs - startMs) / 36e5;
-};
-var isCompletionOnTime = (task = {}, completionIso = "") => {
-  const dueDate = normalizeDateOnlyString(task.date);
-  const completionDate = getHondurasDateFromIso(completionIso);
-  if (!dueDate || !completionDate) return false;
-  return compareDateOnlyStrings(completionDate, dueDate) <= 0;
-};
-var isCompletionEarly = (task = {}, completionIso = "", cutoffHour = 12) => {
-  const dueDate = normalizeDateOnlyString(task.date);
-  const completionParts = getHondurasDatePartsFromIso(completionIso);
-  if (!dueDate || !completionParts) return false;
-  const dateDelta = compareDateOnlyStrings(completionParts.date, dueDate);
-  return dateDelta < 0 || dateDelta === 0 && completionParts.hour <= cutoffHour;
-};
-var isTaskPlannedAhead = (task = {}, leadDays = 1) => {
-  const dueDate = normalizeDateOnlyString(task.date);
-  const createdDate = getHondurasDateFromIso(task.createdAt);
-  if (!dueDate || !createdDate) return false;
-  return getDateOnlyDiffDays(dueDate, createdDate) >= leadDays;
+  if (workflowType === "editing") {
+    const previousEditingStatus = normalizeEditingWorkflowStatus(task.status);
+    const nextEditingStatus = normalizeEditingWorkflowStatus(newStatus);
+    const isEditorDelivery = [
+      "revision_interna",
+      "aprobado",
+      "publicado"
+    ].includes(nextEditingStatus);
+    const isReturnedToEditing = ["revision_interna", "aprobado", "publicado"].includes(
+      previousEditingStatus
+    ) && ["editar", "en_edicion"].includes(nextEditingStatus);
+    if (isEditorDelivery && !task.editorCompletedAt) {
+      patch.editorCompletedAt = stamp;
+      patch.editorCompletedByUserId = actorUserId || "";
+      patch.editorOwnerAtCompletionId = task.contextId || task.assigneeUserId || "";
+      patch.editorAssigneeUserAtCompletionId = task.assigneeUserId || "";
+      patch.editorAssigneesAtCompletion = Array.isArray(task.assignees) ? task.assignees.filter(Boolean) : [];
+      patch.editorDueDateAtCompletion = normalizeDateOnlyString(task.date);
+    }
+    if (isReturnedToEditing && task.editorCompletedAt) {
+      patch.editorReworkCount = Number(task.editorReworkCount || 0) + 1;
+      patch.lastEditorReworkAt = stamp;
+    }
+  }
+  return patch;
 };
 var getRankingMonthPeriod = (referenceDate = getHondurasTodayStr()) => {
   const normalizedDate = normalizeDateOnlyString(referenceDate) || getHondurasTodayStr();
@@ -888,32 +684,6 @@ var getRankingMonthPeriod = (referenceDate = getHondurasTodayStr()) => {
     end: `${year}-${monthText}-${String(lastDay).padStart(2, "0")}`,
     label: `${MONTH_NAMES[month - 1]} ${year}`
   };
-};
-var isDateWithinPeriod = (value = "", period = getRankingMonthPeriod()) => {
-  const normalizedDate = normalizeDateOnlyString(value);
-  if (!normalizedDate) return false;
-  return compareDateOnlyStrings(normalizedDate, period.start) >= 0 && compareDateOnlyStrings(normalizedDate, period.end) <= 0;
-};
-var toKpiPercent = (value = 0, maxValue = 0) => {
-  const numericValue = Number(value);
-  const numericMax = Number(maxValue);
-  if (!Number.isFinite(numericValue) || !Number.isFinite(numericMax) || numericMax <= 0)
-    return 0;
-  return Math.max(
-    0,
-    Math.min(100, Math.round(numericValue / numericMax * 100))
-  );
-};
-var getRankingKeywords = (value = "") => String(value || "").split(",").map((item) => normalizeNameKey(item)).filter(Boolean);
-var hasCreativitySignal = (task = {}, keywords = []) => {
-  if (keywords.length === 0) return false;
-  const commentText = Array.isArray(task.comments) ? task.comments.map((item) => item.text || "").join(" ") : "";
-  const checklistText = Array.isArray(task.checklist) ? task.checklist.map((item) => item.text || "").join(" ") : "";
-  const searchableText = normalizeNameKey(
-    [task.title, task.notes, commentText, checklistText].filter(Boolean).join(" ")
-  );
-  if (!searchableText) return false;
-  return keywords.some((keyword) => searchableText.includes(keyword));
 };
 var isAccountTaskDone = (task = {}) => ["aprobado_internamente", "publicado"].includes(task.status);
 var getManagerLinkedUserMatches = (manager = {}, users = []) => {
@@ -937,179 +707,6 @@ var isManagerLinkedToInactiveUser = (manager = {}, users = []) => {
   const matches = getManagerLinkedUserMatches(manager, users);
   if (matches.length === 0) return false;
   return matches.some((user) => user.isActive === false);
-};
-var buildManagerRankingStats = ({
-  managers = [],
-  users = [],
-  clients = [],
-  accountTasks = [],
-  rankingSettings = DEFAULT_RANKING_SETTINGS,
-  rankingPeriod = getRankingMonthPeriod()
-}) => {
-  const rules = sanitizeRankingSettings(rankingSettings).manager;
-  const todayStr = getHondurasTodayStr();
-  const creativityKeywords = getRankingKeywords(rules.creativityKeywords);
-  const rankingManagers = managers.filter(
-    (manager) => !isManagerLinkedToInactiveUser(manager, users)
-  );
-  return rankingManagers.map((manager) => {
-    const mTasks = accountTasks.filter(
-      (task) => task.contextId === manager.id && isDateWithinPeriod(task.date, rankingPeriod)
-    );
-    const completedTasksArr = mTasks.filter(isAccountTaskDone);
-    let taskScore = 0;
-    let taskScoreMax = 0;
-    let completionScore = 0;
-    let completionScoreMax = 0;
-    let efficiencyScore = 0;
-    let efficiencyScoreMax = 0;
-    let onTimeCount = 0;
-    let earlyCount = 0;
-    let fastTurnaroundCount = 0;
-    let overdueCount = 0;
-    mTasks.forEach((task) => {
-      const hierarchy = getAccountTaskHierarchyId(task);
-      taskScoreMax += Math.max(
-        0,
-        rules.taskPoints[hierarchy] ?? rules.taskPoints.p2
-      );
-      taskScoreMax += Math.max(0, rules.publishedBonus);
-      completionScoreMax += Math.max(0, rules.workflowStepPoints);
-      efficiencyScoreMax += Math.max(0, rules.onTimeBonus) + Math.max(0, rules.earlyDeliveryBonus) + Math.max(0, rules.fastTurnaroundBonus);
-    });
-    completedTasksArr.forEach((task) => {
-      const hierarchy = getAccountTaskHierarchyId(task);
-      taskScore += rules.taskPoints[hierarchy] ?? rules.taskPoints.p2;
-      if (task.status === "publicado") taskScore += rules.publishedBonus;
-      completionScore += rules.workflowStepPoints;
-      const completionIso = getTaskCompletionIso(task);
-      const onTime = isCompletionOnTime(task, completionIso);
-      if (onTime) {
-        efficiencyScore += rules.onTimeBonus;
-        onTimeCount++;
-      } else if (normalizeDateOnlyString(task.date) && completionIso) {
-        efficiencyScore += rules.overduePenalty;
-        overdueCount++;
-      }
-      if (isCompletionEarly(task, completionIso, rules.earlyDeliveryCutoffHour)) {
-        efficiencyScore += rules.earlyDeliveryBonus;
-        earlyCount++;
-      }
-      const turnaroundHours = getHoursBetween(task.createdAt, completionIso);
-      if (rules.fastTurnaroundHours > 0 && turnaroundHours !== null && turnaroundHours <= rules.fastTurnaroundHours) {
-        efficiencyScore += rules.fastTurnaroundBonus;
-        fastTurnaroundCount++;
-      }
-    });
-    mTasks.filter(
-      (task) => !isAccountTaskDone(task) && isDateBeforeDateString(task.date, todayStr)
-    ).forEach(() => {
-      efficiencyScore += rules.overduePenalty;
-      overdueCount++;
-    });
-    const tasksByDate = mTasks.reduce((acc, task) => {
-      const date = normalizeDateOnlyString(task.date);
-      if (!date) return acc;
-      if (!acc.has(date)) acc.set(date, []);
-      acc.get(date).push(task);
-      return acc;
-    }, /* @__PURE__ */ new Map());
-    let batchBonusCount = 0;
-    tasksByDate.forEach((items) => {
-      const differentClients = new Set(
-        items.map((task) => task.clientId).filter(Boolean)
-      ).size;
-      if (differentClients < rules.batchDifferentClientCount) return;
-      if (items.length >= rules.batchEarlyCompletedCount) {
-        efficiencyScoreMax += Math.max(0, rules.batchEarlyBonus);
-      }
-      const earlyCompleted = items.filter(
-        (task) => isAccountTaskDone(task) && isCompletionEarly(
-          task,
-          getTaskCompletionIso(task),
-          rules.earlyDeliveryCutoffHour
-        )
-      ).length;
-      if (earlyCompleted >= rules.batchEarlyCompletedCount) {
-        efficiencyScore += rules.batchEarlyBonus;
-        batchBonusCount++;
-      }
-    });
-    const monthlyClientCount = new Set(
-      mTasks.map((task) => task.clientId).filter(Boolean)
-    ).size;
-    const workflowTotal = mTasks.length;
-    const workflowCompleted = completedTasksArr.length;
-    const plannedTasks = mTasks.filter(
-      (task) => isTaskPlannedAhead(task, rules.planningLeadDays)
-    ).length;
-    const planningScore = Math.min(
-      plannedTasks * rules.planningTaskPoints,
-      rules.planningMaxPoints
-    );
-    const planningScoreMax = Math.min(
-      mTasks.length * Math.max(0, rules.planningTaskPoints),
-      Math.max(0, rules.planningMaxPoints)
-    );
-    const creativitySignals = mTasks.filter(
-      (task) => hasCreativitySignal(task, creativityKeywords)
-    ).length;
-    const creativityScore = Math.min(
-      creativitySignals * rules.creativityKeywordPoints,
-      rules.creativityMaxPoints
-    );
-    const creativityScoreMax = Math.min(
-      mTasks.length * Math.max(0, rules.creativityKeywordPoints),
-      Math.max(0, rules.creativityMaxPoints)
-    );
-    const rawScore = Math.round(
-      taskScore + completionScore + efficiencyScore + planningScore + creativityScore
-    );
-    const maxScore = Math.round(
-      taskScoreMax + completionScoreMax + efficiencyScoreMax + planningScoreMax + creativityScoreMax
-    );
-    const finalScore = toKpiPercent(rawScore, maxScore);
-    const mappedColorName = LEGACY_COLOR_MAP[manager.color] || manager.color || "slate";
-    return {
-      ...manager,
-      mappedColor: mappedColorName,
-      totalTasks: mTasks.length,
-      completedTasks: completedTasksArr.length,
-      totalClients: monthlyClientCount,
-      workflowTotal,
-      workflowCompleted,
-      taskScore,
-      taskScoreMax,
-      completionScore,
-      completionScoreMax,
-      efficiencyScore,
-      efficiencyScoreMax,
-      planningScore,
-      planningScoreMax,
-      creativityScore,
-      creativityScoreMax,
-      rawScore,
-      maxScore,
-      score: finalScore,
-      taskPercent: toKpiPercent(taskScore, taskScoreMax),
-      completionPercent: toKpiPercent(completionScore, completionScoreMax),
-      efficiencyPercent: toKpiPercent(efficiencyScore, efficiencyScoreMax),
-      planningCreativityPercent: toKpiPercent(
-        planningScore + creativityScore,
-        planningScoreMax + creativityScoreMax
-      ),
-      onTimeCount,
-      earlyCount,
-      fastTurnaroundCount,
-      overdueCount,
-      batchBonusCount,
-      plannedTasks,
-      creativitySignals,
-      rankingPeriod
-    };
-  }).sort(
-    (a, b) => b.score - a.score || b.rawScore - a.rawScore || b.efficiencyScore - a.efficiencyScore || a.name.localeCompare(b.name)
-  );
 };
 var isTaskAssignedToProfile = (task, profile, contextIds = []) => {
   const profileId = profile?.id;
@@ -1210,7 +807,8 @@ var useTaskRoomState = (storageKey, options = {}) => {
 };
 var EDITING_STATUS_OPTIONS = [
   { id: "editar", label: "Por Editar" },
-  { id: "correccion", label: "En Correccion" },
+  { id: "en_edicion", label: "En Edicion" },
+  { id: "revision_interna", label: "En Revision" },
   { id: "aprobado", label: "Aprobado" },
   { id: "publicado", label: "Publicado" }
 ];
@@ -1256,10 +854,6 @@ function App() {
   const [managementTasks, setManagementTasks] = useState([]);
   const [appUsers, setAppUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
-  const [rankingSettings, setRankingSettings] = useState(
-    DEFAULT_RANKING_SETTINGS
-  );
-  const [rankingSettingsDocId, setRankingSettingsDocId] = useState("");
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedManager, setSelectedManager] = useState(null);
   const [selectedEditor, setSelectedEditor] = useState(null);
@@ -1776,21 +1370,6 @@ function App() {
         errHandler
       ),
       onSnapshot(
-        dataCollection("ranking_settings"),
-        (snapshot) => {
-          const records = snapshot.docs.map((docItem) => ({
-            id: docItem.id,
-            ...docItem.data()
-          }));
-          const activeSettings = records.find((item) => item.id === "default") || records[records.length - 1] || null;
-          setRankingSettingsDocId(activeSettings?.id || "");
-          setRankingSettings(
-            sanitizeRankingSettings(activeSettings || DEFAULT_RANKING_SETTINGS)
-          );
-        },
-        errHandler
-      ),
-      onSnapshot(
         query(
           dataCollection("audit_logs"),
           orderBy("createdAt", "desc"),
@@ -2139,7 +1718,7 @@ function App() {
         label: "Edicion",
         view: "editions",
         defaultTime: "18:00",
-        done: (task) => task.status === "aprobado" || task.status === "publicado",
+        done: isEditingDelivered,
         assigned: (task) => isTaskAssignedToProfile(task, currentUserProfile, [
           currentUserProfile?.linkedEditorId
         ])
@@ -3157,7 +2736,7 @@ function App() {
           updatedAt: nowIso()
         });
         const tasksToMove = accountTasks.filter(
-          (task) => task.clientId === client.id
+          (task) => task.clientId === client.id && !isAccountTaskDone(task)
         );
         await Promise.all(
           tasksToMove.map(
@@ -3296,6 +2875,11 @@ function App() {
   };
   const updateAccountTask = async (id, data) => {
     const manager = managers.find((item) => item.id === data.contextId);
+    const existingTask = accountTasks.find((item) => item.id === id);
+    const historicalOwnerPatch = existingTask && isAccountTaskDone(existingTask) && (!existingTask.ownerAtCompletionId || !existingTask.dueDateAtCompletion) ? {
+      ownerAtCompletionId: existingTask.ownerAtCompletionId || existingTask.contextId || "",
+      dueDateAtCompletion: existingTask.dueDateAtCompletion || normalizeDateOnlyString(existingTask.date)
+    } : {};
     await runMutation({
       permission: "manage_account_tasks",
       action: "update",
@@ -3307,6 +2891,7 @@ function App() {
       execute: () => updateDoc(dataDoc("account_tasks", id), {
         ...data,
         assigneeUserId: manager?.userId || "",
+        ...historicalOwnerPatch,
         updatedAt: nowIso()
       }),
       afterSuccess: closeModal
@@ -3322,7 +2907,13 @@ function App() {
         entityType: "accountTask",
         description: `Mueve task ${task.title} a ${newStatus}`,
         changes: { previousStatus: task.status, nextStatus: newStatus },
-        statusPatch: (stamp) => getStatusTimestampPatch(task, newStatus, stamp),
+        statusPatch: (stamp) => getStatusTimestampPatch(
+          task,
+          newStatus,
+          stamp,
+          currentUserProfile?.id,
+          "account"
+        ),
         afterSuccess: () => {
           if (newStatus === "publicado") triggerConfetti();
         }
@@ -3331,6 +2922,9 @@ function App() {
   };
   const addEditingTask = async (data) => {
     const editor = editors.find((item) => item.id === data.contextId);
+    const stamp = nowIso();
+    const initialStatus = data.status || "editar";
+    const initialTask = { ...data, status: initialStatus };
     await runMutation({
       permission: "create_editing_tasks",
       action: "create",
@@ -3346,15 +2940,31 @@ function App() {
         hierarchy: data.hierarchy || getEditingHierarchyId(data),
         assigneeUserId: editor?.userId || "",
         notificationsEnabled: data.notificationsEnabled !== false,
-        status: data.status || "editar",
-        createdAt: nowIso(),
-        updatedAt: nowIso()
+        status: initialStatus,
+        ...getStatusTimestampPatch(
+          initialTask,
+          initialStatus,
+          stamp,
+          currentUserProfile?.id,
+          "editing"
+        ),
+        createdAt: stamp,
+        updatedAt: stamp
       }),
       afterSuccess: closeModal
     });
   };
   const updateEditingTask = async (id, data) => {
     const editor = editors.find((item) => item.id === data.contextId);
+    const existingTask = editingTasks.find((item) => item.id === id);
+    const stamp = nowIso();
+    const statusPatch = existingTask?.status && data.status && existingTask.status !== data.status ? getStatusTimestampPatch(
+      existingTask,
+      data.status,
+      stamp,
+      currentUserProfile?.id,
+      "editing"
+    ) : {};
     await runMutation({
       permission: "manage_editing_tasks",
       action: "update",
@@ -3367,7 +2977,8 @@ function App() {
         ...data,
         hierarchy: data.hierarchy || getEditingHierarchyId(data),
         assigneeUserId: editor?.userId || "",
-        updatedAt: nowIso()
+        ...statusPatch,
+        updatedAt: stamp
       }),
       afterSuccess: closeModal
     });
@@ -3386,7 +2997,13 @@ function App() {
           nextStatus: newStatus,
           hierarchy: getEditingHierarchyId(task)
         },
-        statusPatch: (stamp) => getStatusTimestampPatch(task, newStatus, stamp),
+        statusPatch: (stamp) => getStatusTimestampPatch(
+          task,
+          newStatus,
+          stamp,
+          currentUserProfile?.id,
+          "editing"
+        ),
         afterSuccess: () => {
           if (newStatus === "aprobado" || newStatus === "publicado")
             triggerConfetti();
@@ -3475,7 +3092,13 @@ function App() {
         entityType: "managementTask",
         description: `Mueve tarea de gestion ${task.title} a ${newStatus}`,
         changes: { previousStatus: task.status, nextStatus: newStatus },
-        statusPatch: (stamp) => getStatusTimestampPatch(task, newStatus, stamp)
+        statusPatch: (stamp) => getStatusTimestampPatch(
+          task,
+          newStatus,
+          stamp,
+          currentUserProfile?.id,
+          "management"
+        )
       });
     }
   };
@@ -3497,8 +3120,13 @@ function App() {
     };
     const col = colMap[type];
     if (!col) return;
+    const historicalOwnerPatch = type === "accountTask" && isAccountTaskDone(task) && (!task.ownerAtCompletionId || !task.dueDateAtCompletion) ? {
+      ownerAtCompletionId: task.ownerAtCompletionId || task.contextId || "",
+      dueDateAtCompletion: task.dueDateAtCompletion || normalizeDateOnlyString(task.date)
+    } : {};
     await updateDoc(dataDoc(col, task.id), {
       contextId: contextId || null,
+      ...historicalOwnerPatch,
       updatedAt: nowIso()
     });
   };
@@ -3877,34 +3505,6 @@ function App() {
       })
     });
   };
-  const saveRankingSettings = async (nextSettings) => {
-    const normalizedSettings = sanitizeRankingSettings(nextSettings);
-    const stamp = nowIso();
-    const payload = {
-      ...normalizedSettings,
-      updatedAt: stamp,
-      updatedBy: {
-        id: currentUserProfile?.id || "",
-        name: currentUserProfile?.name || "",
-        email: authEmail || ""
-      }
-    };
-    if (!rankingSettingsDocId) payload.createdAt = stamp;
-    await runMutation({
-      permission: "manage_ranking_settings",
-      action: rankingSettingsDocId ? "update" : "create",
-      entityType: "ranking_settings",
-      entityId: rankingSettingsDocId || "new",
-      description: "Actualiza reglas de ranking",
-      changes: normalizedSettings,
-      successMessage: "Reglas de ranking guardadas",
-      execute: () => rankingSettingsDocId ? updateDoc(
-        dataDoc("ranking_settings", rankingSettingsDocId),
-        payload
-      ) : addDoc(dataCollection("ranking_settings"), payload),
-      afterSuccess: () => setRankingSettings(normalizedSettings)
-    });
-  };
   const handleDelete = async () => {
     const { type, id } = deleteConfirm;
     const map = {
@@ -4257,8 +3857,7 @@ function App() {
       accountTasks,
       managementTasks,
       currentUserProfile,
-      onSignIn: handleGoogleSignIn,
-      rankingSettings
+      onSignIn: handleGoogleSignIn
     }
   )), view === "clients" && /* @__PURE__ */ React.createElement(
     ClientsView,
@@ -4412,7 +4011,6 @@ function App() {
       editors,
       clients,
       currentUserProfile,
-      rankingSettings,
       onAdd: (dateStr) => setModalConfig({
         isOpen: true,
         type: "editingTask",
@@ -4479,8 +4077,6 @@ function App() {
       editors,
       auditLogs,
       currentUserProfile,
-      rankingSettings,
-      onSaveRankingSettings: saveRankingSettings,
       onAdd: () => setModalConfig({ isOpen: true, type: "user" }),
       onEdit: (userRecord) => setModalConfig({
         isOpen: true,
@@ -5477,8 +5073,7 @@ var DashboardView = ({
   accountTasks,
   managementTasks = [],
   currentUserProfile,
-  onSignIn,
-  rankingSettings = DEFAULT_RANKING_SETTINGS
+  onSignIn
 }) => {
   const [rankingRefDate, setRankingRefDate] = React.useState(getHondurasTodayStr());
   const goToPrevMonth = () => {
@@ -5568,12 +5163,13 @@ var DashboardView = ({
     const tp = getRankingMonthPeriod(todayStr);
     return rankingPeriod.year === tp.year && rankingPeriod.month === tp.month;
   })();
-  const managerStats = buildManagerRankingStats({
-    managers,
-    users,
+  const managerStats = buildManagerKpiStats({
+    managers: managers.filter((manager) => !isManagerLinkedToInactiveUser(manager, users)).map((manager) => ({
+      ...manager,
+      mappedColor: LEGACY_COLOR_MAP[manager.color] || manager.color || "slate"
+    })),
     clients,
     accountTasks,
-    rankingSettings,
     rankingPeriod
   });
   return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 animate-in fade-in duration-500" }, /* @__PURE__ */ React.createElement("div", { className: "bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-700 rounded-3xl p-8 md:p-10 text-white shadow-xl relative overflow-hidden" }, /* @__PURE__ */ React.createElement("div", { className: "absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" }), /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-0 right-1/4 w-40 h-40 bg-purple-400 opacity-20 rounded-full blur-2xl translate-y-1/3" }), /* @__PURE__ */ React.createElement("div", { className: "relative z-10" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-2" }, /* @__PURE__ */ React.createElement("span", { className: "px-3 py-1 bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md border border-white/10" }, "Resumen Operativo")), /* @__PURE__ */ React.createElement("h2", { className: "text-3xl md:text-4xl font-black mb-2 tracking-tight" }, "\xA1Hola, Equipo Cluster! \u{1F44B}"), /* @__PURE__ */ React.createElement("p", { className: "text-purple-100 font-medium text-sm md:text-base max-w-xl leading-relaxed" }, "Hoy es ", /* @__PURE__ */ React.createElement("span", { className: "capitalize" }, formattedDate), ". Tienes", " ", /* @__PURE__ */ React.createElement("strong", { className: "text-white" }, urgentTasks.length), " tareas que requieren atenci\xF3n prioritaria. Mant\xE9n el ritmo, ya han completado ", completedTasks, " asignaciones en total.")), /* @__PURE__ */ React.createElement(
@@ -5659,7 +5255,7 @@ var DashboardView = ({
       "Vence: ",
       t.date
     )))
-  ))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm mt-6" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white mb-1 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trophy", size: 20, className: "text-yellow-500" }), " KPI mensual por Account"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Ranking 0-100% basado en tareas, tiempos, planificacion e ideas.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+  ))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm mt-6" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white mb-1 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trophy", size: 20, className: "text-yellow-500" }), " KPI mensual por Account"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "KPI = porcentaje de tareas del mes completadas. La puntualidad solo usa cierres con fecha verificable.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: goToPrevMonth,
@@ -5683,10 +5279,9 @@ var DashboardView = ({
       text: "No hay Accounts para evaluar a\xFAn."
     }
   )) : (() => {
-    const RANKING_MIN_TASKS = 5;
     let qualifiedRank = 0;
     return managerStats.map((ms) => {
-      const hasEnoughTasks = ms.totalTasks >= RANKING_MIN_TASKS;
+      const hasEnoughTasks = ms.totalTasks >= KPI_MIN_TASKS;
       if (hasEnoughTasks) qualifiedRank++;
       const rank = hasEnoughTasks ? qualifiedRank : null;
       const isTop = rank === 1;
@@ -5727,7 +5322,7 @@ var DashboardView = ({
           "div",
           {
             className: `w-8 h-8 shrink-0 flex items-center justify-center font-black rounded-full shadow-sm text-sm ${medalBg} ${medalColor}`,
-            title: !hasEnoughTasks ? `M\xEDnimo ${RANKING_MIN_TASKS} tareas para clasificar` : void 0
+            title: !hasEnoughTasks ? `M\xEDnimo ${KPI_MIN_TASKS} tareas para clasificar` : void 0
           },
           hasEnoughTasks ? `#${rank}` : "\u2014"
         ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("h4", { className: "min-w-0 font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "truncate" }, ms.name), isTop && /* @__PURE__ */ React.createElement(
@@ -5746,42 +5341,24 @@ var DashboardView = ({
           ms.score,
           "%"
         ))),
-        /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800/80 dark:bg-slate-900/40" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Tareas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.completedTasks, "/", ms.totalTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "resueltas")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Temprano"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.earlyCount), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, ms.onTimeCount, " a tiempo")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Planning"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.plannedTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "preparadas")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Ideas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.creativitySignals), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "senales"))),
+        /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800/80 dark:bg-slate-900/40" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Tareas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.completedTasks, "/", ms.totalTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "resueltas")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "A tiempo"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.onTimePercent === null ? "N/D" : `${ms.onTimePercent}%`), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, ms.onTimeCount, "/", ms.measuredCompletionCount, " cierres medidos")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Pendientes"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.pendingTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "por completar")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Atrasadas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.overdueTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "vencidas y pendientes"))),
         /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ React.createElement(
-          CompactMetricBar,
-          {
-            label: "Ejecucion",
-            value: ms.taskPercent,
-            color: ms.mappedColor,
-            meta: `${ms.taskPercent}%`,
-            helper: ms.totalTasks > 0 ? `${ms.completedTasks} de ${ms.totalTasks} tareas cerradas` : "Sin tareas asignadas"
-          }
-        ), /* @__PURE__ */ React.createElement(
           CompactMetricBar,
           {
             label: "Cumplimiento",
             value: ms.completionPercent,
             color: ms.mappedColor,
             meta: `${ms.completionPercent}%`,
-            helper: ms.workflowTotal > 0 ? `${ms.workflowCompleted} de ${ms.workflowTotal} tareas del mes completadas` : "Sin tareas del mes"
+            helper: ms.totalTasks > 0 ? `${ms.completedTasks} de ${ms.totalTasks} tareas cerradas` : "Sin tareas asignadas"
           }
         ), /* @__PURE__ */ React.createElement(
           CompactMetricBar,
           {
-            label: "Eficiencia",
-            value: ms.efficiencyPercent,
+            label: "Puntualidad verificada",
+            value: ms.onTimePercent || 0,
             color: ms.mappedColor,
-            meta: `${ms.efficiencyPercent}%`,
-            helper: `${ms.earlyCount} tempranas, ${ms.fastTurnaroundCount} rapidas, ${ms.overdueCount} atrasos`
-          }
-        ), /* @__PURE__ */ React.createElement(
-          CompactMetricBar,
-          {
-            label: "Plan + ideas",
-            value: ms.planningCreativityPercent,
-            color: ms.mappedColor,
-            meta: `${ms.planningCreativityPercent}%`,
-            helper: `${ms.planningScore} planificacion, ${ms.creativityScore} creatividad`
+            meta: ms.onTimePercent === null ? "N/D" : `${ms.onTimePercent}%`,
+            helper: ms.measuredCompletionCount > 0 ? `${ms.onTimeCount} de ${ms.measuredCompletionCount} cierres a tiempo` : "Los cierres historicos no tienen fecha verificable"
           }
         )),
         /* @__PURE__ */ React.createElement("div", { className: "hidden" }, /* @__PURE__ */ React.createElement(
@@ -6634,7 +6211,6 @@ var EditionsRoomView = ({
   editors,
   clients,
   currentUserProfile,
-  rankingSettings = DEFAULT_RANKING_SETTINGS,
   onAdd,
   onEdit,
   onChangeStatus,
@@ -6705,27 +6281,11 @@ var EditionsRoomView = ({
     setFilterMode("date");
     onAdd(nextDate);
   };
-  const editingRankingRules = sanitizeRankingSettings(rankingSettings).editing;
-  const rankedTasks = filteredTasks.map((task) => {
-    const hierarchy = getEditingHierarchyId(task);
-    const delta = task.date ? getDateOnlyDiffDays(task.date, todayStr) : 99;
-    const hierarchyScore = editingRankingRules.hierarchyScores[hierarchy] ?? editingRankingRules.hierarchyScores.p2;
-    const priorityBonus = editingRankingRules.priorityScores[task.priority] ?? editingRankingRules.priorityScores.normal;
-    const dateBonus = delta < 0 ? editingRankingRules.dateScores.overdue : delta === 0 ? editingRankingRules.dateScores.today : delta === 1 ? editingRankingRules.dateScores.tomorrow : delta <= 3 ? editingRankingRules.dateScores.soon : 0;
-    const statusPenalty = editingRankingRules.statusPenalties[task.status] || 0;
-    const earlyDeliveryBonus = isCompletedStatus(task.status) && isCompletionEarly(
-      task,
-      getTaskCompletionIso(task),
-      editingRankingRules.earlyDeliveryCutoffHour
-    ) ? editingRankingRules.earlyDeliveryBonus : 0;
-    return {
-      ...task,
-      hierarchy,
-      rankScore: hierarchyScore + priorityBonus + dateBonus + statusPenalty + earlyDeliveryBonus
-    };
-  }).sort(
-    (a, b) => b.rankScore - a.rankScore || (a.date || "").localeCompare(b.date || "") || a.title.localeCompare(b.title)
-  );
+  const rankedTasks = rankPendingEditingTasks(filteredTasks, todayStr);
+  const displayTasks = [
+    ...rankedTasks,
+    ...filteredTasks.filter((task) => isCompletedStatus(task.status))
+  ];
   const rankingMap = rankedTasks.reduce(
     (acc, task, index) => ({ ...acc, [task.id]: index + 1 }),
     {}
@@ -6800,7 +6360,9 @@ var EditionsRoomView = ({
       setSearchTerm
     }
   ), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-5 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
-    const colTasks = filteredTasks.filter((t) => t.status === col.id);
+    const colTasks = displayTasks.filter(
+      (task) => normalizeEditingWorkflowStatus(task.status) === col.id
+    );
     const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
     const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
     const prevLabel = colIndex > 0 ? columns[colIndex - 1].title : "";
@@ -6821,7 +6383,7 @@ var EditionsRoomView = ({
       colTasks.map((t) => {
         const editor = editors.find((e) => e.id === t.contextId);
         const client = clients.find((c) => c.id === t.clientId);
-        const isOverdue = isDateBeforeDateString(t.date, todayStr) && col.id !== "publicado";
+        const isOverdue = isDateBeforeDateString(t.date, todayStr) && !isCompletedStatus(t.status);
         const hierarchyId = t.hierarchy || getEditingHierarchyId(t);
         const hierTone = hierarchyId === "p1" ? "red" : hierarchyId === "p2" ? "amber" : hierarchyId === "p3" ? "emerald" : "slate";
         const prioTone = t.priority === "urgente" ? "red" : t.priority === "recurrente" ? "emerald" : "amber";
@@ -7189,264 +6751,12 @@ var ManagementRoomView = ({
     );
   })));
 };
-var RankingNumberField = ({ label, value, onChange, min, max, step = 1 }) => /* @__PURE__ */ React.createElement("label", { className: "block min-w-0" }, /* @__PURE__ */ React.createElement("span", { className: "block text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-1" }, label), /* @__PURE__ */ React.createElement(
-  "input",
-  {
-    type: "number",
-    value,
-    min,
-    max,
-    step,
-    onChange: (event) => onChange(toConfigNumber(event.target.value, 0)),
-    className: "w-full min-h-[42px] rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-  }
-));
-var RankingRulesPanel = ({ rankingSettings, currentUserProfile, onSave }) => {
-  const [draft, setDraft] = useState(
-    () => sanitizeRankingSettings(rankingSettings)
-  );
-  const [saving, setSaving] = useState(false);
-  const canEdit = userHasPermission(
-    currentUserProfile,
-    "manage_ranking_settings"
-  );
-  useEffect(() => {
-    setDraft(sanitizeRankingSettings(rankingSettings));
-  }, [rankingSettings]);
-  if (!canEdit) return null;
-  const updateManagerValue = (key, value) => setDraft((current) => ({
-    ...current,
-    manager: { ...current.manager, [key]: value }
-  }));
-  const updateManagerMapValue = (group, key, value) => setDraft((current) => ({
-    ...current,
-    manager: {
-      ...current.manager,
-      [group]: { ...current.manager[group], [key]: value }
-    }
-  }));
-  const updateEditingValue = (key, value) => setDraft((current) => ({
-    ...current,
-    editing: { ...current.editing, [key]: value }
-  }));
-  const updateEditingMapValue = (group, key, value) => setDraft((current) => ({
-    ...current,
-    editing: {
-      ...current.editing,
-      [group]: { ...current.editing[group], [key]: value }
-    }
-  }));
-  const handleSave = async () => {
-    if (!onSave) return;
-    setSaving(true);
-    try {
-      await onSave(sanitizeRankingSettings(draft));
-    } finally {
-      setSaving(false);
-    }
-  };
-  return /* @__PURE__ */ React.createElement("section", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-5" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col lg:flex-row lg:items-center justify-between gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trophy", size: 18, className: "text-yellow-500" }), " Reglas de ranking"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400 mt-1" }, "Pesos activos para productividad, tiempos, planificacion e ideas.")), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row gap-2" }, /* @__PURE__ */ React.createElement(
-    "button",
-    {
-      type: "button",
-      onClick: () => setDraft(sanitizeRankingSettings(DEFAULT_RANKING_SETTINGS)),
-      className: "min-h-[42px] rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-    },
-    "Defaults"
-  ), /* @__PURE__ */ React.createElement(
-    "button",
-    {
-      type: "button",
-      onClick: handleSave,
-      disabled: saving,
-      className: "min-h-[42px] rounded-xl bg-purple-600 px-4 text-sm font-black text-white hover:bg-purple-700 disabled:opacity-60 flex items-center justify-center gap-2"
-    },
-    /* @__PURE__ */ React.createElement(
-      Icon,
-      {
-        name: saving ? "Loader2" : "Save",
-        size: 15,
-        className: saving ? "animate-spin" : ""
-      }
-    ),
-    "Guardar reglas"
-  ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 xl:grid-cols-3 gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3" }, "Entregas"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, Object.keys(draft.manager.taskPoints).map((key) => /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      key,
-      label: key.toUpperCase(),
-      value: draft.manager.taskPoints[key],
-      onChange: (value) => updateManagerMapValue("taskPoints", key, value)
-    }
-  )), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Publicado",
-      value: draft.manager.publishedBonus,
-      onChange: (value) => updateManagerValue("publishedBonus", value)
-    }
-  ), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Cumplimiento",
-      value: draft.manager.workflowStepPoints,
-      onChange: (value) => updateManagerValue("workflowStepPoints", value)
-    }
-  ))), /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3" }, "Tiempos"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "A tiempo",
-      value: draft.manager.onTimeBonus,
-      onChange: (value) => updateManagerValue("onTimeBonus", value)
-    }
-  ), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Temprano",
-      value: draft.manager.earlyDeliveryBonus,
-      onChange: (value) => updateManagerValue("earlyDeliveryBonus", value)
-    }
-  ), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Hora temprana",
-      value: draft.manager.earlyDeliveryCutoffHour,
-      min: 0,
-      max: 23,
-      onChange: (value) => updateManagerValue("earlyDeliveryCutoffHour", value)
-    }
-  ), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Atraso",
-      value: draft.manager.overduePenalty,
-      onChange: (value) => updateManagerValue("overduePenalty", value)
-    }
-  ), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Horas rapidas",
-      value: draft.manager.fastTurnaroundHours,
-      min: 0,
-      onChange: (value) => updateManagerValue("fastTurnaroundHours", value)
-    }
-  ), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Rapidez",
-      value: draft.manager.fastTurnaroundBonus,
-      onChange: (value) => updateManagerValue("fastTurnaroundBonus", value)
-    }
-  ))), /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3" }, "Lote temprano"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Cuentas",
-      value: draft.manager.batchDifferentClientCount,
-      min: 1,
-      onChange: (value) => updateManagerValue("batchDifferentClientCount", value)
-    }
-  ), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Entregas",
-      value: draft.manager.batchEarlyCompletedCount,
-      min: 1,
-      onChange: (value) => updateManagerValue("batchEarlyCompletedCount", value)
-    }
-  ), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Bonus lote",
-      value: draft.manager.batchEarlyBonus,
-      onChange: (value) => updateManagerValue("batchEarlyBonus", value)
-    }
-  ))), /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3" }, "Planificacion"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Dias antes",
-      value: draft.manager.planningLeadDays,
-      min: 0,
-      onChange: (value) => updateManagerValue("planningLeadDays", value)
-    }
-  ), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Puntos",
-      value: draft.manager.planningTaskPoints,
-      onChange: (value) => updateManagerValue("planningTaskPoints", value)
-    }
-  ), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Max",
-      value: draft.manager.planningMaxPoints,
-      min: 0,
-      onChange: (value) => updateManagerValue("planningMaxPoints", value)
-    }
-  ))), /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3" }, "Ideas"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Puntos",
-      value: draft.manager.creativityKeywordPoints,
-      onChange: (value) => updateManagerValue("creativityKeywordPoints", value)
-    }
-  ), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Max",
-      value: draft.manager.creativityMaxPoints,
-      min: 0,
-      onChange: (value) => updateManagerValue("creativityMaxPoints", value)
-    }
-  )), /* @__PURE__ */ React.createElement("label", { className: "mt-3 block" }, /* @__PURE__ */ React.createElement("span", { className: "block text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-1" }, "Palabras clave"), /* @__PURE__ */ React.createElement(
-    "textarea",
-    {
-      value: draft.manager.creativityKeywords,
-      onChange: (event) => updateManagerValue("creativityKeywords", event.target.value),
-      className: "w-full min-h-[86px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none focus:ring-2 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-    }
-  ))), /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/60 dark:bg-slate-950/40" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3" }, "Sala de Edicion"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, Object.keys(draft.editing.hierarchyScores).map((key) => /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      key: `h-${key}`,
-      label: key.toUpperCase(),
-      value: draft.editing.hierarchyScores[key],
-      onChange: (value) => updateEditingMapValue("hierarchyScores", key, value)
-    }
-  )), Object.keys(draft.editing.priorityScores).map((key) => /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      key: `p-${key}`,
-      label: key,
-      value: draft.editing.priorityScores[key],
-      onChange: (value) => updateEditingMapValue("priorityScores", key, value)
-    }
-  )), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Edicion temprano",
-      value: draft.editing.earlyDeliveryBonus,
-      onChange: (value) => updateEditingValue("earlyDeliveryBonus", value)
-    }
-  ), /* @__PURE__ */ React.createElement(
-    RankingNumberField,
-    {
-      label: "Hora temprana",
-      value: draft.editing.earlyDeliveryCutoffHour,
-      min: 0,
-      max: 23,
-      onChange: (value) => updateEditingValue("earlyDeliveryCutoffHour", value)
-    }
-  )))));
-};
 var UsersAccessView = ({
   users,
   managers,
   editors,
   auditLogs,
   currentUserProfile,
-  rankingSettings = DEFAULT_RANKING_SETTINGS,
-  onSaveRankingSettings,
   onAdd,
   onEdit,
   onResendVerification
@@ -7502,14 +6812,7 @@ var UsersAccessView = ({
       icon: "ClipboardList",
       color: "indigo"
     }
-  )), /* @__PURE__ */ React.createElement(
-    RankingRulesPanel,
-    {
-      rankingSettings,
-      currentUserProfile,
-      onSave: onSaveRankingSettings
-    }
-  ), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 xl:grid-cols-[1.05fr,1.3fr] gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white" }, "Directorio"), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black uppercase tracking-wider text-slate-500" }, getRoleMeta(currentUserProfile?.role).label)), /* @__PURE__ */ React.createElement("div", { className: "space-y-3 max-h-[540px] overflow-y-auto custom-scroll pr-2" }, filteredUsers.length === 0 ? /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 xl:grid-cols-[1.05fr,1.3fr] gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white" }, "Directorio"), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black uppercase tracking-wider text-slate-500" }, getRoleMeta(currentUserProfile?.role).label)), /* @__PURE__ */ React.createElement("div", { className: "space-y-3 max-h-[540px] overflow-y-auto custom-scroll pr-2" }, filteredUsers.length === 0 ? /* @__PURE__ */ React.createElement(
     EmptyState,
     {
       icon: "Users",
@@ -9412,7 +8715,9 @@ var CreateTaskModal = ({
         setTime(data.time || "");
         setHierarchy(data.hierarchy || data.editingHierarchy || "p2");
         setCategory(data.category || "seguimiento");
-        setStatus(data.status || "editar");
+        setStatus(
+          type === "editingTask" ? normalizeEditingWorkflowStatus(data.status || "editar") : data.status || "editar"
+        );
       } else {
         setTitle("");
         setNotes("");
@@ -10403,7 +9708,9 @@ var Modal = ({
         {
           name: "status",
           required: true,
-          defaultValue: data?.status || "editar",
+          defaultValue: normalizeEditingWorkflowStatus(
+            data?.status || "editar"
+          ),
           className: "w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-700 dark:text-slate-200"
         },
         EDITING_STATUS_OPTIONS.map((option) => /* @__PURE__ */ React.createElement("option", { key: option.id, value: option.id }, option.label))
@@ -10755,7 +10062,8 @@ var ReportsView = ({
     return key;
   };
   const getTaskAssigneeKeys = (task, type) => {
-    const explicitAssignees = Array.isArray(task.assignees) ? task.assignees.filter(Boolean) : [];
+    const storedAssignees = type === "editing" && isEditingDelivered(task) && Array.isArray(task.editorAssigneesAtCompletion) ? task.editorAssigneesAtCompletion : task.assignees;
+    const explicitAssignees = Array.isArray(storedAssignees) ? storedAssignees.filter(Boolean) : [];
     const keys = /* @__PURE__ */ new Set();
     if (type === "account")
       explicitAssignees.forEach(
@@ -10775,7 +10083,10 @@ var ReportsView = ({
       );
     if (keys.size === 0 && type === "editing")
       keys.add(
-        resolveEditorPerformanceKey(task.contextId, task.assigneeUserId)
+        resolveEditorPerformanceKey(
+          task.editorOwnerAtCompletionId || task.contextId,
+          task.editorAssigneeUserAtCompletionId || task.assigneeUserId
+        )
       );
     if (keys.size === 0 && type === "management")
       keys.add(
@@ -10785,10 +10096,12 @@ var ReportsView = ({
   };
   const dailyPerformanceByKey = /* @__PURE__ */ new Map();
   const addDailyPerformanceTask = (task, type) => {
-    const date = normalizeDateOnlyString(task.date);
+    const date = normalizeDateOnlyString(
+      type === "editing" && isEditingDelivered(task) ? task.editorDueDateAtCompletion || task.date : task.date
+    );
     if (!date) return;
     const areaKey = type === "account" ? "account" : type === "editing" ? "editing" : "management";
-    const isDone = type === "account" ? task.status === "publicado" : type === "editing" ? ["aprobado", "publicado"].includes(task.status) : task.status === "cerrado";
+    const isDone = type === "account" ? task.status === "publicado" : type === "editing" ? isEditingDelivered(task) : task.status === "cerrado";
     getTaskAssigneeKeys(task, type).forEach((personKey) => {
       const person = performancePeopleByKey.get(personKey) || addPerformancePerson(personKey, {});
       const rowKey = `${date}:${person.id}`;
@@ -11028,7 +10341,7 @@ var ReportsView = ({
       icon: "Clock",
       sub: "abiertas en el rango"
     }
-  )), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden" }, dailyPerformanceStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 font-bold" }, "Sin desempeno diario en este rango de fechas") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[800px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Fecha"), /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Usuario"), /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Rol"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Areas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Total"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Finalizadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Pendientes"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Desempeno"))), /* @__PURE__ */ React.createElement("tbody", null, dailyPerformanceStats.map((row, i) => {
+  )), /* @__PURE__ */ React.createElement("p", { className: "rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-semibold text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300" }, "En Edicion, la tarea cuenta como finalizada para el editor al pasar a Revision Interna. La espera de aprobacion del cliente no reduce su desempeno."), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden" }, dailyPerformanceStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 font-bold" }, "Sin desempeno diario en este rango de fechas") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[800px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Fecha"), /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Usuario"), /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Rol"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Areas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Total"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Finalizadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Pendientes"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Desempeno"))), /* @__PURE__ */ React.createElement("tbody", null, dailyPerformanceStats.map((row, i) => {
     const pct = row.total > 0 ? Math.round(row.done / row.total * 100) : 0;
     const performanceColor = pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500";
     return /* @__PURE__ */ React.createElement(

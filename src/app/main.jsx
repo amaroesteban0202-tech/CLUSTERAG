@@ -120,6 +120,14 @@ import {
   normalizeDateOnlyString,
   resolveStoredTaskRoomDate,
 } from "/src/app/utils/date.js";
+import {
+  KPI_MIN_TASKS,
+  buildManagerKpiStats,
+  isEditingDelivered,
+  isWorkflowCompleted,
+  normalizeEditingWorkflowStatus,
+  rankPendingEditingTasks,
+} from "/src/app/utils/kpi.js";
 
 void TAILWIND_SAFELIST;
 
@@ -898,6 +906,8 @@ const getStatusTimestampPatch = (
   task = {},
   newStatus = "",
   stamp = nowIso(),
+  actorUserId = "",
+  workflowType = "",
 ) => {
   const statusTimestamps = {
     ...(task.statusTimestamps || {}),
@@ -909,6 +919,41 @@ const getStatusTimestampPatch = (
   if (newStatus === "aprobado_internamente" && !task.internallyApprovedAt)
     patch.internallyApprovedAt = stamp;
   if (newStatus === "cerrado" && !task.closedAt) patch.closedAt = stamp;
+  if (isWorkflowCompleted(newStatus) && !task.completedAt) {
+    patch.completedAt = stamp;
+    patch.completedByUserId = actorUserId || "";
+    patch.ownerAtCompletionId = task.contextId || task.assigneeUserId || "";
+    patch.dueDateAtCompletion = normalizeDateOnlyString(task.date);
+  }
+  if (workflowType === "editing") {
+    const previousEditingStatus = normalizeEditingWorkflowStatus(task.status);
+    const nextEditingStatus = normalizeEditingWorkflowStatus(newStatus);
+    const isEditorDelivery = [
+      "revision_interna",
+      "aprobado",
+      "publicado",
+    ].includes(nextEditingStatus);
+    const isReturnedToEditing =
+      ["revision_interna", "aprobado", "publicado"].includes(
+        previousEditingStatus,
+      ) && ["editar", "en_edicion"].includes(nextEditingStatus);
+
+    if (isEditorDelivery && !task.editorCompletedAt) {
+      patch.editorCompletedAt = stamp;
+      patch.editorCompletedByUserId = actorUserId || "";
+      patch.editorOwnerAtCompletionId =
+        task.contextId || task.assigneeUserId || "";
+      patch.editorAssigneeUserAtCompletionId = task.assigneeUserId || "";
+      patch.editorAssigneesAtCompletion = Array.isArray(task.assignees)
+        ? task.assignees.filter(Boolean)
+        : [];
+      patch.editorDueDateAtCompletion = normalizeDateOnlyString(task.date);
+    }
+    if (isReturnedToEditing && task.editorCompletedAt) {
+      patch.editorReworkCount = Number(task.editorReworkCount || 0) + 1;
+      patch.lastEditorReworkAt = stamp;
+    }
+  }
   return patch;
 };
 
@@ -1436,7 +1481,8 @@ const useTaskRoomState = (storageKey, options = {}) => {
 };
 const EDITING_STATUS_OPTIONS = [
   { id: "editar", label: "Por Editar" },
-  { id: "correccion", label: "En Correccion" },
+  { id: "en_edicion", label: "En Edicion" },
+  { id: "revision_interna", label: "En Revision" },
   { id: "aprobado", label: "Aprobado" },
   { id: "publicado", label: "Publicado" },
 ];
@@ -1489,10 +1535,6 @@ function App() {
   const [managementTasks, setManagementTasks] = useState([]);
   const [appUsers, setAppUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
-  const [rankingSettings, setRankingSettings] = useState(
-    DEFAULT_RANKING_SETTINGS,
-  );
-  const [rankingSettingsDocId, setRankingSettingsDocId] = useState("");
 
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedManager, setSelectedManager] = useState(null);
@@ -2156,24 +2198,6 @@ function App() {
         errHandler,
       ),
       onSnapshot(
-        dataCollection("ranking_settings"),
-        (snapshot) => {
-          const records = snapshot.docs.map((docItem) => ({
-            id: docItem.id,
-            ...docItem.data(),
-          }));
-          const activeSettings =
-            records.find((item) => item.id === "default") ||
-            records[records.length - 1] ||
-            null;
-          setRankingSettingsDocId(activeSettings?.id || "");
-          setRankingSettings(
-            sanitizeRankingSettings(activeSettings || DEFAULT_RANKING_SETTINGS),
-          );
-        },
-        errHandler,
-      ),
-      onSnapshot(
         query(
           dataCollection("audit_logs"),
           orderBy("createdAt", "desc"),
@@ -2651,8 +2675,7 @@ function App() {
         label: "Edicion",
         view: "editions",
         defaultTime: "18:00",
-        done: (task) =>
-          task.status === "aprobado" || task.status === "publicado",
+        done: isEditingDelivered,
         assigned: (task) =>
           isTaskAssignedToProfile(task, currentUserProfile, [
             currentUserProfile?.linkedEditorId,
@@ -3904,7 +3927,7 @@ function App() {
           updatedAt: nowIso(),
         });
         const tasksToMove = accountTasks.filter(
-          (task) => task.clientId === client.id,
+          (task) => task.clientId === client.id && !isAccountTaskDone(task),
         );
         await Promise.all(
           tasksToMove.map((task) =>
@@ -4051,6 +4074,19 @@ function App() {
   };
   const updateAccountTask = async (id, data) => {
     const manager = managers.find((item) => item.id === data.contextId);
+    const existingTask = accountTasks.find((item) => item.id === id);
+    const historicalOwnerPatch =
+      existingTask &&
+      isAccountTaskDone(existingTask) &&
+      (!existingTask.ownerAtCompletionId || !existingTask.dueDateAtCompletion)
+        ? {
+            ownerAtCompletionId:
+              existingTask.ownerAtCompletionId || existingTask.contextId || "",
+            dueDateAtCompletion:
+              existingTask.dueDateAtCompletion ||
+              normalizeDateOnlyString(existingTask.date),
+          }
+        : {};
     await runMutation({
       permission: "manage_account_tasks",
       action: "update",
@@ -4063,6 +4099,7 @@ function App() {
         updateDoc(dataDoc("account_tasks", id), {
           ...data,
           assigneeUserId: manager?.userId || "",
+          ...historicalOwnerPatch,
           updatedAt: nowIso(),
         }),
       afterSuccess: closeModal,
@@ -4078,7 +4115,14 @@ function App() {
         entityType: "accountTask",
         description: `Mueve task ${task.title} a ${newStatus}`,
         changes: { previousStatus: task.status, nextStatus: newStatus },
-        statusPatch: (stamp) => getStatusTimestampPatch(task, newStatus, stamp),
+        statusPatch: (stamp) =>
+          getStatusTimestampPatch(
+            task,
+            newStatus,
+            stamp,
+            currentUserProfile?.id,
+            "account",
+          ),
         afterSuccess: () => {
           if (newStatus === "publicado") triggerConfetti();
         },
@@ -4088,6 +4132,9 @@ function App() {
 
   const addEditingTask = async (data) => {
     const editor = editors.find((item) => item.id === data.contextId);
+    const stamp = nowIso();
+    const initialStatus = data.status || "editar";
+    const initialTask = { ...data, status: initialStatus };
     await runMutation({
       permission: "create_editing_tasks",
       action: "create",
@@ -4104,15 +4151,36 @@ function App() {
           hierarchy: data.hierarchy || getEditingHierarchyId(data),
           assigneeUserId: editor?.userId || "",
           notificationsEnabled: data.notificationsEnabled !== false,
-          status: data.status || "editar",
-          createdAt: nowIso(),
-          updatedAt: nowIso(),
+          status: initialStatus,
+          ...getStatusTimestampPatch(
+            initialTask,
+            initialStatus,
+            stamp,
+            currentUserProfile?.id,
+            "editing",
+          ),
+          createdAt: stamp,
+          updatedAt: stamp,
         }),
       afterSuccess: closeModal,
     });
   };
   const updateEditingTask = async (id, data) => {
     const editor = editors.find((item) => item.id === data.contextId);
+    const existingTask = editingTasks.find((item) => item.id === id);
+    const stamp = nowIso();
+    const statusPatch =
+      existingTask?.status &&
+      data.status &&
+      existingTask.status !== data.status
+        ? getStatusTimestampPatch(
+            existingTask,
+            data.status,
+            stamp,
+            currentUserProfile?.id,
+            "editing",
+          )
+        : {};
     await runMutation({
       permission: "manage_editing_tasks",
       action: "update",
@@ -4126,7 +4194,8 @@ function App() {
           ...data,
           hierarchy: data.hierarchy || getEditingHierarchyId(data),
           assigneeUserId: editor?.userId || "",
-          updatedAt: nowIso(),
+          ...statusPatch,
+          updatedAt: stamp,
         }),
       afterSuccess: closeModal,
     });
@@ -4145,7 +4214,14 @@ function App() {
           nextStatus: newStatus,
           hierarchy: getEditingHierarchyId(task),
         },
-        statusPatch: (stamp) => getStatusTimestampPatch(task, newStatus, stamp),
+        statusPatch: (stamp) =>
+          getStatusTimestampPatch(
+            task,
+            newStatus,
+            stamp,
+            currentUserProfile?.id,
+            "editing",
+          ),
         afterSuccess: () => {
           if (newStatus === "aprobado" || newStatus === "publicado")
             triggerConfetti();
@@ -4239,7 +4315,14 @@ function App() {
         entityType: "managementTask",
         description: `Mueve tarea de gestion ${task.title} a ${newStatus}`,
         changes: { previousStatus: task.status, nextStatus: newStatus },
-        statusPatch: (stamp) => getStatusTimestampPatch(task, newStatus, stamp),
+        statusPatch: (stamp) =>
+          getStatusTimestampPatch(
+            task,
+            newStatus,
+            stamp,
+            currentUserProfile?.id,
+            "management",
+          ),
       });
     }
   };
@@ -4263,8 +4346,19 @@ function App() {
     };
     const col = colMap[type];
     if (!col) return;
+    const historicalOwnerPatch =
+      type === "accountTask" &&
+      isAccountTaskDone(task) &&
+      (!task.ownerAtCompletionId || !task.dueDateAtCompletion)
+        ? {
+            ownerAtCompletionId: task.ownerAtCompletionId || task.contextId || "",
+            dueDateAtCompletion:
+              task.dueDateAtCompletion || normalizeDateOnlyString(task.date),
+          }
+        : {};
     await updateDoc(dataDoc(col, task.id), {
       contextId: contextId || null,
+      ...historicalOwnerPatch,
       updatedAt: nowIso(),
     });
   };
@@ -4693,39 +4787,6 @@ function App() {
           photo: data.photo || "",
           updatedAt: nowIso(),
         }),
-    });
-  };
-
-  const saveRankingSettings = async (nextSettings) => {
-    const normalizedSettings = sanitizeRankingSettings(nextSettings);
-    const stamp = nowIso();
-    const payload = {
-      ...normalizedSettings,
-      updatedAt: stamp,
-      updatedBy: {
-        id: currentUserProfile?.id || "",
-        name: currentUserProfile?.name || "",
-        email: authEmail || "",
-      },
-    };
-    if (!rankingSettingsDocId) payload.createdAt = stamp;
-
-    await runMutation({
-      permission: "manage_ranking_settings",
-      action: rankingSettingsDocId ? "update" : "create",
-      entityType: "ranking_settings",
-      entityId: rankingSettingsDocId || "new",
-      description: "Actualiza reglas de ranking",
-      changes: normalizedSettings,
-      successMessage: "Reglas de ranking guardadas",
-      execute: () =>
-        rankingSettingsDocId
-          ? updateDoc(
-              dataDoc("ranking_settings", rankingSettingsDocId),
-              payload,
-            )
-          : addDoc(dataCollection("ranking_settings"), payload),
-      afterSuccess: () => setRankingSettings(normalizedSettings),
     });
   };
 
@@ -5162,7 +5223,6 @@ function App() {
                 managementTasks={managementTasks}
                 currentUserProfile={currentUserProfile}
                 onSignIn={handleGoogleSignIn}
-                rankingSettings={rankingSettings}
               />
             ))}
           {view === "clients" && (
@@ -5344,7 +5404,6 @@ function App() {
               editors={editors}
               clients={clients}
               currentUserProfile={currentUserProfile}
-              rankingSettings={rankingSettings}
               onAdd={(dateStr) =>
                 setModalConfig({
                   isOpen: true,
@@ -5427,8 +5486,6 @@ function App() {
               editors={editors}
               auditLogs={auditLogs}
               currentUserProfile={currentUserProfile}
-              rankingSettings={rankingSettings}
-              onSaveRankingSettings={saveRankingSettings}
               onAdd={() => setModalConfig({ isOpen: true, type: "user" })}
               onEdit={(userRecord) =>
                 setModalConfig({
@@ -6788,7 +6845,6 @@ const DashboardView = ({
   managementTasks = [],
   currentUserProfile,
   onSignIn,
-  rankingSettings = DEFAULT_RANKING_SETTINGS,
 }) => {
   const [rankingRefDate, setRankingRefDate] = React.useState(getHondurasTodayStr());
 
@@ -6899,12 +6955,15 @@ const DashboardView = ({
 
   const rankingPeriod = getRankingMonthPeriod(rankingRefDate);
   const isCurrentMonth = (() => { const tp = getRankingMonthPeriod(todayStr); return rankingPeriod.year === tp.year && rankingPeriod.month === tp.month; })();
-  const managerStats = buildManagerRankingStats({
-    managers,
-    users,
+  const managerStats = buildManagerKpiStats({
+    managers: managers
+      .filter((manager) => !isManagerLinkedToInactiveUser(manager, users))
+      .map((manager) => ({
+        ...manager,
+        mappedColor: LEGACY_COLOR_MAP[manager.color] || manager.color || "slate",
+      })),
     clients,
     accountTasks,
-    rankingSettings,
     rankingPeriod,
   });
 
@@ -7082,7 +7141,8 @@ const DashboardView = ({
               mensual por Account
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Ranking 0-100% basado en tareas, tiempos, planificacion e ideas.
+              KPI = porcentaje de tareas del mes completadas. La puntualidad
+              solo usa cierres con fecha verificable.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -7117,10 +7177,9 @@ const DashboardView = ({
             </div>
           ) : (
             (() => {
-              const RANKING_MIN_TASKS = 5;
               let qualifiedRank = 0;
               return managerStats.map((ms) => {
-              const hasEnoughTasks = ms.totalTasks >= RANKING_MIN_TASKS;
+              const hasEnoughTasks = ms.totalTasks >= KPI_MIN_TASKS;
               if (hasEnoughTasks) qualifiedRank++;
               const rank = hasEnoughTasks ? qualifiedRank : null;
               const isTop = rank === 1;
@@ -7162,7 +7221,7 @@ const DashboardView = ({
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                       <div
                         className={`w-8 h-8 shrink-0 flex items-center justify-center font-black rounded-full shadow-sm text-sm ${medalBg} ${medalColor}`}
-                        title={!hasEnoughTasks ? `Mínimo ${RANKING_MIN_TASKS} tareas para clasificar` : undefined}
+                        title={!hasEnoughTasks ? `Mínimo ${KPI_MIN_TASKS} tareas para clasificar` : undefined}
                       >
                         {hasEnoughTasks ? `#${rank}` : "—"}
                       </div>
@@ -7215,45 +7274,45 @@ const DashboardView = ({
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                        Temprano
+                        A tiempo
                       </p>
                       <p className="mt-1 text-base font-black text-slate-900 dark:text-white">
-                        {ms.earlyCount}
+                        {ms.onTimePercent === null ? "N/D" : `${ms.onTimePercent}%`}
                       </p>
                       <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                        {ms.onTimeCount} a tiempo
+                        {ms.onTimeCount}/{ms.measuredCompletionCount} cierres medidos
                       </p>
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                        Planning
+                        Pendientes
                       </p>
                       <p className="mt-1 text-base font-black text-slate-900 dark:text-white">
-                        {ms.plannedTasks}
+                        {ms.pendingTasks}
                       </p>
                       <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                        preparadas
+                        por completar
                       </p>
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                        Ideas
+                        Atrasadas
                       </p>
                       <p className="mt-1 text-base font-black text-slate-900 dark:text-white">
-                        {ms.creativitySignals}
+                        {ms.overdueTasks}
                       </p>
                       <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                        senales
+                        vencidas y pendientes
                       </p>
                     </div>
                   </div>
 
                   <div className="space-y-3">
                     <CompactMetricBar
-                      label="Ejecucion"
-                      value={ms.taskPercent}
+                      label="Cumplimiento"
+                      value={ms.completionPercent}
                       color={ms.mappedColor}
-                      meta={`${ms.taskPercent}%`}
+                      meta={`${ms.completionPercent}%`}
                       helper={
                         ms.totalTasks > 0
                           ? `${ms.completedTasks} de ${ms.totalTasks} tareas cerradas`
@@ -7261,29 +7320,15 @@ const DashboardView = ({
                       }
                     />
                     <CompactMetricBar
-                      label="Cumplimiento"
-                      value={ms.completionPercent}
+                      label="Puntualidad verificada"
+                      value={ms.onTimePercent || 0}
                       color={ms.mappedColor}
-                      meta={`${ms.completionPercent}%`}
+                      meta={ms.onTimePercent === null ? "N/D" : `${ms.onTimePercent}%`}
                       helper={
-                        ms.workflowTotal > 0
-                          ? `${ms.workflowCompleted} de ${ms.workflowTotal} tareas del mes completadas`
-                          : "Sin tareas del mes"
+                        ms.measuredCompletionCount > 0
+                          ? `${ms.onTimeCount} de ${ms.measuredCompletionCount} cierres a tiempo`
+                          : "Los cierres historicos no tienen fecha verificable"
                       }
-                    />
-                    <CompactMetricBar
-                      label="Eficiencia"
-                      value={ms.efficiencyPercent}
-                      color={ms.mappedColor}
-                      meta={`${ms.efficiencyPercent}%`}
-                      helper={`${ms.earlyCount} tempranas, ${ms.fastTurnaroundCount} rapidas, ${ms.overdueCount} atrasos`}
-                    />
-                    <CompactMetricBar
-                      label="Plan + ideas"
-                      value={ms.planningCreativityPercent}
-                      color={ms.mappedColor}
-                      meta={`${ms.planningCreativityPercent}%`}
-                      helper={`${ms.planningScore} planificacion, ${ms.creativityScore} creatividad`}
                     />
                   </div>
 
@@ -8444,7 +8489,6 @@ const EditionsRoomView = ({
   editors,
   clients,
   currentUserProfile,
-  rankingSettings = DEFAULT_RANKING_SETTINGS,
   onAdd,
   onEdit,
   onChangeStatus,
@@ -8526,55 +8570,11 @@ const EditionsRoomView = ({
     setFilterMode("date");
     onAdd(nextDate);
   };
-  const editingRankingRules = sanitizeRankingSettings(rankingSettings).editing;
-  const rankedTasks = filteredTasks
-    .map((task) => {
-      const hierarchy = getEditingHierarchyId(task);
-      const delta = task.date ? getDateOnlyDiffDays(task.date, todayStr) : 99;
-      const hierarchyScore =
-        editingRankingRules.hierarchyScores[hierarchy] ??
-        editingRankingRules.hierarchyScores.p2;
-      const priorityBonus =
-        editingRankingRules.priorityScores[task.priority] ??
-        editingRankingRules.priorityScores.normal;
-      const dateBonus =
-        delta < 0
-          ? editingRankingRules.dateScores.overdue
-          : delta === 0
-            ? editingRankingRules.dateScores.today
-            : delta === 1
-              ? editingRankingRules.dateScores.tomorrow
-              : delta <= 3
-                ? editingRankingRules.dateScores.soon
-                : 0;
-      const statusPenalty =
-        editingRankingRules.statusPenalties[task.status] || 0;
-      const earlyDeliveryBonus =
-        isCompletedStatus(task.status) &&
-        isCompletionEarly(
-          task,
-          getTaskCompletionIso(task),
-          editingRankingRules.earlyDeliveryCutoffHour,
-        )
-          ? editingRankingRules.earlyDeliveryBonus
-          : 0;
-      return {
-        ...task,
-        hierarchy,
-        rankScore:
-          hierarchyScore +
-          priorityBonus +
-          dateBonus +
-          statusPenalty +
-          earlyDeliveryBonus,
-      };
-    })
-    .sort(
-      (a, b) =>
-        b.rankScore - a.rankScore ||
-        (a.date || "").localeCompare(b.date || "") ||
-        a.title.localeCompare(b.title),
-    );
+  const rankedTasks = rankPendingEditingTasks(filteredTasks, todayStr);
+  const displayTasks = [
+    ...rankedTasks,
+    ...filteredTasks.filter((task) => isCompletedStatus(task.status)),
+  ];
   const rankingMap = rankedTasks.reduce(
     (acc, task, index) => ({ ...acc, [task.id]: index + 1 }),
     {},
@@ -8658,7 +8658,9 @@ const EditionsRoomView = ({
       />
       <div className="flex-1 flex md:grid md:grid-cols-5 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0">
         {columns.map((col, colIndex) => {
-          const colTasks = filteredTasks.filter((t) => t.status === col.id);
+          const colTasks = displayTasks.filter(
+            (task) => normalizeEditingWorkflowStatus(task.status) === col.id,
+          );
           const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
           const nextStatus =
             colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
@@ -8687,7 +8689,7 @@ const EditionsRoomView = ({
                 const client = clients.find((c) => c.id === t.clientId);
                 const isOverdue =
                   isDateBeforeDateString(t.date, todayStr) &&
-                  col.id !== "publicado";
+                  !isCompletedStatus(t.status);
                 const hierarchyId = t.hierarchy || getEditingHierarchyId(t);
                 const hierTone =
                   hierarchyId === "p1"
@@ -9549,8 +9551,6 @@ const UsersAccessView = ({
   editors,
   auditLogs,
   currentUserProfile,
-  rankingSettings = DEFAULT_RANKING_SETTINGS,
-  onSaveRankingSettings,
   onAdd,
   onEdit,
   onResendVerification,
@@ -9623,11 +9623,6 @@ const UsersAccessView = ({
           color="indigo"
         />
       </div>
-      <RankingRulesPanel
-        rankingSettings={rankingSettings}
-        currentUserProfile={currentUserProfile}
-        onSave={onSaveRankingSettings}
-      />
       <div className="grid grid-cols-1 xl:grid-cols-[1.05fr,1.3fr] gap-6">
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
           <div className="flex items-center justify-between mb-4">
@@ -12278,7 +12273,11 @@ const CreateTaskModal = ({
         setTime(data.time || "");
         setHierarchy(data.hierarchy || data.editingHierarchy || "p2");
         setCategory(data.category || "seguimiento");
-        setStatus(data.status || "editar");
+        setStatus(
+          type === "editingTask"
+            ? normalizeEditingWorkflowStatus(data.status || "editar")
+            : data.status || "editar",
+        );
       } else {
         setTitle("");
         setNotes("");
@@ -13431,7 +13430,9 @@ const Modal = ({
                 <select
                   name="status"
                   required
-                  defaultValue={data?.status || "editar"}
+                  defaultValue={normalizeEditingWorkflowStatus(
+                    data?.status || "editar",
+                  )}
                   className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-700 dark:text-slate-200"
                 >
                   {EDITING_STATUS_OPTIONS.map((option) => (
@@ -13875,8 +13876,14 @@ const ReportsView = ({
     return key;
   };
   const getTaskAssigneeKeys = (task, type) => {
-    const explicitAssignees = Array.isArray(task.assignees)
-      ? task.assignees.filter(Boolean)
+    const storedAssignees =
+      type === "editing" &&
+      isEditingDelivered(task) &&
+      Array.isArray(task.editorAssigneesAtCompletion)
+        ? task.editorAssigneesAtCompletion
+        : task.assignees;
+    const explicitAssignees = Array.isArray(storedAssignees)
+      ? storedAssignees.filter(Boolean)
       : [];
     const keys = new Set();
     if (type === "account")
@@ -13897,7 +13904,10 @@ const ReportsView = ({
       );
     if (keys.size === 0 && type === "editing")
       keys.add(
-        resolveEditorPerformanceKey(task.contextId, task.assigneeUserId),
+        resolveEditorPerformanceKey(
+          task.editorOwnerAtCompletionId || task.contextId,
+          task.editorAssigneeUserAtCompletionId || task.assigneeUserId,
+        ),
       );
     if (keys.size === 0 && type === "management")
       keys.add(
@@ -13907,7 +13917,11 @@ const ReportsView = ({
   };
   const dailyPerformanceByKey = new Map();
   const addDailyPerformanceTask = (task, type) => {
-    const date = normalizeDateOnlyString(task.date);
+    const date = normalizeDateOnlyString(
+      type === "editing" && isEditingDelivered(task)
+        ? task.editorDueDateAtCompletion || task.date
+        : task.date,
+    );
     if (!date) return;
     const areaKey =
       type === "account"
@@ -13919,7 +13933,7 @@ const ReportsView = ({
       type === "account"
         ? task.status === "publicado"
         : type === "editing"
-          ? ["aprobado", "publicado"].includes(task.status)
+          ? isEditingDelivered(task)
           : task.status === "cerrado";
     getTaskAssigneeKeys(task, type).forEach((personKey) => {
       const person =
@@ -14259,6 +14273,12 @@ const ReportsView = ({
               sub="abiertas en el rango"
             />
           </div>
+
+          <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-semibold text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
+            En Edicion, la tarea cuenta como finalizada para el editor al pasar
+            a Revision Interna. La espera de aprobacion del cliente no reduce
+            su desempeno.
+          </p>
 
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
             {dailyPerformanceStats.length === 0 ? (
