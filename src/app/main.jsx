@@ -7141,8 +7141,8 @@ const DashboardView = ({
               mensual por Account
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              KPI = porcentaje de tareas del mes completadas. La puntualidad
-              solo usa cierres con fecha verificable.
+              KPI: 50% cumplimiento ponderado, 30% puntualidad verificada y
+              20% carga completada del mes.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -7309,13 +7309,13 @@ const DashboardView = ({
 
                   <div className="space-y-3">
                     <CompactMetricBar
-                      label="Cumplimiento"
-                      value={ms.completionPercent}
+                      label="Cumplimiento ponderado"
+                      value={ms.weightedCompletionPercent}
                       color={ms.mappedColor}
-                      meta={`${ms.completionPercent}%`}
+                      meta={`${ms.weightedCompletionPercent}%`}
                       helper={
                         ms.totalTasks > 0
-                          ? `${ms.completedTasks} de ${ms.totalTasks} tareas cerradas`
+                          ? `${ms.weightedCompleted} de ${ms.weightedTotal} unidades completadas`
                           : "Sin tareas asignadas"
                       }
                     />
@@ -7329,6 +7329,13 @@ const DashboardView = ({
                           ? `${ms.onTimeCount} de ${ms.measuredCompletionCount} cierres a tiempo`
                           : "Los cierres historicos no tienen fecha verificable"
                       }
+                    />
+                    <CompactMetricBar
+                      label="Carga completada"
+                      value={ms.loadPercent}
+                      color={ms.mappedColor}
+                      meta={`${ms.loadPercent}%`}
+                      helper={`${ms.weightedCompleted} unidades; referencia: mayor carga del mes`}
                     />
                   </div>
 

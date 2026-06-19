@@ -31,7 +31,7 @@ const [kpi] = buildManagerKpiStats({
   today: "2026-06-19",
 });
 
-assert.equal(kpi.score, 50);
+assert.equal(kpi.score, 64);
 assert.equal(kpi.onTimePercent, 100);
 assert.equal(
   getMeasuredCompletionIso({ status: "publicado", updatedAt: "2026-06-10T15:00:00Z" }),
@@ -57,5 +57,36 @@ assert.equal(
   isEditingDelivered({ status: "en_edicion", editorCompletedAt: "2026-06-18T12:00:00Z" }),
   true,
 );
+
+const makeAccountTasks = ({ managerId, total, completed, onTime }) =>
+  Array.from({ length: total }, (_, index) => ({
+    id: `${managerId}-${index}`,
+    contextId: managerId,
+    date: "2026-06-10",
+    hierarchy: "p2",
+    status: index < completed ? "publicado" : "por_disenar",
+    ...(index < completed
+      ? {
+          completedAt:
+            index < onTime
+              ? "2026-06-10T15:00:00.000Z"
+              : "2026-06-11T15:00:00.000Z",
+        }
+      : {}),
+  }));
+const unequalLoadStats = buildManagerKpiStats({
+  managers: [
+    { id: "heavy", name: "Carga alta" },
+    { id: "light", name: "Carga baja" },
+  ],
+  accountTasks: [
+    ...makeAccountTasks({ managerId: "heavy", total: 10, completed: 9, onTime: 9 }),
+    ...makeAccountTasks({ managerId: "light", total: 5, completed: 5, onTime: 4 }),
+  ],
+  rankingPeriod: period,
+  today: "2026-06-19",
+});
+assert.equal(unequalLoadStats[0].id, "heavy");
+assert.ok(unequalLoadStats[0].score > unequalLoadStats[1].score);
 
 console.log("KPI y ranking medibles: OK");

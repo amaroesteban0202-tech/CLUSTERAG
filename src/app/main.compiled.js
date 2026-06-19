@@ -5255,7 +5255,7 @@ var DashboardView = ({
       "Vence: ",
       t.date
     )))
-  ))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm mt-6" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white mb-1 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trophy", size: 20, className: "text-yellow-500" }), " KPI mensual por Account"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "KPI = porcentaje de tareas del mes completadas. La puntualidad solo usa cierres con fecha verificable.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+  ))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm mt-6" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white mb-1 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trophy", size: 20, className: "text-yellow-500" }), " KPI mensual por Account"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "KPI: 50% cumplimiento ponderado, 30% puntualidad verificada y 20% carga completada del mes.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: goToPrevMonth,
@@ -5345,11 +5345,11 @@ var DashboardView = ({
         /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ React.createElement(
           CompactMetricBar,
           {
-            label: "Cumplimiento",
-            value: ms.completionPercent,
+            label: "Cumplimiento ponderado",
+            value: ms.weightedCompletionPercent,
             color: ms.mappedColor,
-            meta: `${ms.completionPercent}%`,
-            helper: ms.totalTasks > 0 ? `${ms.completedTasks} de ${ms.totalTasks} tareas cerradas` : "Sin tareas asignadas"
+            meta: `${ms.weightedCompletionPercent}%`,
+            helper: ms.totalTasks > 0 ? `${ms.weightedCompleted} de ${ms.weightedTotal} unidades completadas` : "Sin tareas asignadas"
           }
         ), /* @__PURE__ */ React.createElement(
           CompactMetricBar,
@@ -5359,6 +5359,15 @@ var DashboardView = ({
             color: ms.mappedColor,
             meta: ms.onTimePercent === null ? "N/D" : `${ms.onTimePercent}%`,
             helper: ms.measuredCompletionCount > 0 ? `${ms.onTimeCount} de ${ms.measuredCompletionCount} cierres a tiempo` : "Los cierres historicos no tienen fecha verificable"
+          }
+        ), /* @__PURE__ */ React.createElement(
+          CompactMetricBar,
+          {
+            label: "Carga completada",
+            value: ms.loadPercent,
+            color: ms.mappedColor,
+            meta: `${ms.loadPercent}%`,
+            helper: `${ms.weightedCompleted} unidades; referencia: mayor carga del mes`
           }
         )),
         /* @__PURE__ */ React.createElement("div", { className: "hidden" }, /* @__PURE__ */ React.createElement(

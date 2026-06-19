@@ -6,6 +6,19 @@ import {
 } from "./date.js";
 
 export const KPI_MIN_TASKS = 5;
+export const KPI_MIN_TIMED_TASKS = 5;
+
+const ACCOUNT_HIERARCHY_WEIGHTS = { p1: 4, p2: 3, p3: 2, p4: 1 };
+const getAccountTaskWeight = (task = {}) => {
+  const hierarchy =
+    task.hierarchy ||
+    (task.priority === "urgente"
+      ? "p1"
+      : task.priority === "recurrente"
+        ? "p3"
+        : "p2");
+  return ACCOUNT_HIERARCHY_WEIGHTS[hierarchy] || ACCOUNT_HIERARCHY_WEIGHTS.p2;
+};
 
 export const isWorkflowCompleted = (status = "") =>
   ["aprobado_internamente", "aprobado", "publicado", "cerrado"].includes(
@@ -68,8 +81,7 @@ export const buildManagerKpiStats = ({
     clients.filter((client) => client.isActive === false).map((client) => client.id),
   );
 
-  return managers
-    .map((manager) => {
+  const stats = managers.map((manager) => {
       const tasks = accountTasks.filter((task) => {
         const isCompleted = isWorkflowCompleted(task.status);
         const ownerId =
@@ -112,6 +124,17 @@ export const buildManagerKpiStats = ({
       const onTimePercent = measuredCompletions.length
         ? Math.round((onTimeCount / measuredCompletions.length) * 100)
         : null;
+      const weightedTotal = tasks.reduce(
+        (sum, task) => sum + getAccountTaskWeight(task),
+        0,
+      );
+      const weightedCompleted = completedTasks.reduce(
+        (sum, task) => sum + getAccountTaskWeight(task),
+        0,
+      );
+      const weightedCompletionPercent = weightedTotal
+        ? Math.round((weightedCompleted / weightedTotal) * 100)
+        : 0;
 
       return {
         ...manager,
@@ -126,17 +149,60 @@ export const buildManagerKpiStats = ({
         ).length,
         measuredCompletionCount: measuredCompletions.length,
         onTimeCount,
-        score: completionPercent,
+        weightedTotal,
+        weightedCompleted,
+        weightedCompletionPercent,
         completionPercent,
         onTimePercent,
       };
+    });
+  const qualifiedStats = stats.filter(
+    (item) => item.totalTasks >= KPI_MIN_TASKS,
+  );
+  const loadReference = Math.max(
+    1,
+    ...(qualifiedStats.length > 0 ? qualifiedStats : stats).map(
+      (item) => item.weightedCompleted,
+    ),
+  );
+
+  return stats
+    .map((item) => {
+      const loadPercent = Math.min(
+        100,
+        Math.round((item.weightedCompleted / loadReference) * 100),
+      );
+      const components = [
+        { value: item.weightedCompletionPercent, weight: 50 },
+        { value: loadPercent, weight: 20 },
+      ];
+      if (
+        item.onTimePercent !== null &&
+        item.measuredCompletionCount >= KPI_MIN_TIMED_TASKS
+      ) {
+        components.push({ value: item.onTimePercent, weight: 30 });
+      }
+      const activeWeight = components.reduce(
+        (sum, component) => sum + component.weight,
+        0,
+      );
+      const score = activeWeight
+        ? Math.round(
+            components.reduce(
+              (sum, component) => sum + component.value * component.weight,
+              0,
+            ) / activeWeight,
+          )
+        : 0;
+
+      return { ...item, loadPercent, score };
     })
     .sort(
       (left, right) =>
         Number(right.totalTasks >= KPI_MIN_TASKS) -
           Number(left.totalTasks >= KPI_MIN_TASKS) ||
         right.score - left.score ||
-        right.completedTasks - left.completedTasks ||
+        right.weightedCompleted - left.weightedCompleted ||
         (right.onTimePercent ?? -1) - (left.onTimePercent ?? -1) ||
         String(left.name || "").localeCompare(String(right.name || "")),
     );
