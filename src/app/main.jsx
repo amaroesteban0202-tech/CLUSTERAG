@@ -69,6 +69,8 @@ import {
   UserX,
   Zap,
   PauseCircle,
+  Power,
+  RotateCcw,
   MoreHorizontal,
   GripVertical,
 } from "lucide-react";
@@ -191,6 +193,8 @@ const IconsMap = {
   UserX,
   Zap,
   PauseCircle,
+  Power,
+  RotateCcw,
   MoreHorizontal,
   GripVertical,
 };
@@ -1105,13 +1109,24 @@ const buildManagerRankingStats = ({
   const rankingManagers = managers.filter(
     (manager) => !isManagerLinkedToInactiveUser(manager, users),
   );
+  // Clientes dados de baja (inactivos): su trabajo YA entregado debe seguir
+  // sumando puntos, pero sus tareas pendientes ya no se podran completar, asi
+  // que no deben penalizar ni contar contra el gestor.
+  const inactiveClientIds = new Set(
+    clients
+      .filter((client) => client.isActive === false)
+      .map((client) => client.id),
+  );
+  const isUnreachableInactiveTask = (task) =>
+    inactiveClientIds.has(task.clientId) && !isAccountTaskDone(task);
 
   return rankingManagers
     .map((manager) => {
       const mTasks = accountTasks.filter(
         (task) =>
           task.contextId === manager.id &&
-          isDateWithinPeriod(task.date, rankingPeriod),
+          isDateWithinPeriod(task.date, rankingPeriod) &&
+          !isUnreachableInactiveTask(task),
       );
       const completedTasksArr = mTasks.filter(isAccountTaskDone);
       let taskScore = 0;
@@ -6943,7 +6958,7 @@ const DashboardView = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <StatCard
           title="Clientes Activos"
-          value={clients.length}
+          value={clients.filter((c) => c.isActive !== false).length}
           icon="Briefcase"
           color="blue"
         />
@@ -9827,8 +9842,15 @@ const ClientsView = ({ clients, onAdd, onSelect }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredClients.map((c) => {
             const mood = c.mood || "";
-            const status =
-              mood === "En Riesgo"
+            const isInactive = c.isActive === false;
+            const status = isInactive
+              ? {
+                  label: "Inactivo",
+                  dot: "bg-slate-400",
+                  text: "text-slate-500 dark:text-slate-400",
+                  bg: "bg-slate-500/10",
+                }
+              : mood === "En Riesgo"
                 ? {
                     label: "En riesgo",
                     dot: "bg-red-500",
@@ -9852,7 +9874,7 @@ const ClientsView = ({ clients, onAdd, onSelect }) => {
               <div
                 key={c.id}
                 onClick={() => onSelect(c)}
-                className="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600/60 hover:-translate-y-0.5 transition-all cursor-pointer"
+                className={`group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600/60 hover:-translate-y-0.5 transition-all cursor-pointer ${isInactive ? "opacity-60 hover:opacity-100" : ""}`}
               >
                 <div className="flex items-start justify-between gap-3 mb-4">
                   {c.photo ? (
@@ -9958,7 +9980,14 @@ const ClientDetail = ({
             </div>
           )}
           <div>
-            <h1 className="text-2xl md:text-3xl font-black">{client.name}</h1>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl md:text-3xl font-black">{client.name}</h1>
+              {client.isActive === false && (
+                <span className="text-[10px] font-black uppercase tracking-widest bg-red-500/20 text-red-300 border border-red-500/30 px-2.5 py-1 rounded-full">
+                  Inactivo
+                </span>
+              )}
+            </div>
 
             <div className="flex items-center gap-2 mt-2 bg-white/5 px-3 py-1.5 rounded-lg inline-flex border border-white/10 relative transition-all hover:bg-white/10">
               <Icon name="UserCircle2" size={14} className="text-blue-300" />
@@ -10033,6 +10062,34 @@ const ClientDetail = ({
                 Ver <Icon name="ExternalLink" size={14} />
               </a>
             </div>
+          </div>
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800">
+            <h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+              <Icon name="Power" size={14} /> Estado del cliente
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+              {client.isActive === false
+                ? "Cliente inactivo: sus tareas pendientes ya no penalizan al gestor, pero el trabajo entregado sigue sumando puntos."
+                : "Si el cliente abandona la agencia, marcalo como inactivo. El gestor conserva los puntos del trabajo entregado y deja de penalizarse por lo pendiente."}
+            </p>
+            <button
+              onClick={() =>
+                onUpdate(client.id, { isActive: client.isActive === false })
+              }
+              className={`text-xs font-bold flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-colors ${
+                client.isActive === false
+                  ? "bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 border-green-200 dark:border-green-500/20 hover:bg-green-100 dark:hover:bg-green-500/20"
+                  : "bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/20 hover:bg-amber-100 dark:hover:bg-amber-500/20"
+              }`}
+            >
+              <Icon
+                name={client.isActive === false ? "RotateCcw" : "PauseCircle"}
+                size={14}
+              />
+              {client.isActive === false
+                ? "Reactivar cliente"
+                : "Marcar como inactivo"}
+            </button>
           </div>
           <button
             onClick={onDelete}

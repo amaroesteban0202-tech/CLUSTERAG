@@ -70,6 +70,8 @@ import {
   UserX,
   Zap,
   PauseCircle,
+  Power,
+  RotateCcw,
   MoreHorizontal,
   GripVertical
 } from "lucide-react";
@@ -189,6 +191,8 @@ var IconsMap = {
   UserX,
   Zap,
   PauseCircle,
+  Power,
+  RotateCcw,
   MoreHorizontal,
   GripVertical
 };
@@ -952,9 +956,13 @@ var buildManagerRankingStats = ({
   const rankingManagers = managers.filter(
     (manager) => !isManagerLinkedToInactiveUser(manager, users)
   );
+  const inactiveClientIds = new Set(
+    clients.filter((client) => client.isActive === false).map((client) => client.id)
+  );
+  const isUnreachableInactiveTask = (task) => inactiveClientIds.has(task.clientId) && !isAccountTaskDone(task);
   return rankingManagers.map((manager) => {
     const mTasks = accountTasks.filter(
-      (task) => task.contextId === manager.id && isDateWithinPeriod(task.date, rankingPeriod)
+      (task) => task.contextId === manager.id && isDateWithinPeriod(task.date, rankingPeriod) && !isUnreachableInactiveTask(task)
     );
     const completedTasksArr = mTasks.filter(isAccountTaskDone);
     let taskScore = 0;
@@ -5594,7 +5602,7 @@ var DashboardView = ({
     StatCard,
     {
       title: "Clientes Activos",
-      value: clients.length,
+      value: clients.filter((c) => c.isActive !== false).length,
       icon: "Briefcase",
       color: "blue"
     }
@@ -7569,7 +7577,13 @@ var ClientsView = ({ clients, onAdd, onSelect }) => {
     }
   ), /* @__PURE__ */ React.createElement(Button, { onClick: onAdd, color: "blue", icon: "Plus" }, "Nuevo Cliente"))), filteredClients.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 h-64" }, /* @__PURE__ */ React.createElement(EmptyState, { icon: "Briefcase", text: "No hay clientes que coincidan." })) : /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" }, filteredClients.map((c) => {
     const mood = c.mood || "";
-    const status = mood === "En Riesgo" ? {
+    const isInactive = c.isActive === false;
+    const status = isInactive ? {
+      label: "Inactivo",
+      dot: "bg-slate-400",
+      text: "text-slate-500 dark:text-slate-400",
+      bg: "bg-slate-500/10"
+    } : mood === "En Riesgo" ? {
       label: "En riesgo",
       dot: "bg-red-500",
       text: "text-red-600 dark:text-red-400",
@@ -7590,7 +7604,7 @@ var ClientsView = ({ clients, onAdd, onSelect }) => {
       {
         key: c.id,
         onClick: () => onSelect(c),
-        className: "group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600/60 hover:-translate-y-0.5 transition-all cursor-pointer"
+        className: `group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600/60 hover:-translate-y-0.5 transition-all cursor-pointer ${isInactive ? "opacity-60 hover:opacity-100" : ""}`
       },
       /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-3 mb-4" }, c.photo ? /* @__PURE__ */ React.createElement(
         "img",
@@ -7667,7 +7681,7 @@ var ClientDetail = ({
     alt: client.name,
     className: "h-20 w-20 rounded-2xl object-cover shadow-inner shrink-0 border border-white/10"
   }
-) : /* @__PURE__ */ React.createElement("div", { className: "h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl font-black shadow-inner shrink-0" }, client.name ? client.name.charAt(0).toUpperCase() : "C"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { className: "text-2xl md:text-3xl font-black" }, client.name), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mt-2 bg-white/5 px-3 py-1.5 rounded-lg inline-flex border border-white/10 relative transition-all hover:bg-white/10" }, /* @__PURE__ */ React.createElement(Icon, { name: "UserCircle2", size: 14, className: "text-blue-300" }), /* @__PURE__ */ React.createElement(
+) : /* @__PURE__ */ React.createElement("div", { className: "h-20 w-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl font-black shadow-inner shrink-0" }, client.name ? client.name.charAt(0).toUpperCase() : "C"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 flex-wrap" }, /* @__PURE__ */ React.createElement("h1", { className: "text-2xl md:text-3xl font-black" }, client.name), client.isActive === false && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-black uppercase tracking-widest bg-red-500/20 text-red-300 border border-red-500/30 px-2.5 py-1 rounded-full" }, "Inactivo")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mt-2 bg-white/5 px-3 py-1.5 rounded-lg inline-flex border border-white/10 relative transition-all hover:bg-white/10" }, /* @__PURE__ */ React.createElement(Icon, { name: "UserCircle2", size: 14, className: "text-blue-300" }), /* @__PURE__ */ React.createElement(
   "select",
   {
     value: client.managerId || "",
@@ -7716,7 +7730,21 @@ var ClientDetail = ({
   },
   "Ver ",
   /* @__PURE__ */ React.createElement(Icon, { name: "ExternalLink", size: 14 })
-))), /* @__PURE__ */ React.createElement(
+))), /* @__PURE__ */ React.createElement("div", { className: "bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Power", size: 14 }), " Estado del cliente"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400 mb-4" }, client.isActive === false ? "Cliente inactivo: sus tareas pendientes ya no penalizan al gestor, pero el trabajo entregado sigue sumando puntos." : "Si el cliente abandona la agencia, marcalo como inactivo. El gestor conserva los puntos del trabajo entregado y deja de penalizarse por lo pendiente."), /* @__PURE__ */ React.createElement(
+  "button",
+  {
+    onClick: () => onUpdate(client.id, { isActive: client.isActive === false }),
+    className: `text-xs font-bold flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-colors ${client.isActive === false ? "bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 border-green-200 dark:border-green-500/20 hover:bg-green-100 dark:hover:bg-green-500/20" : "bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/20 hover:bg-amber-100 dark:hover:bg-amber-500/20"}`
+  },
+  /* @__PURE__ */ React.createElement(
+    Icon,
+    {
+      name: client.isActive === false ? "RotateCcw" : "PauseCircle",
+      size: 14
+    }
+  ),
+  client.isActive === false ? "Reactivar cliente" : "Marcar como inactivo"
+)), /* @__PURE__ */ React.createElement(
   "button",
   {
     onClick: onDelete,
