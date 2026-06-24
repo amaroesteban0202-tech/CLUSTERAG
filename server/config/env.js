@@ -39,7 +39,12 @@ const parseJson = (value, fallback) => {
 };
 
 const defaultFirebaseProjectId = process.env.FIREBASE_PROJECT_ID || 'cluster-41f73';
-const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
+const databaseUrl = process.env.DATABASE_URL
+    || process.env.POSTGRES_URL
+    || process.env.POSTGRES_PRISMA_URL
+    || process.env.POSTGRES_URL_NON_POOLING
+    || process.env.DATABASE_URL_UNPOOLED
+    || '';
 const databaseClient = ['pg', 'mysql2'].includes(process.env.DATABASE_CLIENT)
     ? process.env.DATABASE_CLIENT
     : databaseUrl
