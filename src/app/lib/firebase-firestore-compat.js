@@ -67,11 +67,11 @@ const buildQueryOptions = (ref) => {
     return options;
 };
 
-const getCurrentMonthWindow = () => {
+const getBaseTaskWindow = () => {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
-    const from = new Date(year, month, 1);
+    const from = new Date(year, month - 3, 1);
     const to = new Date(year, month + 1, 0);
     const format = (date) => [
         date.getFullYear(),
@@ -95,9 +95,9 @@ const fetchRecords = async (ref) => {
     if (options.orderDir) params.set('orderDir', options.orderDir);
     if (options.limit) params.set('limit', String(options.limit));
     if (TASK_COLLECTIONS.has(collectionName) && window.__cluster_task_history !== 'all') {
-        const monthWindow = getCurrentMonthWindow();
-        params.set('dateFrom', monthWindow.dateFrom);
-        params.set('dateTo', monthWindow.dateTo);
+        const baseWindow = getBaseTaskWindow();
+        params.set('dateFrom', baseWindow.dateFrom);
+        params.set('dateTo', baseWindow.dateTo);
         params.set('includeOpenBefore', '1');
     }
     const payload = await apiFetch(`/api/collections/${collectionName}?${params.toString()}`);
