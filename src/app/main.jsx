@@ -2911,6 +2911,14 @@ function App() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  useEffect(() => {
+    if (!user || !db) return;
+    if (["reports", "general-calendar", "calendar"].includes(view)) {
+      handleLoadTaskHistory();
+    }
+  }, [view, user, db]);
+
   const closeModal = () =>
     setModalConfig({ isOpen: false, type: null, data: null, isEdit: false });
   const closeDelete = () =>
@@ -10291,12 +10299,31 @@ const CalendarGrid = ({
   canAdd = true,
 }) => {
   const [date, setDate] = useState(new Date());
+  const hasAutoFocusedDataMonthRef = useRef(false);
   const daysInMonth = new Date(
     date.getFullYear(),
     date.getMonth() + 1,
     0,
   ).getDate();
   const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+
+  useEffect(() => {
+    if (hasAutoFocusedDataMonthRef.current || events.length === 0) return;
+    const currentMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    if (events.some((event) => String(event.date || "").startsWith(currentMonth))) {
+      hasAutoFocusedDataMonthRef.current = true;
+      return;
+    }
+    const latestDate = events
+      .map((event) => String(event.date || ""))
+      .filter(Boolean)
+      .sort()
+      .at(-1);
+    if (!latestDate) return;
+    const [year, month] = latestDate.split("-");
+    setDate(new Date(Number(year), Number(month) - 1, 1));
+    hasAutoFocusedDataMonthRef.current = true;
+  }, [events]);
 
   let mappedColorName = LEGACY_COLOR_MAP[baseColor] || baseColor;
   const style = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
@@ -10416,6 +10443,7 @@ const CalendarGrid = ({
 const GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
   const [viewMode, setViewMode] = useState("month");
   const [date, setDate] = useState(new Date());
+  const hasAutoFocusedDataMonthRef = useRef(false);
   const [showPicker, setShowPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
   const [draggedId, setDraggedId] = useState(null);
@@ -10439,6 +10467,24 @@ const GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
   const toDateStr = (d) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const todayStr = toDateStr(new Date());
+
+  useEffect(() => {
+    if (hasAutoFocusedDataMonthRef.current || activities.length === 0) return;
+    const currentMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    if (activities.some((activity) => String(activity.date || "").startsWith(currentMonth))) {
+      hasAutoFocusedDataMonthRef.current = true;
+      return;
+    }
+    const latestDate = activities
+      .map((activity) => String(activity.date || ""))
+      .filter(Boolean)
+      .sort()
+      .at(-1);
+    if (!latestDate) return;
+    const [year, month] = latestDate.split("-");
+    setDate(new Date(Number(year), Number(month) - 1, 1));
+    hasAutoFocusedDataMonthRef.current = true;
+  }, [activities]);
 
   const getWeekDates = () => {
     const d = new Date(date);
@@ -13780,6 +13826,7 @@ const ReportsView = ({
   const [fromDate, setFromDate] = useState(firstOfMonth);
   const [toDate, setToDate] = useState(todayStr);
   const [activeTab, setActiveTab] = useState("content");
+  const hasAutoExpandedRangeRef = useRef(false);
 
   const inRange = (dateStr) => {
     if (!dateStr) return false;
@@ -13794,6 +13841,23 @@ const ReportsView = ({
   const filteredManagementTasks = managementTasks.filter((t) =>
     inRange(t.date),
   );
+
+  useEffect(() => {
+    if (hasAutoExpandedRangeRef.current) return;
+    const allTaskDates = [...accountTasks, ...editingTasks, ...managementTasks]
+      .map((task) => normalizeDateOnlyString(task.date))
+      .filter(Boolean)
+      .sort();
+    if (allTaskDates.length === 0) return;
+    const hasCurrentRangeData = allTaskDates.some(inRange);
+    if (hasCurrentRangeData) {
+      hasAutoExpandedRangeRef.current = true;
+      return;
+    }
+    setFromDate(allTaskDates[0]);
+    setToDate(todayStr);
+    hasAutoExpandedRangeRef.current = true;
+  }, [accountTasks, editingTasks, managementTasks]);
 
   const managerById = new Map(managers.map((item) => [item.id, item]));
   const editorById = new Map(editors.map((item) => [item.id, item]));
