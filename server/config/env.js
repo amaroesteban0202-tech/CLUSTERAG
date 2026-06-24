@@ -66,7 +66,7 @@ export const env = {
     isProduction: process.env.NODE_ENV === 'production',
     port: parseNumber(process.env.PORT, 3000),
     appBaseUrl: process.env.APP_BASE_URL || '',
-    appId: process.env.APP_ID || 'cluster-agency-pro-mobile-v6',
+    appId: process.env.APP_ID || 'cluster-agency-pro-mobile-v7',
     databaseClient,
     databaseUrl,
     sqliteFilename: resolveSqliteFilename(process.env.SQLITE_FILENAME || defaultSqliteFilename),

@@ -1,6 +1,6 @@
 // Script para asegurar que Andrea Chamorro tenga acceso como editor en Firestore.
 const PROJECT_ID = 'cluster-41f73';
-const APP_ID = 'cluster-agency-pro-mobile-v6';
+const APP_ID = 'cluster-agency-pro-mobile-v7';
 const BASE_PATH = `artifacts/${APP_ID}/public/data`;
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 const TARGET_USER = {

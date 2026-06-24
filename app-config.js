@@ -3,7 +3,7 @@
     const isLocalWeb = ['http:', 'https:'].includes(window.location.protocol)
         && localHosts.has(window.location.hostname);
 
-    window.__cluster_app_id = 'cluster-agency-pro-mobile-v6';
+    window.__cluster_app_id = 'cluster-agency-pro-mobile-v7';
     window.__cluster_api_base_url = isLocalWeb ? '' : 'https://clusterag.vercel.app';
     window.__cluster_firebase_config = {
         apiKey: 'AIzaSyBAnY2ihWlow17H-TjUKgueWpw2MqYpzUc',

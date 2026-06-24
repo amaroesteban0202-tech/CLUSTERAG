@@ -10,7 +10,7 @@ try {
 }
 
 const db = admin.firestore();
-const appId = 'cluster-agency-pro-mobile-v6';
+const appId = 'cluster-agency-pro-mobile-v7';
 
 async function main() {
     try {
