@@ -715,10 +715,10 @@ var isTaskAssignedToProfile = (task, profile, contextIds = []) => {
   if (task?.assigneeUserId && task.assigneeUserId === profileId) return true;
   return contextIds.filter(Boolean).includes(task?.contextId);
 };
-var TASK_ROOM_STATE_VERSION = 2;
+var TASK_ROOM_STATE_VERSION = 3;
 var getTaskRoomDefaults = ({ preferMine = false } = {}) => ({
   currentDate: getHondurasTodayStr(),
-  filterMode: preferMine ? "all" : "date",
+  filterMode: "all",
   ownershipFilter: preferMine ? "mine" : "all",
   rangeStart: getHondurasTodayStr(),
   rangeEnd: getHondurasTodayStr()
@@ -746,7 +746,7 @@ var readTaskRoomState = (storageKey, options = {}) => {
     const savedVersion = Number(parsedValue.version || 0);
     const wasPersonalized = parsedValue.personalized === true;
     const looksLikeLegacyDefault = (!wasPersonalized || savedVersion < TASK_ROOM_STATE_VERSION) && parsedState.filterMode === "date" && parsedState.ownershipFilter === "all" && compareDateOnlyStrings(parsedState.currentDate, defaults.currentDate) === 0;
-    if (options.preferMine && looksLikeLegacyDefault) return defaults;
+    if (looksLikeLegacyDefault) return defaults;
     return parsedState;
   } catch (error) {
     console.warn(`No se pudo leer el estado guardado de ${storageKey}:`, error);
@@ -7272,26 +7272,17 @@ var CalendarGrid = ({
   canAdd = true
 }) => {
   const [date, setDate] = useState(/* @__PURE__ */ new Date());
-  const hasAutoFocusedDataMonthRef = useRef(false);
+  const dataDates = events.map((event) => normalizeDateOnlyString(event.date)).filter(Boolean).sort();
+  const stateMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const hasStateMonthData = dataDates.some((item) => item.startsWith(stateMonth));
+  const fallbackDate = dataDates.length > 0 ? dataDates[dataDates.length - 1] : "";
+  const displayDate = !hasStateMonthData && fallbackDate ? new Date(Number(fallbackDate.slice(0, 4)), Number(fallbackDate.slice(5, 7)) - 1, 1) : date;
   const daysInMonth = new Date(
-    date.getFullYear(),
-    date.getMonth() + 1,
+    displayDate.getFullYear(),
+    displayDate.getMonth() + 1,
     0
   ).getDate();
-  const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-  useEffect(() => {
-    if (hasAutoFocusedDataMonthRef.current || events.length === 0) return;
-    const currentMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    if (events.some((event) => String(event.date || "").startsWith(currentMonth))) {
-      hasAutoFocusedDataMonthRef.current = true;
-      return;
-    }
-    const latestDate = events.map((event) => String(event.date || "")).filter(Boolean).sort().at(-1);
-    if (!latestDate) return;
-    const [year, month] = latestDate.split("-");
-    setDate(new Date(Number(year), Number(month) - 1, 1));
-    hasAutoFocusedDataMonthRef.current = true;
-  }, [events]);
+  const startDay = new Date(displayDate.getFullYear(), displayDate.getMonth(), 1).getDay();
   let mappedColorName = LEGACY_COLOR_MAP[baseColor] || baseColor;
   const style = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
   return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900" }, /* @__PURE__ */ React.createElement(
@@ -7303,15 +7294,15 @@ var CalendarGrid = ({
   ), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-4 bg-slate-50 dark:bg-slate-800 rounded-lg p-1" }, /* @__PURE__ */ React.createElement(
     "button",
     {
-      onClick: () => setDate(new Date(date.getFullYear(), date.getMonth() - 1, 1)),
+      onClick: () => setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() - 1, 1)),
       "aria-label": "Mes anterior",
       className: "p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"
     },
     /* @__PURE__ */ React.createElement(Icon, { name: "ChevronLeft", size: 16 })
-  ), /* @__PURE__ */ React.createElement("span", { className: "font-black text-slate-700 dark:text-slate-200 w-32 text-center text-sm uppercase" }, MONTH_NAMES[date.getMonth()], " ", date.getFullYear()), /* @__PURE__ */ React.createElement(
+  ), /* @__PURE__ */ React.createElement("span", { className: "font-black text-slate-700 dark:text-slate-200 w-32 text-center text-sm uppercase" }, MONTH_NAMES[displayDate.getMonth()], " ", displayDate.getFullYear()), /* @__PURE__ */ React.createElement(
     "button",
     {
-      onClick: () => setDate(new Date(date.getFullYear(), date.getMonth() + 1, 1)),
+      onClick: () => setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 1)),
       "aria-label": "Mes siguiente",
       className: "p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"
     },
@@ -7330,7 +7321,7 @@ var CalendarGrid = ({
       className: "border-r border-b border-slate-200/50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30"
     }
   )), Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
-    const dStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const dStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const dayEvents = events.filter((e) => e.date === dStr);
     return /* @__PURE__ */ React.createElement(
       "div",
@@ -7380,7 +7371,6 @@ var CalendarGrid = ({
 var GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
   const [viewMode, setViewMode] = useState("month");
   const [date, setDate] = useState(/* @__PURE__ */ new Date());
-  const hasAutoFocusedDataMonthRef = useRef(false);
   const [showPicker, setShowPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(() => (/* @__PURE__ */ new Date()).getFullYear());
   const [draggedId, setDraggedId] = useState(null);
@@ -7402,21 +7392,13 @@ var GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
   const DAY_LABELS = ["D", "L", "M", "M", "J", "V", "S"];
   const toDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const todayStr = toDateStr(/* @__PURE__ */ new Date());
-  useEffect(() => {
-    if (hasAutoFocusedDataMonthRef.current || activities.length === 0) return;
-    const currentMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    if (activities.some((activity) => String(activity.date || "").startsWith(currentMonth))) {
-      hasAutoFocusedDataMonthRef.current = true;
-      return;
-    }
-    const latestDate = activities.map((activity) => String(activity.date || "")).filter(Boolean).sort().at(-1);
-    if (!latestDate) return;
-    const [year, month] = latestDate.split("-");
-    setDate(new Date(Number(year), Number(month) - 1, 1));
-    hasAutoFocusedDataMonthRef.current = true;
-  }, [activities]);
+  const dataDates = activities.map((activity) => normalizeDateOnlyString(activity.date)).filter(Boolean).sort();
+  const stateMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const hasStateMonthData = dataDates.some((item) => item.startsWith(stateMonth));
+  const fallbackDate = dataDates.length > 0 ? dataDates[dataDates.length - 1] : "";
+  const displayDate = !hasStateMonthData && fallbackDate ? new Date(Number(fallbackDate.slice(0, 4)), Number(fallbackDate.slice(5, 7)) - 1, 1) : date;
   const getWeekDates = () => {
-    const d = new Date(date);
+    const d = new Date(displayDate);
     d.setDate(d.getDate() - d.getDay());
     return Array.from({ length: 7 }, (_, i) => {
       const w = new Date(d);
@@ -7425,15 +7407,15 @@ var GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
     });
   };
   const navPrev = () => viewMode === "week" ? setDate((d) => {
-    const n = new Date(d);
+    const n = new Date(displayDate);
     n.setDate(n.getDate() - 7);
     return n;
-  }) : setDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  }) : setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() - 1, 1));
   const navNext = () => viewMode === "week" ? setDate((d) => {
-    const n = new Date(d);
+    const n = new Date(displayDate);
     n.setDate(n.getDate() + 7);
     return n;
-  }) : setDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  }) : setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 1));
   const getDateLabel = () => {
     if (viewMode === "week") {
       const wk = getWeekDates();
@@ -7442,7 +7424,7 @@ var GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
         return `${s.getDate()} \u2013 ${e.getDate()} ${MONTH_NAMES[s.getMonth()]} ${s.getFullYear()}`;
       return `${s.getDate()} ${SHORT_MONTHS[s.getMonth()]} \u2013 ${e.getDate()} ${SHORT_MONTHS[e.getMonth()]} ${e.getFullYear()}`;
     }
-    return `${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
+    return `${MONTH_NAMES[displayDate.getMonth()]} ${displayDate.getFullYear()}`;
   };
   const handleDragStart = (e, act) => {
     setDraggedId(act.id);

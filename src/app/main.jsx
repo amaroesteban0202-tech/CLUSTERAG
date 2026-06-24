@@ -1359,10 +1359,10 @@ const isTaskAssignedToProfile = (task, profile, contextIds = []) => {
   if (task?.assigneeUserId && task.assigneeUserId === profileId) return true;
   return contextIds.filter(Boolean).includes(task?.contextId);
 };
-const TASK_ROOM_STATE_VERSION = 2;
+const TASK_ROOM_STATE_VERSION = 3;
 const getTaskRoomDefaults = ({ preferMine = false } = {}) => ({
   currentDate: getHondurasTodayStr(),
-  filterMode: preferMine ? "all" : "date",
+  filterMode: "all",
   ownershipFilter: preferMine ? "mine" : "all",
   rangeStart: getHondurasTodayStr(),
   rangeEnd: getHondurasTodayStr(),
@@ -1401,7 +1401,7 @@ const readTaskRoomState = (storageKey, options = {}) => {
       parsedState.ownershipFilter === "all" &&
       compareDateOnlyStrings(parsedState.currentDate, defaults.currentDate) ===
         0;
-    if (options.preferMine && looksLikeLegacyDefault) return defaults;
+    if (looksLikeLegacyDefault) return defaults;
     return parsedState;
   } catch (error) {
     console.warn(`No se pudo leer el estado guardado de ${storageKey}:`, error);
@@ -10299,31 +10299,23 @@ const CalendarGrid = ({
   canAdd = true,
 }) => {
   const [date, setDate] = useState(new Date());
-  const hasAutoFocusedDataMonthRef = useRef(false);
+  const dataDates = events
+    .map((event) => normalizeDateOnlyString(event.date))
+    .filter(Boolean)
+    .sort();
+  const stateMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const hasStateMonthData = dataDates.some((item) => item.startsWith(stateMonth));
+  const fallbackDate = dataDates.length > 0 ? dataDates[dataDates.length - 1] : "";
+  const displayDate =
+    !hasStateMonthData && fallbackDate
+      ? new Date(Number(fallbackDate.slice(0, 4)), Number(fallbackDate.slice(5, 7)) - 1, 1)
+      : date;
   const daysInMonth = new Date(
-    date.getFullYear(),
-    date.getMonth() + 1,
+    displayDate.getFullYear(),
+    displayDate.getMonth() + 1,
     0,
   ).getDate();
-  const startDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-
-  useEffect(() => {
-    if (hasAutoFocusedDataMonthRef.current || events.length === 0) return;
-    const currentMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    if (events.some((event) => String(event.date || "").startsWith(currentMonth))) {
-      hasAutoFocusedDataMonthRef.current = true;
-      return;
-    }
-    const latestDate = events
-      .map((event) => String(event.date || ""))
-      .filter(Boolean)
-      .sort()
-      .at(-1);
-    if (!latestDate) return;
-    const [year, month] = latestDate.split("-");
-    setDate(new Date(Number(year), Number(month) - 1, 1));
-    hasAutoFocusedDataMonthRef.current = true;
-  }, [events]);
+  const startDay = new Date(displayDate.getFullYear(), displayDate.getMonth(), 1).getDay();
 
   let mappedColorName = LEGACY_COLOR_MAP[baseColor] || baseColor;
   const style = PERSON_COLORS[mappedColorName] || PERSON_COLORS.slate;
@@ -10339,7 +10331,7 @@ const CalendarGrid = ({
         <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800 rounded-lg p-1">
           <button
             onClick={() =>
-              setDate(new Date(date.getFullYear(), date.getMonth() - 1, 1))
+              setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() - 1, 1))
             }
             aria-label="Mes anterior"
             className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"
@@ -10347,11 +10339,11 @@ const CalendarGrid = ({
             <Icon name="ChevronLeft" size={16} />
           </button>
           <span className="font-black text-slate-700 dark:text-slate-200 w-32 text-center text-sm uppercase">
-            {MONTH_NAMES[date.getMonth()]} {date.getFullYear()}
+            {MONTH_NAMES[displayDate.getMonth()]} {displayDate.getFullYear()}
           </span>
           <button
             onClick={() =>
-              setDate(new Date(date.getFullYear(), date.getMonth() + 1, 1))
+              setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 1))
             }
             aria-label="Mes siguiente"
             className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"
@@ -10379,7 +10371,7 @@ const CalendarGrid = ({
               />
             ))}
           {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
-            const dStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+            const dStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
             const dayEvents = events.filter((e) => e.date === dStr);
 
             return (
@@ -10443,7 +10435,6 @@ const CalendarGrid = ({
 const GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
   const [viewMode, setViewMode] = useState("month");
   const [date, setDate] = useState(new Date());
-  const hasAutoFocusedDataMonthRef = useRef(false);
   const [showPicker, setShowPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
   const [draggedId, setDraggedId] = useState(null);
@@ -10467,27 +10458,20 @@ const GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
   const toDateStr = (d) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const todayStr = toDateStr(new Date());
-
-  useEffect(() => {
-    if (hasAutoFocusedDataMonthRef.current || activities.length === 0) return;
-    const currentMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    if (activities.some((activity) => String(activity.date || "").startsWith(currentMonth))) {
-      hasAutoFocusedDataMonthRef.current = true;
-      return;
-    }
-    const latestDate = activities
-      .map((activity) => String(activity.date || ""))
-      .filter(Boolean)
-      .sort()
-      .at(-1);
-    if (!latestDate) return;
-    const [year, month] = latestDate.split("-");
-    setDate(new Date(Number(year), Number(month) - 1, 1));
-    hasAutoFocusedDataMonthRef.current = true;
-  }, [activities]);
+  const dataDates = activities
+    .map((activity) => normalizeDateOnlyString(activity.date))
+    .filter(Boolean)
+    .sort();
+  const stateMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const hasStateMonthData = dataDates.some((item) => item.startsWith(stateMonth));
+  const fallbackDate = dataDates.length > 0 ? dataDates[dataDates.length - 1] : "";
+  const displayDate =
+    !hasStateMonthData && fallbackDate
+      ? new Date(Number(fallbackDate.slice(0, 4)), Number(fallbackDate.slice(5, 7)) - 1, 1)
+      : date;
 
   const getWeekDates = () => {
-    const d = new Date(date);
+    const d = new Date(displayDate);
     d.setDate(d.getDate() - d.getDay());
     return Array.from({ length: 7 }, (_, i) => {
       const w = new Date(d);
@@ -10499,20 +10483,20 @@ const GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
   const navPrev = () =>
     viewMode === "week"
       ? setDate((d) => {
-          const n = new Date(d);
+          const n = new Date(displayDate);
           n.setDate(n.getDate() - 7);
           return n;
         })
-      : setDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+      : setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() - 1, 1));
 
   const navNext = () =>
     viewMode === "week"
       ? setDate((d) => {
-          const n = new Date(d);
+          const n = new Date(displayDate);
           n.setDate(n.getDate() + 7);
           return n;
         })
-      : setDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+      : setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 1));
 
   const getDateLabel = () => {
     if (viewMode === "week") {
@@ -10523,7 +10507,7 @@ const GeneralCalendarGrid = ({ activities, onDayClick, onMoveActivity }) => {
         return `${s.getDate()} – ${e.getDate()} ${MONTH_NAMES[s.getMonth()]} ${s.getFullYear()}`;
       return `${s.getDate()} ${SHORT_MONTHS[s.getMonth()]} – ${e.getDate()} ${SHORT_MONTHS[e.getMonth()]} ${e.getFullYear()}`;
     }
-    return `${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
+    return `${MONTH_NAMES[displayDate.getMonth()]} ${displayDate.getFullYear()}`;
   };
 
   const handleDragStart = (e, act) => {
