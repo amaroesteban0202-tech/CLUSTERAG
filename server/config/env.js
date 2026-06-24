@@ -56,7 +56,8 @@ export const env = {
     port: parseNumber(process.env.PORT, 3000),
     appBaseUrl: process.env.APP_BASE_URL || '',
     appId: process.env.APP_ID || 'cluster-agency-pro-mobile-v6',
-    databaseClient: process.env.DATABASE_CLIENT === 'mysql2' ? 'mysql2' : 'sqlite3',
+    databaseClient: ['pg', 'mysql2'].includes(process.env.DATABASE_CLIENT) ? process.env.DATABASE_CLIENT : 'sqlite3',
+    databaseUrl: process.env.DATABASE_URL || process.env.POSTGRES_URL || '',
     sqliteFilename: resolveSqliteFilename(process.env.SQLITE_FILENAME || defaultSqliteFilename),
     mysql: {
         host: process.env.MYSQL_HOST || '127.0.0.1',

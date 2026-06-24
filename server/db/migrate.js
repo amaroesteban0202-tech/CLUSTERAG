@@ -2,26 +2,39 @@ import { db } from './knex.js';
 
 const ensureAppRecordsTable = async () => {
     const exists = await db.schema.hasTable('app_records');
-    if (exists) return;
+    if (!exists) {
+        await db.schema.createTable('app_records', (table) => {
+            table.increments('id').primary();
+            table.string('collection_name', 120).notNullable();
+            table.string('record_id', 120).notNullable();
+            table.text('payload_json').notNullable();
+            table.string('created_at', 40).notNullable();
+            table.string('updated_at', 40).notNullable();
+            table.string('email_index', 255).nullable();
+            table.string('role_index', 80).nullable();
+            table.boolean('is_active_index').nullable();
+            table.string('auth_uid_index', 255).nullable();
+            table.string('management_key_index', 255).nullable();
+            table.string('date_index', 20).nullable();
+            table.string('status_index', 80).nullable();
+            table.unique(['collection_name', 'record_id']);
+            table.index(['collection_name', 'updated_at']);
+            table.index(['collection_name', 'email_index']);
+            table.index(['collection_name', 'role_index']);
+            table.index(['collection_name', 'auth_uid_index']);
+            table.index(['collection_name', 'date_index']);
+            table.index(['collection_name', 'status_index']);
+        });
+        return;
+    }
 
-    await db.schema.createTable('app_records', (table) => {
-        table.increments('id').primary();
-        table.string('collection_name', 120).notNullable();
-        table.string('record_id', 120).notNullable();
-        table.text('payload_json').notNullable();
-        table.string('created_at', 40).notNullable();
-        table.string('updated_at', 40).notNullable();
-        table.string('email_index', 255).nullable();
-        table.string('role_index', 80).nullable();
-        table.boolean('is_active_index').nullable();
-        table.string('auth_uid_index', 255).nullable();
-        table.string('management_key_index', 255).nullable();
-        table.unique(['collection_name', 'record_id']);
-        table.index(['collection_name', 'updated_at']);
-        table.index(['collection_name', 'email_index']);
-        table.index(['collection_name', 'role_index']);
-        table.index(['collection_name', 'auth_uid_index']);
-    });
+    const addColumn = async (name, build) => {
+        if (await db.schema.hasColumn('app_records', name)) return;
+        await db.schema.table('app_records', build);
+    };
+
+    await addColumn('date_index', (table) => table.string('date_index', 20).nullable());
+    await addColumn('status_index', (table) => table.string('status_index', 80).nullable());
 };
 
 const ensureAuthSessionsTable = async () => {

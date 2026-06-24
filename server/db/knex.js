@@ -15,8 +15,17 @@ if (env.databaseClient === 'sqlite3') {
     }
 }
 
-const config = env.databaseClient === 'mysql2'
+const config = env.databaseClient === 'pg'
     ? {
+        client: 'pg',
+        connection: env.databaseUrl,
+        pool: {
+            min: 0,
+            max: 2
+        }
+    }
+    : env.databaseClient === 'mysql2'
+        ? {
         client: 'mysql2',
         connection: {
             host: env.mysql.host,
@@ -30,12 +39,12 @@ const config = env.databaseClient === 'mysql2'
             max: 10
         }
     }
-    : {
-        client: 'sqlite3',
-        connection: {
-            filename: env.sqliteFilename
-        },
-        useNullAsDefault: true
-    };
+        : {
+            client: 'sqlite3',
+            connection: {
+                filename: env.sqliteFilename
+            },
+            useNullAsDefault: true
+        };
 
 export const db = knex(config);

@@ -211,7 +211,10 @@ router.get('/:collectionName', asyncHandler(async (req, res) => {
         collectionName,
         sortBy: String(req.query.orderBy || 'updatedAt'),
         sortDirection: String(req.query.orderDir || 'asc'),
-        limitCount: req.query.limit ? Number(req.query.limit) : undefined
+        limitCount: req.query.limit ? Number(req.query.limit) : undefined,
+        dateFrom: req.query.dateFrom ? String(req.query.dateFrom) : undefined,
+        dateTo: req.query.dateTo ? String(req.query.dateTo) : undefined,
+        includeOpenBefore: req.query.includeOpenBefore === '1'
     });
 
     res.json({ records });

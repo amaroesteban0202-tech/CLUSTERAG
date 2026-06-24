@@ -97,6 +97,7 @@ import {
   writeBatch,
   setDoc,
   getDocs,
+  loadAllTaskHistory,
 } from "firebase/firestore";
 import { auth, db, appId } from "/src/app/config/firebase.js";
 import {
@@ -1533,6 +1534,8 @@ function App() {
   const [editingTasks, setEditingTasks] = useState([]);
   const [accountTasks, setAccountTasks] = useState([]);
   const [managementTasks, setManagementTasks] = useState([]);
+  const [taskHistoryLoaded, setTaskHistoryLoaded] = useState(false);
+  const [isLoadingTaskHistory, setIsLoadingTaskHistory] = useState(false);
   const [appUsers, setAppUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
 
@@ -1571,6 +1574,21 @@ function App() {
   const authEmailMatches = authEmail
     ? appUsers.filter((item) => normalizeEmail(item.email) === authEmail)
     : [];
+
+  const handleLoadTaskHistory = async () => {
+    if (taskHistoryLoaded || isLoadingTaskHistory) return;
+    setIsLoadingTaskHistory(true);
+    try {
+      await loadAllTaskHistory();
+      setTaskHistoryLoaded(true);
+      showToast("Historial de tareas cargado.", "success");
+    } catch (error) {
+      console.error("No se pudo cargar el historial de tareas:", error);
+      showToast("No se pudo cargar el historial de tareas.", "error");
+    } finally {
+      setIsLoadingTaskHistory(false);
+    }
+  };
   const resolvedAuthProfile =
     authEmailMatches.length > 0
       ? chooseCanonicalUserRecord(authEmailMatches)
@@ -5395,6 +5413,9 @@ function App() {
                   type: "accountTask",
                 })
               }
+              onLoadHistory={handleLoadTaskHistory}
+              historyLoaded={taskHistoryLoaded}
+              historyLoading={isLoadingTaskHistory}
               legacyColorMap={LEGACY_COLOR_MAP}
             />
           )}
@@ -5435,6 +5456,9 @@ function App() {
                   type: "editingTask",
                 })
               }
+              onLoadHistory={handleLoadTaskHistory}
+              historyLoaded={taskHistoryLoaded}
+              historyLoading={isLoadingTaskHistory}
             />
           )}
           {view === "management-room" && (
@@ -5477,6 +5501,9 @@ function App() {
                   type: "managementTask",
                 })
               }
+              onLoadHistory={handleLoadTaskHistory}
+              historyLoaded={taskHistoryLoaded}
+              historyLoading={isLoadingTaskHistory}
             />
           )}
           {view === "control-center" && (
@@ -7141,8 +7168,8 @@ const DashboardView = ({
               mensual por Account
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              KPI = porcentaje de tareas del mes completadas. La puntualidad
-              solo usa cierres con fecha verificable.
+              KPI: 50% cumplimiento ponderado, 30% puntualidad verificada y
+              20% carga completada del mes.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -7309,13 +7336,13 @@ const DashboardView = ({
 
                   <div className="space-y-3">
                     <CompactMetricBar
-                      label="Cumplimiento"
-                      value={ms.completionPercent}
+                      label="Cumplimiento ponderado"
+                      value={ms.weightedCompletionPercent}
                       color={ms.mappedColor}
-                      meta={`${ms.completionPercent}%`}
+                      meta={`${ms.weightedCompletionPercent}%`}
                       helper={
                         ms.totalTasks > 0
-                          ? `${ms.completedTasks} de ${ms.totalTasks} tareas cerradas`
+                          ? `${ms.weightedCompleted} de ${ms.weightedTotal} unidades completadas`
                           : "Sin tareas asignadas"
                       }
                     />
@@ -7329,6 +7356,13 @@ const DashboardView = ({
                           ? `${ms.onTimeCount} de ${ms.measuredCompletionCount} cierres a tiempo`
                           : "Los cierres historicos no tienen fecha verificable"
                       }
+                    />
+                    <CompactMetricBar
+                      label="Carga completada"
+                      value={ms.loadPercent}
+                      color={ms.mappedColor}
+                      meta={`${ms.loadPercent}%`}
+                      helper={`${ms.weightedCompleted} unidades; referencia: mayor carga del mes`}
                     />
                   </div>
 
@@ -8057,6 +8091,9 @@ const DateHeader = ({
   setRangeStart,
   rangeEnd,
   setRangeEnd,
+  onLoadHistory,
+  historyLoaded = false,
+  historyLoading = false,
 }) => {
   const today = getHondurasTodayStr();
   const hasRangeSupport = Boolean(setRangeStart && setRangeEnd);
@@ -8121,10 +8158,14 @@ const DateHeader = ({
               Atrasadas <Icon name="Flame" size={14} />
             </button>
             <button
-              onClick={() => setFilterMode("all")}
+              onClick={async () => {
+                if (onLoadHistory && !historyLoaded) await onLoadHistory();
+                setFilterMode("all");
+              }}
+              disabled={historyLoading}
               className={`${segBase} ${filterMode === "all" ? segActive : segIdle}`}
             >
-              Todas
+              {historyLoading ? "Cargando" : "Todas"}
             </button>
           </div>
           {/* Filtro por ASIGNACIÓN */}
@@ -8219,6 +8260,9 @@ const AccountRoomView = ({
   onDelete,
   onTaskClick,
   legacyColorMap,
+  onLoadHistory,
+  historyLoaded,
+  historyLoading,
 }) => {
   const {
     currentDate,
@@ -8376,6 +8420,9 @@ const AccountRoomView = ({
         setRangeStart={setRangeStart}
         rangeEnd={rangeEnd}
         setRangeEnd={setRangeEnd}
+        onLoadHistory={onLoadHistory}
+        historyLoaded={historyLoaded}
+        historyLoading={historyLoading}
       />
       <div className="flex-1 flex md:grid md:grid-cols-4 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0">
         {columns.map((col, colIndex) => {
@@ -8494,6 +8541,9 @@ const EditionsRoomView = ({
   onChangeStatus,
   onDelete,
   onTaskClick,
+  onLoadHistory,
+  historyLoaded,
+  historyLoading,
 }) => {
   const {
     currentDate,
@@ -8655,6 +8705,9 @@ const EditionsRoomView = ({
         btnIcon="Video"
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
+        onLoadHistory={onLoadHistory}
+        historyLoaded={historyLoaded}
+        historyLoading={historyLoading}
       />
       <div className="flex-1 flex md:grid md:grid-cols-5 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0">
         {columns.map((col, colIndex) => {
@@ -8832,6 +8885,9 @@ const ManagementRoomView = ({
   onChangeStatus,
   onDelete,
   onTaskClick,
+  onLoadHistory,
+  historyLoaded,
+  historyLoading,
 }) => {
   const {
     currentDate,
@@ -8935,6 +8991,9 @@ const ManagementRoomView = ({
         btnIcon="ShieldCheck"
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
+        onLoadHistory={onLoadHistory}
+        historyLoaded={historyLoaded}
+        historyLoading={historyLoading}
       />
 
       {/* Stats + Team strip */}
