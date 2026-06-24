@@ -97,7 +97,8 @@ import {
   limit,
   writeBatch,
   setDoc,
-  getDocs
+  getDocs,
+  loadAllTaskHistory
 } from "firebase/firestore";
 import { auth, db, appId } from "/src/app/config/firebase.js";
 import {
@@ -852,6 +853,8 @@ function App() {
   const [editingTasks, setEditingTasks] = useState([]);
   const [accountTasks, setAccountTasks] = useState([]);
   const [managementTasks, setManagementTasks] = useState([]);
+  const [taskHistoryLoaded, setTaskHistoryLoaded] = useState(false);
+  const [isLoadingTaskHistory, setIsLoadingTaskHistory] = useState(false);
   const [appUsers, setAppUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
@@ -885,6 +888,20 @@ function App() {
   });
   const authEmail = normalizeEmail(user?.email);
   const authEmailMatches = authEmail ? appUsers.filter((item) => normalizeEmail(item.email) === authEmail) : [];
+  const handleLoadTaskHistory = async () => {
+    if (taskHistoryLoaded || isLoadingTaskHistory) return;
+    setIsLoadingTaskHistory(true);
+    try {
+      await loadAllTaskHistory();
+      setTaskHistoryLoaded(true);
+      showToast("Historial de tareas cargado.", "success");
+    } catch (error) {
+      console.error("No se pudo cargar el historial de tareas:", error);
+      showToast("No se pudo cargar el historial de tareas.", "error");
+    } finally {
+      setIsLoadingTaskHistory(false);
+    }
+  };
   const resolvedAuthProfile = authEmailMatches.length > 0 ? chooseCanonicalUserRecord(authEmailMatches) : null;
   const pendingManagementMember = authEmail ? MANAGEMENT_DIRECTORY.find(
     (item) => normalizeEmail(item.email) === authEmail
@@ -4002,6 +4019,9 @@ function App() {
         task: t,
         type: "accountTask"
       }),
+      onLoadHistory: handleLoadTaskHistory,
+      historyLoaded: taskHistoryLoaded,
+      historyLoading: isLoadingTaskHistory,
       legacyColorMap: LEGACY_COLOR_MAP
     }
   ), view === "editions" && /* @__PURE__ */ React.createElement(
@@ -4033,7 +4053,10 @@ function App() {
         isOpen: true,
         task: t,
         type: "editingTask"
-      })
+      }),
+      onLoadHistory: handleLoadTaskHistory,
+      historyLoaded: taskHistoryLoaded,
+      historyLoading: isLoadingTaskHistory
     }
   ), view === "management-room" && /* @__PURE__ */ React.createElement(
     ManagementRoomView,
@@ -4067,7 +4090,10 @@ function App() {
         isOpen: true,
         task: t,
         type: "managementTask"
-      })
+      }),
+      onLoadHistory: handleLoadTaskHistory,
+      historyLoaded: taskHistoryLoaded,
+      historyLoading: isLoadingTaskHistory
     }
   ), view === "control-center" && /* @__PURE__ */ React.createElement(
     UsersAccessView,
@@ -5873,7 +5899,10 @@ var DateHeader = ({
   rangeStart,
   setRangeStart,
   rangeEnd,
-  setRangeEnd
+  setRangeEnd,
+  onLoadHistory,
+  historyLoaded = false,
+  historyLoading = false
 }) => {
   const today = getHondurasTodayStr();
   const hasRangeSupport = Boolean(setRangeStart && setRangeEnd);
@@ -5925,10 +5954,14 @@ var DateHeader = ({
   ), /* @__PURE__ */ React.createElement(
     "button",
     {
-      onClick: () => setFilterMode("all"),
+      onClick: async () => {
+        if (onLoadHistory && !historyLoaded) await onLoadHistory();
+        setFilterMode("all");
+      },
+      disabled: historyLoading,
       className: `${segBase} ${filterMode === "all" ? segActive : segIdle}`
     },
-    "Todas"
+    historyLoading ? "Cargando" : "Todas"
   )), setOwnershipFilter && /* @__PURE__ */ React.createElement("div", { className: "flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl max-w-full overflow-x-auto kanban-mobile-scroll" }, /* @__PURE__ */ React.createElement(
     "button",
     {
@@ -5998,7 +6031,10 @@ var AccountRoomView = ({
   onChangeStatus,
   onDelete,
   onTaskClick,
-  legacyColorMap
+  legacyColorMap,
+  onLoadHistory,
+  historyLoaded,
+  historyLoading
 }) => {
   const {
     currentDate,
@@ -6132,7 +6168,10 @@ var AccountRoomView = ({
       rangeStart,
       setRangeStart,
       rangeEnd,
-      setRangeEnd
+      setRangeEnd,
+      onLoadHistory,
+      historyLoaded,
+      historyLoading
     }
   ), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-4 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
     const colTasks = filteredTasks.filter((t) => t.status === col.id);
@@ -6224,7 +6263,10 @@ var EditionsRoomView = ({
   onEdit,
   onChangeStatus,
   onDelete,
-  onTaskClick
+  onTaskClick,
+  onLoadHistory,
+  historyLoaded,
+  historyLoading
 }) => {
   const {
     currentDate,
@@ -6366,7 +6408,10 @@ var EditionsRoomView = ({
       btnColor: "amber",
       btnIcon: "Video",
       searchTerm,
-      setSearchTerm
+      setSearchTerm,
+      onLoadHistory,
+      historyLoaded,
+      historyLoading
     }
   ), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-5 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
     const colTasks = displayTasks.filter(
@@ -6500,7 +6545,10 @@ var ManagementRoomView = ({
   onEdit,
   onChangeStatus,
   onDelete,
-  onTaskClick
+  onTaskClick,
+  onLoadHistory,
+  historyLoaded,
+  historyLoading
 }) => {
   const {
     currentDate,
@@ -6587,7 +6635,10 @@ var ManagementRoomView = ({
       btnColor: "violet",
       btnIcon: "ShieldCheck",
       searchTerm,
-      setSearchTerm
+      setSearchTerm,
+      onLoadHistory,
+      historyLoaded,
+      historyLoading
     }
   ), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col lg:flex-row gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 flex-1" }, columns.map((col) => {
     const filteredCount = filteredTasks.filter(

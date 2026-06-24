@@ -1,7 +1,8 @@
 import { apiFetch } from './backend-api.js?v=20260525-local-api';
 
 const registry = new Map();
-const DEFAULT_POLL_MS = 20000;
+const DEFAULT_POLL_MS = 120000;
+const TASK_COLLECTIONS = new Set(['account_tasks', 'editing', 'management_tasks']);
 
 if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
@@ -66,6 +67,20 @@ const buildQueryOptions = (ref) => {
     return options;
 };
 
+const getCurrentMonthWindow = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const from = new Date(year, month, 1);
+    const to = new Date(year, month + 1, 0);
+    const format = (date) => [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0')
+    ].join('-');
+    return { dateFrom: format(from), dateTo: format(to) };
+};
+
 const buildRegistryKey = (ref) => {
     const collectionName = getCollectionName(ref);
     const options = buildQueryOptions(ref);
@@ -79,6 +94,12 @@ const fetchRecords = async (ref) => {
     if (options.orderBy) params.set('orderBy', options.orderBy);
     if (options.orderDir) params.set('orderDir', options.orderDir);
     if (options.limit) params.set('limit', String(options.limit));
+    if (TASK_COLLECTIONS.has(collectionName) && window.__cluster_task_history !== 'all') {
+        const monthWindow = getCurrentMonthWindow();
+        params.set('dateFrom', monthWindow.dateFrom);
+        params.set('dateTo', monthWindow.dateTo);
+        params.set('includeOpenBefore', '1');
+    }
     const payload = await apiFetch(`/api/collections/${collectionName}?${params.toString()}`);
     return Array.isArray(payload?.records) ? payload.records : [];
 };
@@ -166,6 +187,11 @@ export const query = (baseRef, ...constraints) => ({ __kind: 'query', baseRef, c
 export const orderBy = (field, direction = 'asc') => ({ type: 'orderBy', field, direction });
 
 export const limit = (count) => ({ type: 'limit', count });
+
+export const loadAllTaskHistory = async () => {
+    window.__cluster_task_history = 'all';
+    await Promise.all(['account_tasks', 'editing', 'management_tasks'].map(refreshCollection));
+};
 
 export const onSnapshot = (ref, onNext, onError) => {
     const key = buildRegistryKey(ref);
