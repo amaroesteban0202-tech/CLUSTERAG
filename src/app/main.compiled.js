@@ -126,6 +126,7 @@ import {
   KPI_MIN_TASKS,
   buildManagerKpiStats,
   isEditingDelivered,
+  isEditingActionable,
   isWorkflowCompleted,
   normalizeEditingWorkflowStatus,
   rankPendingEditingTasks
@@ -6341,7 +6342,7 @@ var EditionsRoomView = ({
   const rankedTasks = rankPendingEditingTasks(filteredTasks, todayStr);
   const displayTasks = [
     ...rankedTasks,
-    ...filteredTasks.filter((task) => isCompletedStatus(task.status))
+    ...filteredTasks.filter((task) => !isEditingActionable(task))
   ];
   const rankingMap = rankedTasks.reduce(
     (acc, task, index) => ({ ...acc, [task.id]: index + 1 }),
