@@ -7273,11 +7273,12 @@ var CalendarGrid = ({
   canAdd = true
 }) => {
   const [date, setDate] = useState(/* @__PURE__ */ new Date());
+  const userNavigatedRef = useRef(false);
   const dataDates = events.map((event) => normalizeDateOnlyString(event.date)).filter(Boolean).sort();
   const stateMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
   const hasStateMonthData = dataDates.some((item) => item.startsWith(stateMonth));
   const fallbackDate = dataDates.length > 0 ? dataDates[dataDates.length - 1] : "";
-  const displayDate = !hasStateMonthData && fallbackDate ? new Date(Number(fallbackDate.slice(0, 4)), Number(fallbackDate.slice(5, 7)) - 1, 1) : date;
+  const displayDate = !userNavigatedRef.current && !hasStateMonthData && fallbackDate ? new Date(Number(fallbackDate.slice(0, 4)), Number(fallbackDate.slice(5, 7)) - 1, 1) : date;
   const daysInMonth = new Date(
     displayDate.getFullYear(),
     displayDate.getMonth() + 1,
@@ -7295,7 +7296,10 @@ var CalendarGrid = ({
   ), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-4 bg-slate-50 dark:bg-slate-800 rounded-lg p-1" }, /* @__PURE__ */ React.createElement(
     "button",
     {
-      onClick: () => setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() - 1, 1)),
+      onClick: () => {
+        userNavigatedRef.current = true;
+        setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() - 1, 1));
+      },
       "aria-label": "Mes anterior",
       className: "p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"
     },
@@ -7303,7 +7307,10 @@ var CalendarGrid = ({
   ), /* @__PURE__ */ React.createElement("span", { className: "font-black text-slate-700 dark:text-slate-200 w-32 text-center text-sm uppercase" }, MONTH_NAMES[displayDate.getMonth()], " ", displayDate.getFullYear()), /* @__PURE__ */ React.createElement(
     "button",
     {
-      onClick: () => setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 1)),
+      onClick: () => {
+        userNavigatedRef.current = true;
+        setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 1));
+      },
       "aria-label": "Mes siguiente",
       className: "p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"
     },

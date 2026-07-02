@@ -10300,6 +10300,7 @@ const CalendarGrid = ({
   canAdd = true,
 }) => {
   const [date, setDate] = useState(new Date());
+  const userNavigatedRef = useRef(false);
   const dataDates = events
     .map((event) => normalizeDateOnlyString(event.date))
     .filter(Boolean)
@@ -10308,7 +10309,7 @@ const CalendarGrid = ({
   const hasStateMonthData = dataDates.some((item) => item.startsWith(stateMonth));
   const fallbackDate = dataDates.length > 0 ? dataDates[dataDates.length - 1] : "";
   const displayDate =
-    !hasStateMonthData && fallbackDate
+    !userNavigatedRef.current && !hasStateMonthData && fallbackDate
       ? new Date(Number(fallbackDate.slice(0, 4)), Number(fallbackDate.slice(5, 7)) - 1, 1)
       : date;
   const daysInMonth = new Date(
@@ -10331,9 +10332,10 @@ const CalendarGrid = ({
         </div>
         <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800 rounded-lg p-1">
           <button
-            onClick={() =>
-              setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() - 1, 1))
-            }
+            onClick={() => {
+              userNavigatedRef.current = true;
+              setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() - 1, 1));
+            }}
             aria-label="Mes anterior"
             className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"
           >
@@ -10343,9 +10345,10 @@ const CalendarGrid = ({
             {MONTH_NAMES[displayDate.getMonth()]} {displayDate.getFullYear()}
           </span>
           <button
-            onClick={() =>
-              setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 1))
-            }
+            onClick={() => {
+              userNavigatedRef.current = true;
+              setDate(new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 1));
+            }}
             aria-label="Mes siguiente"
             className="p-3 md:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-500 dark:text-slate-300 shadow-sm"
           >
