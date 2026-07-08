@@ -12,6 +12,22 @@ const CLOSED_STATUS_BY_COLLECTION = {
 
 const stripUndefined = (value) => JSON.parse(JSON.stringify(value));
 
+// Los adjuntos guardan el archivo como base64 en `data` (hasta 8MB c/u). Si se
+// devuelven completos en cada listado, el polling (cada 2 min, por pestaña)
+// vuelve a transferir esos MB una y otra vez sin que nadie los este viendo.
+// El listado solo manda metadata; el detalle completo se pide bajo demanda
+// via getRecord (GET /api/collections/:collectionName/:recordId).
+const stripAttachmentData = (record) => {
+    if (!Array.isArray(record?.attachments) || record.attachments.length === 0) return record;
+    return {
+        ...record,
+        attachments: record.attachments.map(({ data, ...meta }) => ({
+            ...meta,
+            hasData: Boolean(data)
+        }))
+    };
+};
+
 const parsePayload = (row = {}) => {
     try {
         return JSON.parse(row.payload_json || '{}');
@@ -86,15 +102,19 @@ export const listRecords = async ({
     const query = getClient(trx)('app_records').where({ collection_name: collectionName });
     applyTaskWindow(query, { collectionName, dateFrom, dateTo, includeOpenBefore });
 
+    const stripHeavyFields = TASK_COLLECTIONS.has(collectionName)
+        ? (record) => stripAttachmentData(record)
+        : (record) => record;
+
     const sortColumn = SORT_COLUMN_BY_FIELD[sortBy];
     if (sortColumn) {
         query.orderBy(sortColumn, sortDirection === 'desc' ? 'desc' : 'asc');
         if (limitCount) query.limit(limitCount);
-        return (await query).map(buildRecord);
+        return (await query).map(buildRecord).map(stripHeavyFields);
     }
 
     const rows = await query;
-    let records = rows.map(buildRecord);
+    let records = rows.map(buildRecord).map(stripHeavyFields);
     records = records.sort((left, right) => compareValues(left?.[sortBy], right?.[sortBy], sortDirection));
     if (limitCount) records = records.slice(0, limitCount);
     return records;

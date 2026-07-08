@@ -272,6 +272,13 @@ export const getDocs = async (ref) => {
     return createQuerySnapshot(records);
 };
 
+export const getDoc = async (docRef) => {
+    const collectionName = getCollectionName(docRef);
+    const recordId = getRecordId(docRef);
+    const payload = await apiFetch(`/api/collections/${collectionName}/${recordId}`);
+    return createDocSnapshot(payload.record);
+};
+
 export const writeBatch = () => {
     const ops = [];
     return {

@@ -98,6 +98,7 @@ import {
   writeBatch,
   setDoc,
   getDocs,
+  getDoc,
   loadAllTaskHistory
 } from "firebase/firestore";
 import { auth, db, appId } from "/src/app/config/firebase.js";
@@ -3275,8 +3276,10 @@ function App() {
       uploadedBy: currentUserProfile?.name || (authEmail ? authEmail.split("@")[0] : "Usuario"),
       uploadedAt: nowIso()
     };
+    const currentSnap = await getDoc(dataDoc(col, task.id));
+    const currentAttachments = currentSnap.data()?.attachments || [];
     await updateDoc(dataDoc(col, task.id), {
-      attachments: [...task.attachments || [], newAttachment],
+      attachments: [...currentAttachments, newAttachment],
       updatedAt: nowIso()
     });
   };
@@ -3288,10 +3291,10 @@ function App() {
     };
     const col = colMap[type];
     if (!col) return;
+    const currentSnap = await getDoc(dataDoc(col, task.id));
+    const currentAttachments = currentSnap.data()?.attachments || [];
     await updateDoc(dataDoc(col, task.id), {
-      attachments: (task.attachments || []).filter(
-        (a) => a.id !== attachmentId
-      ),
+      attachments: currentAttachments.filter((a) => a.id !== attachmentId),
       updatedAt: nowIso()
     });
   };
@@ -7804,6 +7807,7 @@ var TaskDetailModal = ({
   const [mentionedIds, setMentionedIds] = useState([]);
   const dialogRef = useDialogA11y(config.isOpen, onClose);
   const dialogTitleId = useId();
+  const [fullAttachments, setFullAttachments] = useState(null);
   useEffect(() => {
     if (!statusOpen && !priorityOpen && !assigneeOpen) return;
     const handler = (e) => {
@@ -7830,6 +7834,38 @@ var TaskDetailModal = ({
     }
     return () => clearInterval(timerIntervalRef.current);
   }, [timerRunning]);
+  const attachmentColMap = {
+    accountTask: "account_tasks",
+    editingTask: "editing",
+    managementTask: "management_tasks"
+  };
+  const liveTaskForAttachments = config.task ? ({ accountTask: accountTasks, editingTask: editingTasks, managementTask: managementTasks }[config.type] || []).find((t) => t.id === config.task.id) || config.task : null;
+  const attachmentsSignature = Array.isArray(
+    liveTaskForAttachments?.attachments
+  ) ? liveTaskForAttachments.attachments.map((att) => `${att.id}:${att.hasData ? 1 : 0}:${att.data ? 1 : 0}`).join(",") : "";
+  useEffect(() => {
+    if (!config.isOpen || !config.task) {
+      setFullAttachments(null);
+      return;
+    }
+    const col = attachmentColMap[config.type];
+    const taskId = config.task.id;
+    const pendingAttachments = Array.isArray(
+      liveTaskForAttachments?.attachments
+    ) ? liveTaskForAttachments.attachments : [];
+    const needsFetch = pendingAttachments.some(
+      (att) => att.hasData && !att.data
+    );
+    if (!col || !taskId || !needsFetch) return;
+    let cancelled = false;
+    getDoc(doc(db, "artifacts", appId, "public", "data", col, taskId)).then((snap) => {
+      if (!cancelled) setFullAttachments(snap.data()?.attachments || null);
+    }).catch(() => {
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [config.isOpen, config.task?.id, config.type, attachmentsSignature]);
   if (!config.isOpen || !config.task) return null;
   const { type } = config;
   const liveArrays = {
@@ -8218,7 +8254,7 @@ var TaskDetailModal = ({
           " Agregar elemento"
         ));
       })(), (() => {
-        const attachments = Array.isArray(task.attachments) ? task.attachments : [];
+        const attachments = Array.isArray(fullAttachments) ? fullAttachments : Array.isArray(task.attachments) ? task.attachments : [];
         const handleFileChange = async (e) => {
           const file = e.target.files && e.target.files[0];
           if (!file) return;
@@ -8237,12 +8273,14 @@ var TaskDetailModal = ({
           return (bytes / (1024 * 1024)).toFixed(1) + " MB";
         };
         const downloadFile = (att) => {
+          if (!att.data) return;
           const a = document.createElement("a");
           a.href = att.data;
           a.download = att.name;
           a.click();
         };
         const isImage = (att) => att.type && att.type.startsWith("image/");
+        const isLoadingData = (att) => att.hasData && !att.data;
         return /* @__PURE__ */ React.createElement("div", { className: "mb-7" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-3" }, /* @__PURE__ */ React.createElement(Icon, { name: "Inbox", size: 13, className: "text-slate-500" }), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Adjuntos"), attachments.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500 ml-1" }, attachments.length), canAct && attachments.length > 0 && /* @__PURE__ */ React.createElement(
           "button",
           {
@@ -8274,7 +8312,7 @@ var TaskDetailModal = ({
             key: att.id,
             className: "flex items-center gap-3 group p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800/50 transition-colors"
           },
-          isImage(att) ? /* @__PURE__ */ React.createElement(
+          isImage(att) && att.data ? /* @__PURE__ */ React.createElement(
             "img",
             {
               src: att.data,
@@ -8284,9 +8322,9 @@ var TaskDetailModal = ({
           ) : /* @__PURE__ */ React.createElement("div", { className: "w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0" }, /* @__PURE__ */ React.createElement(
             Icon,
             {
-              name: "FileText",
+              name: isLoadingData(att) ? "Loader2" : "FileText",
               size: 16,
-              className: "text-slate-500"
+              className: isLoadingData(att) ? "text-slate-500 animate-spin" : "text-slate-500"
             }
           )),
           /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200 truncate" }, att.name), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500" }, formatFileSize(att.size), " \xB7 ", att.uploadedBy, " \xB7", " ", relativeTime(att.uploadedAt))),
@@ -8294,8 +8332,9 @@ var TaskDetailModal = ({
             "button",
             {
               onClick: () => downloadFile(att),
-              title: "Descargar",
-              className: "p-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              title: isLoadingData(att) ? "Cargando adjunto..." : "Descargar",
+              disabled: isLoadingData(att),
+              className: "p-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             },
             /* @__PURE__ */ React.createElement(Icon, { name: "ArrowRight", size: 13 })
           ), canAct && /* @__PURE__ */ React.createElement(

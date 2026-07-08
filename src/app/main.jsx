@@ -97,6 +97,7 @@ import {
   writeBatch,
   setDoc,
   getDocs,
+  getDoc,
   loadAllTaskHistory,
 } from "firebase/firestore";
 import { auth, db, appId } from "/src/app/config/firebase.js";
@@ -4523,8 +4524,13 @@ function App() {
         (authEmail ? authEmail.split("@")[0] : "Usuario"),
       uploadedAt: nowIso(),
     };
+    // El listado con polling llega sin el base64 de los adjuntos existentes
+    // (ver stripAttachmentData en el backend), asi que se relee el registro
+    // completo antes de escribir para no perder los archivos ya guardados.
+    const currentSnap = await getDoc(dataDoc(col, task.id));
+    const currentAttachments = currentSnap.data()?.attachments || [];
     await updateDoc(dataDoc(col, task.id), {
-      attachments: [...(task.attachments || []), newAttachment],
+      attachments: [...currentAttachments, newAttachment],
       updatedAt: nowIso(),
     });
   };
@@ -4537,10 +4543,10 @@ function App() {
     };
     const col = colMap[type];
     if (!col) return;
+    const currentSnap = await getDoc(dataDoc(col, task.id));
+    const currentAttachments = currentSnap.data()?.attachments || [];
     await updateDoc(dataDoc(col, task.id), {
-      attachments: (task.attachments || []).filter(
-        (a) => a.id !== attachmentId,
-      ),
+      attachments: currentAttachments.filter((a) => a.id !== attachmentId),
       updatedAt: nowIso(),
     });
   };
@@ -10941,6 +10947,7 @@ const TaskDetailModal = ({
   const [mentionedIds, setMentionedIds] = useState([]);
   const dialogRef = useDialogA11y(config.isOpen, onClose);
   const dialogTitleId = useId();
+  const [fullAttachments, setFullAttachments] = useState(null);
 
   // Cerrar dropdowns al click fuera
   useEffect(() => {
@@ -10970,6 +10977,56 @@ const TaskDetailModal = ({
     }
     return () => clearInterval(timerIntervalRef.current);
   }, [timerRunning]);
+
+  const attachmentColMap = {
+    accountTask: "account_tasks",
+    editingTask: "editing",
+    managementTask: "management_tasks",
+  };
+  const liveTaskForAttachments = config.task
+    ? ({ accountTask: accountTasks, editingTask: editingTasks, managementTask: managementTasks }[
+        config.type
+      ] || []
+      ).find((t) => t.id === config.task.id) || config.task
+    : null;
+  const attachmentsSignature = Array.isArray(
+    liveTaskForAttachments?.attachments,
+  )
+    ? liveTaskForAttachments.attachments
+        .map((att) => `${att.id}:${att.hasData ? 1 : 0}:${att.data ? 1 : 0}`)
+        .join(",")
+    : "";
+
+  // Los adjuntos llegan sin el archivo (base64) desde el listado con polling,
+  // para no re-descargar MBs de datos cada 2 min. Al abrir una tarea con
+  // adjuntos pendientes de cargar (o al subir uno nuevo), se pide el registro
+  // completo una sola vez.
+  useEffect(() => {
+    if (!config.isOpen || !config.task) {
+      setFullAttachments(null);
+      return;
+    }
+    const col = attachmentColMap[config.type];
+    const taskId = config.task.id;
+    const pendingAttachments = Array.isArray(
+      liveTaskForAttachments?.attachments,
+    )
+      ? liveTaskForAttachments.attachments
+      : [];
+    const needsFetch = pendingAttachments.some(
+      (att) => att.hasData && !att.data,
+    );
+    if (!col || !taskId || !needsFetch) return;
+    let cancelled = false;
+    getDoc(doc(db, "artifacts", appId, "public", "data", col, taskId))
+      .then((snap) => {
+        if (!cancelled) setFullAttachments(snap.data()?.attachments || null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [config.isOpen, config.task?.id, config.type, attachmentsSignature]);
 
   if (!config.isOpen || !config.task) return null;
   const { type } = config;
@@ -11475,9 +11532,11 @@ const TaskDetailModal = ({
 
               {/* Adjuntos */}
               {(() => {
-                const attachments = Array.isArray(task.attachments)
-                  ? task.attachments
-                  : [];
+                const attachments = Array.isArray(fullAttachments)
+                  ? fullAttachments
+                  : Array.isArray(task.attachments)
+                    ? task.attachments
+                    : [];
                 const handleFileChange = async (e) => {
                   const file = e.target.files && e.target.files[0];
                   if (!file) return;
@@ -11496,6 +11555,7 @@ const TaskDetailModal = ({
                   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
                 };
                 const downloadFile = (att) => {
+                  if (!att.data) return;
                   const a = document.createElement("a");
                   a.href = att.data;
                   a.download = att.name;
@@ -11503,6 +11563,7 @@ const TaskDetailModal = ({
                 };
                 const isImage = (att) =>
                   att.type && att.type.startsWith("image/");
+                const isLoadingData = (att) => att.hasData && !att.data;
                 return (
                   <div className="mb-7">
                     <div className="flex items-center gap-2 mb-3">
@@ -11550,7 +11611,7 @@ const TaskDetailModal = ({
                             key={att.id}
                             className="flex items-center gap-3 group p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800/50 transition-colors"
                           >
-                            {isImage(att) ? (
+                            {isImage(att) && att.data ? (
                               <img
                                 src={att.data}
                                 alt={att.name}
@@ -11559,9 +11620,13 @@ const TaskDetailModal = ({
                             ) : (
                               <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
                                 <Icon
-                                  name="FileText"
+                                  name={isLoadingData(att) ? "Loader2" : "FileText"}
                                   size={16}
-                                  className="text-slate-500"
+                                  className={
+                                    isLoadingData(att)
+                                      ? "text-slate-500 animate-spin"
+                                      : "text-slate-500"
+                                  }
                                 />
                               </div>
                             )}
@@ -11577,8 +11642,13 @@ const TaskDetailModal = ({
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                               <button
                                 onClick={() => downloadFile(att)}
-                                title="Descargar"
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                                title={
+                                  isLoadingData(att)
+                                    ? "Cargando adjunto..."
+                                    : "Descargar"
+                                }
+                                disabled={isLoadingData(att)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:pointer-events-none"
                               >
                                 <Icon name="ArrowRight" size={13} />
                               </button>
