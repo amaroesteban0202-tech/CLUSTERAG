@@ -209,6 +209,19 @@ textarea:focus-visible,
 .kanban-mobile-scroll::-webkit-scrollbar {
     display: none;
 }
+.task-room {
+    min-height: 0;
+}
+@media (min-width: 768px) {
+    .task-room {
+        height: calc(100vh - 7rem);
+        overflow: hidden;
+    }
+}
+.task-card:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
 .pb-mobile-nav {
     padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
 }

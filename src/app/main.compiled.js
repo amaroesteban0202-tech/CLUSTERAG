@@ -5772,14 +5772,23 @@ var KanbanCard = ({
   return /* @__PURE__ */ React.createElement(
     "div",
     {
+      role: "button",
+      tabIndex: 0,
+      "aria-label": `Abrir tarea ${title}`,
       onClick,
+      onKeyDown: (event) => {
+        if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onClick?.();
+        }
+      },
       draggable: draggable ? "true" : void 0,
       onDragStart,
       onDragEnd,
-      className: `group relative bg-white dark:bg-[#222220] rounded-lg border border-[#e6e4df] dark:border-white/10 border-l-[3px] ${accent} hover:border-[#cac8c2] dark:hover:border-white/20 transition-colors cursor-pointer p-3 ${isOverdue ? "bg-[#fffafa] dark:bg-[#2b2020]" : ""}`
+      className: `task-card group relative cursor-pointer rounded-lg border border-[#e2e0da] border-l-[3px] bg-white p-3.5 transition-colors hover:border-[#b8b5ae] focus-visible:outline-none dark:border-white/10 dark:bg-[#232624] dark:hover:border-white/20 ${accent}`
     },
-    /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-2 mb-1.5 min-h-[20px]" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, client && /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-1 max-w-full text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded" }, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 10, className: "shrink-0" }), /* @__PURE__ */ React.createElement("span", { className: "truncate" }, client))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-0.5 shrink-0" }, rank != null && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 rounded px-1.5 py-0.5" }, "#", rank), menuItems.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "opacity-70 group-hover:opacity-100 transition-opacity" }, /* @__PURE__ */ React.createElement(CardMenu, { items: menuItems })))),
-    /* @__PURE__ */ React.createElement("p", { className: "text-[13.5px] font-semibold text-slate-800 dark:text-slate-100 leading-snug mb-2 line-clamp-2" }, title),
+    /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-2 mb-1.5 min-h-[20px]" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, client && /* @__PURE__ */ React.createElement("span", { className: "inline-flex max-w-full items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 10, className: "shrink-0" }), /* @__PURE__ */ React.createElement("span", { className: "truncate" }, client))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-0.5 shrink-0" }, rank != null && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 rounded px-1.5 py-0.5" }, "#", rank), menuItems.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "opacity-70 group-hover:opacity-100 transition-opacity" }, /* @__PURE__ */ React.createElement(CardMenu, { items: menuItems })))),
+    /* @__PURE__ */ React.createElement("p", { className: "mb-2 line-clamp-2 text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100" }, title),
     badges.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap gap-1.5 mb-2" }, badges.map((b, i) => /* @__PURE__ */ React.createElement(
       "span",
       {
@@ -5788,8 +5797,8 @@ var KanbanCard = ({
       },
       b.label
     ))),
-    notes && /* @__PURE__ */ React.createElement("p", { className: "text-[11.5px] text-slate-400 dark:text-slate-500 leading-snug line-clamp-2 mb-2" }, notes),
-    /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800" }, due ? /* @__PURE__ */ React.createElement(
+    notes && /* @__PURE__ */ React.createElement("p", { className: "mb-2 line-clamp-1 text-[11.5px] leading-snug text-slate-400 dark:text-slate-500" }, notes),
+    /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5 dark:border-white/5" }, due ? /* @__PURE__ */ React.createElement(
       "span",
       {
         className: `inline-flex items-center gap-1 text-[11px] font-semibold ${due.tone === "red" ? "text-red-500 dark:text-red-400" : due.tone === "amber" ? "text-amber-600 dark:text-amber-400" : "text-slate-400 dark:text-slate-500"}`
@@ -5824,25 +5833,37 @@ var KanbanColumn = ({
   onDrop,
   isEmpty,
   children
-}) => /* @__PURE__ */ React.createElement(
-  "div",
-  {
-    className: "flex flex-col shrink-0 w-[82vw] sm:w-72 md:w-auto md:shrink bg-[#f1f0ed] dark:bg-[#1d1d1b] rounded-lg border border-[#e6e4df] dark:border-white/10 h-full overflow-hidden snap-start transition-colors",
-    onDragOver,
-    onDragLeave,
-    onDrop
-  },
-  /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 px-3 py-2.5 shrink-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 min-w-0" }, /* @__PURE__ */ React.createElement("span", { className: "w-2 h-2 rounded-full shrink-0 bg-[#787774] dark:bg-[#aaa7a0]" }), /* @__PURE__ */ React.createElement("span", { className: "text-[13px] font-semibold text-[#2f3437] dark:text-[#f1efe9] truncate" }, title), /* @__PURE__ */ React.createElement("span", { className: "mono-meta text-[11px] font-medium text-[#787774] dark:text-[#aaa7a0] bg-[#e6e4df] dark:bg-[#2a2a27] rounded-full px-2 py-0.5 shrink-0" }, count))),
-  /* @__PURE__ */ React.createElement("div", { className: "px-2.5 pb-2.5 flex-1 overflow-y-auto space-y-2.5 custom-scroll" }, isEmpty && /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-center justify-center gap-2 py-10 text-slate-300 dark:text-slate-600 select-none" }, /* @__PURE__ */ React.createElement(Icon, { name: "Inbox", size: 22 }), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] font-semibold" }, "Sin tareas")), children, onAdd && /* @__PURE__ */ React.createElement(
-    "button",
+}) => {
+  const columnColor = getDashboardPalette(dotColor).strong;
+  return /* @__PURE__ */ React.createElement(
+    "section",
     {
-      onClick: onAdd,
-      className: "w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-semibold text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800/60 transition-colors"
+      className: "flex h-[calc(100dvh-15rem)] min-h-[28rem] w-[86vw] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-[#e2e0da] bg-[#efeee9] transition-colors dark:border-white/10 dark:bg-[#1a1d1b] sm:w-80 md:h-full md:min-h-0 md:w-auto md:shrink",
+      onDragOver,
+      onDragLeave,
+      onDrop,
+      "aria-label": `${title}: ${count} tareas`
     },
-    /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 14 }),
-    " A\xF1adir tarea"
-  ))
-);
+    /* @__PURE__ */ React.createElement("header", { className: "flex shrink-0 items-center justify-between gap-2 border-b border-[#dfddd7] bg-[#f7f6f3]/80 px-3.5 py-3 dark:border-white/10 dark:bg-[#1f2220]/90" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2.5" }, /* @__PURE__ */ React.createElement(
+      "span",
+      {
+        className: "h-2.5 w-2.5 shrink-0 rounded-full",
+        style: { backgroundColor: columnColor }
+      }
+    ), /* @__PURE__ */ React.createElement("span", { className: "truncate text-[13px] font-semibold text-[#2f3437] dark:text-[#f1efe9]" }, title), /* @__PURE__ */ React.createElement("span", { className: "mono-meta shrink-0 rounded-md bg-[#e6e4df] px-2 py-0.5 text-[11px] font-semibold text-[#787774] dark:bg-[#2a2a27] dark:text-[#aaa7a0]" }, count)), onAdd && /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        onClick: onAdd,
+        "aria-label": `A\xF1adir tarea en ${title}`,
+        title: "A\xF1adir tarea",
+        className: "flex h-8 min-h-0 w-8 min-w-0 items-center justify-center rounded-md text-[#787774] hover:bg-[#e6e4df] hover:text-[#2f3437] dark:text-[#aaa7a0] dark:hover:bg-[#2a2a27] dark:hover:text-[#f1efe9]"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 15 })
+    )),
+    /* @__PURE__ */ React.createElement("div", { className: "custom-scroll flex-1 space-y-2.5 overflow-y-auto overscroll-contain p-2.5" }, isEmpty && /* @__PURE__ */ React.createElement("div", { className: "flex h-full min-h-40 select-none flex-col items-center justify-center gap-2 text-slate-300 dark:text-slate-600" }, /* @__PURE__ */ React.createElement(Icon, { name: "Inbox", size: 24 }), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] font-semibold" }, "Sin tareas en esta etapa")), children)
+  );
+};
 var DateHeader = ({
   currentDate,
   setCurrentDate,
@@ -6110,7 +6131,7 @@ var AccountRoomView = ({
     }
   };
   const defaultAddDate = filterMode === "date" ? currentDate : filterMode === "range" ? effectiveRangeStart : todayStr;
-  return /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "task-room min-h-0 flex flex-col gap-3 fade-in" }, /* @__PURE__ */ React.createElement(
     DateHeader,
     {
       currentDate,
@@ -6354,7 +6375,7 @@ var EditionsRoomView = ({
     }
   };
   const defaultAddDate = filterMode === "date" ? currentDate : todayStr;
-  return /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "task-room min-h-0 flex flex-col gap-3 fade-in" }, /* @__PURE__ */ React.createElement(
     DateHeader,
     {
       currentDate,
@@ -6581,7 +6602,7 @@ var ManagementRoomView = ({
     amber: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
     red: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
   };
-  return /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col gap-4 fade-in" }, /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "task-room min-h-0 flex flex-col gap-3 fade-in" }, /* @__PURE__ */ React.createElement(
     DateHeader,
     {
       currentDate,
@@ -6600,7 +6621,7 @@ var ManagementRoomView = ({
       historyLoaded,
       historyLoading
     }
-  ), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col lg:flex-row gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 flex-1" }, columns.map((col) => {
+  ), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-2 lg:flex-row" }, /* @__PURE__ */ React.createElement("div", { className: "surface-subtle flex flex-1 flex-wrap rounded-xl border border-[#e2e0da] p-1.5 dark:border-white/10" }, columns.map((col) => {
     const filteredCount = filteredTasks.filter(
       (t) => t.status === col.id
     ).length;
@@ -6610,12 +6631,12 @@ var ManagementRoomView = ({
       "div",
       {
         key: col.id,
-        className: "bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 flex items-center gap-3"
+        className: "flex min-w-[130px] flex-1 items-center gap-2.5 rounded-lg px-3 py-2.5"
       },
       /* @__PURE__ */ React.createElement(
         "div",
         {
-          className: `p-2 rounded-lg bg-${col.color}-50 dark:bg-${col.color}-500/20 shrink-0`
+          className: `shrink-0 rounded-md bg-${col.color}-50 p-1.5 dark:bg-${col.color}-500/20`
         },
         /* @__PURE__ */ React.createElement(
           Icon,
@@ -6626,13 +6647,13 @@ var ManagementRoomView = ({
           }
         )
       ),
-      /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-black text-slate-800 dark:text-white leading-none" }, filteredCount), isFiltered && /* @__PURE__ */ React.createElement("span", { className: "text-xs font-bold text-slate-500 dark:text-slate-400" }, "/ ", totalCount)), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5" }, col.title))
+      /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "mono-meta text-xl font-semibold leading-none text-slate-800 dark:text-white" }, filteredCount), isFiltered && /* @__PURE__ */ React.createElement("span", { className: "text-xs font-bold text-slate-500 dark:text-slate-400" }, "/ ", totalCount)), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500 dark:text-slate-400" }, col.title))
     );
   })), /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setShowTeam((s) => !s),
-      className: "flex items-center gap-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors shrink-0 self-stretch"
+      className: "surface flex shrink-0 items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50 lg:max-w-[260px]"
     },
     /* @__PURE__ */ React.createElement("div", { className: "flex -space-x-2 shrink-0" }, members.slice(0, 4).map((m) => /* @__PURE__ */ React.createElement(
       "div",
