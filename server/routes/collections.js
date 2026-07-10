@@ -6,6 +6,8 @@ import {
     createRecord,
     deleteRecord,
     getRecord,
+    getLatestRecordChangeId,
+    listRecordChanges,
     listRecords,
     upsertRecord
 } from '../lib/records.js';
@@ -203,6 +205,35 @@ router.post('/_batch', asyncHandler(async (req, res) => {
     });
 
     res.json({ ok: true, operations: operations.length });
+}));
+
+router.get('/_sync', asyncHandler(async (req, res) => {
+    const userRecord = requireAuthenticatedUser(req);
+    const requestedCollections = String(req.query.collections || '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+    const collections = requestedCollections.filter((collectionName) => {
+        const permission = getCollectionPermission(collectionName, 'read');
+        return permission && (PUBLIC_READ_COLLECTIONS.has(collectionName) || hasPermission(userRecord, permission));
+    });
+
+    if (req.query.latest === '1') {
+        res.json({ cursor: await getLatestRecordChangeId() });
+        return;
+    }
+
+    if (collections.length === 0) {
+        res.json({ cursor: Number(req.query.cursor) || 0, hasMore: false, changes: [] });
+        return;
+    }
+
+    const result = await listRecordChanges({
+        afterId: Number(req.query.cursor) || 0,
+        collections,
+        limitCount: 500
+    });
+    res.json(result);
 }));
 
 router.get('/:collectionName', asyncHandler(async (req, res) => {

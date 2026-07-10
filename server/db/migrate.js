@@ -37,6 +37,19 @@ const ensureAppRecordsTable = async () => {
     await addColumn('status_index', (table) => table.string('status_index', 80).nullable());
 };
 
+const ensureRecordChangesTable = async () => {
+    if (await db.schema.hasTable('record_changes')) return;
+
+    await db.schema.createTable('record_changes', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('collection_name', 120).notNullable();
+        table.string('record_id', 120).notNullable();
+        table.string('action', 20).notNullable();
+        table.string('changed_at', 40).notNullable();
+        table.index(['collection_name', 'id']);
+    });
+};
+
 const ensureAuthSessionsTable = async () => {
     const exists = await db.schema.hasTable('auth_sessions');
     if (exists) return;
@@ -70,6 +83,7 @@ const ensureOauthStatesTable = async () => {
 
 export const migrateDatabase = async () => {
     await ensureAppRecordsTable();
+    await ensureRecordChangesTable();
     await ensureAuthSessionsTable();
     await ensureOauthStatesTable();
 };

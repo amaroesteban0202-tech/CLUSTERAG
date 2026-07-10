@@ -43,6 +43,13 @@ const buildRecord = (row = {}) => ({
 
 const getClient = (trx) => trx || db;
 
+const trackRecordChange = ({ collectionName, recordId, action, trx }) => getClient(trx)('record_changes').insert({
+    collection_name: collectionName,
+    record_id: recordId,
+    action,
+    changed_at: nowIso()
+});
+
 const getIndexes = (collectionName, payload = {}) => ({
     email_index: normalizeEmail(payload.email),
     role_index: payload.role ? String(payload.role) : null,
@@ -141,6 +148,7 @@ export const createRecord = async ({ collectionName, payload, recordId = createR
         .insert(row)
         .onConflict(['collection_name', 'record_id'])
         .merge(row);
+    await trackRecordChange({ collectionName, recordId, action: 'upsert', trx });
 
     return { id: recordId, ...nextPayload };
 };
@@ -173,6 +181,7 @@ export const upsertRecord = async ({ collectionName, recordId = createRecordId()
             updated_at: nextPayload.updatedAt,
             ...getIndexes(collectionName, nextPayload)
         });
+    await trackRecordChange({ collectionName, recordId, action: 'upsert', trx });
 
     return { id: recordId, ...nextPayload };
 };
@@ -181,6 +190,55 @@ export const deleteRecord = async ({ collectionName, recordId, trx }) => {
     await getClient(trx)('app_records')
         .where({ collection_name: collectionName, record_id: recordId })
         .delete();
+    await trackRecordChange({ collectionName, recordId, action: 'delete', trx });
+};
+
+export const getLatestRecordChangeId = async ({ trx } = {}) => {
+    const row = await getClient(trx)('record_changes').max('id as id').first();
+    return Number(row?.id || 0);
+};
+
+export const listRecordChanges = async ({ afterId = 0, collections = [], limitCount = 500, trx } = {}) => {
+    const client = getClient(trx);
+    const query = client('record_changes')
+        .where('id', '>', Number(afterId) || 0)
+        .orderBy('id', 'asc')
+        .limit(limitCount);
+    if (collections.length > 0) query.whereIn('collection_name', collections);
+
+    const rows = await query;
+    const latestByRecord = new Map();
+    rows.forEach((row) => latestByRecord.set(`${row.collection_name}:${row.record_id}`, row));
+
+    const recordsByKey = new Map();
+    const idsByCollection = new Map();
+    latestByRecord.forEach((row) => {
+        if (row.action === 'delete') return;
+        if (!idsByCollection.has(row.collection_name)) idsByCollection.set(row.collection_name, []);
+        idsByCollection.get(row.collection_name).push(row.record_id);
+    });
+    for (const [collectionName, recordIds] of idsByCollection) {
+        const recordRows = await client('app_records')
+            .where({ collection_name: collectionName })
+            .whereIn('record_id', recordIds);
+        recordRows.forEach((row) => {
+            const record = buildRecord(row);
+            recordsByKey.set(`${collectionName}:${row.record_id}`, TASK_COLLECTIONS.has(collectionName)
+                ? stripAttachmentData(record)
+                : record);
+        });
+    }
+
+    return {
+        cursor: Number(rows.at(-1)?.id || afterId || 0),
+        hasMore: rows.length === limitCount,
+        changes: [...latestByRecord.values()].map((row) => ({
+            collectionName: row.collection_name,
+            recordId: row.record_id,
+            action: row.action,
+            record: recordsByKey.get(`${row.collection_name}:${row.record_id}`) || null
+        }))
+    };
 };
 
 export const findFirstRecordByEmail = async ({ collectionName, email, trx }) => {

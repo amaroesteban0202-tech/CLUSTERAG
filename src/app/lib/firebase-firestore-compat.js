@@ -2,26 +2,27 @@ import { apiFetch } from './backend-api.js?v=20260525-local-api';
 
 const registry = new Map();
 const DEFAULT_POLL_MS = 120000;
+const IDLE_AFTER_MS = 240000;
 const TASK_COLLECTIONS = new Set(['account_tasks', 'editing', 'management_tasks']);
+const STATIC_COLLECTIONS = new Set(['clients', 'events', 'managers', 'editors', 'users']);
+const CLOSED_STATUS_BY_COLLECTION = {
+    account_tasks: new Set(['publicado']),
+    editing: new Set(['aprobado', 'publicado']),
+    management_tasks: new Set(['cerrado'])
+};
+const LIVE_COLLECTION_BY_VIEW = {
+    'account-room': 'account_tasks',
+    editions: 'editing',
+    'management-room': 'management_tasks',
+    'control-center': 'audit_logs'
+};
 
-if (typeof document !== 'undefined') {
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            registry.forEach((entry, key) => {
-                if (entry.listeners.size > 0 && !entry.intervalId) {
-                    startPolling(key, entry.ref);
-                }
-            });
-        } else {
-            registry.forEach((entry) => {
-                if (entry.intervalId) {
-                    window.clearInterval(entry.intervalId);
-                    entry.intervalId = null;
-                }
-            });
-        }
-    });
-}
+const syncCursors = new Map();
+let latestCursorPromise = null;
+let syncTimerId = null;
+let syncInFlight = false;
+let lastActivityAt = Date.now();
+let lastFocusRefreshAt = 0;
 
 const createDocSnapshot = (record) => ({
     id: record.id,
@@ -81,6 +82,46 @@ const getBaseTaskWindow = () => {
     return { dateFrom: format(from), dateTo: format(to) };
 };
 
+const isPollingAllowed = ({ visibilityState = 'visible', lastActivity = 0, now = Date.now(), idleAfter = IDLE_AFTER_MS }) => (
+    visibilityState === 'visible' && now - lastActivity < idleAfter
+);
+
+const recordMatchesRef = (record, ref) => {
+    const collectionName = getCollectionName(ref);
+    if (!TASK_COLLECTIONS.has(collectionName) || (typeof window !== 'undefined' && window.__cluster_task_history === 'all')) {
+        return true;
+    }
+    const { dateFrom, dateTo } = getBaseTaskWindow();
+    const date = String(record?.date || '');
+    if (date >= dateFrom && date <= dateTo) return true;
+    return date < dateFrom && !CLOSED_STATUS_BY_COLLECTION[collectionName]?.has(record?.status);
+};
+
+const applyQueryOptions = (records, ref) => {
+    const options = buildQueryOptions(ref);
+    const direction = options.orderDir === 'desc' ? -1 : 1;
+    const sorted = [...records].sort((left, right) => {
+        const leftValue = left?.[options.orderBy] ?? '';
+        const rightValue = right?.[options.orderBy] ?? '';
+        if (leftValue === rightValue) return 0;
+        return (leftValue > rightValue ? 1 : -1) * direction;
+    });
+    return options.limit ? sorted.slice(0, options.limit) : sorted;
+};
+
+const mergeEntryChanges = (entry, changes = []) => {
+    const collectionName = getCollectionName(entry.ref);
+    const records = new Map(entry.records.map((record) => [record.id, record]));
+    changes.filter((change) => change.collectionName === collectionName).forEach((change) => {
+        if (change.action === 'delete' || !change.record || !recordMatchesRef(change.record, entry.ref)) {
+            records.delete(change.recordId);
+            return;
+        }
+        records.set(change.recordId, change.record);
+    });
+    return applyQueryOptions([...records.values()], entry.ref);
+};
+
 const buildRegistryKey = (ref) => {
     const collectionName = getCollectionName(ref);
     const options = buildQueryOptions(ref);
@@ -94,7 +135,7 @@ const fetchRecords = async (ref) => {
     if (options.orderBy) params.set('orderBy', options.orderBy);
     if (options.orderDir) params.set('orderDir', options.orderDir);
     if (options.limit) params.set('limit', String(options.limit));
-    if (TASK_COLLECTIONS.has(collectionName) && window.__cluster_task_history !== 'all') {
+    if (TASK_COLLECTIONS.has(collectionName) && (typeof window === 'undefined' || window.__cluster_task_history !== 'all')) {
         const baseWindow = getBaseTaskWindow();
         params.set('dateFrom', baseWindow.dateFrom);
         params.set('dateTo', baseWindow.dateTo);
@@ -115,41 +156,141 @@ const notifyListeners = (entry) => {
     });
 };
 
+const updateEntryRecords = (entry, records) => {
+    const normalizedRecords = applyQueryOptions(records, entry.ref);
+    const signature = JSON.stringify(normalizedRecords);
+    if (signature === entry.signature) return;
+    entry.records = normalizedRecords;
+    entry.signature = signature;
+    notifyListeners(entry);
+};
+
+const handleEntryError = (entry, error) => {
+    if (error.status === 401 || error.status === 403) {
+        updateEntryRecords(entry, []);
+        return;
+    }
+    entry.listeners.forEach((listener) => listener.onError?.(error));
+};
+
+const ensureSyncCursor = async (collectionName) => {
+    if (syncCursors.has(collectionName)) return syncCursors.get(collectionName);
+    if (!latestCursorPromise) {
+        latestCursorPromise = apiFetch('/api/collections/_sync?latest=1')
+            .then((payload) => Number(payload?.cursor || 0))
+            .catch((error) => {
+                latestCursorPromise = null;
+                throw error;
+            });
+    }
+    const cursor = await latestCursorPromise;
+    syncCursors.set(collectionName, cursor);
+    return cursor;
+};
+
+const hasCollectionListeners = (collectionName) => [...registry.values()].some(
+    (entry) => entry.listeners.size > 0 && getCollectionName(entry.ref) === collectionName
+);
+
+const getLiveCollections = () => {
+    if (typeof window === 'undefined') return [];
+    const collectionName = LIVE_COLLECTION_BY_VIEW[window.__cluster_active_view || ''];
+    return collectionName && hasCollectionListeners(collectionName) ? [collectionName] : [];
+};
+
+const shouldPollNow = () => typeof document !== 'undefined' && isPollingAllowed({
+    visibilityState: document.visibilityState,
+    lastActivity: lastActivityAt
+});
+
+const getPollMs = () => {
+    const configured = Number(typeof window !== 'undefined' ? window.__cluster_poll_ms : DEFAULT_POLL_MS);
+    return Number.isFinite(configured) && configured >= 10000 ? configured : DEFAULT_POLL_MS;
+};
+
+const applyServerChanges = (changes) => {
+    registry.forEach((entry) => {
+        if (entry.listeners.size === 0) return;
+        const nextRecords = mergeEntryChanges(entry, changes);
+        updateEntryRecords(entry, nextRecords);
+    });
+};
+
+const syncCollection = async (collectionName) => {
+    let cursor = await ensureSyncCursor(collectionName);
+    let hasMore = false;
+    do {
+        const params = new URLSearchParams({
+            collections: collectionName,
+            cursor: String(cursor)
+        });
+        const payload = await apiFetch(`/api/collections/_sync?${params.toString()}`);
+        applyServerChanges(Array.isArray(payload?.changes) ? payload.changes : []);
+        cursor = Number(payload?.cursor || cursor);
+        syncCursors.set(collectionName, cursor);
+        hasMore = payload?.hasMore === true;
+    } while (hasMore);
+};
+
+const pauseSync = () => {
+    if (syncTimerId) window.clearTimeout(syncTimerId);
+    syncTimerId = null;
+};
+
+const scheduleSync = (delay = getPollMs()) => {
+    if (syncTimerId || syncInFlight || !shouldPollNow() || getLiveCollections().length === 0) return;
+    syncTimerId = window.setTimeout(runSync, delay);
+};
+
+const runSync = async () => {
+    syncTimerId = null;
+    const collections = getLiveCollections();
+    if (!shouldPollNow() || collections.length === 0 || syncInFlight) return;
+    syncInFlight = true;
+    try {
+        await Promise.all(collections.map(syncCollection));
+    } catch (error) {
+        registry.forEach((entry) => entry.listeners.forEach((listener) => listener.onError?.(error)));
+    } finally {
+        syncInFlight = false;
+        scheduleSync();
+    }
+};
+
+const resumeSync = () => {
+    if (!syncTimerId && !syncInFlight) scheduleSync(0);
+};
+
 const startPolling = (key, ref) => {
     const entry = registry.get(key);
-    if (!entry || entry.intervalId) return;
+    if (!entry || entry.started) return;
+    entry.started = true;
 
     const run = async () => {
         try {
+            await ensureSyncCursor(getCollectionName(ref));
             const records = await fetchRecords(ref);
-            const signature = JSON.stringify(records);
-            if (signature !== entry.signature) {
-                entry.records = records;
-                entry.signature = signature;
-                notifyListeners(entry);
-            }
+            updateEntryRecords(entry, records);
         } catch (error) {
-            if (error.status === 401 || error.status === 403) {
-                if (entry.signature !== '[]') {
-                    entry.records = [];
-                    entry.signature = '[]';
-                    notifyListeners(entry);
-                }
-                return;
+            handleEntryError(entry, error);
+            if (error.status !== 401 && error.status !== 403) {
+                entry.started = false;
+                window.setTimeout(() => startPolling(key, ref), getPollMs());
             }
-            entry.listeners.forEach((listener) => listener.onError?.(error));
+        } finally {
+            resumeSync();
         }
     };
 
     run();
-    entry.intervalId = window.setInterval(run, Number(window.__cluster_poll_ms || DEFAULT_POLL_MS));
 };
 
 const stopPollingIfUnused = (key) => {
     const entry = registry.get(key);
     if (!entry || entry.listeners.size > 0) return;
-    if (entry.intervalId) window.clearInterval(entry.intervalId);
     registry.delete(key);
+    pauseSync();
+    resumeSync();
 };
 
 const refreshCollection = async (collectionName) => {
@@ -159,14 +300,48 @@ const refreshCollection = async (collectionName) => {
         if (!entry) return;
         try {
             const records = await fetchRecords(entry.ref);
-            entry.records = records;
-            entry.signature = JSON.stringify(records);
-            notifyListeners(entry);
+            updateEntryRecords(entry, records);
         } catch (error) {
-            entry.listeners.forEach((listener) => listener.onError?.(error));
+            handleEntryError(entry, error);
         }
     }));
 };
+
+const applyLocalChange = (collectionName, recordId, action, record = null) => {
+    applyServerChanges([{ collectionName, recordId, action, record }]);
+};
+
+if (typeof document !== 'undefined') {
+    const markActivity = () => {
+        lastActivityAt = Date.now();
+        resumeSync();
+    };
+    const refreshStaticOnFocus = () => {
+        const now = Date.now();
+        if (now - lastFocusRefreshAt < 10000) return;
+        lastFocusRefreshAt = now;
+        Promise.all([...STATIC_COLLECTIONS].map(refreshCollection)).catch(() => {});
+    };
+    ['pointerdown', 'keydown', 'touchstart'].forEach((eventName) => {
+        window.addEventListener(eventName, markActivity, { passive: true });
+    });
+    window.addEventListener('focus', () => {
+        markActivity();
+        refreshStaticOnFocus();
+    });
+    window.addEventListener('cluster:viewchange', () => {
+        pauseSync();
+        markActivity();
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            markActivity();
+            refreshStaticOnFocus();
+        } else {
+            pauseSync();
+        }
+    });
+}
 
 export const initializeFirestore = (app, options = {}) => ({ app, options });
 
@@ -201,7 +376,7 @@ export const onSnapshot = (ref, onNext, onError) => {
             listeners: new Set(),
             records: [],
             signature: '',
-            intervalId: null
+            started: false
         });
     }
 
@@ -226,7 +401,7 @@ export const addDoc = async (collectionRef, data) => {
         method: 'POST',
         body: JSON.stringify({ data })
     });
-    await refreshCollection(collectionName);
+    applyLocalChange(collectionName, payload.record.id, 'upsert', payload.record);
     return {
         id: payload.record.id,
         ...payload.record
@@ -240,7 +415,7 @@ export const updateDoc = async (docRef, data) => {
         method: 'PATCH',
         body: JSON.stringify({ data })
     });
-    await refreshCollection(collectionName);
+    applyLocalChange(collectionName, recordId, 'upsert', payload.record);
     return payload.record;
 };
 
@@ -250,7 +425,7 @@ export const deleteDoc = async (docRef) => {
     await apiFetch(`/api/collections/${collectionName}/${recordId}`, {
         method: 'DELETE'
     });
-    await refreshCollection(collectionName);
+    applyLocalChange(collectionName, recordId, 'delete');
 };
 
 export const setDoc = async (docRef, data, options = {}) => {
@@ -263,7 +438,7 @@ export const setDoc = async (docRef, data, options = {}) => {
             merge: options.merge !== false
         })
     });
-    await refreshCollection(collectionName);
+    applyLocalChange(collectionName, recordId, 'upsert', payload.record);
     return payload.record;
 };
 
@@ -320,3 +495,6 @@ export const writeBatch = () => {
         }
     };
 };
+
+// ponytail: exported only for the smallest runnable check; keep production logic and its check identical.
+export const _pollingInternals = { isPollingAllowed, mergeEntryChanges };

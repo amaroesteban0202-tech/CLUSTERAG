@@ -1541,6 +1541,11 @@ function App() {
   const [appUsers, setAppUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
 
+  useEffect(() => {
+    window.__cluster_active_view = view;
+    window.dispatchEvent(new Event("cluster:viewchange"));
+  }, [view]);
+
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedManager, setSelectedManager] = useState(null);
   const [selectedEditor, setSelectedEditor] = useState(null);
@@ -2217,25 +2222,29 @@ function App() {
         },
         errHandler,
       ),
-      onSnapshot(
-        query(
-          dataCollection("audit_logs"),
-          orderBy("createdAt", "desc"),
-          limit(120),
-        ),
-        (snapshot) =>
-          setAuditLogs(
-            snapshot.docs.map((docItem) => ({
-              id: docItem.id,
-              ...docItem.data(),
-            })),
-          ),
-        errHandler,
-      ),
     ];
 
     return () => unsubs.forEach((unsubscribe) => unsubscribe());
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !db || view !== "control-center") return;
+    return onSnapshot(
+      query(
+        dataCollection("audit_logs"),
+        orderBy("createdAt", "desc"),
+        limit(120),
+      ),
+      (snapshot) =>
+        setAuditLogs(
+          snapshot.docs.map((docItem) => ({
+            id: docItem.id,
+            ...docItem.data(),
+          })),
+        ),
+      (err) => console.error("Error de Firestore:", err),
+    );
+  }, [user, view]);
 
   useEffect(() => {
     if (!db || !user || !usersLoaded || hasSeededManagementDirectory) return;

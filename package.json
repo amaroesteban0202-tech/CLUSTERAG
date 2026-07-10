@@ -7,6 +7,7 @@
     "build:css": "tailwindcss -c tailwind.config.cjs -i ./src/styles/tailwind.input.css -o ./src/styles/tailwind.generated.css --minify",
     "build:js": "esbuild src/app/main.jsx --bundle --outfile=src/app/main.compiled.js --format=esm --external:react --external:react-dom/client --external:lucide-react --external:@capacitor/app --external:firebase/auth --external:firebase/firestore --external:/src/app/config/firebase.js --external:/src/app/constants/app.constants.js --external:/src/app/utils/date.js --external:/src/app/utils/kpi.js --legal-comments=none",
     "check:kpi": "node scripts/check-kpi.mjs",
+    "check:polling": "node scripts/check-polling.mjs",
     "dev": "node server/index.js",
     "start": "node server/index.js",
     "mobile:sync": "npm run build && cap sync",
