@@ -292,12 +292,31 @@ textarea:focus-visible,
 .dark .custom-scroll::-webkit-scrollbar-thumb { background: #334155; }
 .fade-in { animation: fadeIn 0.3s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+@keyframes taskDetailBackdropIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+@keyframes taskDetailShellIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.task-detail-overlay {
+    animation: taskDetailBackdropIn 180ms ease-out both;
+}
+.task-detail-shell {
+    animation: taskDetailShellIn 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         scroll-behavior: auto !important;
         transition-duration: 0.01ms !important;
+    }
+    .task-detail-overlay,
+    .task-detail-shell {
+        animation: none !important;
     }
 }
 

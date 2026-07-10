@@ -8003,6 +8003,13 @@ var formatDuration = (ms) => {
   if (mins > 0) return `${mins}m ${secs > 0 ? `${secs}s` : ""}`.trim();
   return `${secs}s`;
 };
+var formatClockDuration = (ms = 0) => {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1e3));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor(totalSeconds % 3600 / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
+};
 var relativeTime = (iso) => {
   if (!iso) return "";
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 6e4);
@@ -8057,6 +8064,7 @@ var TaskDetailModal = ({
   const [addingCheck, setAddingCheck] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionStart, setMentionStart] = useState(-1);
@@ -8065,17 +8073,18 @@ var TaskDetailModal = ({
   const dialogTitleId = useId();
   const [fullAttachments, setFullAttachments] = useState(null);
   useEffect(() => {
-    if (!statusOpen && !priorityOpen && !assigneeOpen) return;
+    if (!statusOpen && !priorityOpen && !assigneeOpen && !actionsOpen) return;
     const handler = (e) => {
       if (!e.target.closest("[data-dropdown]")) {
         setStatusOpen(false);
         setPriorityOpen(false);
         setAssigneeOpen(false);
+        setActionsOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [statusOpen, priorityOpen, assigneeOpen]);
+  }, [statusOpen, priorityOpen, assigneeOpen, actionsOpen]);
   const timerStartRef = useRef(null);
   const timerIntervalRef = useRef(null);
   const commentInputRef = useRef(null);
@@ -8204,6 +8213,10 @@ var TaskDetailModal = ({
       0
     );
   };
+  const scrollToTaskSection = (sectionId) => {
+    const section = document.getElementById(sectionId);
+    section?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   const FieldRow = ({ icon, label, children }) => /* @__PURE__ */ React.createElement("div", { className: "flex items-center min-h-[32px] hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-lg px-2 -mx-2 transition-colors" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 w-40 shrink-0" }, /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 13, className: "text-slate-500 shrink-0" }), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500 dark:text-slate-400 font-medium" }, label)), /* @__PURE__ */ React.createElement("div", { className: "flex-1 text-sm" }, children));
   const priorityColors = {
     urgente: "text-red-500",
@@ -8265,7 +8278,7 @@ var TaskDetailModal = ({
   return /* @__PURE__ */ React.createElement(
     "div",
     {
-      className: "fixed inset-0 z-[80] bg-slate-950/70 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto",
+      className: "task-detail-overlay fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-[#080b09]/75 p-3 backdrop-blur-sm md:p-6",
       onClick: onClose
     },
     /* @__PURE__ */ React.createElement(
@@ -8276,13 +8289,13 @@ var TaskDetailModal = ({
         "aria-modal": "true",
         "aria-labelledby": dialogTitleId,
         tabIndex: -1,
-        className: "bg-white dark:bg-slate-950 rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col border border-slate-200 dark:border-slate-800 overflow-hidden outline-none",
-        style: { maxHeight: "92vh" },
+        className: "task-detail-shell flex w-full max-w-[1320px] flex-col overflow-hidden rounded-2xl border border-[#d8d5ce] bg-[#f7f6f2] shadow-2xl outline-none dark:border-white/10 dark:bg-[#171a18]",
+        style: { height: "min(92vh, 860px)" },
         onClick: function(e) {
           e.stopPropagation();
         }
       },
-      /* @__PURE__ */ React.createElement("div", { className: "min-h-[56px] border-b border-slate-200 dark:border-slate-800 flex items-center px-4 md:px-5 gap-2 shrink-0 bg-white/95 dark:bg-slate-950/95" }, /* @__PURE__ */ React.createElement(
+      /* @__PURE__ */ React.createElement("div", { className: "flex min-h-[68px] shrink-0 items-center gap-2 border-b border-[#dedbd4] bg-[#f7f6f2] px-4 dark:border-white/10 dark:bg-[#171a18] md:px-5" }, /* @__PURE__ */ React.createElement(
         "div",
         {
           className: `flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wide bg-${tagColor}-100 dark:bg-${tagColor}-500/20 text-${tagColor}-700 dark:text-${tagColor}-400`
@@ -8296,55 +8309,66 @@ var TaskDetailModal = ({
           size: 12,
           className: "text-slate-300 dark:text-slate-600"
         }
-      ), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500 font-mono" }, task.id?.slice(0, 8)), /* @__PURE__ */ React.createElement("div", { className: "flex-1" }), canAct && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
+      ), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500 font-mono" }, task.id?.slice(0, 8)), /* @__PURE__ */ React.createElement("div", { className: "hidden items-center gap-2 text-xs text-slate-500 lg:flex dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "ChevronRight", size: 12 }), /* @__PURE__ */ React.createElement("span", null, "Sala de ", typeLabel), /* @__PURE__ */ React.createElement(Icon, { name: "ChevronRight", size: 12 }), /* @__PURE__ */ React.createElement("span", null, currentStatus?.label || task.status)), /* @__PURE__ */ React.createElement("div", { className: "flex-1" }), canAct && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2", "data-dropdown": true }, /* @__PURE__ */ React.createElement(
         "button",
         {
           onClick: () => onEdit(task, type),
           "aria-label": `Editar ${task.title || "tarea"}`,
           title: "Editar",
-          className: "min-h-[40px] flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+          className: "flex min-h-11 items-center gap-2 rounded-lg border border-[#d8d5ce] bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors hover:border-[#aaa69d] hover:bg-[#efede7] dark:border-white/10 dark:bg-[#202420] dark:text-slate-200 dark:hover:border-white/20 dark:hover:bg-[#282d29]"
         },
-        /* @__PURE__ */ React.createElement(Icon, { name: "Pencil", size: 11 }),
+        /* @__PURE__ */ React.createElement(Icon, { name: "Pencil", size: 14 }),
         " ",
         /* @__PURE__ */ React.createElement("span", { className: "hidden sm:inline" }, "Editar")
-      ), /* @__PURE__ */ React.createElement(
+      ), /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
         "button",
         {
-          onClick: () => onDelete(task, type),
-          "aria-label": `Eliminar ${task.title || "tarea"}`,
-          title: "Eliminar",
-          className: "min-h-[40px] flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+          type: "button",
+          onClick: () => setActionsOpen((value) => !value),
+          "aria-label": "M\xE1s acciones",
+          "aria-expanded": actionsOpen,
+          className: "flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-[#d8d5ce] bg-white text-slate-500 transition-colors hover:border-[#aaa69d] hover:text-slate-800 dark:border-white/10 dark:bg-[#202420] dark:text-slate-400 dark:hover:border-white/20 dark:hover:text-slate-100"
         },
-        /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 11 }),
-        " ",
-        /* @__PURE__ */ React.createElement("span", { className: "hidden sm:inline" }, "Eliminar")
-      )), /* @__PURE__ */ React.createElement(
+        /* @__PURE__ */ React.createElement(Icon, { name: "MoreHorizontal", size: 18 })
+      ), actionsOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute right-0 top-full z-30 mt-2 w-48 rounded-xl border border-[#d8d5ce] bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#242824]" }, /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          onClick: () => {
+            setActionsOpen(false);
+            onDelete(task, type);
+          },
+          className: "flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 15 }),
+        "Eliminar tarea"
+      )))), /* @__PURE__ */ React.createElement(
         "button",
         {
           onClick: onClose,
           "aria-label": "Cerrar modal",
-          className: "ml-1 min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors"
+          className: "ml-1 flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-transparent text-slate-500 transition-colors hover:border-[#d8d5ce] hover:bg-white hover:text-slate-800 dark:text-slate-400 dark:hover:border-white/10 dark:hover:bg-[#202420] dark:hover:text-slate-100"
         },
         /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 16 })
       )),
-      /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0 overflow-y-auto custom-scroll bg-white dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("div", { className: "max-w-3xl mx-auto px-5 md:px-8 pt-6 md:pt-7 pb-10" }, /* @__PURE__ */ React.createElement(
+      /* @__PURE__ */ React.createElement("div", { className: "grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden lg:grid-cols-[minmax(0,1fr)_24rem] lg:grid-rows-1" }, /* @__PURE__ */ React.createElement("div", { className: "custom-scroll min-w-0 overflow-y-auto bg-[#f7f6f2] dark:bg-[#171a18]" }, /* @__PURE__ */ React.createElement("div", { className: "mx-auto max-w-4xl px-5 pb-10 pt-6 md:px-8 md:pt-7" }, /* @__PURE__ */ React.createElement(
         "h1",
         {
           id: dialogTitleId,
-          className: "text-xl md:text-[24px] font-black text-slate-900 dark:text-white leading-snug mb-4 pr-4 break-words"
+          className: "editorial-title mb-4 break-words pr-4 text-3xl leading-tight text-slate-900 dark:text-[#f1efe9] md:text-[38px]"
         },
         task.title
       ), /* @__PURE__ */ React.createElement(
         "div",
         {
-          className: "flex flex-wrap items-center gap-3 mb-6",
+          className: "mb-5 flex flex-wrap items-center gap-x-4 gap-y-2",
           "data-dropdown": true
         },
         /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
           "button",
           {
             onClick: () => canAct && setStatusOpen((o) => !o),
-            className: `min-h-[34px] flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border shadow-sm ${STATUS_COLOR_CLASSES[currentStatus?.color || "slate"]} ${canAct ? "cursor-pointer hover:opacity-90" : "cursor-default"} transition-opacity`
+            className: `flex min-h-10 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold ${STATUS_COLOR_CLASSES[currentStatus?.color || "slate"]} ${canAct ? "cursor-pointer hover:opacity-90" : "cursor-default"} transition-opacity`
           },
           currentStatus?.label || task.status,
           canAct && /* @__PURE__ */ React.createElement(Icon, { name: "ChevronDown", size: 10 })
@@ -8381,22 +8405,56 @@ var TaskDetailModal = ({
             )
           ))
         )),
-        task.createdAt && /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1" }, /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 11 }), "Creado el", " ", new Date(task.createdAt).toLocaleDateString("es-ES", {
+        client && /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-400" }, "Cliente"), /* @__PURE__ */ React.createElement("span", { className: "flex h-6 w-6 items-center justify-center rounded bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-500/20 dark:text-blue-300" }, client.name?.charAt(0).toUpperCase()), /* @__PURE__ */ React.createElement("strong", { className: "font-semibold" }, client.name)),
+        /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300" }, /* @__PURE__ */ React.createElement(Icon, { name: "CalendarDays", size: 14, className: "text-slate-400" }), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-400" }, "Fecha l\xEDmite"), /* @__PURE__ */ React.createElement("strong", { className: "font-semibold" }, task.date || "Sin fecha")),
+        assignee && /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-7 w-7 items-center justify-center rounded-full bg-[#555552] text-[9px] font-bold text-white" }, assignee.name?.slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("strong", { className: "font-semibold" }, assignee.name)),
+        task.createdAt && /* @__PURE__ */ React.createElement("span", { className: "hidden items-center gap-1 text-xs text-slate-500 dark:text-slate-400 xl:flex" }, /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 11 }), "Creado el", " ", new Date(task.createdAt).toLocaleDateString("es-ES", {
           day: "numeric",
           month: "short"
         }), " ", "a las", " ", new Date(task.createdAt).toLocaleTimeString("es-ES", {
           hour: "2-digit",
           minute: "2-digit"
         }))
-      ), /* @__PURE__ */ React.createElement("div", { className: "mb-7" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 mb-2" }, "Descripci\xF3n"), task.notes ? /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 px-4 py-3" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed" }, task.notes)) : /* @__PURE__ */ React.createElement(
-        "button",
+      ), /* @__PURE__ */ React.createElement(
+        "nav",
         {
-          onClick: canAct ? () => onEdit(task, type) : void 0,
-          className: `w-full min-h-[54px] flex items-center gap-2 text-left px-4 py-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/60 text-sm text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600 hover:text-slate-700 dark:hover:text-slate-200 transition-colors ${canAct ? "cursor-pointer" : ""}`
+          "aria-label": "Secciones de la tarea",
+          className: "sticky top-0 z-10 mb-5 flex gap-1 border-b border-[#dedbd4] bg-[#f7f6f2]/95 backdrop-blur-sm dark:border-white/10 dark:bg-[#171a18]/95"
         },
-        /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 14, className: "shrink-0" }),
-        canAct ? "Agregar descripci\xF3n" : "Sin descripci\xF3n"
-      )), (() => {
+        [
+          { id: "task-summary", label: "Resumen" },
+          { id: "task-activity", label: "Actividad" },
+          {
+            id: "task-files",
+            label: `Archivos (${Array.isArray(task.attachments) ? task.attachments.length : 0})`
+          }
+        ].map((item, index) => /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            key: item.id,
+            type: "button",
+            onClick: () => scrollToTaskSection(item.id),
+            className: `relative min-h-11 px-3 text-sm font-semibold transition-colors ${index === 0 ? "text-slate-900 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-blue-500 dark:text-[#f1efe9]" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"}`
+          },
+          item.label
+        ))
+      ), /* @__PURE__ */ React.createElement(
+        "section",
+        {
+          id: "task-summary",
+          className: "mb-4 scroll-mt-16 rounded-xl border border-[#dedbd4] bg-white p-5 dark:border-white/10 dark:bg-[#202420]"
+        },
+        /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 mb-2" }, "Descripci\xF3n"),
+        task.notes ? /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 px-4 py-3" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed" }, task.notes)) : /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            onClick: canAct ? () => onEdit(task, type) : void 0,
+            className: `w-full min-h-[54px] flex items-center gap-2 text-left px-4 py-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/60 text-sm text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600 hover:text-slate-700 dark:hover:text-slate-200 transition-colors ${canAct ? "cursor-pointer" : ""}`
+          },
+          /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 14, className: "shrink-0" }),
+          /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("strong", { className: "block font-semibold text-slate-700 dark:text-slate-200" }, canAct ? "Agregar descripci\xF3n" : "Sin descripci\xF3n"), /* @__PURE__ */ React.createElement("span", { className: "mt-0.5 block text-xs text-slate-500" }, "A\xF1ade contexto, enlaces o instrucciones para el equipo."))
+        )
+      ), (() => {
         const checklist = Array.isArray(task.checklist) ? task.checklist : [];
         const done = checklist.filter((i) => i.done).length;
         const pct = checklist.length > 0 ? Math.round(done / checklist.length * 100) : 0;
@@ -8425,30 +8483,31 @@ var TaskDetailModal = ({
           setNewCheckItem("");
           setAddingCheck(false);
         };
-        return /* @__PURE__ */ React.createElement("div", { className: "mb-7" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-3" }, /* @__PURE__ */ React.createElement(
+        return /* @__PURE__ */ React.createElement("section", { className: "mb-4 rounded-xl border border-[#dedbd4] bg-white p-5 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("div", { className: "mb-4 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
           Icon,
           {
             name: "CheckSquare",
             size: 13,
             className: "text-slate-500"
           }
-        ), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Lista de control"), checklist.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500 ml-1" }, done, "/", checklist.length), checklist.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-xs font-bold text-slate-500" }, pct, "%")), checklist.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full mb-3 overflow-hidden" }, /* @__PURE__ */ React.createElement(
+        ), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Lista de control"), checklist.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-1 text-xs text-slate-500" }, done, " de ", checklist.length, " completados"), checklist.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-xs font-bold text-slate-500" }, pct, "%")), checklist.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mb-4 h-1.5 overflow-hidden rounded-full bg-[#dedbd4] dark:bg-white/10" }, /* @__PURE__ */ React.createElement(
           "div",
           {
-            className: "h-full bg-emerald-500 rounded-full transition-all duration-500",
+            className: "h-full rounded-full bg-[#b78000] transition-all duration-500",
             style: { width: `${pct}%` }
           }
-        )), /* @__PURE__ */ React.createElement("div", { className: "space-y-0.5" }, checklist.map((item) => /* @__PURE__ */ React.createElement(
+        )), /* @__PURE__ */ React.createElement("div", { className: "space-y-1" }, checklist.map((item) => /* @__PURE__ */ React.createElement(
           "div",
           {
             key: item.id,
-            className: "flex items-center gap-3 group py-2 px-3 rounded-xl border border-transparent hover:border-slate-200 dark:hover:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/70 transition-colors"
+            className: "group flex min-h-11 items-center gap-3 rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-[#dedbd4] hover:bg-[#f7f6f2] dark:hover:border-white/10 dark:hover:bg-[#282d29]"
           },
           /* @__PURE__ */ React.createElement(
             "button",
             {
               onClick: () => toggleItem(item.id),
-              className: `w-[18px] h-[18px] rounded-[4px] border-2 shrink-0 flex items-center justify-center transition-all ${item.done ? "bg-emerald-500 border-emerald-500" : "border-slate-300 dark:border-slate-600 hover:border-emerald-400"}`
+              "aria-label": item.done ? `Marcar ${item.text} como pendiente` : `Completar ${item.text}`,
+              className: `flex h-6 min-h-0 w-6 min-w-0 shrink-0 items-center justify-center rounded-md border-2 transition-all ${item.done ? "border-emerald-500 bg-emerald-500" : "border-slate-300 hover:border-emerald-400 dark:border-slate-600"}`
             },
             item.done && /* @__PURE__ */ React.createElement(
               Icon,
@@ -8470,7 +8529,8 @@ var TaskDetailModal = ({
             "button",
             {
               onClick: () => deleteItem(item.id),
-              className: "opacity-0 group-hover:opacity-100 p-1 rounded text-slate-500 hover:text-red-400 transition-all"
+              "aria-label": `Eliminar ${item.text}`,
+              className: "flex h-9 min-h-0 w-9 min-w-0 items-center justify-center rounded-lg text-slate-500 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 focus:opacity-100 group-hover:opacity-100 dark:hover:bg-red-500/10"
             },
             /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 12 })
           )
@@ -8504,7 +8564,7 @@ var TaskDetailModal = ({
           "button",
           {
             onClick: () => canAct && setAddingCheck(true),
-            className: `flex items-center gap-2 mt-3 min-h-[42px] rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/60 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:border-emerald-300 dark:hover:border-emerald-600 transition-colors px-4 py-2 w-full ${!canAct ? "opacity-40 cursor-default" : ""}`
+            className: `mt-3 flex min-h-11 w-full items-center gap-2 rounded-lg border border-dashed border-[#cbc7bf] bg-[#f7f6f2] px-4 py-2 text-sm text-slate-500 transition-colors hover:border-[#aaa69d] hover:text-slate-700 dark:border-white/15 dark:bg-[#1b1f1c] dark:hover:border-white/25 dark:hover:text-slate-200 ${!canAct ? "cursor-default opacity-40" : ""}`
           },
           /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 13 }),
           " Agregar elemento"
@@ -8537,167 +8597,186 @@ var TaskDetailModal = ({
         };
         const isImage = (att) => att.type && att.type.startsWith("image/");
         const isLoadingData = (att) => att.hasData && !att.data;
-        return /* @__PURE__ */ React.createElement("div", { className: "mb-7" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-3" }, /* @__PURE__ */ React.createElement(Icon, { name: "Inbox", size: 13, className: "text-slate-500" }), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Adjuntos"), attachments.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500 ml-1" }, attachments.length), canAct && attachments.length > 0 && /* @__PURE__ */ React.createElement(
+        return /* @__PURE__ */ React.createElement(
+          "section",
+          {
+            id: "task-files",
+            className: "mb-4 scroll-mt-16 rounded-xl border border-[#dedbd4] bg-white p-5 dark:border-white/10 dark:bg-[#202420]"
+          },
+          /* @__PURE__ */ React.createElement("div", { className: "mb-4 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Inbox", size: 13, className: "text-slate-500" }), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Archivos"), attachments.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500 ml-1" }, attachments.length), canAct && attachments.length > 0 && /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => fileInputRef.current && fileInputRef.current.click(),
+              disabled: uploadingFile,
+              className: "ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+            },
+            uploadingFile ? /* @__PURE__ */ React.createElement(
+              Icon,
+              {
+                name: "Loader2",
+                size: 11,
+                className: "animate-spin"
+              }
+            ) : /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 11 }),
+            uploadingFile ? "Subiendo..." : "Adjuntar"
+          )),
+          /* @__PURE__ */ React.createElement(
+            "input",
+            {
+              ref: fileInputRef,
+              type: "file",
+              className: "hidden",
+              onChange: handleFileChange,
+              accept: "image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.mp4,.mov"
+            }
+          ),
+          attachments.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "space-y-2" }, attachments.map((att) => /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              key: att.id,
+              className: "group flex items-center gap-3 rounded-lg border border-[#dedbd4] bg-[#f7f6f2] p-3 transition-colors hover:border-[#aaa69d] dark:border-white/10 dark:bg-[#282d29] dark:hover:border-white/20"
+            },
+            isImage(att) && att.data ? /* @__PURE__ */ React.createElement(
+              "img",
+              {
+                src: att.data,
+                alt: att.name,
+                className: "w-10 h-10 rounded-lg object-cover shrink-0 border border-slate-200 dark:border-slate-700"
+              }
+            ) : /* @__PURE__ */ React.createElement("div", { className: "w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0" }, /* @__PURE__ */ React.createElement(
+              Icon,
+              {
+                name: isLoadingData(att) ? "Loader2" : "FileText",
+                size: 16,
+                className: isLoadingData(att) ? "text-slate-500 animate-spin" : "text-slate-500"
+              }
+            )),
+            /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200 truncate" }, att.name), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500" }, formatFileSize(att.size), " \xB7 ", att.uploadedBy, " \xB7", " ", relativeTime(att.uploadedAt))),
+            /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" }, /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                onClick: () => downloadFile(att),
+                title: isLoadingData(att) ? "Cargando adjunto..." : "Descargar",
+                disabled: isLoadingData(att),
+                className: "p-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              },
+              /* @__PURE__ */ React.createElement(Icon, { name: "ArrowRight", size: 13 })
+            ), canAct && /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                onClick: () => onRemoveAttachment(task, type, att.id),
+                title: "Eliminar",
+                className: "p-1.5 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+              },
+              /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 13 })
+            ))
+          ))),
+          attachments.length === 0 && /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => canAct && fileInputRef.current && fileInputRef.current.click(),
+              className: `flex min-h-[76px] w-full items-center justify-center gap-3 rounded-lg border border-dashed border-[#cbc7bf] bg-[#f7f6f2] px-4 py-3 text-sm text-slate-500 transition-colors hover:border-blue-400 hover:text-slate-700 dark:border-white/15 dark:bg-[#1b1f1c] dark:hover:border-blue-500/60 dark:hover:text-slate-200 ${!canAct ? "cursor-default opacity-40" : ""}`
+            },
+            /* @__PURE__ */ React.createElement(Icon, { name: "Paperclip", size: 16 }),
+            /* @__PURE__ */ React.createElement("span", { className: "text-left" }, /* @__PURE__ */ React.createElement("strong", { className: "block font-semibold text-slate-700 dark:text-slate-200" }, "Selecciona un archivo"), /* @__PURE__ */ React.createElement("span", { className: "mt-0.5 block text-xs text-slate-500" }, "Im\xE1genes, documentos, hojas de c\xE1lculo o video"))
+          )
+        );
+      })(), /* @__PURE__ */ React.createElement(
+        "section",
+        {
+          id: "task-activity",
+          className: "scroll-mt-16 rounded-xl border border-[#dedbd4] bg-white p-5 dark:border-white/10 dark:bg-[#202420]"
+        },
+        /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-5" }, /* @__PURE__ */ React.createElement(
+          Icon,
+          {
+            name: "MessageSquare",
+            size: 13,
+            className: "text-slate-500"
+          }
+        ), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Actividad"), totalLoggedMs > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1" }, /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 11 }), formatDuration(totalLoggedMs))),
+        /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[10px] font-black text-white" }, (currentUserProfile?.name || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "flex-1 relative" }, /* @__PURE__ */ React.createElement(
+          "textarea",
+          {
+            ref: commentInputRef,
+            value: commentText,
+            onChange: handleCommentChange,
+            onKeyDown: (e) => {
+              if (mentionOpen && e.key === "Escape") {
+                setMentionOpen(false);
+                e.preventDefault();
+                return;
+              }
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey))
+                handleSubmitComment();
+            },
+            placeholder: "Escribe una actualizaci\xF3n o menciona con @",
+            rows: commentText ? 3 : 1,
+            className: "min-h-[48px] w-full resize-none rounded-lg border border-[#d8d5ce] bg-[#f7f6f2] px-4 py-3 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500/70 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[#1b1f1c] dark:text-slate-200"
+          }
+        ), mentionOpen && mentionSuggestions.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "absolute left-0 bottom-full mb-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-52" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 px-3 pt-1.5 pb-1" }, "Mencionar"), mentionSuggestions.map((p) => /* @__PURE__ */ React.createElement(
           "button",
           {
-            onClick: () => fileInputRef.current && fileInputRef.current.click(),
-            disabled: uploadingFile,
-            className: "ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+            key: p.id,
+            onMouseDown: (e) => {
+              e.preventDefault();
+              insertMention(p);
+            },
+            className: "w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
           },
-          uploadingFile ? /* @__PURE__ */ React.createElement(
+          /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
+          /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1 text-left" }, p.name)
+        ))), commentText.trim() && /* @__PURE__ */ React.createElement("div", { className: "flex justify-end mt-2" }, /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            onClick: handleSubmitComment,
+            disabled: submitting,
+            className: "flex min-h-10 items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+          },
+          submitting ? /* @__PURE__ */ React.createElement(
             Icon,
             {
               name: "Loader2",
-              size: 11,
+              size: 12,
               className: "animate-spin"
             }
-          ) : /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 11 }),
-          uploadingFile ? "Subiendo..." : "Adjuntar"
-        )), /* @__PURE__ */ React.createElement(
-          "input",
+          ) : /* @__PURE__ */ React.createElement(Icon, { name: "Send", size: 12 }),
+          submitting ? "Enviando..." : "Comentar"
+        )))),
+        /* @__PURE__ */ React.createElement("div", { className: "space-y-4 border-l border-[#dedbd4] pl-4 dark:border-white/10" }, activityFeed.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "rounded-lg border border-dashed border-[#cbc7bf] bg-[#f7f6f2] px-4 py-5 text-center dark:border-white/15 dark:bg-[#1b1f1c]" }, /* @__PURE__ */ React.createElement(
+          Icon,
           {
-            ref: fileInputRef,
-            type: "file",
-            className: "hidden",
-            onChange: handleFileChange,
-            accept: "image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.mp4,.mov"
+            name: "MessageSquare",
+            size: 18,
+            className: "mx-auto mb-2 text-slate-400"
           }
-        ), attachments.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "space-y-2" }, attachments.map((att) => /* @__PURE__ */ React.createElement(
-          "div",
-          {
-            key: att.id,
-            className: "flex items-center gap-3 group p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800/50 transition-colors"
-          },
-          isImage(att) && att.data ? /* @__PURE__ */ React.createElement(
-            "img",
-            {
-              src: att.data,
-              alt: att.name,
-              className: "w-10 h-10 rounded-lg object-cover shrink-0 border border-slate-200 dark:border-slate-700"
-            }
-          ) : /* @__PURE__ */ React.createElement("div", { className: "w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0" }, /* @__PURE__ */ React.createElement(
+        ), /* @__PURE__ */ React.createElement("p", { className: "text-sm font-semibold text-slate-500 dark:text-slate-400" }, "Sin actividad a\xFAn")), activityFeed.map(
+          (item) => item._kind === "time" ? /* @__PURE__ */ React.createElement("div", { key: item.id, className: "flex gap-3 items-center" }, /* @__PURE__ */ React.createElement("div", { className: "w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-500/10 flex items-center justify-center shrink-0" }, /* @__PURE__ */ React.createElement(
             Icon,
             {
-              name: isLoadingData(att) ? "Loader2" : "FileText",
-              size: 16,
-              className: isLoadingData(att) ? "text-slate-500 animate-spin" : "text-slate-500"
+              name: "Clock",
+              size: 12,
+              className: "text-emerald-600 dark:text-emerald-400"
             }
-          )),
-          /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200 truncate" }, att.name), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500" }, formatFileSize(att.size), " \xB7 ", att.uploadedBy, " \xB7", " ", relativeTime(att.uploadedAt))),
-          /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" }, /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: () => downloadFile(att),
-              title: isLoadingData(att) ? "Cargando adjunto..." : "Descargar",
-              disabled: isLoadingData(att),
-              className: "p-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-            },
-            /* @__PURE__ */ React.createElement(Icon, { name: "ArrowRight", size: 13 })
-          ), canAct && /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: () => onRemoveAttachment(task, type, att.id),
-              title: "Eliminar",
-              className: "p-1.5 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-            },
-            /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 13 })
-          ))
-        ))), attachments.length === 0 && /* @__PURE__ */ React.createElement(
-          "button",
-          {
-            onClick: () => canAct && fileInputRef.current && fileInputRef.current.click(),
-            className: `w-full min-h-[58px] flex items-center gap-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/60 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:border-blue-300 dark:hover:border-blue-600 transition-colors px-4 py-3 ${!canAct ? "opacity-40 cursor-default" : ""}`
-          },
-          /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 13 }),
-          " Adjuntar archivo"
-        ));
-      })(), /* @__PURE__ */ React.createElement("div", { className: "border-t border-slate-100 dark:border-slate-800 pt-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-5" }, /* @__PURE__ */ React.createElement(
-        Icon,
-        {
-          name: "MessageSquare",
-          size: 13,
-          className: "text-slate-500"
-        }
-      ), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Actividad"), totalLoggedMs > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1" }, /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 11 }), formatDuration(totalLoggedMs))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-3 mb-6" }, /* @__PURE__ */ React.createElement("div", { className: "w-8 h-8 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[10px] shrink-0" }, (currentUserProfile?.name || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "flex-1 relative" }, /* @__PURE__ */ React.createElement(
-        "textarea",
-        {
-          ref: commentInputRef,
-          value: commentText,
-          onChange: handleCommentChange,
-          onKeyDown: (e) => {
-            if (mentionOpen && e.key === "Escape") {
-              setMentionOpen(false);
-              e.preventDefault();
-              return;
-            }
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey))
-              handleSubmitComment();
-          },
-          placeholder: "Escribe un comentario... usa @ para mencionar (Ctrl+Enter para enviar)",
-          rows: commentText ? 3 : 1,
-          className: "w-full min-h-[46px] px-4 py-3 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500/70 resize-none text-slate-700 dark:text-slate-200 placeholder-slate-400 transition-all"
-        }
-      ), mentionOpen && mentionSuggestions.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "absolute left-0 bottom-full mb-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-52" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 px-3 pt-1.5 pb-1" }, "Mencionar"), mentionSuggestions.map((p) => /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          key: p.id,
-          onMouseDown: (e) => {
-            e.preventDefault();
-            insertMention(p);
-          },
-          className: "w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-        },
-        /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
-        /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1 text-left" }, p.name)
-      ))), commentText.trim() && /* @__PURE__ */ React.createElement("div", { className: "flex justify-end mt-2" }, /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          onClick: handleSubmitComment,
-          disabled: submitting,
-          className: "flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg disabled:opacity-60 transition-colors"
-        },
-        submitting ? /* @__PURE__ */ React.createElement(
-          Icon,
-          {
-            name: "Loader2",
-            size: 12,
-            className: "animate-spin"
-          }
-        ) : /* @__PURE__ */ React.createElement(Icon, { name: "Send", size: 12 }),
-        submitting ? "Enviando..." : "Comentar"
-      )))), /* @__PURE__ */ React.createElement("div", { className: "space-y-5" }, activityFeed.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 px-4 py-5 text-center" }, /* @__PURE__ */ React.createElement(
-        Icon,
-        {
-          name: "MessageSquare",
-          size: 18,
-          className: "mx-auto mb-2 text-slate-400"
-        }
-      ), /* @__PURE__ */ React.createElement("p", { className: "text-sm font-semibold text-slate-500 dark:text-slate-400" }, "Sin actividad a\xFAn")), activityFeed.map(
-        (item) => item._kind === "time" ? /* @__PURE__ */ React.createElement("div", { key: item.id, className: "flex gap-3 items-center" }, /* @__PURE__ */ React.createElement("div", { className: "w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-500/10 flex items-center justify-center shrink-0" }, /* @__PURE__ */ React.createElement(
-          Icon,
-          {
-            name: "Clock",
-            size: 12,
-            className: "text-emerald-600 dark:text-emerald-400"
-          }
-        )), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement("span", { className: "font-bold text-slate-700 dark:text-slate-200" }, item.authorName), " ", "registr\xF3", " ", /* @__PURE__ */ React.createElement("span", { className: "font-bold text-emerald-600 dark:text-emerald-400" }, formatDuration(item.durationMs)), /* @__PURE__ */ React.createElement("span", { className: "text-slate-500 text-xs ml-2" }, relativeTime(item.loggedAt)))) : /* @__PURE__ */ React.createElement("div", { key: item.id, className: "flex gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "w-7 h-7 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5" }, (item.authorName || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2 mb-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm font-bold text-slate-700 dark:text-slate-200" }, item.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500" }, relativeTime(item.createdAt))), /* @__PURE__ */ React.createElement("div", { className: "bg-slate-50 dark:bg-slate-800 rounded-xl rounded-tl-none px-4 py-3 border border-slate-200 dark:border-slate-700" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words" }, item.text.split(/(@\S+)/g).map(
-          (part, i) => part.startsWith("@") ? /* @__PURE__ */ React.createElement(
-            "span",
-            {
-              key: i,
-              className: "text-purple-600 dark:text-purple-400 font-bold"
-            },
-            part
-          ) : part
-        )))))
-      ))))), /* @__PURE__ */ React.createElement("div", { className: "w-full lg:w-72 shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 overflow-y-auto custom-scroll bg-slate-50/80 dark:bg-slate-950/70 max-h-72 lg:max-h-none" }, /* @__PURE__ */ React.createElement("div", { className: "p-5 space-y-5" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400" }, "Detalles"), /* @__PURE__ */ React.createElement("div", { "data-dropdown": true, className: "relative" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Asignados"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1 flex-wrap min-h-[28px] py-0.5 -mx-1 px-1" }, currentAssigneeIds.length > 0 ? currentAssigneeIds.map((uid) => {
+          )), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement("span", { className: "font-bold text-slate-700 dark:text-slate-200" }, item.authorName), " ", "registr\xF3", " ", /* @__PURE__ */ React.createElement("span", { className: "font-bold text-emerald-600 dark:text-emerald-400" }, formatDuration(item.durationMs)), /* @__PURE__ */ React.createElement("span", { className: "text-slate-500 text-xs ml-2" }, relativeTime(item.loggedAt)))) : /* @__PURE__ */ React.createElement("div", { key: item.id, className: "flex gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "w-7 h-7 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5" }, (item.authorName || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2 mb-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm font-bold text-slate-700 dark:text-slate-200" }, item.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500" }, relativeTime(item.createdAt))), /* @__PURE__ */ React.createElement("div", { className: "rounded-lg rounded-tl-none border border-[#dedbd4] bg-[#f7f6f2] px-4 py-3 dark:border-white/10 dark:bg-[#282d29]" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words" }, item.text.split(/(@\S+)/g).map(
+            (part, i) => part.startsWith("@") ? /* @__PURE__ */ React.createElement(
+              "span",
+              {
+                key: i,
+                className: "text-purple-600 dark:text-purple-400 font-bold"
+              },
+              part
+            ) : part
+          )))))
+        ))
+      ))), /* @__PURE__ */ React.createElement("aside", { className: "custom-scroll max-h-72 w-full overflow-y-auto border-t border-[#dedbd4] bg-[#efeee9] dark:border-white/10 dark:bg-[#12161a] lg:max-h-none lg:border-l lg:border-t-0" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-3 p-5" }, /* @__PURE__ */ React.createElement("p", { className: "mb-4 text-sm font-semibold text-slate-800 dark:text-[#f1efe9]" }, "Detalles"), /* @__PURE__ */ React.createElement("div", { "data-dropdown": true, className: "relative rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Users", size: 14 }), "Responsable"), /* @__PURE__ */ React.createElement("div", { className: "flex min-h-10 flex-wrap items-center gap-2" }, currentAssigneeIds.length > 0 ? currentAssigneeIds.map((uid) => {
         const person = peoplePool.find((p) => p.id === uid);
         if (!person) return null;
         return /* @__PURE__ */ React.createElement(
           "div",
           {
             key: uid,
-            className: "min-h-[34px] flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full pl-1 pr-2 py-1 group"
+            className: "group flex min-h-10 items-center gap-2 rounded-lg bg-[#f7f6f2] py-1 pl-1.5 pr-2 dark:bg-[#282d29]"
           },
           /* @__PURE__ */ React.createElement("div", { className: "w-5 h-5 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[8px] shrink-0" }, person.name.slice(0, 2).toUpperCase()),
           /* @__PURE__ */ React.createElement("span", { className: "text-[11px] font-semibold text-slate-700 dark:text-slate-300 leading-none" }, person.name.split(" ")[0]),
@@ -8718,7 +8797,8 @@ var TaskDetailModal = ({
         "button",
         {
           onClick: () => setAssigneeOpen((o) => !o),
-          className: "w-8 h-8 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-500 hover:border-purple-400 hover:text-purple-500 transition-colors shrink-0"
+          "aria-label": "Cambiar responsable",
+          className: "flex h-10 min-h-0 w-10 min-w-0 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-300 text-slate-500 transition-colors hover:border-blue-400 hover:text-blue-500 dark:border-slate-600"
         },
         /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 12 })
       )), assigneeOpen && canAct && /* @__PURE__ */ React.createElement(
@@ -8787,11 +8867,11 @@ var TaskDetailModal = ({
           /* @__PURE__ */ React.createElement(Icon, { name: "UserX", size: 13 }),
           " Quitar todos"
         )
-      )), /* @__PURE__ */ React.createElement("div", { "data-dropdown": true, className: "relative" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Prioridad"), /* @__PURE__ */ React.createElement(
+      )), /* @__PURE__ */ React.createElement("div", { "data-dropdown": true, className: "relative rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flag", size: 14 }), "Prioridad"), /* @__PURE__ */ React.createElement(
         "button",
         {
           onClick: () => canAct && setPriorityOpen((o) => !o),
-          className: `min-h-[38px] flex items-center gap-2 w-full rounded-xl py-1.5 ${canAct ? "hover:bg-white dark:hover:bg-slate-900 cursor-pointer" : "cursor-default"} transition-colors -mx-1 px-2`
+          className: `flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-1.5 ${canAct ? "cursor-pointer hover:bg-[#f7f6f2] dark:hover:bg-[#282d29]" : "cursor-default"} transition-colors`
         },
         /* @__PURE__ */ React.createElement(
           FlagIcon,
@@ -8847,7 +8927,7 @@ var TaskDetailModal = ({
           /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 12 }),
           " Quitar prioridad"
         )
-      )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Fecha l\xEDmite"), /* @__PURE__ */ React.createElement("div", { className: "min-h-[38px] flex items-center gap-2 py-1 -mx-1 px-2 rounded-xl" }, /* @__PURE__ */ React.createElement(
+      )), /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Fecha l\xEDmite"), /* @__PURE__ */ React.createElement("div", { className: "min-h-[38px] flex items-center gap-2 py-1 -mx-1 px-2 rounded-xl" }, /* @__PURE__ */ React.createElement(
         Icon,
         {
           name: "CalendarDays",
@@ -8860,12 +8940,12 @@ var TaskDetailModal = ({
           className: `text-sm font-semibold ${task.date ? "text-slate-700 dark:text-slate-200" : "text-slate-500 italic"}`
         },
         task.date || "Sin fecha"
-      ))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Cliente"), /* @__PURE__ */ React.createElement("div", { className: "min-h-[38px] flex items-center gap-2 py-1 -mx-1 px-2 rounded-xl" }, client ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "w-5 h-5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-[9px] shrink-0" }, client.name?.charAt(0).toUpperCase()), /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200" }, client.name)) : /* @__PURE__ */ React.createElement("span", { className: "text-sm text-slate-500 italic" }, "Interno"))), type === "editingTask" && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Jerarqu\xEDa"), /* @__PURE__ */ React.createElement("span", { className: "px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800" }, getEditingHierarchyId(task).toUpperCase())), type === "managementTask" && task.category && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Categor\xEDa"), /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200" }, task.category)), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Tiempo registrado"), /* @__PURE__ */ React.createElement("div", { className: "min-h-[38px] flex items-center gap-2" }, timerRunning ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", { className: "w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" }), /* @__PURE__ */ React.createElement("span", { className: "text-sm font-black text-red-500 dark:text-red-400 tabular-nums" }, formatDuration(timerElapsed)), /* @__PURE__ */ React.createElement(
+      ))), /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Cliente"), /* @__PURE__ */ React.createElement("div", { className: "min-h-[38px] flex items-center gap-2 py-1 -mx-1 px-2 rounded-xl" }, client ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "w-5 h-5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-[9px] shrink-0" }, client.name?.charAt(0).toUpperCase()), /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200" }, client.name)) : /* @__PURE__ */ React.createElement("span", { className: "text-sm text-slate-500 italic" }, "Interno"))), type === "editingTask" && /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Jerarqu\xEDa"), /* @__PURE__ */ React.createElement("span", { className: "px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800" }, getEditingHierarchyId(task).toUpperCase())), type === "managementTask" && task.category && /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Categor\xEDa"), /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200" }, task.category)), /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[#d8d5ce] bg-white p-5 text-center dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "mb-3 flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Timer", size: 14 }), "Tiempo registrado"), /* @__PURE__ */ React.createElement("div", { className: "flex min-h-[74px] flex-col items-center justify-center gap-3" }, timerRunning ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-red-500" }, /* @__PURE__ */ React.createElement("span", { className: "h-2 w-2 shrink-0 animate-pulse rounded-full bg-red-500" }), "En curso"), /* @__PURE__ */ React.createElement("span", { className: "text-2xl font-semibold tabular-nums text-red-500 dark:text-red-400" }, formatClockDuration(timerElapsed)), /* @__PURE__ */ React.createElement(
         "button",
         {
           onClick: handleStopTimer,
           disabled: savingTime,
-          className: "ml-auto flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors disabled:opacity-60"
+          className: "flex min-h-10 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs font-bold text-red-600 transition-colors hover:bg-red-100 disabled:opacity-60 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
         },
         savingTime ? /* @__PURE__ */ React.createElement(
           Icon,
@@ -8876,12 +8956,12 @@ var TaskDetailModal = ({
           }
         ) : /* @__PURE__ */ React.createElement(Icon, { name: "Square", size: 10 }),
         savingTime ? "..." : "Detener"
-      )) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Icon, { name: "Timer", size: 13, className: "text-slate-500" }), /* @__PURE__ */ React.createElement(
+      )) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
         "span",
         {
-          className: `text-sm ${totalLoggedMs > 0 ? "font-black text-emerald-600 dark:text-emerald-400" : "text-slate-500 italic"}`
+          className: `text-2xl font-semibold tabular-nums ${totalLoggedMs > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-700 dark:text-slate-200"}`
         },
-        totalLoggedMs > 0 ? formatDuration(totalLoggedMs) : "Sin tiempo"
+        formatClockDuration(totalLoggedMs)
       ), canAct && /* @__PURE__ */ React.createElement(
         "button",
         {
@@ -8889,11 +8969,11 @@ var TaskDetailModal = ({
             setTimerElapsed(0);
             setTimerRunning(true);
           },
-          className: "ml-auto flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors"
+          className: "flex min-h-11 items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-6 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20"
         },
         /* @__PURE__ */ React.createElement(Icon, { name: "Play", size: 10 }),
         " Iniciar"
-      ))), timeEntries.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-2 space-y-1" }, [...timeEntries].reverse().slice(0, 3).map((e) => /* @__PURE__ */ React.createElement(
+      ))), timeEntries.length === 0 && !timerRunning && /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs text-slate-500" }, "Sin registros todav\xEDa"), timeEntries.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-2 space-y-1" }, [...timeEntries].reverse().slice(0, 3).map((e) => /* @__PURE__ */ React.createElement(
         "div",
         {
           key: e.id,
@@ -8903,14 +8983,14 @@ var TaskDetailModal = ({
         /* @__PURE__ */ React.createElement("span", { className: "font-bold text-slate-600 dark:text-slate-300" }, formatDuration(e.durationMs)),
         /* @__PURE__ */ React.createElement("span", { className: "truncate" }, e.authorName),
         /* @__PURE__ */ React.createElement("span", { className: "ml-auto shrink-0" }, relativeTime(e.loggedAt))
-      )))), task.createdAt && /* @__PURE__ */ React.createElement("div", { className: "border-t border-slate-200 dark:border-slate-800 pt-4" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Creado"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, new Date(task.createdAt).toLocaleDateString("es-ES", {
+      )))), task.createdAt && /* @__PURE__ */ React.createElement("div", { className: "border-t border-[#d8d5ce] px-1 pt-4 dark:border-white/10" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Creado"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, new Date(task.createdAt).toLocaleDateString("es-ES", {
         day: "numeric",
         month: "long",
         year: "numeric"
       }), /* @__PURE__ */ React.createElement("br", null), new Date(task.createdAt).toLocaleTimeString("es-ES", {
         hour: "2-digit",
         minute: "2-digit"
-      }))))))
+      }))), /* @__PURE__ */ React.createElement("p", { className: "flex items-center justify-center gap-2 pt-2 text-xs text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement("kbd", { className: "rounded border border-[#cbc7bf] bg-white px-2 py-1 font-mono text-[10px] dark:border-white/15 dark:bg-[#202420]" }, "Esc"), "para cerrar"))))
     )
   );
 };
