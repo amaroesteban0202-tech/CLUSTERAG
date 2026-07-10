@@ -8289,8 +8289,7 @@ var TaskDetailModal = ({
         "aria-modal": "true",
         "aria-labelledby": dialogTitleId,
         tabIndex: -1,
-        className: "task-detail-shell flex w-full max-w-[1320px] flex-col overflow-hidden rounded-2xl border border-[#d8d5ce] bg-[#f7f6f2] shadow-2xl outline-none dark:border-white/10 dark:bg-[#171a18]",
-        style: { height: "min(92vh, 860px)" },
+        className: "task-detail-shell flex h-[92dvh] max-h-[860px] w-full max-w-[1320px] flex-col overflow-hidden rounded-2xl border border-[#d8d5ce] bg-[#f7f6f2] shadow-2xl outline-none dark:border-white/10 dark:bg-[#171a18]",
         onClick: function(e) {
           e.stopPropagation();
         }
@@ -8351,7 +8350,7 @@ var TaskDetailModal = ({
         },
         /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 16 })
       )),
-      /* @__PURE__ */ React.createElement("div", { className: "grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden lg:grid-cols-[minmax(0,1fr)_24rem] lg:grid-rows-1" }, /* @__PURE__ */ React.createElement("div", { className: "custom-scroll min-w-0 overflow-y-auto bg-[#f7f6f2] dark:bg-[#171a18]" }, /* @__PURE__ */ React.createElement("div", { className: "mx-auto max-w-4xl px-5 pb-10 pt-6 md:px-8 md:pt-7" }, /* @__PURE__ */ React.createElement(
+      /* @__PURE__ */ React.createElement("div", { className: "task-detail-body custom-scroll min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_24rem] lg:grid-rows-1 lg:overflow-hidden" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 overflow-visible bg-[#f7f6f2] dark:bg-[#171a18] lg:custom-scroll lg:overflow-y-auto" }, /* @__PURE__ */ React.createElement("div", { className: "mx-auto max-w-4xl px-5 pb-10 pt-6 md:px-8 md:pt-7" }, /* @__PURE__ */ React.createElement(
         "h1",
         {
           id: dialogTitleId,
@@ -8769,7 +8768,7 @@ var TaskDetailModal = ({
             ) : part
           )))))
         ))
-      ))), /* @__PURE__ */ React.createElement("aside", { className: "custom-scroll max-h-72 w-full overflow-y-auto border-t border-[#dedbd4] bg-[#efeee9] dark:border-white/10 dark:bg-[#12161a] lg:max-h-none lg:border-l lg:border-t-0" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-3 p-5" }, /* @__PURE__ */ React.createElement("p", { className: "mb-4 text-sm font-semibold text-slate-800 dark:text-[#f1efe9]" }, "Detalles"), /* @__PURE__ */ React.createElement("div", { "data-dropdown": true, className: "relative rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Users", size: 14 }), "Responsable"), /* @__PURE__ */ React.createElement("div", { className: "flex min-h-10 flex-wrap items-center gap-2" }, currentAssigneeIds.length > 0 ? currentAssigneeIds.map((uid) => {
+      ))), /* @__PURE__ */ React.createElement("aside", { className: "w-full overflow-visible border-t border-[#dedbd4] bg-[#efeee9] dark:border-white/10 dark:bg-[#12161a] lg:custom-scroll lg:max-h-none lg:overflow-y-auto lg:border-l lg:border-t-0" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-3 p-5" }, /* @__PURE__ */ React.createElement("p", { className: "mb-4 text-sm font-semibold text-slate-800 dark:text-[#f1efe9]" }, "Detalles"), /* @__PURE__ */ React.createElement("div", { "data-dropdown": true, className: "relative rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Users", size: 14 }), "Responsable"), /* @__PURE__ */ React.createElement("div", { className: "flex min-h-10 flex-wrap items-center gap-2" }, currentAssigneeIds.length > 0 ? currentAssigneeIds.map((uid) => {
         const person = peoplePool.find((p) => p.id === uid);
         if (!person) return null;
         return /* @__PURE__ */ React.createElement(

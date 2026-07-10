@@ -11628,8 +11628,7 @@ const TaskDetailModal = ({
         aria-modal="true"
         aria-labelledby={dialogTitleId}
         tabIndex={-1}
-        className="task-detail-shell flex w-full max-w-[1320px] flex-col overflow-hidden rounded-2xl border border-[#d8d5ce] bg-[#f7f6f2] shadow-2xl outline-none dark:border-white/10 dark:bg-[#171a18]"
-        style={{ height: "min(92vh, 860px)" }}
+        className="task-detail-shell flex h-[92dvh] max-h-[860px] w-full max-w-[1320px] flex-col overflow-hidden rounded-2xl border border-[#d8d5ce] bg-[#f7f6f2] shadow-2xl outline-none dark:border-white/10 dark:bg-[#171a18]"
         onClick={function (e) {
           e.stopPropagation();
         }}
@@ -11706,9 +11705,9 @@ const TaskDetailModal = ({
         </div>
 
         {/* Cuerpo */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden lg:grid-cols-[minmax(0,1fr)_24rem] lg:grid-rows-1">
+        <div className="task-detail-body custom-scroll min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_24rem] lg:grid-rows-1 lg:overflow-hidden">
           {/* LEFT — Contenido principal */}
-          <div className="custom-scroll min-w-0 overflow-y-auto bg-[#f7f6f2] dark:bg-[#171a18]">
+          <div className="min-w-0 overflow-visible bg-[#f7f6f2] dark:bg-[#171a18] lg:custom-scroll lg:overflow-y-auto">
             <div className="mx-auto max-w-4xl px-5 pb-10 pt-6 md:px-8 md:pt-7">
               {/* Title */}
               <h1
@@ -12332,7 +12331,7 @@ const TaskDetailModal = ({
           </div>
 
           {/* RIGHT — Panel de detalles estilo Jira */}
-          <aside className="custom-scroll max-h-72 w-full overflow-y-auto border-t border-[#dedbd4] bg-[#efeee9] dark:border-white/10 dark:bg-[#12161a] lg:max-h-none lg:border-l lg:border-t-0">
+          <aside className="w-full overflow-visible border-t border-[#dedbd4] bg-[#efeee9] dark:border-white/10 dark:bg-[#12161a] lg:custom-scroll lg:max-h-none lg:overflow-y-auto lg:border-l lg:border-t-0">
             <div className="space-y-3 p-5">
               <p className="mb-4 text-sm font-semibold text-slate-800 dark:text-[#f1efe9]">
                 Detalles
