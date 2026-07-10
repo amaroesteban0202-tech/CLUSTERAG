@@ -24,6 +24,8 @@ const checks = [
   ["task rooms stay viewport sized", css.includes("height: calc(100vh - 7rem)") && app.includes("task-room min-h-0")],
   ["kanban columns scroll independently", app.includes("overflow-y-auto overscroll-contain") && app.includes("md:h-full md:min-h-0")],
   ["task cards are keyboard accessible", app.includes('aria-label={`Abrir tarea ${title}`}') && app.includes('event.key === "Enter"')],
+  ["task rooms default to current month", app.includes("Este mes") && app.includes("isDateWithinPeriod(t.date, currentMonthPeriod)") && app.includes("isDateWithinPeriod(task.date, currentMonthPeriod)")],
+  ["history is explicit", app.includes('setFilterMode("history")') && app.includes("Histórico completo")],
   ["charcoal theme is the default", app.includes('localStorage.setItem("cluster_theme", "dark")') && html.includes("2026-07-charcoal-default")],
   ["company logo asset", fs.existsSync(path.join(root, "src/app/assets/cluster-symbol.webp")) && app.includes("cluster-symbol.webp")],
   ["two-font system", css.includes('font-family: Arial, sans-serif') && css.includes('font-family: "Newsreader"') && !/SF Mono|Geist Mono|Consolas/.test(css)],

@@ -8084,15 +8084,24 @@ const DateHeader = ({
               Atrasadas <Icon name="Flame" size={14} />
             </button>
             <button
-              onClick={async () => {
-                if (onLoadHistory && !historyLoaded) await onLoadHistory();
-                setFilterMode("all");
-              }}
-              disabled={historyLoading}
+              onClick={() => setFilterMode("all")}
               className={`${segBase} ${filterMode === "all" ? segActive : segIdle}`}
             >
-              {historyLoading ? "Cargando" : "Todas"}
+              Este mes
             </button>
+            {onLoadHistory && (
+              <button
+                onClick={async () => {
+                  if (!historyLoaded) await onLoadHistory();
+                  setFilterMode("history");
+                }}
+                disabled={historyLoading}
+                className={`${segBase} ${filterMode === "history" ? segActive : segIdle}`}
+              >
+                <Icon name="Clock" size={14} />
+                {historyLoading ? "Cargando" : "Histórico"}
+              </button>
+            )}
           </div>
           {/* Filtro por ASIGNACIÓN */}
           {setOwnershipFilter && (
@@ -8207,6 +8216,7 @@ const AccountRoomView = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const todayStr = getHondurasTodayStr();
+  const currentMonthPeriod = getRankingMonthPeriod(todayStr);
 
   const columns = [
     {
@@ -8253,7 +8263,8 @@ const AccountRoomView = ({
         compareDateOnlyStrings(t.date, effectiveRangeStart) >= 0 &&
         compareDateOnlyStrings(t.date, effectiveRangeEnd) <= 0
       );
-    return true;
+    if (filterMode === "history") return true;
+    return isDateWithinPeriod(t.date, currentMonthPeriod);
   });
   const handleAddTask = (dateStr) => {
     const nextDate = normalizeDateOnlyString(dateStr) || todayStr;
@@ -8484,6 +8495,7 @@ const EditionsRoomView = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const todayStr = getHondurasTodayStr();
+  const currentMonthPeriod = getRankingMonthPeriod(todayStr);
 
   const columns = [
     { id: "editar", title: "Por Editar", color: "slate", icon: "PenTool" },
@@ -8534,7 +8546,8 @@ const EditionsRoomView = ({
       return (
         isDateBeforeDateString(t.date, todayStr) && t.status !== "publicado"
       );
-    return true;
+    if (filterMode === "history") return true;
+    return isDateWithinPeriod(t.date, currentMonthPeriod);
   });
   const canManageEditingTasks = userHasPermission(
     currentUserProfile,
@@ -8829,6 +8842,7 @@ const ManagementRoomView = ({
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [showTeam, setShowTeam] = useState(false);
   const todayStr = getHondurasTodayStr();
+  const currentMonthPeriod = getRankingMonthPeriod(todayStr);
 
   const columns = [
     { id: "pendiente", title: "Pendiente", color: "slate", icon: "Circle" },
@@ -8861,7 +8875,8 @@ const ManagementRoomView = ({
       return (
         isDateBeforeDateString(task.date, todayStr) && task.status !== "cerrado"
       );
-    return true;
+    if (filterMode === "history") return true;
+    return isDateWithinPeriod(task.date, currentMonthPeriod);
   });
 
   const handleAddTask = (dateStr) => {
@@ -8928,7 +8943,12 @@ const ManagementRoomView = ({
             const filteredCount = filteredTasks.filter(
               (t) => t.status === col.id,
             ).length;
-            const totalCount = tasks.filter((t) => t.status === col.id).length;
+            const totalCount = tasks.filter(
+              (task) =>
+                task.status === col.id &&
+                (filterMode === "history" ||
+                  isDateWithinPeriod(task.date, currentMonthPeriod)),
+            ).length;
             const isFiltered = filteredCount !== totalCount;
             return (
               <div
@@ -9010,7 +9030,10 @@ const ManagementRoomView = ({
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 fade-in">
           {members.map((member) => {
             const openCount = tasks.filter(
-              (t) => t.contextId === member.id && t.status !== "cerrado",
+              (task) =>
+                task.contextId === member.id &&
+                task.status !== "cerrado" &&
+                isDateWithinPeriod(task.date, currentMonthPeriod),
             ).length;
             const hasAlert = !normalizeEmail(member.email);
             return (
@@ -9060,6 +9083,12 @@ const ManagementRoomView = ({
             <span className="flex items-center gap-1 text-[10px] font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-500/30">
               <Icon name="Flame" size={9} />
               Solo atrasadas
+            </span>
+          )}
+          {filterMode === "history" && (
+            <span className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <Icon name="Clock" size={9} />
+              Histórico completo
             </span>
           )}
           {ownershipFilter === "mine" && (

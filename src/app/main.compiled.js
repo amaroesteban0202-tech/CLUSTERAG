@@ -5935,14 +5935,22 @@ var DateHeader = ({
   ), /* @__PURE__ */ React.createElement(
     "button",
     {
-      onClick: async () => {
-        if (onLoadHistory && !historyLoaded) await onLoadHistory();
-        setFilterMode("all");
-      },
-      disabled: historyLoading,
+      onClick: () => setFilterMode("all"),
       className: `${segBase} ${filterMode === "all" ? segActive : segIdle}`
     },
-    historyLoading ? "Cargando" : "Todas"
+    "Este mes"
+  ), onLoadHistory && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: async () => {
+        if (!historyLoaded) await onLoadHistory();
+        setFilterMode("history");
+      },
+      disabled: historyLoading,
+      className: `${segBase} ${filterMode === "history" ? segActive : segIdle}`
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 14 }),
+    historyLoading ? "Cargando" : "Hist\xF3rico"
   )), setOwnershipFilter && /* @__PURE__ */ React.createElement("div", { className: "flex bg-[#f1f0ed] dark:bg-[#2a2a27] p-1 rounded-md max-w-full overflow-x-auto kanban-mobile-scroll" }, /* @__PURE__ */ React.createElement(
     "button",
     {
@@ -6034,6 +6042,7 @@ var AccountRoomView = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const todayStr = getHondurasTodayStr();
+  const currentMonthPeriod = getRankingMonthPeriod(todayStr);
   const columns = [
     {
       id: "por_disenar",
@@ -6070,7 +6079,8 @@ var AccountRoomView = ({
       return isDateBeforeDateString(t.date, todayStr) && t.status !== "publicado";
     if (filterMode === "range")
       return compareDateOnlyStrings(t.date, effectiveRangeStart) >= 0 && compareDateOnlyStrings(t.date, effectiveRangeEnd) <= 0;
-    return true;
+    if (filterMode === "history") return true;
+    return isDateWithinPeriod(t.date, currentMonthPeriod);
   });
   const handleAddTask = (dateStr) => {
     const nextDate = normalizeDateOnlyString(dateStr) || todayStr;
@@ -6262,6 +6272,7 @@ var EditionsRoomView = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const todayStr = getHondurasTodayStr();
+  const currentMonthPeriod = getRankingMonthPeriod(todayStr);
   const columns = [
     { id: "editar", title: "Por Editar", color: "slate", icon: "PenTool" },
     { id: "en_edicion", title: "En Edici\xF3n", color: "amber", icon: "Video" },
@@ -6301,7 +6312,8 @@ var EditionsRoomView = ({
       return compareDateOnlyStrings(t.date, currentDate) === 0;
     if (filterMode === "overdue")
       return isDateBeforeDateString(t.date, todayStr) && t.status !== "publicado";
-    return true;
+    if (filterMode === "history") return true;
+    return isDateWithinPeriod(t.date, currentMonthPeriod);
   });
   const canManageEditingTasks = userHasPermission(
     currentUserProfile,
@@ -6545,6 +6557,7 @@ var ManagementRoomView = ({
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [showTeam, setShowTeam] = useState(false);
   const todayStr = getHondurasTodayStr();
+  const currentMonthPeriod = getRankingMonthPeriod(todayStr);
   const columns = [
     { id: "pendiente", title: "Pendiente", color: "slate", icon: "Circle" },
     { id: "en_proceso", title: "En Proceso", color: "violet", icon: "Zap" },
@@ -6567,7 +6580,8 @@ var ManagementRoomView = ({
       return compareDateOnlyStrings(task.date, currentDate) === 0;
     if (filterMode === "overdue")
       return isDateBeforeDateString(task.date, todayStr) && task.status !== "cerrado";
-    return true;
+    if (filterMode === "history") return true;
+    return isDateWithinPeriod(task.date, currentMonthPeriod);
   });
   const handleAddTask = (dateStr) => {
     const nextDate = normalizeDateOnlyString(dateStr) || todayStr;
@@ -6625,7 +6639,9 @@ var ManagementRoomView = ({
     const filteredCount = filteredTasks.filter(
       (t) => t.status === col.id
     ).length;
-    const totalCount = tasks.filter((t) => t.status === col.id).length;
+    const totalCount = tasks.filter(
+      (task) => task.status === col.id && (filterMode === "history" || isDateWithinPeriod(task.date, currentMonthPeriod))
+    ).length;
     const isFiltered = filteredCount !== totalCount;
     return /* @__PURE__ */ React.createElement(
       "div",
@@ -6674,7 +6690,7 @@ var ManagementRoomView = ({
     )
   )), showTeam && /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 fade-in" }, members.map((member) => {
     const openCount = tasks.filter(
-      (t) => t.contextId === member.id && t.status !== "cerrado"
+      (task) => task.contextId === member.id && task.status !== "cerrado" && isDateWithinPeriod(task.date, currentMonthPeriod)
     ).length;
     const hasAlert = !normalizeEmail(member.email);
     return /* @__PURE__ */ React.createElement(
@@ -6699,7 +6715,7 @@ var ManagementRoomView = ({
       )),
       openCount > 0 && /* @__PURE__ */ React.createElement("span", { className: "shrink-0 text-[10px] font-black bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-1 rounded-full" }, openCount, " activas")
     );
-  })), (filterMode !== "all" || ownershipFilter !== "all" || searchTerm) && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 flex-wrap" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Filtros activos:"), filterMode === "date" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "Calendar", size: 9 }), "Fecha: ", currentDate), filterMode === "overdue" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 9 }), "Solo atrasadas"), ownershipFilter === "mine" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "User", size: 9 }), "Solo mis tareas"), searchTerm && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700" }, /* @__PURE__ */ React.createElement(Icon, { name: "Search", size: 9 }), '"', searchTerm, '"'), /* @__PURE__ */ React.createElement("span", { className: "text-[10px] text-slate-500" }, "\u2014 mostrando ", filteredTasks.length, " de ", tasks.length, " tareas")), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-4 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
+  })), (filterMode !== "all" || ownershipFilter !== "all" || searchTerm) && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 flex-wrap" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Filtros activos:"), filterMode === "date" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "Calendar", size: 9 }), "Fecha: ", currentDate), filterMode === "overdue" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 9 }), "Solo atrasadas"), filterMode === "history" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" }, /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 9 }), "Hist\xF3rico completo"), ownershipFilter === "mine" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "User", size: 9 }), "Solo mis tareas"), searchTerm && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700" }, /* @__PURE__ */ React.createElement(Icon, { name: "Search", size: 9 }), '"', searchTerm, '"'), /* @__PURE__ */ React.createElement("span", { className: "text-[10px] text-slate-500" }, "\u2014 mostrando ", filteredTasks.length, " de ", tasks.length, " tareas")), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-4 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
     const colTasks = filteredTasks.filter(
       (task) => task.status === col.id
     );
