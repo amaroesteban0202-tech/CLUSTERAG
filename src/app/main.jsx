@@ -7920,6 +7920,7 @@ const KanbanCard = ({
   assignee,
   menuItems = [],
   selected = false,
+  mobileStatus = null,
 }) => {
   const accent = isOverdue
     ? "border-l-red-500"
@@ -7984,6 +7985,40 @@ const KanbanCard = ({
             </span>
           ))}
         </div>
+      )}
+
+      {mobileStatus && (
+        <label
+          className="mb-2.5 block lg:hidden"
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onTouchStart={(event) => event.stopPropagation()}
+        >
+          <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
+            Estado
+          </span>
+          <span className="relative block">
+            <select
+              value={mobileStatus.value}
+              onChange={(event) => mobileStatus.onChange(event.target.value)}
+              onClick={(event) => event.stopPropagation()}
+              onDragStart={(event) => event.stopPropagation()}
+              aria-label={`Cambiar estado de ${title}`}
+              className="min-h-11 w-full appearance-none rounded-lg border border-[#d8d5ce] bg-[#f7f6f2] px-3 py-2 pr-10 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[#1b1f1c] dark:text-slate-200"
+            >
+              {mobileStatus.options.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label || option.title}
+                </option>
+              ))}
+            </select>
+            <Icon
+              name="ChevronDown"
+              size={14}
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+            />
+          </span>
+        </label>
       )}
 
       {notes && (
@@ -8804,6 +8839,13 @@ const AccountRoomView = ({
         }}
         assignee={buildAssignee(manager, legacyColorMap)}
         menuItems={menuItems}
+        mobileStatus={{
+          value: task.status,
+          options: columns,
+          onChange: (status) => {
+            if (status !== task.status) onChangeStatus(task, status);
+          },
+        }}
       />
     );
   };
@@ -9134,6 +9176,18 @@ const EditionsRoomView = ({
         }}
         assignee={buildAssignee(editor)}
         menuItems={menuItems}
+        mobileStatus={
+          canManageEditingTasks
+            ? {
+                value: normalizeEditingWorkflowStatus(task.status),
+                options: columns,
+                onChange: (status) => {
+                  if (status !== normalizeEditingWorkflowStatus(task.status))
+                    onChangeStatus(task, status);
+                },
+              }
+            : null
+        }
       />
     );
   };
@@ -9435,6 +9489,13 @@ const ManagementRoomView = ({
         }}
         assignee={buildManagementAssignee(member)}
         menuItems={menuItems}
+        mobileStatus={{
+          value: task.status,
+          options: columns,
+          onChange: (status) => {
+            if (status !== task.status) onChangeStatus(task, status);
+          },
+        }}
       />
     );
   };
