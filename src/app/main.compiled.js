@@ -292,9 +292,17 @@ var AgencyLogo = ({ className }) => {
   return /* @__PURE__ */ React.createElement(
     "div",
     {
-      className: `bg-[#111111] dark:bg-[#f1efe9] flex items-center justify-center text-white dark:text-[#181817] font-bold rounded-md ${className}`
+      className: `agency-logo relative overflow-hidden rounded-md bg-white ${className}`
     },
-    "C"
+    /* @__PURE__ */ React.createElement(
+      "img",
+      {
+        src: "/src/app/assets/cluster-symbol.webp",
+        alt: "",
+        "aria-hidden": "true",
+        className: "absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2"
+      }
+    )
   );
 };
 var GOOGLE_PROVIDER = auth ? new GoogleAuthProvider() : null;
@@ -827,14 +835,14 @@ function App() {
   const [toast, setToast] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDark, setIsDark] = useState(() => {
-    const darkDefaultVersion = "2026-07-warm-editorial-default";
+    const darkDefaultVersion = "2026-07-charcoal-default";
     const appliedDefaultVersion = localStorage.getItem(
       "cluster_theme_default_version"
     );
     if (appliedDefaultVersion !== darkDefaultVersion) {
-      localStorage.setItem("cluster_theme", "light");
+      localStorage.setItem("cluster_theme", "dark");
       localStorage.setItem("cluster_theme_default_version", darkDefaultVersion);
-      return false;
+      return true;
     }
     return localStorage.getItem("cluster_theme") !== "light";
   });
@@ -3650,7 +3658,7 @@ function App() {
       toast && /* @__PURE__ */ React.createElement(Toast, { message: toast.message, type: toast.type })
     ));
   }
-  return /* @__PURE__ */ React.createElement("div", { className: "app-shell flex h-screen overflow-hidden flex-col md:flex-row transition-colors duration-300" }, /* @__PURE__ */ React.createElement("div", { className: "app-sidebar md:hidden border-b p-4 flex justify-between items-center z-30 shrink-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "w-8 h-8 text-sm" }), /* @__PURE__ */ React.createElement("span", { className: "font-black text-slate-800 dark:text-white text-lg" }, "CLUSTER")), /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "app-shell flex h-screen overflow-hidden flex-col md:flex-row transition-colors duration-300" }, /* @__PURE__ */ React.createElement("div", { className: "app-sidebar md:hidden border-b p-4 flex justify-between items-center z-30 shrink-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "w-8 h-8 text-sm" }), /* @__PURE__ */ React.createElement("span", { className: "brand-name text-lg font-bold text-slate-800 dark:text-white" }, "CLUSTER")), /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setIsMobileMenuOpen(!isMobileMenuOpen),
@@ -3670,7 +3678,7 @@ function App() {
     {
       className: `app-sidebar fixed md:relative z-50 h-full border-r flex flex-col w-60 shrink-0 transition-transform duration-300 top-0 left-0 ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`
     },
-    /* @__PURE__ */ React.createElement("div", { className: "px-5 pt-6 pb-3 hidden md:block" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "w-9 h-9 text-lg" }), /* @__PURE__ */ React.createElement("div", { className: "leading-none" }, /* @__PURE__ */ React.createElement("h1", { className: "text-xl font-bold text-slate-800 dark:text-white tracking-tight" }, "CLUSTER"), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] uppercase font-semibold text-slate-400 dark:text-slate-500 tracking-widest mt-1" }, "Agency OS")))),
+    /* @__PURE__ */ React.createElement("div", { className: "px-5 pt-6 pb-3 hidden md:block" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "w-9 h-9 text-lg" }), /* @__PURE__ */ React.createElement("div", { className: "leading-none" }, /* @__PURE__ */ React.createElement("h1", { className: "brand-name text-xl font-bold text-slate-800 dark:text-white" }, "CLUSTER"), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] uppercase font-semibold text-slate-400 dark:text-slate-500 tracking-widest mt-1" }, "Agency OS")))),
     /* @__PURE__ */ React.createElement(
       "nav",
       {
@@ -4706,7 +4714,7 @@ var LoginScreen = ({
   onEmailChange,
   onEmailSubmit,
   isSendingLoginLink
-}) => /* @__PURE__ */ React.createElement("div", { className: "min-h-screen bg-[#f7f6f3] text-[#2f3437] dark:bg-[#181817] dark:text-[#f1efe9]" }, /* @__PURE__ */ React.createElement("header", { className: "flex min-h-[72px] items-center border-b border-[#e6e4df] px-6 dark:border-[#343431] sm:px-10 lg:px-16" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2.5" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "h-8 w-8 rounded-md text-sm" }), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-base font-bold leading-none text-[#2f3437] dark:text-white" }, "CLUSTER"), /* @__PURE__ */ React.createElement("p", { className: "mono-meta mt-0.5 text-slate-500" }, "Agency OS")))), /* @__PURE__ */ React.createElement("main", { className: "flex min-h-[calc(100vh-72px)] items-start justify-center px-5 pb-12 pt-16 sm:pt-24" }, /* @__PURE__ */ React.createElement("section", { className: "surface w-full max-w-[420px] p-7 sm:p-9", "aria-labelledby": "login-title" }, /* @__PURE__ */ React.createElement("div", { className: "mb-8" }, /* @__PURE__ */ React.createElement("p", { className: "eyebrow mb-2" }, "Espacio de trabajo"), /* @__PURE__ */ React.createElement(
+}) => /* @__PURE__ */ React.createElement("div", { className: "min-h-screen bg-[#f7f6f3] text-[#2f3437] dark:bg-[#181817] dark:text-[#f1efe9]" }, /* @__PURE__ */ React.createElement("header", { className: "flex min-h-[72px] items-center border-b border-[#e6e4df] px-6 dark:border-[#343431] sm:px-10 lg:px-16" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2.5" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "h-8 w-8 rounded-md text-sm" }), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "brand-name text-base font-bold leading-none text-[#2f3437] dark:text-white" }, "CLUSTER"), /* @__PURE__ */ React.createElement("p", { className: "mono-meta mt-0.5 text-slate-500" }, "Agency OS")))), /* @__PURE__ */ React.createElement("main", { className: "flex min-h-[calc(100vh-72px)] items-start justify-center px-5 pb-12 pt-16 sm:pt-24" }, /* @__PURE__ */ React.createElement("section", { className: "surface w-full max-w-[420px] p-7 sm:p-9", "aria-labelledby": "login-title" }, /* @__PURE__ */ React.createElement("div", { className: "mb-8" }, /* @__PURE__ */ React.createElement("p", { className: "eyebrow mb-2" }, "Espacio de trabajo"), /* @__PURE__ */ React.createElement(
   "h1",
   {
     id: "login-title",

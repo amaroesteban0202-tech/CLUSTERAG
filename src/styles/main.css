@@ -23,21 +23,21 @@
 
 .dark {
     color-scheme: dark;
-    --canvas: #181817;
-    --surface: #222220;
-    --surface-subtle: #1d1d1b;
-    --surface-muted: #2a2a27;
-    --text: #f1efe9;
-    --text-muted: #aaa7a0;
-    --border: rgba(255, 255, 255, 0.09);
-    --primary: #f1efe9;
-    --primary-hover: #ffffff;
+    --canvas: #161817;
+    --surface: #1f2220;
+    --surface-subtle: #1a1d1b;
+    --surface-muted: #292d2a;
+    --text: #e9e6df;
+    --text-muted: #a6a39c;
+    --border: rgba(233, 230, 223, 0.1);
+    --primary: #e9e6df;
+    --primary-hover: #f5f2eb;
 }
 
 html, body, #root { min-height: 100%; }
 body {
     margin: 0;
-    font-family: "Helvetica Neue", "SF Pro Display", Arial, sans-serif;
+    font-family: Arial, sans-serif;
     background: var(--canvas);
     color: var(--text);
     letter-spacing: -0.01em;
@@ -49,7 +49,25 @@ h1, h2, .editorial-title {
     letter-spacing: -0.035em;
     line-height: 1.08;
 }
-.mono-meta { font-family: "SF Mono", "Geist Mono", Consolas, monospace; }
+.mono-meta {
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+}
+.brand-name {
+    font-family: Arial, sans-serif;
+    letter-spacing: 0.02em;
+}
+[class~="font-sans"], [class~="font-mono"] {
+    font-family: Arial, sans-serif !important;
+}
+.agency-logo {
+    border: 1px solid rgba(17, 17, 17, 0.12);
+    flex: 0 0 auto;
+}
+.agency-logo img {
+    width: 240%;
+}
 .app-shell { background: var(--canvas); color: var(--text); }
 .app-sidebar { background: var(--surface); border-color: var(--border); }
 .app-main { background: var(--canvas); }
@@ -144,6 +162,7 @@ h1, h2, .editorial-title {
 .dark [class~="dark:border-slate-700"] { border-color: var(--border) !important; }
 .dark [class~="dark:text-slate-400"],
 .dark [class~="dark:text-slate-500"] { color: var(--text-muted) !important; }
+.dark [class~="dark:text-white"] { color: var(--text) !important; }
 button, [role="button"], input, select, textarea {
     touch-action: manipulation;
 }

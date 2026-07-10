@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cluster Agency OS</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+    <script>
+        (() => {
+            const version = '2026-07-charcoal-default';
+            const versionKey = 'cluster_theme_default_version';
+            const themeKey = 'cluster_theme';
+            if (localStorage.getItem(versionKey) !== version) {
+                localStorage.setItem(themeKey, 'dark');
+                localStorage.setItem(versionKey, version);
+            }
+            document.documentElement.classList.toggle(
+                'dark',
+                localStorage.getItem(themeKey) !== 'light'
+            );
+        })();
+    </script>
     
     <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet">
     
@@ -36,7 +51,7 @@
 <body class="app-body">
     <div id="root"></div>
 
-    <script type="module" src="./src/app/main.compiled.js?v=20260710-dashboard-monthly"></script>
+    <script type="module" src="./src/app/main.compiled.js?v=20260710-charcoal-brand"></script>
 </body>
 </html>
 

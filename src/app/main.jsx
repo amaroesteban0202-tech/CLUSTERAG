@@ -311,9 +311,14 @@ const useDialogA11y = (isOpen, onClose) => {
 const AgencyLogo = ({ className }) => {
   return (
     <div
-      className={`bg-[#111111] dark:bg-[#f1efe9] flex items-center justify-center text-white dark:text-[#181817] font-bold rounded-md ${className}`}
+      className={`agency-logo relative overflow-hidden rounded-md bg-white ${className}`}
     >
-      C
+      <img
+        src="/src/app/assets/cluster-symbol.webp"
+        alt=""
+        aria-hidden="true"
+        className="absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2"
+      />
     </div>
   );
 };
@@ -1499,14 +1504,14 @@ function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [isDark, setIsDark] = useState(() => {
-    const darkDefaultVersion = "2026-07-warm-editorial-default";
+    const darkDefaultVersion = "2026-07-charcoal-default";
     const appliedDefaultVersion = localStorage.getItem(
       "cluster_theme_default_version",
     );
     if (appliedDefaultVersion !== darkDefaultVersion) {
-      localStorage.setItem("cluster_theme", "light");
+      localStorage.setItem("cluster_theme", "dark");
       localStorage.setItem("cluster_theme_default_version", darkDefaultVersion);
-      return false;
+      return true;
     }
     return localStorage.getItem("cluster_theme") !== "light";
   });
@@ -4948,7 +4953,7 @@ function App() {
       <div className="app-sidebar md:hidden border-b p-4 flex justify-between items-center z-30 shrink-0">
         <div className="flex items-center gap-2">
           <AgencyLogo className="w-8 h-8 text-sm" />
-          <span className="font-black text-slate-800 dark:text-white text-lg">
+          <span className="brand-name text-lg font-bold text-slate-800 dark:text-white">
             CLUSTER
           </span>
         </div>
@@ -4977,7 +4982,7 @@ function App() {
           <div className="flex items-center gap-3">
             <AgencyLogo className="w-9 h-9 text-lg" />
             <div className="leading-none">
-              <h1 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">
+              <h1 className="brand-name text-xl font-bold text-slate-800 dark:text-white">
                 CLUSTER
               </h1>
               <p className="text-[10px] uppercase font-semibold text-slate-400 dark:text-slate-500 tracking-widest mt-1">
@@ -6263,7 +6268,7 @@ const LoginScreen = ({
       <div className="flex items-center gap-2.5">
         <AgencyLogo className="h-8 w-8 rounded-md text-sm" />
         <div>
-          <p className="text-base font-bold leading-none text-[#2f3437] dark:text-white">
+          <p className="brand-name text-base font-bold leading-none text-[#2f3437] dark:text-white">
             CLUSTER
           </p>
           <p className="mono-meta mt-0.5 text-slate-500">
