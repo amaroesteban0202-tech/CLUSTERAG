@@ -6373,18 +6373,23 @@ const SearchBar = ({ searchTerm, setSearchTerm, placeholder }) => (
   </div>
 );
 
-const StatCard = ({ title, value, icon, color }) => (
-  <div className="surface p-5 flex items-center justify-between">
-    <div>
-      <p className="text-xs font-medium text-[#787774] dark:text-[#aaa7a0] mb-1">
+const StatCard = ({ title, value, icon, detail = "" }) => (
+  <div className="surface flex min-h-[118px] items-start justify-between p-5">
+    <div className="min-w-0">
+      <p className="text-xs font-medium text-[#787774] dark:text-[#aaa7a0]">
         {title}
       </p>
-      <p className="text-3xl font-semibold text-[#2f3437] dark:text-[#f1efe9] mono-meta">
+      <p className="mono-meta mt-2 text-3xl font-semibold leading-none text-[#2f3437] dark:text-[#f1efe9]">
         {value}
       </p>
+      {detail && (
+        <p className="mt-2 text-xs text-[#9a9893] dark:text-[#8f8c85]">
+          {detail}
+        </p>
+      )}
     </div>
-    <div className="p-2.5 rounded-lg bg-[#f1f0ed] dark:bg-[#2a2a27] text-[#555552] dark:text-[#d3d0c9]">
-      <Icon name={icon} size={22} />
+    <div className="rounded-lg bg-[#f1f0ed] p-2.5 text-[#555552] dark:bg-[#2a2a27] dark:text-[#d3d0c9]">
+      <Icon name={icon} size={20} />
     </div>
   </div>
 );
@@ -6554,62 +6559,6 @@ const DASHBOARD_PALETTE = {
 const getDashboardPalette = (name = "slate") =>
   DASHBOARD_PALETTE[name] || DASHBOARD_PALETTE.slate;
 
-const polarToCartesian = (centerX, centerY, radius, angleInDegrees) => {
-  const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0;
-  return {
-    x: centerX + radius * Math.cos(angleInRadians),
-    y: centerY + radius * Math.sin(angleInRadians),
-  };
-};
-
-const describeArc = (centerX, centerY, radius, startAngle, endAngle) => {
-  const start = polarToCartesian(centerX, centerY, radius, endAngle);
-  const end = polarToCartesian(centerX, centerY, radius, startAngle);
-  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
-  return [
-    "M",
-    start.x,
-    start.y,
-    "A",
-    radius,
-    radius,
-    0,
-    largeArcFlag,
-    0,
-    end.x,
-    end.y,
-  ].join(" ");
-};
-
-const buildRingSegments = (
-  segments,
-  startAngle = -90,
-  totalAngle = 360,
-  gapAngle = 6,
-) => {
-  const activeSegments = segments.filter((segment) => segment.value > 0);
-  if (activeSegments.length === 0) return [];
-
-  const normalizedGap = activeSegments.length === 1 ? 0 : gapAngle;
-  const gapCount = Math.max(activeSegments.length - 1, 0);
-  const availableAngle = Math.max(totalAngle - normalizedGap * gapCount, 0);
-  const totalValue =
-    activeSegments.reduce((sum, segment) => sum + segment.value, 0) || 1;
-  let cursor = startAngle;
-
-  return activeSegments.map((segment, index) => {
-    const sweepAngle = Math.min(
-      (segment.value / totalValue) * availableAngle,
-      359.999,
-    );
-    const segmentStart = cursor;
-    const segmentEnd = cursor + sweepAngle;
-    cursor =
-      segmentEnd + (index < activeSegments.length - 1 ? normalizedGap : 0);
-    return { ...segment, startAngle: segmentStart, endAngle: segmentEnd };
-  });
-};
-
 const PortfolioHealthChart = ({
   totalClients,
   activos,
@@ -6639,13 +6588,8 @@ const PortfolioHealthChart = ({
       strong: "#555552",
     },
   ];
-  const ringSegments = buildRingSegments(segments);
   const healthScore =
     totalClients > 0 ? Math.round((activos / totalClients) * 100) : 0;
-  const attentionCount = pausados + inactivos;
-  const dominantSegment = [...segments].sort(
-    (left, right) => right.value - left.value,
-  )[0];
   const healthLabel =
     totalClients === 0
       ? "Sin datos"
@@ -6656,92 +6600,45 @@ const PortfolioHealthChart = ({
           : "Baja";
 
   return (
-    <div className="mt-5 grid grid-cols-1 gap-5">
-      <div className="relative mx-auto h-44 w-44">
-        <svg viewBox="0 0 220 220" className="h-full w-full">
-          <circle
-            cx="110"
-            cy="110"
-            r="70"
-            fill="none"
-            stroke="rgba(148,163,184,0.16)"
-            strokeWidth="20"
-          />
-          {ringSegments.map((segment) => (
-            <path
-              key={segment.key}
-              d={describeArc(
-                110,
-                110,
-                70,
-                segment.startAngle,
-                segment.endAngle,
-              )}
-              fill="none"
-              stroke={segment.color}
-              strokeWidth="20"
-              strokeLinecap="round"
-            />
-          ))}
-          <circle
-            cx="110"
-            cy="110"
-            r="86"
-            fill="none"
-            stroke="rgba(148,163,184,0.08)"
-            strokeWidth="1.5"
-            strokeDasharray="4 8"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="h-24 w-24 rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col items-center justify-center text-center">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-              Activos
-            </span>
-            <span className="mt-1 text-3xl font-black leading-none text-slate-900 dark:text-white">
-              {healthScore}
-            </span>
-            <span className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-              {healthLabel}
-            </span>
+    <div className="mt-6 grid grid-cols-1 gap-5">
+      <div className="grid gap-4 sm:grid-cols-[160px_minmax(0,1fr)]">
+        <div className="surface-subtle rounded-lg border border-[#e6e4df] p-4 dark:border-white/10">
+          <p className="eyebrow">Salud de cartera</p>
+          <p className="mono-meta mt-3 text-4xl font-semibold leading-none text-[#2f3437] dark:text-[#f1efe9]">
+            {healthScore}%
+          </p>
+          <p className="mt-2 text-xs text-[#787774] dark:text-[#aaa7a0]">
+            {healthLabel} · {activos} de {totalClients} activos
+          </p>
+        </div>
+        <div className="flex min-w-0 flex-col justify-center">
+          <div
+            className="flex h-5 w-full overflow-hidden rounded-md bg-[#efeee9] dark:bg-[#343431]"
+            aria-label={`Distribucion de cartera: ${healthScore}% activa`}
+          >
+            {segments.map((segment) => (
+              <div
+                key={segment.key}
+                style={{
+                  width: `${totalClients > 0 ? (segment.value / totalClients) * 100 : 0}%`,
+                  backgroundColor: segment.strong,
+                }}
+                title={`${segment.label}: ${segment.value}`}
+              />
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+            {segments.map((segment) => (
+              <span key={segment.key} className="flex items-center gap-2 text-xs text-[#787774] dark:text-[#aaa7a0]">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: segment.strong }} />
+                {segment.label} <strong className="mono-meta text-[#2f3437] dark:text-[#f1efe9]">{segment.value}</strong>
+              </span>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="min-w-0 space-y-3">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-950/50">
-            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-              Pulso actual
-            </p>
-            <p className="mt-1 break-words text-lg font-black leading-tight text-slate-900 dark:text-white">
-              {dominantSegment?.label || "Sin datos"}
-            </p>
-            <p className="break-words text-xs leading-relaxed font-medium text-slate-500 dark:text-slate-400">
-              {totalClients > 0
-                ? Math.round(
-                    ((dominantSegment?.value || 0) / totalClients) * 100,
-                  )
-                : 0}
-              % de la cartera
-            </p>
-          </div>
-          <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-950/50">
-            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-              En foco
-            </p>
-            <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">
-              {attentionCount}
-            </p>
-            <p className="break-words text-xs leading-relaxed font-medium text-slate-500 dark:text-slate-400">
-              {totalClients > 0
-                ? Math.round((attentionCount / totalClients) * 100)
-                : 0}
-              % pausados o inactivos
-            </p>
-          </div>
-        </div>
-
+      <div className="grid min-w-0 gap-3 sm:grid-cols-3">
         {segments.map((segment) => {
           const percent =
             totalClients > 0
@@ -6796,55 +6693,32 @@ const ProgressOverviewChart = ({
 }) => {
   const safePercent = clampPercent(completionPercent);
   const pendingTasks = Math.max(totalTasks - completedTasks, 0);
-  const radius = 72;
-  const circumference = 2 * Math.PI * radius;
-  const strokeOffset = circumference * (1 - safePercent / 100);
 
   return (
-    <div className="mt-5 grid grid-cols-1 gap-5">
-      <div className="relative mx-auto h-44 w-44">
-        <svg viewBox="0 0 220 220" className="h-full w-full -rotate-90">
-          <circle
-            cx="110"
-            cy="110"
-            r={radius}
-            fill="none"
-            stroke="rgba(148,163,184,0.18)"
-            strokeWidth="18"
-          />
-          <circle
-            cx="110"
-            cy="110"
-            r={radius}
-            fill="none"
-            stroke="#555552"
-            strokeWidth="18"
-            strokeLinecap="round"
-            strokeDasharray={`${circumference} ${circumference}`}
-            strokeDashoffset={strokeOffset}
-          />
-          <circle
-            cx="110"
-            cy="110"
-            r="86"
-            fill="none"
-            stroke="rgba(148,163,184,0.08)"
-            strokeWidth="1.5"
-            strokeDasharray="4 8"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="h-24 w-24 rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col items-center justify-center text-center">
-            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-              Avance
-            </span>
-            <span className="mt-1 text-3xl font-black leading-none text-slate-900 dark:text-white">
+    <div className="mt-6 grid grid-cols-1 gap-5">
+      <div className="surface-subtle rounded-lg border border-[#e6e4df] p-4 dark:border-white/10">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="eyebrow">Avance consolidado</p>
+            <p className="mono-meta mt-2 text-4xl font-semibold leading-none text-[#2f3437] dark:text-[#f1efe9]">
               {Math.round(safePercent)}%
-            </span>
-            <span className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-              {completedTasks}/{totalTasks}
-            </span>
+            </p>
           </div>
+          <p className="mono-meta text-sm text-[#787774] dark:text-[#aaa7a0]">
+            {completedTasks} hechas · {pendingTasks} abiertas
+          </p>
+        </div>
+        <div className="mt-4 flex h-5 overflow-hidden rounded-md bg-[#dfddd7] dark:bg-[#343431]">
+          <div
+            className="bg-[#346538] transition-all duration-700"
+            style={{ width: `${safePercent}%` }}
+            title={`${completedTasks} completadas`}
+          />
+          <div
+            className="bg-transparent"
+            style={{ width: `${100 - safePercent}%` }}
+            title={`${pendingTasks} abiertas`}
+          />
         </div>
       </div>
 
@@ -6954,6 +6828,20 @@ const DashboardView = ({
     setRankingRefDate(`${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-01`);
   };
 
+  const todayStr = getHondurasTodayStr();
+  const dashboardPeriod = getRankingMonthPeriod(todayStr);
+  const isTaskInDashboardMonth = (task) =>
+    isDateWithinPeriod(task?.date, dashboardPeriod);
+  const monthlyEditingTasks = tasks.filter(isTaskInDashboardMonth);
+  const monthlyAccountTasks = accountTasks.filter(isTaskInDashboardMonth);
+  const monthlyManagementTasks = managementTasks.filter(isTaskInDashboardMonth);
+  const openMonthlyAccountTasks = monthlyAccountTasks.filter(
+    (task) => task.status !== "publicado",
+  ).length;
+  const pendingMonthlyEditingTasks = monthlyEditingTasks.filter(
+    (task) => !isCompletedStatus(task.status),
+  ).length;
+
   const activos = clients.filter(
     (c) => (c.status || "Activo") === "Activo",
   ).length;
@@ -6962,14 +6850,14 @@ const DashboardView = ({
   const realTotalClients = clients.length;
   const totalClients = realTotalClients || 1;
 
-  const completedEditingTasks = tasks.filter((task) =>
+  const completedEditingTasks = monthlyEditingTasks.filter((task) =>
     isCompletedStatus(task.status),
   ).length;
-  const completedAccountTasks = accountTasks.filter(
+  const completedAccountTasks = monthlyAccountTasks.filter(
     (task) =>
       task.status === "aprobado_internamente" || task.status === "publicado",
   ).length;
-  const completedManagementTasks = managementTasks.filter(
+  const completedManagementTasks = monthlyManagementTasks.filter(
     (task) => task.status === "cerrado",
   ).length;
 
@@ -6978,7 +6866,7 @@ const DashboardView = ({
       key: "editing",
       label: "Edicion",
       note: "Produccion audiovisual",
-      total: tasks.length,
+      total: monthlyEditingTasks.length,
       completed: completedEditingTasks,
       color: "amber",
     },
@@ -6986,7 +6874,7 @@ const DashboardView = ({
       key: "account",
       label: "Accounts",
       note: "Seguimiento comercial",
-      total: accountTasks.length,
+      total: monthlyAccountTasks.length,
       completed: completedAccountTasks,
       color: "indigo",
     },
@@ -6994,7 +6882,7 @@ const DashboardView = ({
       key: "management",
       label: "Gestion",
       note: "Operacion interna",
-      total: managementTasks.length,
+      total: monthlyManagementTasks.length,
       completed: completedManagementTasks,
       color: "cyan",
     },
@@ -7015,11 +6903,9 @@ const DashboardView = ({
   const compPercent =
     totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  const todayStr = getHondurasTodayStr();
-
-  // Recolectar tareas urgentes o atrasadas
+  // Las alertas del panel respetan el mismo corte mensual que los contadores.
   const urgentTasks = [
-    ...tasks
+    ...monthlyEditingTasks
       .filter(
         (t) =>
           (t.priority === "urgente" ||
@@ -7028,12 +6914,20 @@ const DashboardView = ({
           t.status !== "publicado",
       )
       .map((t) => ({ ...t, _type: "Edición" })),
-    ...accountTasks
+    ...monthlyAccountTasks
       .filter(
         (t) =>
           isDateBeforeDateString(t.date, todayStr) && t.status !== "publicado",
       )
       .map((t) => ({ ...t, _type: "Account" })),
+    ...monthlyManagementTasks
+      .filter(
+        (t) =>
+          (t.priority === "urgente" ||
+            isDateBeforeDateString(t.date, todayStr)) &&
+          t.status !== "cerrado",
+      )
+      .map((t) => ({ ...t, _type: "Gestion" })),
   ]
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .slice(0, 6);
@@ -7062,18 +6956,22 @@ const DashboardView = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-3 border-b border-[#e6e4df] pb-6 dark:border-white/10 sm:flex-row sm:items-end sm:justify-between">
+      <div className="surface-subtle flex flex-col gap-5 rounded-xl border border-[#e6e4df] p-5 dark:border-white/10 sm:flex-row sm:items-end sm:justify-between md:p-6">
         <div>
-          <p className="eyebrow">Resumen operativo</p>
+          <p className="eyebrow">Resumen mensual</p>
           <h2 className="editorial-title mt-1 text-4xl text-[#2f3437] dark:text-[#f1efe9] md:text-5xl">
             Panel central
           </h2>
           <p className="page-description mt-2 capitalize">{formattedDate}</p>
         </div>
-        <div className="flex items-center gap-3 text-sm text-[#787774] dark:text-[#aaa7a0]">
-          <span className="mono-meta">{urgentTasks.length} requieren atención</span>
-          <span aria-hidden="true">·</span>
-          <span className="mono-meta">{completedTasks} completadas</span>
+        <div className="flex flex-col items-start gap-3 sm:items-end">
+          <span className="quiet-action px-3 text-sm">
+            <Icon name="CalendarRange" size={16} />
+            {dashboardPeriod.label}
+          </span>
+          <p className="mono-meta text-xs text-[#787774] dark:text-[#aaa7a0]">
+            {completedTasks} completadas · {urgentTasks.length} requieren atención
+          </p>
         </div>
       </div>
 
@@ -7081,61 +6979,40 @@ const DashboardView = ({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           title="Clientes Activos"
-          value={clients.length}
+          value={activos}
           icon="Briefcase"
-          color="blue"
+          detail={`${realTotalClients} clientes en cartera`}
         />
         <StatCard
           title="Account Managers"
           value={managers.length}
           icon="Users"
-          color="indigo"
+          detail="Equipo asignado"
         />
         <StatCard
-          title="Tareas Accounts"
-          value={accountTasks.filter((t) => t.status !== "publicado").length}
+          title="Accounts pendientes"
+          value={openMonthlyAccountTasks}
           icon="LayoutList"
-          color="indigo"
+          detail={`${monthlyAccountTasks.length} tareas del mes`}
         />
         <StatCard
-          title="Pendientes Edición"
-          value={
-            tasks.filter(
-              (t) => t.status !== "aprobado" && t.status !== "publicado",
-            ).length
-          }
+          title="Edición pendiente"
+          value={pendingMonthlyEditingTasks}
           icon="Video"
-          color="amber"
+          detail={`${monthlyEditingTasks.length} tareas del mes`}
         />
       </div>
 
-      {/* Paneles Inferiores */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
-            <div className="surface p-6 self-start">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div className="xl:col-span-7">
+          <div className="h-full">
+            <div className="surface h-full p-6">
               <div>
                 <h3 className="text-base font-semibold text-[#2f3437] dark:text-[#f1efe9] mb-1">
-                  Estado de la Cartera
+                  Avance del mes
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Distribución por estado de cliente
-                </p>
-              </div>
-              <PortfolioHealthChart
-                totalClients={realTotalClients}
-                activos={activos}
-                pausados={pausados}
-                inactivos={inactivos}
-              />
-            </div>
-            <div className="surface p-6 self-start">
-              <div>
-                <h3 className="text-base font-semibold text-[#2f3437] dark:text-[#f1efe9] mb-1">
-                  Progreso Global
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Volumen completado vs general
+                  Edición, Accounts y Gestión · {dashboardPeriod.label}
                 </p>
               </div>
               <ProgressOverviewChart
@@ -7149,14 +7026,14 @@ const DashboardView = ({
         </div>
 
         {/* Tareas Urgentes */}
-        <div className="surface p-6 flex flex-col min-h-[300px]">
+        <div className="surface flex min-h-[360px] flex-col p-6 xl:col-span-5">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-base font-semibold text-[#2f3437] dark:text-[#f1efe9] mb-1">
                 Atención Requerida
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Urgentes y atrasadas
+                Solo tareas de {dashboardPeriod.label}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -7200,6 +7077,28 @@ const DashboardView = ({
             )}
           </div>
         </div>
+      </div>
+
+      <div className="surface p-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-[#2f3437] dark:text-[#f1efe9]">
+              Distribución de cartera
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Estado actual de los clientes activos, pausados e inactivos
+            </p>
+          </div>
+          <span className="mono-meta text-xs text-[#787774] dark:text-[#aaa7a0]">
+            {realTotalClients} clientes totales
+          </span>
+        </div>
+        <PortfolioHealthChart
+          totalClients={realTotalClients}
+          activos={activos}
+          pausados={pausados}
+          inactivos={inactivos}
+        />
       </div>
 
       {/* Ranking Account Managers */}

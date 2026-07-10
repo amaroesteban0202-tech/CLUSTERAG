@@ -16,6 +16,9 @@ const checks = [
   ["consolidated team navigation", app.includes('label="Equipo"')],
   ["consolidated calendar navigation", app.includes('label="Calendario"')],
   ["compact KPI table", app.includes("Cumplimiento") && app.includes("Pendientes") && app.includes("KPI")],
+  ["monthly dashboard task scope", app.includes("monthlyEditingTasks") && app.includes("monthlyAccountTasks") && app.includes("monthlyManagementTasks")],
+  ["dashboard period is visible", app.includes("dashboardPeriod.label") && app.includes("Resumen mensual")],
+  ["dashboard charts use comparison bars", !app.includes("buildRingSegments") && !app.includes("strokeDasharray")],
   ["no gradient source styles", !/\b(?:linear|radial)-gradient\b|\bbg-gradient-/i.test(`${app}\n${css}`)],
   ["no Lucide dependency", !`${app}\n${html}`.includes("lucide-react")],
 ];
