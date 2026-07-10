@@ -3,76 +3,76 @@ import React, { useState, useEffect, useRef, useId } from "react";
 import { createRoot } from "react-dom/client";
 import { App as CapacitorApp } from "@capacitor/app";
 import {
-  LayoutDashboard,
+  SquaresFour as LayoutDashboard,
   Users,
-  Calendar as CalendarIcon,
+  CalendarBlank as CalendarIcon,
   Plus,
-  ChevronLeft,
-  ChevronRight,
+  CaretLeft as ChevronLeft,
+  CaretRight as ChevronRight,
   X,
-  CheckCircle2,
+  CheckCircle as CheckCircle2,
   Circle,
-  ExternalLink,
+  ArrowSquareOut as ExternalLink,
   Briefcase,
-  UserCircle2,
-  Loader2,
-  Trash2,
-  Video,
+  UserCircle as UserCircle2,
+  SpinnerGap as Loader2,
+  Trash as Trash2,
+  VideoCamera as Video,
   ArrowRight,
   UserPlus,
   MonitorPlay,
-  Search,
-  Menu,
-  PenTool,
-  LayoutList,
-  CalendarDays,
-  AlertTriangle,
-  Smile,
-  Meh,
-  Frown,
-  Instagram,
-  Edit,
-  Inbox,
+  MagnifyingGlass as Search,
+  List as Menu,
+  PenNib as PenTool,
+  ListBullets as LayoutList,
+  CalendarDots as CalendarDays,
+  Warning as AlertTriangle,
+  Smiley as Smile,
+  SmileyMeh as Meh,
+  SmileySad as Frown,
+  InstagramLogo as Instagram,
+  PencilSimple as Edit,
+  Tray as Inbox,
   Moon,
   Sun,
-  MousePointerClick,
-  Flame,
-  ListTree,
-  ChevronDown,
-  ChevronUp,
-  Sparkles,
+  CursorClick as MousePointerClick,
+  Fire as Flame,
+  TreeStructure as ListTree,
+  CaretDown as ChevronDown,
+  CaretUp as ChevronUp,
+  Sparkle as Sparkles,
   Trophy,
   Medal,
-  BarChart3,
+  ChartBar as BarChart3,
   ShieldCheck,
-  LogIn,
-  LogOut,
-  ClipboardList,
+  SignIn as LogIn,
+  SignOut as LogOut,
+  ClipboardText as ClipboardList,
   Lock,
-  Mail,
-  AlignLeft,
+  Envelope as Mail,
+  TextAlignLeft as AlignLeft,
   Calendar,
-  CalendarOff,
+  CalendarX as CalendarOff,
   CalendarPlus,
-  CalendarRange,
+  CalendarDots as CalendarRange,
   Check,
   CheckSquare,
   Clock,
   FileText,
-  MessageSquare,
+  ChatText as MessageSquare,
   Pencil,
   Play,
-  Save,
-  Send,
+  FloppyDisk as Save,
+  PaperPlaneTilt as Send,
   Square,
   Timer,
   User,
-  UserX,
-  Zap,
+  UserMinus as UserX,
+  Lightning as Zap,
   PauseCircle,
-  MoreHorizontal,
-  GripVertical
-} from "lucide-react";
+  DotsThree as MoreHorizontal,
+  DotsSixVertical as GripVertical
+} from "@phosphor-icons/react";
 import {
   signInAnonymously,
   onAuthStateChanged,
@@ -204,16 +204,17 @@ var IconsMap = {
   GripVertical
 };
 var Icon = ({ name, size = 18, className = "", ...props }) => {
-  const LucideIcon = IconsMap[name];
+  const PhosphorIcon = IconsMap[name];
   const {
     "aria-hidden": ariaHidden = true,
     focusable = false,
     ...iconProps
   } = props;
-  return LucideIcon ? /* @__PURE__ */ React.createElement(
-    LucideIcon,
+  return PhosphorIcon ? /* @__PURE__ */ React.createElement(
+    PhosphorIcon,
     {
       size,
+      weight: "bold",
       className,
       "aria-hidden": ariaHidden,
       focusable,
@@ -291,7 +292,7 @@ var AgencyLogo = ({ className }) => {
   return /* @__PURE__ */ React.createElement(
     "div",
     {
-      className: `bg-purple-600 flex items-center justify-center text-white font-black rounded-lg ${className}`
+      className: `bg-[#111111] dark:bg-[#f1efe9] flex items-center justify-center text-white dark:text-[#181817] font-bold rounded-md ${className}`
     },
     "C"
   );
@@ -821,14 +822,14 @@ function App() {
   const [toast, setToast] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDark, setIsDark] = useState(() => {
-    const darkDefaultVersion = "2026-06-login-dark-default";
+    const darkDefaultVersion = "2026-07-warm-editorial-default";
     const appliedDefaultVersion = localStorage.getItem(
       "cluster_theme_default_version"
     );
     if (appliedDefaultVersion !== darkDefaultVersion) {
-      localStorage.setItem("cluster_theme", "dark");
+      localStorage.setItem("cluster_theme", "light");
       localStorage.setItem("cluster_theme_default_version", darkDefaultVersion);
-      return true;
+      return false;
     }
     return localStorage.getItem("cluster_theme") !== "light";
   });
@@ -1765,8 +1766,8 @@ function App() {
       if (Notification.permission !== "granted") return;
       const titleMap = {
         "8h": "\u23F0 Tarea proxima a vencer (8h)",
-        overdue: "\u{1F534} Tarea vencida",
-        nag: "\u{1F534} Tarea vencida hace mas de 24h"
+        overdue: "Tarea vencida",
+        nag: "Tarea vencida hace mas de 24h"
       };
       const client = clients.find((c) => c.id === task.clientId);
       const notificationTitle = stage === "8h" ? `Tarea de ${config.label} proxima a vencer (8h)` : stage === "overdue" ? `Tarea de ${config.label} vencida` : `Tarea de ${config.label} vencida hace mas de 24h`;
@@ -3644,7 +3645,7 @@ function App() {
       toast && /* @__PURE__ */ React.createElement(Toast, { message: toast.message, type: toast.type })
     ));
   }
-  return /* @__PURE__ */ React.createElement("div", { className: "flex h-screen text-slate-900 dark:text-slate-100 overflow-hidden flex-col md:flex-row font-sans transition-colors duration-300" }, /* @__PURE__ */ React.createElement("div", { className: "md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center z-30 shadow-sm shrink-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "w-8 h-8 text-sm" }), /* @__PURE__ */ React.createElement("span", { className: "font-black text-slate-800 dark:text-white text-lg" }, "CLUSTER")), /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "app-shell flex h-screen overflow-hidden flex-col md:flex-row transition-colors duration-300" }, /* @__PURE__ */ React.createElement("div", { className: "app-sidebar md:hidden border-b p-4 flex justify-between items-center z-30 shrink-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "w-8 h-8 text-sm" }), /* @__PURE__ */ React.createElement("span", { className: "font-black text-slate-800 dark:text-white text-lg" }, "CLUSTER")), /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setIsMobileMenuOpen(!isMobileMenuOpen),
@@ -3662,7 +3663,7 @@ function App() {
   ), /* @__PURE__ */ React.createElement(
     "aside",
     {
-      className: `fixed md:relative z-50 h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col w-64 shrink-0 transition-transform duration-300 top-0 left-0 ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`
+      className: `app-sidebar fixed md:relative z-50 h-full border-r flex flex-col w-60 shrink-0 transition-transform duration-300 top-0 left-0 ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`
     },
     /* @__PURE__ */ React.createElement("div", { className: "px-5 pt-6 pb-3 hidden md:block" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "w-9 h-9 text-lg" }), /* @__PURE__ */ React.createElement("div", { className: "leading-none" }, /* @__PURE__ */ React.createElement("h1", { className: "text-xl font-bold text-slate-800 dark:text-white tracking-tight" }, "CLUSTER"), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] uppercase font-semibold text-slate-400 dark:text-slate-500 tracking-widest mt-1" }, "Agency OS")))),
     /* @__PURE__ */ React.createElement(
@@ -3693,24 +3694,21 @@ function App() {
           color: "blue"
         }
       ),
-      canAccessView(currentUserProfile, "managers") && /* @__PURE__ */ React.createElement(
+      (canAccessView(currentUserProfile, "managers") || canAccessView(currentUserProfile, "editors")) && /* @__PURE__ */ React.createElement(
         SidebarItem,
         {
-          active: view === "managers" || view === "manager-detail",
-          onClick: () => handleNavigate("managers"),
+          active: [
+            "managers",
+            "manager-detail",
+            "editors",
+            "editor-detail"
+          ].includes(view),
+          onClick: () => handleNavigate(
+            canAccessView(currentUserProfile, "managers") ? "managers" : "editors"
+          ),
           icon: "Users",
-          label: "Account Managers",
-          color: "indigo"
-        }
-      ),
-      canAccessView(currentUserProfile, "editors") && /* @__PURE__ */ React.createElement(
-        SidebarItem,
-        {
-          active: view === "editors" || view === "editor-detail",
-          onClick: () => handleNavigate("editors"),
-          icon: "PenTool",
-          label: "Editores",
-          color: "rose"
+          label: "Equipo",
+          color: "slate"
         }
       ),
       /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2" }, "Salas de trabajo"),
@@ -3751,24 +3749,16 @@ function App() {
         }
       ),
       /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2" }, "Calendario"),
-      canAccessView(currentUserProfile, "general-calendar") && /* @__PURE__ */ React.createElement(
+      (canAccessView(currentUserProfile, "general-calendar") || canAccessView(currentUserProfile, "calendar")) && /* @__PURE__ */ React.createElement(
         SidebarItem,
         {
-          active: view === "general-calendar",
-          onClick: () => handleNavigate("general-calendar"),
+          active: ["general-calendar", "calendar"].includes(view),
+          onClick: () => handleNavigate(
+            canAccessView(currentUserProfile, "general-calendar") ? "general-calendar" : "calendar"
+          ),
           icon: "CalendarDays",
-          label: "Calendario General",
-          color: "blue"
-        }
-      ),
-      canAccessView(currentUserProfile, "calendar") && /* @__PURE__ */ React.createElement(
-        SidebarItem,
-        {
-          active: view === "calendar",
-          onClick: () => handleNavigate("calendar"),
-          icon: "CalendarIcon",
-          label: "Agenda Producci\xF3n",
-          color: "emerald"
+          label: "Calendario",
+          color: "slate"
         }
       ),
       canAccessView(currentUserProfile, "reports") && /* @__PURE__ */ React.createElement(
@@ -3819,7 +3809,7 @@ function App() {
       ) : /* @__PURE__ */ React.createElement(
         "div",
         {
-          className: `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${profileBlocked ? "bg-red-500" : authEmail ? "bg-gradient-to-tr from-purple-500 to-indigo-500" : "bg-slate-500"}`
+          className: `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${profileBlocked ? "bg-[#9f2f2d]" : "bg-[#555552]"}`
         },
         (currentUserProfile?.name || "IN").slice(0, 2).toUpperCase()
       ),
@@ -3874,7 +3864,7 @@ function App() {
         }
       )
     )))
-  ), /* @__PURE__ */ React.createElement("main", { className: "flex-1 overflow-y-auto relative w-full h-full" }, /* @__PURE__ */ React.createElement("div", { className: "p-4 md:p-8 max-w-[1600px] mx-auto min-h-full pb-mobile-nav md:pb-20" }, view === "dashboard" && (isFirstTimeWorkspace ? /* @__PURE__ */ React.createElement(
+  ), /* @__PURE__ */ React.createElement("main", { className: "app-main flex-1 overflow-y-auto relative w-full h-full" }, /* @__PURE__ */ React.createElement("div", { className: "p-4 md:p-8 max-w-[1360px] mx-auto min-h-full pb-mobile-nav md:pb-20" }, view === "dashboard" && (isFirstTimeWorkspace ? /* @__PURE__ */ React.createElement(
     FirstTimeView,
     {
       role: currentUserProfile?.role,
@@ -3928,7 +3918,23 @@ function App() {
         isEdit: true
       })
     }
-  ), view === "managers" && /* @__PURE__ */ React.createElement(
+  ), view === "managers" && /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement(
+    ViewTabs,
+    {
+      active: "managers",
+      onChange: handleNavigate,
+      items: [
+        canAccessView(currentUserProfile, "managers") && {
+          id: "managers",
+          label: "Accounts"
+        },
+        canAccessView(currentUserProfile, "editors") && {
+          id: "editors",
+          label: "Editores"
+        }
+      ].filter(Boolean)
+    }
+  ), /* @__PURE__ */ React.createElement(
     TeamView,
     {
       title: "Account Managers",
@@ -3952,7 +3958,7 @@ function App() {
         isEdit: true
       })
     }
-  ), view === "manager-detail" && selectedManager && /* @__PURE__ */ React.createElement(
+  )), view === "manager-detail" && selectedManager && /* @__PURE__ */ React.createElement(
     PersonCalendarDetail,
     {
       person: selectedManager,
@@ -3967,7 +3973,23 @@ function App() {
       }),
       onEventClick: (e) => handleEventClick(e, "accountTask")
     }
-  ), view === "editors" && /* @__PURE__ */ React.createElement(
+  ), view === "editors" && /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement(
+    ViewTabs,
+    {
+      active: "editors",
+      onChange: handleNavigate,
+      items: [
+        canAccessView(currentUserProfile, "managers") && {
+          id: "managers",
+          label: "Accounts"
+        },
+        canAccessView(currentUserProfile, "editors") && {
+          id: "editors",
+          label: "Editores"
+        }
+      ].filter(Boolean)
+    }
+  ), /* @__PURE__ */ React.createElement(
     TeamView,
     {
       title: "Editores",
@@ -3991,7 +4013,7 @@ function App() {
         isEdit: true
       })
     }
-  ), view === "editor-detail" && selectedEditor && /* @__PURE__ */ React.createElement(
+  )), view === "editor-detail" && selectedEditor && /* @__PURE__ */ React.createElement(
     PersonCalendarDetail,
     {
       person: selectedEditor,
@@ -4136,7 +4158,23 @@ function App() {
       roleLabel: ROLE_DEFINITIONS[currentUserProfile?.role]?.label || currentUserProfile?.role || "",
       onSave: updateMyProfile
     }
-  ), view === "general-calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Calendario General"), /* @__PURE__ */ React.createElement("div", { className: "flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden" }, /* @__PURE__ */ React.createElement(
+  ), view === "general-calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-3xl text-[#2f3437] dark:text-[#f1efe9]" }, "Calendario")), /* @__PURE__ */ React.createElement(
+    ViewTabs,
+    {
+      active: "general-calendar",
+      onChange: handleNavigate,
+      items: [
+        canAccessView(currentUserProfile, "general-calendar") && {
+          id: "general-calendar",
+          label: "General"
+        },
+        canAccessView(currentUserProfile, "calendar") && {
+          id: "calendar",
+          label: "Producciones"
+        }
+      ].filter(Boolean)
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "surface flex-1 flex flex-col overflow-hidden" }, /* @__PURE__ */ React.createElement(
     GeneralCalendarGrid,
     {
       activities: allActivities,
@@ -4157,7 +4195,23 @@ function App() {
           });
       }
     }
-  ))), view === "calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Agenda de Producciones"), /* @__PURE__ */ React.createElement("div", { className: "flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden" }, /* @__PURE__ */ React.createElement(
+  ))), view === "calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-3xl text-[#2f3437] dark:text-[#f1efe9]" }, "Calendario")), /* @__PURE__ */ React.createElement(
+    ViewTabs,
+    {
+      active: "calendar",
+      onChange: handleNavigate,
+      items: [
+        canAccessView(currentUserProfile, "general-calendar") && {
+          id: "general-calendar",
+          label: "General"
+        },
+        canAccessView(currentUserProfile, "calendar") && {
+          id: "calendar",
+          label: "Producciones"
+        }
+      ].filter(Boolean)
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "surface flex-1 flex flex-col overflow-hidden" }, /* @__PURE__ */ React.createElement(
     CalendarGrid,
     {
       events: events.filter((e) => e.type === "production"),
@@ -4353,23 +4407,36 @@ var SidebarItem = ({
   {
     onClick,
     "aria-current": active ? "page" : void 0,
-    className: `relative w-full flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-lg transition-colors group ${active ? `bg-${color}-500/10 text-${color}-700 dark:text-${color}-300` : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-800 dark:hover:text-slate-200"}`
+    className: `relative w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors group ${active ? "bg-[#f1f0ed] dark:bg-[#2a2a27] text-[#2f3437] dark:text-[#f1efe9]" : "text-[#787774] dark:text-[#aaa7a0] hover:bg-[#f7f6f3] dark:hover:bg-[#2a2a27] hover:text-[#2f3437] dark:hover:text-[#f1efe9]"}`
   },
-  active && /* @__PURE__ */ React.createElement(
-    "span",
-    {
-      className: `absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-${color}-500`
-    }
-  ),
   /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 19, className: "shrink-0 text-[inherit]" }),
-  /* @__PURE__ */ React.createElement("span", { className: "font-semibold text-[13.5px] flex-1 text-left text-[inherit] truncate" }, label),
+  /* @__PURE__ */ React.createElement("span", { className: "font-medium text-sm flex-1 text-left text-[inherit] truncate" }, label),
   badge != null && /* @__PURE__ */ React.createElement(
     "span",
     {
-      className: `text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor}`
+      className: "text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#eae9e5] text-[#555552] dark:bg-[#333330] dark:text-[#d3d0c9]"
     },
     badge
   )
+);
+var ViewTabs = ({ items, active, onChange }) => /* @__PURE__ */ React.createElement(
+  "div",
+  {
+    className: "inline-flex w-fit max-w-full overflow-x-auto rounded-md border border-[#e6e4df] bg-white p-1 dark:border-white/10 dark:bg-[#222220]",
+    role: "tablist"
+  },
+  items.map((item) => /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      key: item.id,
+      type: "button",
+      role: "tab",
+      "aria-selected": active === item.id,
+      onClick: () => onChange(item.id),
+      className: `min-h-[38px] min-w-0 whitespace-nowrap rounded px-3 py-1.5 text-sm font-medium transition-colors ${active === item.id ? "bg-[#111111] text-white dark:bg-[#f1efe9] dark:text-[#181817]" : "text-[#787774] hover:bg-[#f7f6f3] hover:text-[#2f3437] dark:text-[#aaa7a0] dark:hover:bg-[#2a2a27] dark:hover:text-[#f1efe9]"}`
+    },
+    item.label
+  ))
 );
 var Button = ({
   children,
@@ -4384,21 +4451,21 @@ var Button = ({
   {
     type,
     onClick,
-    className: `${full ? "w-full" : ""} min-h-[46px] whitespace-nowrap bg-${color}-600 hover:bg-${color}-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-${color}-500/30 flex items-center justify-center gap-2 transition-all transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-${color}-500 dark:focus-visible:ring-offset-slate-950`,
+    className: `${full ? "w-full" : ""} primary-action min-h-[44px] whitespace-nowrap px-4 py-2.5 font-semibold flex items-center justify-center gap-2 transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#111111] dark:focus-visible:ring-[#f1efe9] dark:focus-visible:ring-offset-[#181817]`,
     ...props
   },
   icon && /* @__PURE__ */ React.createElement(Icon, { name: icon }),
   " ",
   children
 );
-var EmptyState = ({ icon, text }) => /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-center justify-center p-6 text-center h-full opacity-60" }, /* @__PURE__ */ React.createElement(
+var EmptyState = ({ icon, text }) => /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-center justify-center p-6 text-center h-full" }, /* @__PURE__ */ React.createElement(
   Icon,
   {
     name: icon,
     size: 32,
     className: "text-slate-500 dark:text-slate-400 mb-3"
   }
-), /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-500 dark:text-slate-400" }, text));
+), /* @__PURE__ */ React.createElement("p", { className: "text-sm font-medium text-[#787774] dark:text-[#aaa7a0]" }, text));
 var AppShellSkeleton = () => /* @__PURE__ */ React.createElement("div", { className: "flex h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100" }, /* @__PURE__ */ React.createElement("div", { className: "hidden md:flex w-64 shrink-0 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6" }, /* @__PURE__ */ React.createElement("div", { className: "h-10 w-36 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" }), /* @__PURE__ */ React.createElement("div", { className: "mt-10 space-y-3" }, Array.from({ length: 8 }).map((_, index) => /* @__PURE__ */ React.createElement(
   "div",
   {
@@ -4619,7 +4686,7 @@ var MobileBottomNav = ({ view, onNavigate, currentUserProfile }) => {
           onClick: () => onNavigate(item.view),
           "aria-label": item.label,
           "aria-current": active ? "page" : void 0,
-          className: `flex-1 min-w-0 min-h-[64px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] font-bold transition-colors ${active ? "text-purple-600 dark:text-purple-400" : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"}`
+          className: `flex-1 min-w-0 min-h-[64px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] font-bold transition-colors ${active ? "text-[#111111] dark:text-white" : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"}`
         },
         /* @__PURE__ */ React.createElement(Icon, { name: item.icon, size: 20 }),
         /* @__PURE__ */ React.createElement("span", { className: "truncate max-w-full" }, item.label)
@@ -4634,19 +4701,19 @@ var LoginScreen = ({
   onEmailChange,
   onEmailSubmit,
   isSendingLoginLink
-}) => /* @__PURE__ */ React.createElement("div", { className: "min-h-screen bg-[#050713] text-white font-sans" }, /* @__PURE__ */ React.createElement("header", { className: "flex min-h-[72px] items-center border-b border-white/10 px-6 sm:px-10 lg:px-16" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2.5" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "h-8 w-8 rounded-md text-sm shadow-lg shadow-violet-950/40" }), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-base font-black leading-none text-white" }, "CLUSTER"), /* @__PURE__ */ React.createElement("p", { className: "mt-0.5 text-[9px] font-bold uppercase text-slate-500" }, "Agency OS")))), /* @__PURE__ */ React.createElement("main", { className: "flex min-h-[calc(100vh-72px)] items-start justify-center px-5 pb-12 pt-16 sm:pt-20" }, /* @__PURE__ */ React.createElement("section", { className: "w-full max-w-[380px]", "aria-labelledby": "login-title" }, /* @__PURE__ */ React.createElement("div", { className: "mb-7" }, /* @__PURE__ */ React.createElement(
+}) => /* @__PURE__ */ React.createElement("div", { className: "min-h-screen bg-[#f7f6f3] text-[#2f3437] dark:bg-[#181817] dark:text-[#f1efe9]" }, /* @__PURE__ */ React.createElement("header", { className: "flex min-h-[72px] items-center border-b border-[#e6e4df] px-6 dark:border-[#343431] sm:px-10 lg:px-16" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2.5" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "h-8 w-8 rounded-md text-sm" }), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-base font-bold leading-none text-[#2f3437] dark:text-white" }, "CLUSTER"), /* @__PURE__ */ React.createElement("p", { className: "mono-meta mt-0.5 text-slate-500" }, "Agency OS")))), /* @__PURE__ */ React.createElement("main", { className: "flex min-h-[calc(100vh-72px)] items-start justify-center px-5 pb-12 pt-16 sm:pt-24" }, /* @__PURE__ */ React.createElement("section", { className: "surface w-full max-w-[420px] p-7 sm:p-9", "aria-labelledby": "login-title" }, /* @__PURE__ */ React.createElement("div", { className: "mb-8" }, /* @__PURE__ */ React.createElement("p", { className: "eyebrow mb-2" }, "Espacio de trabajo"), /* @__PURE__ */ React.createElement(
   "h1",
   {
     id: "login-title",
-    className: "text-[34px] font-semibold leading-tight tracking-normal text-white"
+    className: "editorial-title text-[38px] leading-tight text-[#2f3437] dark:text-white"
   },
-  "Login"
-), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm font-medium text-slate-400" }, "Hola, bienvenido")), /* @__PURE__ */ React.createElement(
+  "Iniciar sesion"
+), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-slate-500 dark:text-slate-400" }, "Gestiona clientes, tareas y produccion desde un solo lugar.")), /* @__PURE__ */ React.createElement(
   "button",
   {
     onClick: onGoogleSignIn,
     disabled: isSigningIn || isSendingLoginLink,
-    className: "inline-flex min-h-[46px] w-full items-center justify-center gap-3 rounded-md border border-white/10 bg-white px-4 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-300 disabled:cursor-not-allowed disabled:opacity-60"
+    className: "quiet-action w-full justify-center px-4 disabled:cursor-not-allowed disabled:opacity-60"
   },
   isSigningIn ? /* @__PURE__ */ React.createElement(Icon, { name: "Loader2", size: 17, className: "animate-spin" }) : /* @__PURE__ */ React.createElement(
     "span",
@@ -4656,12 +4723,12 @@ var LoginScreen = ({
     },
     "G"
   ),
-  "Login with Google"
-), /* @__PURE__ */ React.createElement("div", { className: "my-6 flex items-center gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "h-px flex-1 bg-white/10" }), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-medium text-slate-500" }, "or Login with Email"), /* @__PURE__ */ React.createElement("div", { className: "h-px flex-1 bg-white/10" })), /* @__PURE__ */ React.createElement("form", { onSubmit: onEmailSubmit, className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(
+  "Continuar con Google"
+), /* @__PURE__ */ React.createElement("div", { className: "my-6 flex items-center gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "h-px flex-1 bg-[#e6e4df] dark:bg-[#343431]" }), /* @__PURE__ */ React.createElement("span", { className: "mono-meta text-slate-500" }, "O usa tu correo"), /* @__PURE__ */ React.createElement("div", { className: "h-px flex-1 bg-[#e6e4df] dark:bg-[#343431]" })), /* @__PURE__ */ React.createElement("form", { onSubmit: onEmailSubmit, className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(
   "label",
   {
     htmlFor: "login-email",
-    className: "mb-2 block text-sm font-medium text-white"
+    className: "mb-2 block text-sm font-medium text-[#2f3437] dark:text-white"
   },
   "Email"
 ), /* @__PURE__ */ React.createElement(
@@ -4673,14 +4740,14 @@ var LoginScreen = ({
     onChange: (event) => onEmailChange(event.target.value),
     placeholder: "Ej. correo@cluster.com",
     autoComplete: "email",
-    className: "min-h-[46px] w-full rounded-md border border-white/10 bg-[#0D1220] px-4 text-sm font-medium text-white outline-none transition placeholder:text-slate-600 focus:border-violet-400 focus:ring-2 focus:ring-violet-400/30"
+    className: "min-h-[46px] w-full rounded-md border border-[#d8d6d0] bg-white px-4 text-sm text-[#2f3437] outline-none transition placeholder:text-slate-400 focus:border-[#111111] focus:ring-2 focus:ring-black/10 dark:border-[#454541] dark:bg-[#222220] dark:text-white"
   }
 )), /* @__PURE__ */ React.createElement(
   "button",
   {
     type: "submit",
     disabled: isSigningIn || isSendingLoginLink,
-    className: "inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-md bg-violet-600 px-4 text-sm font-semibold text-white shadow-lg shadow-violet-950/30 transition hover:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-300 disabled:cursor-not-allowed disabled:opacity-60"
+    className: "primary-action w-full justify-center px-4 disabled:cursor-not-allowed disabled:opacity-60"
   },
   /* @__PURE__ */ React.createElement(
     Icon,
@@ -4710,13 +4777,7 @@ var SearchBar = ({ searchTerm, setSearchTerm, placeholder }) => /* @__PURE__ */ 
     className: "min-h-[46px] w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-500"
   }
 ));
-var StatCard = ({ title, value, icon, color }) => /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1" }, title), /* @__PURE__ */ React.createElement("p", { className: "text-3xl font-black text-slate-800 dark:text-white" }, value)), /* @__PURE__ */ React.createElement(
-  "div",
-  {
-    className: `p-3 rounded-xl bg-${color}-50 dark:bg-${color}-500/20 text-${color}-600 dark:text-${color}-400`
-  },
-  /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 24 })
-));
+var StatCard = ({ title, value, icon, color }) => /* @__PURE__ */ React.createElement("div", { className: "surface p-5 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-medium text-[#787774] dark:text-[#aaa7a0] mb-1" }, title), /* @__PURE__ */ React.createElement("p", { className: "text-3xl font-semibold text-[#2f3437] dark:text-[#f1efe9] mono-meta" }, value)), /* @__PURE__ */ React.createElement("div", { className: "p-2.5 rounded-lg bg-[#f1f0ed] dark:bg-[#2a2a27] text-[#555552] dark:text-[#d3d0c9]" }, /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 22 })));
 var Input = ({ label, id, className = "", ...props }) => {
   const reactId = useId();
   const inputId = id || `input-${slugifyId(label || props.name || props.placeholder || reactId)}`;
@@ -4725,7 +4786,7 @@ var Input = ({ label, id, className = "", ...props }) => {
     "label",
     {
       htmlFor: inputId,
-      className: "block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1"
+      className: "block text-xs font-medium text-[#555552] dark:text-[#d3d0c9] mb-1.5"
     },
     label
   ), /* @__PURE__ */ React.createElement(
@@ -4733,7 +4794,7 @@ var Input = ({ label, id, className = "", ...props }) => {
     {
       id: inputId,
       "aria-label": ariaLabel,
-      className: `w-full p-4 md:p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-medium text-slate-700 dark:text-slate-200 transition-all placeholder:text-slate-500 dark:placeholder:text-slate-500 ${className}`,
+      className: `w-full p-4 md:p-3 bg-white dark:bg-[#222220] border border-[#e6e4df] dark:border-white/10 rounded-md focus:border-[#111111] dark:focus:border-[#f1efe9] focus:ring-0 outline-none font-normal text-[#2f3437] dark:text-[#f1efe9] transition-colors placeholder:text-[#9a9893] ${className}`,
       ...props
     }
   ));
@@ -4832,18 +4893,18 @@ var clampPercent = (value = 0) => {
   return Math.max(0, Math.min(100, numeric));
 };
 var DASHBOARD_PALETTE = {
-  emerald: { solid: "#22c55e", strong: "#15803d" },
-  amber: { solid: "#f59e0b", strong: "#b45309" },
-  red: { solid: "#ef4444", strong: "#b91c1c" },
-  purple: { solid: "#9333ea", strong: "#6b21a8" },
-  violet: { solid: "#8b5cf6", strong: "#6d28d9" },
-  indigo: { solid: "#6366f1", strong: "#4338ca" },
-  blue: { solid: "#3b82f6", strong: "#1d4ed8" },
-  cyan: { solid: "#06b6d4", strong: "#0e7490" },
-  orange: { solid: "#f97316", strong: "#c2410c" },
-  fuchsia: { solid: "#d946ef", strong: "#a21caf" },
-  stone: { solid: "#78716c", strong: "#44403c" },
-  slate: { solid: "#64748b", strong: "#334155" }
+  emerald: { solid: "#a9c6a6", strong: "#346538" },
+  amber: { solid: "#eadcae", strong: "#956400" },
+  red: { solid: "#e8b9ba", strong: "#9f2f2d" },
+  purple: { solid: "#b8dbea", strong: "#1f6c9f" },
+  violet: { solid: "#b8dbea", strong: "#1f6c9f" },
+  indigo: { solid: "#b8dbea", strong: "#1f6c9f" },
+  blue: { solid: "#b8dbea", strong: "#1f6c9f" },
+  cyan: { solid: "#b8dbea", strong: "#1f6c9f" },
+  orange: { solid: "#eadcae", strong: "#956400" },
+  fuchsia: { solid: "#e8b9ba", strong: "#9f2f2d" },
+  stone: { solid: "#bdbab2", strong: "#555552" },
+  slate: { solid: "#bdbab2", strong: "#555552" }
 };
 var getDashboardPalette = (name = "slate") => DASHBOARD_PALETTE[name] || DASHBOARD_PALETTE.slate;
 var polarToCartesian = (centerX, centerY, radius, angleInDegrees) => {
@@ -4890,27 +4951,6 @@ var buildRingSegments = (segments, startAngle = -90, totalAngle = 360, gapAngle 
     return { ...segment, startAngle: segmentStart, endAngle: segmentEnd };
   });
 };
-var CompactMetricBar = ({ label, value, color = "slate", meta, helper }) => {
-  const palette = getDashboardPalette(color);
-  const safeValue = clampPercent(value);
-  return /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "mb-1.5 flex items-start justify-between gap-3" }, /* @__PURE__ */ React.createElement("span", { className: "min-w-0 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, label), /* @__PURE__ */ React.createElement(
-    "span",
-    {
-      className: "shrink-0 text-[11px] font-bold",
-      style: { color: palette.strong }
-    },
-    meta || `${Math.round(safeValue)}%`
-  )), /* @__PURE__ */ React.createElement("div", { className: "h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement(
-    "div",
-    {
-      className: "h-full rounded-full transition-all duration-700",
-      style: {
-        width: `${safeValue}%`,
-        background: `linear-gradient(90deg, ${palette.solid}, ${palette.strong})`
-      }
-    }
-  )), helper ? /* @__PURE__ */ React.createElement("p", { className: "mt-1.5 break-words text-[10px] leading-relaxed font-medium text-slate-500 dark:text-slate-400" }, helper) : null);
-};
 var PortfolioHealthChart = ({
   totalClients,
   activos,
@@ -4922,22 +4962,22 @@ var PortfolioHealthChart = ({
       key: "activo",
       label: "Activos",
       value: activos,
-      color: "#22c55e",
-      strong: "#15803d"
+      color: "#a9c6a6",
+      strong: "#346538"
     },
     {
       key: "pausado",
       label: "Pausados",
       value: pausados,
-      color: "#f59e0b",
-      strong: "#b45309"
+      color: "#eadcae",
+      strong: "#956400"
     },
     {
       key: "inactivo",
       label: "Inactivos",
       value: inactivos,
-      color: "#94a3b8",
-      strong: "#475569"
+      color: "#bdbab2",
+      strong: "#555552"
     }
   ];
   const ringSegments = buildRingSegments(segments);
@@ -5007,7 +5047,7 @@ var PortfolioHealthChart = ({
           className: "h-full rounded-full transition-all duration-700",
           style: {
             width: `${percent}%`,
-            background: `linear-gradient(90deg, ${segment.color}, ${segment.strong})`
+            background: segment.strong
           }
         }
       ))
@@ -5025,19 +5065,7 @@ var ProgressOverviewChart = ({
   const radius = 72;
   const circumference = 2 * Math.PI * radius;
   const strokeOffset = circumference * (1 - safePercent / 100);
-  return /* @__PURE__ */ React.createElement("div", { className: "mt-5 grid grid-cols-1 gap-5" }, /* @__PURE__ */ React.createElement("div", { className: "relative mx-auto h-44 w-44" }, /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 220 220", className: "h-full w-full -rotate-90" }, /* @__PURE__ */ React.createElement("defs", null, /* @__PURE__ */ React.createElement(
-    "linearGradient",
-    {
-      id: "dashboard-progress-gradient",
-      x1: "0%",
-      y1: "0%",
-      x2: "100%",
-      y2: "100%"
-    },
-    /* @__PURE__ */ React.createElement("stop", { offset: "0%", stopColor: "#8b5cf6" }),
-    /* @__PURE__ */ React.createElement("stop", { offset: "55%", stopColor: "#3b82f6" }),
-    /* @__PURE__ */ React.createElement("stop", { offset: "100%", stopColor: "#06b6d4" })
-  )), /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "mt-5 grid grid-cols-1 gap-5" }, /* @__PURE__ */ React.createElement("div", { className: "relative mx-auto h-44 w-44" }, /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 220 220", className: "h-full w-full -rotate-90" }, /* @__PURE__ */ React.createElement(
     "circle",
     {
       cx: "110",
@@ -5054,7 +5082,7 @@ var ProgressOverviewChart = ({
       cy: "110",
       r: radius,
       fill: "none",
-      stroke: "url(#dashboard-progress-gradient)",
+      stroke: "#555552",
       strokeWidth: "18",
       strokeLinecap: "round",
       strokeDasharray: `${circumference} ${circumference}`,
@@ -5100,7 +5128,7 @@ var ProgressOverviewChart = ({
           className: "h-full rounded-full transition-all duration-700",
           style: {
             width: `${group.percent}%`,
-            background: `linear-gradient(90deg, ${palette.solid}, ${palette.strong})`
+            background: palette.strong
           }
         }
       ))
@@ -5215,14 +5243,7 @@ var DashboardView = ({
     accountTasks,
     rankingPeriod
   });
-  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 animate-in fade-in duration-500" }, /* @__PURE__ */ React.createElement("div", { className: "bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-700 rounded-3xl p-8 md:p-10 text-white shadow-xl relative overflow-hidden" }, /* @__PURE__ */ React.createElement("div", { className: "absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" }), /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-0 right-1/4 w-40 h-40 bg-purple-400 opacity-20 rounded-full blur-2xl translate-y-1/3" }), /* @__PURE__ */ React.createElement("div", { className: "relative z-10" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-2" }, /* @__PURE__ */ React.createElement("span", { className: "px-3 py-1 bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md border border-white/10" }, "Resumen Operativo")), /* @__PURE__ */ React.createElement("h2", { className: "text-3xl md:text-4xl font-black mb-2 tracking-tight" }, "\xA1Hola, Equipo Cluster! \u{1F44B}"), /* @__PURE__ */ React.createElement("p", { className: "text-purple-100 font-medium text-sm md:text-base max-w-xl leading-relaxed" }, "Hoy es ", /* @__PURE__ */ React.createElement("span", { className: "capitalize" }, formattedDate), ". Tienes", " ", /* @__PURE__ */ React.createElement("strong", { className: "text-white" }, urgentTasks.length), " tareas que requieren atenci\xF3n prioritaria. Mant\xE9n el ritmo, ya han completado ", completedTasks, " asignaciones en total.")), /* @__PURE__ */ React.createElement(
-    Icon,
-    {
-      name: "Sparkles",
-      size: 140,
-      className: "absolute -right-8 -top-8 text-white opacity-10 rotate-12"
-    }
-  )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6" }, /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 animate-in fade-in duration-500" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3 border-b border-[#e6e4df] pb-6 dark:border-white/10 sm:flex-row sm:items-end sm:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Resumen operativo"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title mt-1 text-4xl text-[#2f3437] dark:text-[#f1efe9] md:text-5xl" }, "Panel central"), /* @__PURE__ */ React.createElement("p", { className: "page-description mt-2 capitalize" }, formattedDate)), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 text-sm text-[#787774] dark:text-[#aaa7a0]" }, /* @__PURE__ */ React.createElement("span", { className: "mono-meta" }, urgentTasks.length, " requieren atenci\xF3n"), /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, "\xB7"), /* @__PURE__ */ React.createElement("span", { className: "mono-meta" }, completedTasks, " completadas"))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 lg:grid-cols-4 gap-3" }, /* @__PURE__ */ React.createElement(
     StatCard,
     {
       title: "Clientes Activos",
@@ -5256,7 +5277,7 @@ var DashboardView = ({
       icon: "Video",
       color: "amber"
     }
-  )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 xl:grid-cols-3 gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "xl:col-span-2 space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-6 h-full" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-black text-slate-800 dark:text-white mb-1" }, "Estado de la Cartera"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Distribuci\xF3n por estado de cliente")), /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 xl:grid-cols-3 gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "xl:col-span-2 space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-6 h-full" }, /* @__PURE__ */ React.createElement("div", { className: "surface p-6 self-start" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-base font-semibold text-[#2f3437] dark:text-[#f1efe9] mb-1" }, "Estado de la Cartera"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Distribuci\xF3n por estado de cliente")), /* @__PURE__ */ React.createElement(
     PortfolioHealthChart,
     {
       totalClients: realTotalClients,
@@ -5264,7 +5285,7 @@ var DashboardView = ({
       pausados,
       inactivos
     }
-  )), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm self-start" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-black text-slate-800 dark:text-white mb-1" }, "Progreso Global"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Volumen completado vs general")), /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("div", { className: "surface p-6 self-start" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-base font-semibold text-[#2f3437] dark:text-[#f1efe9] mb-1" }, "Progreso Global"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Volumen completado vs general")), /* @__PURE__ */ React.createElement(
     ProgressOverviewChart,
     {
       completionPercent: compPercent,
@@ -5272,13 +5293,7 @@ var DashboardView = ({
       totalTasks,
       groups: progressGroups
     }
-  ), /* @__PURE__ */ React.createElement("div", { className: "hidden" }, /* @__PURE__ */ React.createElement("div", { className: "flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-6 overflow-hidden shadow-inner p-1" }, /* @__PURE__ */ React.createElement(
-    "div",
-    {
-      style: { width: `${compPercent}%` },
-      className: "bg-purple-600 h-full rounded-full flex items-center justify-end px-2 transition-all duration-1000 ease-out relative overflow-hidden"
-    }
-  )), /* @__PURE__ */ React.createElement("span", { className: "text-3xl font-black text-purple-600 dark:text-purple-400 w-16 text-right" }, compPercent, "%"))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col min-h-[300px]" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-black text-slate-800 dark:text-white mb-1" }, "Atenci\xF3n Requerida"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Urgentes y atrasadas")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-black tracking-[0.12em] uppercase text-slate-500 dark:text-slate-400" }, urgentTasks.length), /* @__PURE__ */ React.createElement("div", { className: "p-2.5 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 18, className: "animate-pulse" })))), /* @__PURE__ */ React.createElement("div", { className: "flex-1 overflow-y-auto space-y-2 custom-scroll pr-2" }, urgentTasks.length === 0 ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "Smile", text: "\xA1Todo al d\xEDa! No hay urgencias." }) : urgentTasks.map((t) => /* @__PURE__ */ React.createElement(
+  )))), /* @__PURE__ */ React.createElement("div", { className: "surface p-6 flex flex-col min-h-[300px]" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-base font-semibold text-[#2f3437] dark:text-[#f1efe9] mb-1" }, "Atenci\xF3n Requerida"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Urgentes y atrasadas")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-black tracking-[0.12em] uppercase text-slate-500 dark:text-slate-400" }, urgentTasks.length), /* @__PURE__ */ React.createElement("div", { className: "p-2.5 bg-[#fdebec] text-[#9f2f2d] rounded-lg" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 18 })))), /* @__PURE__ */ React.createElement("div", { className: "flex-1 overflow-y-auto space-y-2 custom-scroll pr-2" }, urgentTasks.length === 0 ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "CheckCircle2", text: "No hay tareas urgentes." }) : urgentTasks.map((t) => /* @__PURE__ */ React.createElement(
     "div",
     {
       key: t.id,
@@ -5290,7 +5305,7 @@ var DashboardView = ({
         className: `mt-1 w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${isDateBeforeDateString(t.date, todayStr) ? "bg-red-500" : "bg-amber-500"}`
       }
     ),
-    /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "break-words text-sm font-bold leading-tight text-slate-800 dark:text-slate-100 group-hover:text-purple-600 transition-colors" }, t.title), /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-widest" }, t._type), /* @__PURE__ */ React.createElement(
+    /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "break-words text-sm font-semibold leading-tight text-[#2f3437] dark:text-[#f1efe9]" }, t.title), /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-widest" }, t._type), /* @__PURE__ */ React.createElement(
       "span",
       {
         className: `text-[9px] font-bold break-words ${isDateBeforeDateString(t.date, todayStr) ? "text-red-500" : "text-slate-500"}`
@@ -5298,7 +5313,7 @@ var DashboardView = ({
       "Vence: ",
       t.date
     )))
-  ))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm mt-6" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-black text-slate-800 dark:text-white mb-1 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trophy", size: 20, className: "text-yellow-500" }), " KPI mensual por Account"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "KPI: 50% cumplimiento ponderado, 30% puntualidad verificada y 20% carga completada del mes.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+  ))))), /* @__PURE__ */ React.createElement("div", { className: "surface p-5 md:p-6 mt-6" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold text-[#2f3437] dark:text-[#f1efe9] mb-1" }, "KPI mensual por Account"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "KPI: 50% cumplimiento ponderado, 30% puntualidad verificada y 20% carga completada del mes.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: goToPrevMonth,
@@ -5315,114 +5330,30 @@ var DashboardView = ({
       title: "Mes siguiente"
     },
     /* @__PURE__ */ React.createElement(Icon, { name: "ChevronRight", size: 16 })
-  ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" }, managerStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "col-span-full" }, /* @__PURE__ */ React.createElement(
-    EmptyState,
-    {
-      icon: "Users",
-      text: "No hay Accounts para evaluar a\xFAn."
-    }
-  )) : (() => {
+  ))), managerStats.length === 0 ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "Users", text: "No hay Accounts para evaluar a\xFAn." }) : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[820px] border-collapse" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-[#e6e4df] text-left dark:border-white/10" }, ["Pos.", "Account", "Tareas", "A tiempo", "Cumplimiento", "Carga", "Pendientes", "KPI"].map(
+    (label) => /* @__PURE__ */ React.createElement("th", { key: label, className: "eyebrow px-3 py-3 first:pl-0 last:pr-0 last:text-right" }, label)
+  ))), /* @__PURE__ */ React.createElement("tbody", null, (() => {
     let qualifiedRank = 0;
     return managerStats.map((ms) => {
       const hasEnoughTasks = ms.totalTasks >= KPI_MIN_TASKS;
-      if (hasEnoughTasks) qualifiedRank++;
-      const rank = hasEnoughTasks ? qualifiedRank : null;
-      const isTop = rank === 1;
-      const isSecond = rank === 2;
-      const isThird = rank === 3;
-      const palette = getDashboardPalette(ms.mappedColor);
-      let medalColor = "text-slate-400";
-      let medalBg = "bg-slate-100 dark:bg-slate-800";
-      if (!hasEnoughTasks) {
-        medalColor = "text-slate-400";
-        medalBg = "bg-slate-100 dark:bg-slate-800 opacity-60";
-      } else if (isTop) {
-        medalColor = "text-yellow-500";
-        medalBg = "bg-yellow-50 dark:bg-yellow-500/10 ring-2 ring-yellow-400/50";
-      } else if (isSecond) {
-        medalColor = "text-slate-500";
-        medalBg = "bg-slate-50 dark:bg-slate-500/10 ring-2 ring-slate-300/50";
-      } else if (isThird) {
-        medalColor = "text-amber-600";
-        medalBg = "bg-amber-50 dark:bg-amber-600/10 ring-2 ring-amber-600/50";
-      }
+      if (hasEnoughTasks) qualifiedRank += 1;
       return /* @__PURE__ */ React.createElement(
-        "div",
+        "tr",
         {
           key: ms.id,
-          className: `p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/20 flex flex-col gap-4 hover:bg-white dark:hover:bg-slate-800 transition-colors shadow-sm relative overflow-hidden min-w-0${!hasEnoughTasks ? " opacity-60" : ""}`
+          className: `border-b border-[#efeee9] transition-colors last:border-0 hover:bg-[#fbfbfa] dark:border-white/5 dark:hover:bg-[#2a2a27] ${hasEnoughTasks ? "" : "text-[#9a9893]"}`
         },
-        /* @__PURE__ */ React.createElement(
-          "div",
-          {
-            className: "absolute inset-x-0 top-0 h-1.5",
-            style: {
-              background: `linear-gradient(90deg, ${palette.solid}, ${palette.strong})`
-            }
-          }
-        ),
-        /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-start gap-3 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 flex-1 items-center gap-3" }, /* @__PURE__ */ React.createElement(
-          "div",
-          {
-            className: `w-8 h-8 shrink-0 flex items-center justify-center font-black rounded-full shadow-sm text-sm ${medalBg} ${medalColor}`,
-            title: !hasEnoughTasks ? `M\xEDnimo ${KPI_MIN_TASKS} tareas para clasificar` : void 0
-          },
-          hasEnoughTasks ? `#${rank}` : "\u2014"
-        ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("h4", { className: "min-w-0 font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "truncate" }, ms.name), isTop && /* @__PURE__ */ React.createElement(
-          Icon,
-          {
-            name: "Sparkles",
-            size: 14,
-            className: "text-yellow-500"
-          }
-        )), /* @__PURE__ */ React.createElement("p", { className: "break-words text-[10px] leading-relaxed text-slate-500 font-medium" }, ms.completedTasks, "/", ms.totalTasks, " tareas del mes |", " ", ms.totalClients, " clientes"), !hasEnoughTasks && /* @__PURE__ */ React.createElement("span", { className: "inline-block mt-0.5 text-[9px] font-black uppercase tracking-wider text-slate-400 bg-slate-100 dark:bg-slate-800 dark:text-slate-500 rounded px-1.5 py-0.5" }, "Datos insuficientes"))), /* @__PURE__ */ React.createElement("div", { className: "text-right shrink-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400" }, "KPI"), /* @__PURE__ */ React.createElement(
-          "span",
-          {
-            className: "text-2xl font-black",
-            style: { color: palette.strong }
-          },
-          ms.score,
-          "%"
-        ))),
-        /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800/80 dark:bg-slate-900/40" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Tareas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.completedTasks, "/", ms.totalTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "resueltas")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "A tiempo"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.onTimePercent === null ? "N/D" : `${ms.onTimePercent}%`), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, ms.onTimeCount, "/", ms.measuredCompletionCount, " cierres medidos")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Pendientes"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.pendingTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "por completar")), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400" }, "Atrasadas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-base font-black text-slate-900 dark:text-white" }, ms.overdueTasks), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-medium text-slate-500 dark:text-slate-400" }, "vencidas y pendientes"))),
-        /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ React.createElement(
-          CompactMetricBar,
-          {
-            label: "Cumplimiento ponderado",
-            value: ms.weightedCompletionPercent,
-            color: ms.mappedColor,
-            meta: `${ms.weightedCompletionPercent}%`,
-            helper: ms.totalTasks > 0 ? `${ms.weightedCompleted} de ${ms.weightedTotal} unidades completadas` : "Sin tareas asignadas"
-          }
-        ), /* @__PURE__ */ React.createElement(
-          CompactMetricBar,
-          {
-            label: "Puntualidad verificada",
-            value: ms.onTimePercent || 0,
-            color: ms.mappedColor,
-            meta: ms.onTimePercent === null ? "N/D" : `${ms.onTimePercent}%`,
-            helper: ms.measuredCompletionCount > 0 ? `${ms.onTimeCount} de ${ms.measuredCompletionCount} cierres a tiempo` : "Los cierres historicos no tienen fecha verificable"
-          }
-        ), /* @__PURE__ */ React.createElement(
-          CompactMetricBar,
-          {
-            label: "Carga completada",
-            value: ms.loadPercent,
-            color: ms.mappedColor,
-            meta: `${ms.loadPercent}%`,
-            helper: `${ms.weightedCompleted} unidades; referencia: mayor carga del mes`
-          }
-        )),
-        /* @__PURE__ */ React.createElement("div", { className: "hidden" }, /* @__PURE__ */ React.createElement(
-          "div",
-          {
-            style: { width: `${Math.max(ms.score, 0)}%` },
-            className: `h-full rounded-full transition-all duration-1000 ease-out bg-${ms.mappedColor}-500 ${ms.score > 0 ? "min-w-[0.5rem]" : ""}`
-          }
-        ))
+        /* @__PURE__ */ React.createElement("td", { className: "mono-meta px-3 py-3.5 pl-0 text-sm" }, hasEnoughTasks ? String(qualifiedRank).padStart(2, "0") : "\u2014"),
+        /* @__PURE__ */ React.createElement("td", { className: "px-3 py-3.5" }, /* @__PURE__ */ React.createElement("p", { className: "font-semibold text-[#2f3437] dark:text-[#f1efe9]" }, ms.name), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-[#787774] dark:text-[#aaa7a0]" }, ms.totalClients, " clientes", !hasEnoughTasks && ` \xB7 m\xEDnimo ${KPI_MIN_TASKS} tareas`)),
+        /* @__PURE__ */ React.createElement("td", { className: "mono-meta px-3 py-3.5 text-sm" }, ms.completedTasks, "/", ms.totalTasks),
+        /* @__PURE__ */ React.createElement("td", { className: "mono-meta px-3 py-3.5 text-sm" }, ms.onTimePercent === null ? "N/D" : `${ms.onTimePercent}%`),
+        /* @__PURE__ */ React.createElement("td", { className: "mono-meta px-3 py-3.5 text-sm" }, ms.weightedCompletionPercent, "%"),
+        /* @__PURE__ */ React.createElement("td", { className: "mono-meta px-3 py-3.5 text-sm" }, ms.loadPercent, "%"),
+        /* @__PURE__ */ React.createElement("td", { className: "mono-meta px-3 py-3.5 text-sm" }, /* @__PURE__ */ React.createElement("span", { className: ms.overdueTasks > 0 ? "text-[#9f2f2d]" : "" }, ms.pendingTasks)),
+        /* @__PURE__ */ React.createElement("td", { className: "mono-meta px-3 py-3.5 pr-0 text-right text-lg font-semibold text-[#2f3437] dark:text-[#f1efe9]" }, ms.score, "%")
       );
     });
-  })())));
+  })())))));
 };
 var ProfileSettingsView = ({ profile, roleLabel, onSave }) => {
   const handleSubmit = (e) => {
@@ -5833,7 +5764,7 @@ var KanbanCard = ({
       draggable: draggable ? "true" : void 0,
       onDragStart,
       onDragEnd,
-      className: `group relative bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 border-l-[3px] ${accent} shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer p-3 ${isOverdue ? "ring-1 ring-red-400/40 dark:ring-red-500/30" : ""}`
+      className: `group relative bg-white dark:bg-[#222220] rounded-lg border border-[#e6e4df] dark:border-white/10 border-l-[3px] ${accent} hover:border-[#cac8c2] dark:hover:border-white/20 transition-colors cursor-pointer p-3 ${isOverdue ? "bg-[#fffafa] dark:bg-[#2b2020]" : ""}`
     },
     /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-2 mb-1.5 min-h-[20px]" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, client && /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-1 max-w-full text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded" }, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 10, className: "shrink-0" }), /* @__PURE__ */ React.createElement("span", { className: "truncate" }, client))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-0.5 shrink-0" }, rank != null && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 rounded px-1.5 py-0.5" }, "#", rank), menuItems.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "opacity-70 group-hover:opacity-100 transition-opacity" }, /* @__PURE__ */ React.createElement(CardMenu, { items: menuItems })))),
     /* @__PURE__ */ React.createElement("p", { className: "text-[13.5px] font-semibold text-slate-800 dark:text-slate-100 leading-snug mb-2 line-clamp-2" }, title),
@@ -5884,12 +5815,12 @@ var KanbanColumn = ({
 }) => /* @__PURE__ */ React.createElement(
   "div",
   {
-    className: "flex flex-col shrink-0 w-[82vw] sm:w-72 md:w-auto md:shrink bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200 dark:border-slate-800/80 h-full overflow-hidden snap-start transition-colors",
+    className: "flex flex-col shrink-0 w-[82vw] sm:w-72 md:w-auto md:shrink bg-[#f1f0ed] dark:bg-[#1d1d1b] rounded-lg border border-[#e6e4df] dark:border-white/10 h-full overflow-hidden snap-start transition-colors",
     onDragOver,
     onDragLeave,
     onDrop
   },
-  /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 px-3 py-2.5 shrink-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 min-w-0" }, /* @__PURE__ */ React.createElement("span", { className: `w-2 h-2 rounded-full shrink-0 bg-${dotColor}-500` }), /* @__PURE__ */ React.createElement("span", { className: "text-[13px] font-bold text-slate-700 dark:text-slate-200 truncate" }, title), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] font-semibold text-slate-400 dark:text-slate-500 bg-slate-200/70 dark:bg-slate-800 rounded-full px-2 py-0.5 shrink-0" }, count))),
+  /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 px-3 py-2.5 shrink-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 min-w-0" }, /* @__PURE__ */ React.createElement("span", { className: "w-2 h-2 rounded-full shrink-0 bg-[#787774] dark:bg-[#aaa7a0]" }), /* @__PURE__ */ React.createElement("span", { className: "text-[13px] font-semibold text-[#2f3437] dark:text-[#f1efe9] truncate" }, title), /* @__PURE__ */ React.createElement("span", { className: "mono-meta text-[11px] font-medium text-[#787774] dark:text-[#aaa7a0] bg-[#e6e4df] dark:bg-[#2a2a27] rounded-full px-2 py-0.5 shrink-0" }, count))),
   /* @__PURE__ */ React.createElement("div", { className: "px-2.5 pb-2.5 flex-1 overflow-y-auto space-y-2.5 custom-scroll" }, isEmpty && /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-center justify-center gap-2 py-10 text-slate-300 dark:text-slate-600 select-none" }, /* @__PURE__ */ React.createElement(Icon, { name: "Inbox", size: 22 }), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] font-semibold" }, "Sin tareas")), children, onAdd && /* @__PURE__ */ React.createElement(
     "button",
     {
@@ -5936,16 +5867,16 @@ var DateHeader = ({
     if (compareDateOnlyStrings(val, effectiveRangeStart) < 0)
       setRangeStart(val);
   };
-  const segBase = "shrink-0 px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all flex items-center gap-1.5";
-  const segActive = "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm";
+  const segBase = "shrink-0 px-3 py-1.5 text-[13px] font-medium rounded-md transition-colors flex items-center gap-1.5";
+  const segActive = "bg-[#111111] dark:bg-[#f1efe9] text-white dark:text-[#181817]";
   const segIdle = "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200";
-  return /* @__PURE__ */ React.createElement("div", { className: "flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-white dark:bg-slate-900 px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-3 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2.5 shrink-0" }, /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "surface flex flex-col xl:flex-row xl:items-center justify-between gap-4 px-4 py-3.5" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-3 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2.5 shrink-0" }, /* @__PURE__ */ React.createElement(
     "span",
     {
-      className: `w-9 h-9 rounded-xl flex items-center justify-center bg-${btnColor}-500/10 text-${btnColor}-600 dark:text-${btnColor}-400`
+      className: "w-9 h-9 rounded-md flex items-center justify-center bg-[#f1f0ed] dark:bg-[#2a2a27] text-[#555552] dark:text-[#d3d0c9]"
     },
     /* @__PURE__ */ React.createElement(Icon, { name: btnIcon, size: 18 })
-  ), /* @__PURE__ */ React.createElement("h2", { className: "text-lg font-bold text-slate-800 dark:text-white truncate" }, title)), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-2 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl max-w-full overflow-x-auto kanban-mobile-scroll" }, /* @__PURE__ */ React.createElement(
+  ), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-2xl text-[#2f3437] dark:text-[#f1efe9] truncate" }, title)), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-2 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex bg-[#f1f0ed] dark:bg-[#2a2a27] p-1 rounded-md max-w-full overflow-x-auto kanban-mobile-scroll" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setFilterMode("date"),
@@ -5964,7 +5895,7 @@ var DateHeader = ({
     "button",
     {
       onClick: () => setFilterMode("overdue"),
-      className: `${segBase} ${filterMode === "overdue" ? "bg-red-500 text-white shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-red-500"}`
+      className: `${segBase} ${filterMode === "overdue" ? "bg-[#fdebec] text-[#9f2f2d]" : "text-slate-500 dark:text-slate-400 hover:text-[#9f2f2d]"}`
     },
     "Atrasadas ",
     /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 14 })
@@ -5979,7 +5910,7 @@ var DateHeader = ({
       className: `${segBase} ${filterMode === "all" ? segActive : segIdle}`
     },
     historyLoading ? "Cargando" : "Todas"
-  )), setOwnershipFilter && /* @__PURE__ */ React.createElement("div", { className: "flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl max-w-full overflow-x-auto kanban-mobile-scroll" }, /* @__PURE__ */ React.createElement(
+  )), setOwnershipFilter && /* @__PURE__ */ React.createElement("div", { className: "flex bg-[#f1f0ed] dark:bg-[#2a2a27] p-1 rounded-md max-w-full overflow-x-auto kanban-mobile-scroll" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setOwnershipFilter("all"),
@@ -5990,7 +5921,7 @@ var DateHeader = ({
     "button",
     {
       onClick: () => setOwnershipFilter("mine"),
-      className: `${segBase} ${ownershipFilter === "mine" ? `bg-${btnColor}-500 text-white shadow-sm` : segIdle}`
+      className: `${segBase} ${ownershipFilter === "mine" ? "bg-[#111111] dark:bg-[#f1efe9] text-white dark:text-[#181817]" : segIdle}`
     },
     "Asignadas a m\xED"
   )), filterMode === "date" && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
@@ -8369,7 +8300,7 @@ var TaskDetailModal = ({
           size: 13,
           className: "text-slate-500"
         }
-      ), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Actividad"), totalLoggedMs > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1" }, /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 11 }), formatDuration(totalLoggedMs))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-3 mb-6" }, /* @__PURE__ */ React.createElement("div", { className: "w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[10px] shrink-0" }, (currentUserProfile?.name || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "flex-1 relative" }, /* @__PURE__ */ React.createElement(
+      ), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Actividad"), totalLoggedMs > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1" }, /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 11 }), formatDuration(totalLoggedMs))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-3 mb-6" }, /* @__PURE__ */ React.createElement("div", { className: "w-8 h-8 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[10px] shrink-0" }, (currentUserProfile?.name || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "flex-1 relative" }, /* @__PURE__ */ React.createElement(
         "textarea",
         {
           ref: commentInputRef,
@@ -8398,7 +8329,7 @@ var TaskDetailModal = ({
           },
           className: "w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
         },
-        /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
+        /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
         /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1 text-left" }, p.name)
       ))), commentText.trim() && /* @__PURE__ */ React.createElement("div", { className: "flex justify-end mt-2" }, /* @__PURE__ */ React.createElement(
         "button",
@@ -8431,7 +8362,7 @@ var TaskDetailModal = ({
             size: 12,
             className: "text-emerald-600 dark:text-emerald-400"
           }
-        )), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement("span", { className: "font-bold text-slate-700 dark:text-slate-200" }, item.authorName), " ", "registr\xF3", " ", /* @__PURE__ */ React.createElement("span", { className: "font-bold text-emerald-600 dark:text-emerald-400" }, formatDuration(item.durationMs)), /* @__PURE__ */ React.createElement("span", { className: "text-slate-500 text-xs ml-2" }, relativeTime(item.loggedAt)))) : /* @__PURE__ */ React.createElement("div", { key: item.id, className: "flex gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5" }, (item.authorName || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2 mb-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm font-bold text-slate-700 dark:text-slate-200" }, item.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500" }, relativeTime(item.createdAt))), /* @__PURE__ */ React.createElement("div", { className: "bg-slate-50 dark:bg-slate-800 rounded-xl rounded-tl-none px-4 py-3 border border-slate-200 dark:border-slate-700" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words" }, item.text.split(/(@\S+)/g).map(
+        )), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement("span", { className: "font-bold text-slate-700 dark:text-slate-200" }, item.authorName), " ", "registr\xF3", " ", /* @__PURE__ */ React.createElement("span", { className: "font-bold text-emerald-600 dark:text-emerald-400" }, formatDuration(item.durationMs)), /* @__PURE__ */ React.createElement("span", { className: "text-slate-500 text-xs ml-2" }, relativeTime(item.loggedAt)))) : /* @__PURE__ */ React.createElement("div", { key: item.id, className: "flex gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "w-7 h-7 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5" }, (item.authorName || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2 mb-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm font-bold text-slate-700 dark:text-slate-200" }, item.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500" }, relativeTime(item.createdAt))), /* @__PURE__ */ React.createElement("div", { className: "bg-slate-50 dark:bg-slate-800 rounded-xl rounded-tl-none px-4 py-3 border border-slate-200 dark:border-slate-700" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words" }, item.text.split(/(@\S+)/g).map(
           (part, i) => part.startsWith("@") ? /* @__PURE__ */ React.createElement(
             "span",
             {
@@ -8450,7 +8381,7 @@ var TaskDetailModal = ({
             key: uid,
             className: "min-h-[34px] flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full pl-1 pr-2 py-1 group"
           },
-          /* @__PURE__ */ React.createElement("div", { className: "w-5 h-5 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[8px] shrink-0" }, person.name.slice(0, 2).toUpperCase()),
+          /* @__PURE__ */ React.createElement("div", { className: "w-5 h-5 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[8px] shrink-0" }, person.name.slice(0, 2).toUpperCase()),
           /* @__PURE__ */ React.createElement("span", { className: "text-[11px] font-semibold text-slate-700 dark:text-slate-300 leading-none" }, person.name.split(" ")[0]),
           canAct && /* @__PURE__ */ React.createElement(
             "button",
@@ -8516,7 +8447,7 @@ var TaskDetailModal = ({
                 }
               )
             ),
-            /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
+            /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
             /* @__PURE__ */ React.createElement(
               "span",
               {
@@ -9113,7 +9044,7 @@ var CreateTaskModal = ({
           active: !!assignee,
           onClick: () => setAssigneeOpen((o) => !o)
         },
-        assignee ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[8px]" }, assignee.name.slice(0, 2).toUpperCase()), assignee.name) : "Persona asignada"
+        assignee ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[8px]" }, assignee.name.slice(0, 2).toUpperCase()), assignee.name) : "Persona asignada"
       ), assigneeOpen && /* @__PURE__ */ React.createElement(
         "div",
         {
@@ -9131,7 +9062,7 @@ var CreateTaskModal = ({
             },
             className: "w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
           },
-          /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
+          /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
           /* @__PURE__ */ React.createElement(
             "span",
             {
@@ -9746,7 +9677,7 @@ var Modal = ({
           defaultValue: data?.clientId || "",
           className: "w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none"
         },
-        /* @__PURE__ */ React.createElement("option", { value: "" }, "\u{1F4BC} Sin cliente (Tarea interna)"),
+        /* @__PURE__ */ React.createElement("option", { value: "" }, "Sin cliente (Tarea interna)"),
         clients.map((c) => /* @__PURE__ */ React.createElement("option", { key: c.id, value: c.id }, c.name))
       ), /* @__PURE__ */ React.createElement(
         Input,
@@ -9790,7 +9721,7 @@ var Modal = ({
           defaultValue: data?.clientId || "",
           className: "w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none"
         },
-        /* @__PURE__ */ React.createElement("option", { value: "" }, "\u{1F4BC} Sin cliente (Tarea interna)"),
+        /* @__PURE__ */ React.createElement("option", { value: "" }, "Sin cliente (Tarea interna)"),
         clients.map((c) => /* @__PURE__ */ React.createElement("option", { key: c.id, value: c.id }, c.name))
       ), /* @__PURE__ */ React.createElement(
         "select",
@@ -9806,7 +9737,7 @@ var Modal = ({
             value: "normal",
             className: "text-amber-600 dark:text-amber-400"
           },
-          "\u{1F7E1} Prioridad Normal"
+          "Prioridad normal"
         ),
         /* @__PURE__ */ React.createElement(
           "option",
@@ -9814,7 +9745,7 @@ var Modal = ({
             value: "urgente",
             className: "text-red-600 dark:text-red-400"
           },
-          "\u{1F534} URGENTE"
+          "Urgente"
         ),
         /* @__PURE__ */ React.createElement(
           "option",
@@ -9822,7 +9753,7 @@ var Modal = ({
             value: "recurrente",
             className: "text-emerald-600 dark:text-emerald-400"
           },
-          "\u{1F7E2} Recurrente"
+          "Recurrente"
         )
       ), /* @__PURE__ */ React.createElement(
         "select",

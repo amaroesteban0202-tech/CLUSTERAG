@@ -1,0 +1,28 @@
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
+
+const root = process.cwd();
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const app = read("src/app/main.jsx");
+const css = read("src/styles/main.css");
+const html = read("index.html");
+
+const checks = [
+  ["Phosphor icons", app.includes("@phosphor-icons/react") && html.includes("@phosphor-icons/react")],
+  ["Newsreader editorial type", css.includes('font-family: "Newsreader"') && html.includes("Newsreader")],
+  ["warm canvas token", css.includes("--canvas: #f7f6f3")],
+  ["flat surfaces", css.includes(".surface") && css.includes("box-shadow: none")],
+  ["consolidated team navigation", app.includes('label="Equipo"')],
+  ["consolidated calendar navigation", app.includes('label="Calendario"')],
+  ["compact KPI table", app.includes("Cumplimiento") && app.includes("Pendientes") && app.includes("KPI")],
+  ["no gradient source styles", !/\b(?:linear|radial)-gradient\b|\bbg-gradient-/i.test(`${app}\n${css}`)],
+  ["no Lucide dependency", !`${app}\n${html}`.includes("lucide-react")],
+];
+
+const failed = checks.filter(([, passed]) => !passed);
+for (const [label, passed] of checks) {
+  console.log(`${passed ? "PASS" : "FAIL"} ${label}`);
+}
+
+if (failed.length) process.exit(1);

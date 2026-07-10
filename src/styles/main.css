@@ -1,14 +1,160 @@
 :root {
-    --color-primary: #7c3aed;
-    --color-primary-hover: #6d28d9;
-    --color-accent: #f59e0b;
-    --color-sidebar-bg: #0f172a;
-    --color-sidebar-text: #f1f5f9;
+    color-scheme: light;
+    --canvas: #f7f6f3;
+    --surface: #ffffff;
+    --surface-subtle: #fbfbfa;
+    --surface-muted: #f1f0ed;
+    --text: #2f3437;
+    --text-muted: #787774;
+    --border: #e6e4df;
+    --primary: #111111;
+    --primary-hover: #333333;
+    --status-red-bg: #fdebec;
+    --status-red-text: #9f2f2d;
+    --status-blue-bg: #e1f3fe;
+    --status-blue-text: #1f6c9f;
+    --status-green-bg: #edf3ec;
+    --status-green-text: #346538;
+    --status-yellow-bg: #fbf3db;
+    --status-yellow-text: #956400;
+    --color-primary: var(--primary);
+    --color-primary-hover: var(--primary-hover);
 }
 
-body { font-family: 'Plus Jakarta Sans', sans-serif; }
+.dark {
+    color-scheme: dark;
+    --canvas: #181817;
+    --surface: #222220;
+    --surface-subtle: #1d1d1b;
+    --surface-muted: #2a2a27;
+    --text: #f1efe9;
+    --text-muted: #aaa7a0;
+    --border: rgba(255, 255, 255, 0.09);
+    --primary: #f1efe9;
+    --primary-hover: #ffffff;
+}
+
+html, body, #root { min-height: 100%; }
+body {
+    margin: 0;
+    font-family: "Helvetica Neue", "SF Pro Display", Arial, sans-serif;
+    background: var(--canvas);
+    color: var(--text);
+    letter-spacing: -0.01em;
+    line-height: 1.5;
+}
+h1, h2, .editorial-title {
+    font-family: "Newsreader", Georgia, serif;
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 1.08;
+}
+.mono-meta { font-family: "SF Mono", "Geist Mono", Consolas, monospace; }
+.app-shell { background: var(--canvas); color: var(--text); }
+.app-sidebar { background: var(--surface); border-color: var(--border); }
+.app-main { background: var(--canvas); }
+.surface {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: none;
+}
+.surface-subtle { background: var(--surface-subtle); }
+.eyebrow {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.page-description { color: var(--text-muted); font-size: 0.9rem; }
+.primary-action {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: var(--primary);
+    color: var(--surface);
+    border: 1px solid var(--primary);
+    border-radius: 6px;
+    box-shadow: none;
+}
+.primary-action:hover { background: var(--primary-hover); }
+.quiet-action {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+.quiet-action:hover { background: var(--surface-muted); }
+
+/* ponytail: one global geometry rule replaces hundreds of decorative Tailwind edits. */
+.rounded-3xl, .rounded-2xl { border-radius: 12px !important; }
+.shadow-2xl, .shadow-xl, .shadow-lg, .shadow-md { box-shadow: none !important; }
+[class~="font-black"] { font-weight: 700 !important; }
+[class~="text-[9px]"] { font-size: 0.6875rem !important; }
+[class~="text-[10px]"] { font-size: 0.75rem !important; }
+[class*="backdrop-blur"] { backdrop-filter: none !important; }
+[class~="bg-slate-50"] { background-color: var(--surface-subtle) !important; }
+
+/* Legacy accent utilities now resolve to one quiet editorial palette. */
+[class~="bg-purple-600"],
+[class~="bg-purple-500"],
+[class~="bg-indigo-600"],
+[class~="bg-indigo-500"],
+[class~="bg-violet-600"],
+[class~="bg-violet-500"] {
+    background-color: var(--primary) !important;
+    color: var(--surface) !important;
+}
+[class~="bg-purple-50"], [class~="bg-purple-100"],
+[class~="bg-indigo-50"], [class~="bg-indigo-100"],
+[class~="bg-violet-50"], [class~="bg-violet-100"] {
+    background-color: var(--status-blue-bg) !important;
+}
+[class~="text-purple-300"], [class~="text-purple-400"],
+[class~="text-purple-500"], [class~="text-purple-600"], [class~="text-purple-700"],
+[class~="text-indigo-300"], [class~="text-indigo-400"],
+[class~="text-indigo-500"], [class~="text-indigo-600"], [class~="text-indigo-700"],
+[class~="text-violet-300"], [class~="text-violet-400"],
+[class~="text-violet-500"], [class~="text-violet-600"], [class~="text-violet-700"] {
+    color: var(--status-blue-text) !important;
+}
+[class~="border-purple-200"], [class~="border-purple-300"], [class~="border-purple-500"],
+[class~="border-indigo-200"], [class~="border-indigo-300"], [class~="border-indigo-500"],
+[class~="border-violet-200"], [class~="border-violet-300"], [class~="border-violet-500"] {
+    border-color: #b8dbea !important;
+}
+[class*="focus:ring-purple"]:focus,
+[class*="focus:ring-indigo"]:focus,
+[class*="focus:ring-violet"]:focus {
+    --tw-ring-color: rgba(17, 17, 17, 0.12) !important;
+    border-color: var(--primary) !important;
+}
+.dark [class~="dark:bg-slate-950"] { background-color: var(--canvas) !important; }
+.dark [class~="dark:bg-slate-900"] { background-color: var(--surface) !important; }
+.dark [class~="dark:bg-slate-800"] { background-color: var(--surface-muted) !important; }
+.dark [class~="dark:border-slate-800"],
+.dark [class~="dark:border-slate-700"] { border-color: var(--border) !important; }
+.dark [class~="dark:text-slate-400"],
+.dark [class~="dark:text-slate-500"] { color: var(--text-muted) !important; }
 button, [role="button"], input, select, textarea {
     touch-action: manipulation;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select,
+textarea {
+    background-color: var(--surface);
+    border-color: var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    box-shadow: none;
 }
 button, [role="button"] {
     min-height: 44px;
@@ -69,8 +215,7 @@ textarea:focus-visible,
     transition: none !important;
 }
 .drag-over {
-    background-color: rgba(139, 92, 246, 0.08) !important;
-    border-color: rgba(139, 92, 246, 0.6) !important;
+    background-color: var(--status-blue-bg) !important;
+    border-color: var(--status-blue-text) !important;
     border-style: dashed !important;
-    transform: scale(1.01) !important;
 }
