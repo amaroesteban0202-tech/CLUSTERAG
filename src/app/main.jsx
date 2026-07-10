@@ -5272,6 +5272,14 @@ function App() {
                 managementTasks={managementTasks}
                 currentUserProfile={currentUserProfile}
                 onSignIn={handleGoogleSignIn}
+                onNavigate={handleNavigate}
+                onOpenTask={(task, type) =>
+                  setTaskDetailConfig({
+                    isOpen: true,
+                    task,
+                    type,
+                  })
+                }
               />
             ))}
           {view === "clients" && (
@@ -6378,8 +6386,30 @@ const SearchBar = ({ searchTerm, setSearchTerm, placeholder }) => (
   </div>
 );
 
-const StatCard = ({ title, value, icon, detail = "" }) => (
-  <div className="surface flex min-h-[118px] items-start justify-between p-5">
+const StatCard = ({
+  title,
+  value,
+  icon,
+  detail = "",
+  onClick = null,
+  actionLabel = "",
+}) => {
+  const CardElement = onClick ? "button" : "div";
+  return (
+  <CardElement
+    {...(onClick
+      ? {
+          type: "button",
+          onClick,
+          "aria-label": actionLabel || `Abrir ${title}`,
+        }
+      : {})}
+    className={`surface group flex min-h-[118px] w-full items-start justify-between p-5 text-left transition-colors ${
+      onClick
+        ? "hover:border-[#8f8c85] hover:bg-[#fbfbfa] dark:hover:border-[#5b605c] dark:hover:bg-[#242825]"
+        : ""
+    }`}
+  >
     <div className="min-w-0">
       <p className="text-xs font-medium text-[#787774] dark:text-[#aaa7a0]">
         {title}
@@ -6393,11 +6423,21 @@ const StatCard = ({ title, value, icon, detail = "" }) => (
         </p>
       )}
     </div>
-    <div className="rounded-lg bg-[#f1f0ed] p-2.5 text-[#555552] dark:bg-[#2a2a27] dark:text-[#d3d0c9]">
-      <Icon name={icon} size={20} />
+    <div className="flex items-center gap-2">
+      {onClick && (
+        <Icon
+          name="ArrowRight"
+          size={16}
+          className="text-[#9a9893] transition-transform group-hover:translate-x-0.5 dark:text-[#8f8c85]"
+        />
+      )}
+      <div className="rounded-lg bg-[#f1f0ed] p-2.5 text-[#555552] dark:bg-[#2a2a27] dark:text-[#d3d0c9]">
+        <Icon name={icon} size={20} />
+      </div>
     </div>
-  </div>
-);
+  </CardElement>
+  );
+};
 
 const Input = ({ label, id, className = "", ...props }) => {
   const reactId = useId();
@@ -6569,6 +6609,7 @@ const PortfolioHealthChart = ({
   activos,
   pausados,
   inactivos,
+  onOpenClients,
 }) => {
   const segments = [
     {
@@ -6650,9 +6691,12 @@ const PortfolioHealthChart = ({
               ? Math.round((segment.value / totalClients) * 100)
               : 0;
           return (
-            <div
+            <button
+              type="button"
               key={segment.key}
-              className="min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40"
+              onClick={onOpenClients}
+              aria-label={`Ver clientes ${segment.label.toLowerCase()}`}
+              className="group min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-3 text-left shadow-sm transition-colors hover:border-[#8f8c85] dark:border-slate-800 dark:bg-slate-950/40 dark:hover:border-[#5b605c]"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex items-center gap-2">
@@ -6682,7 +6726,7 @@ const PortfolioHealthChart = ({
                   }}
                 />
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -6695,6 +6739,7 @@ const ProgressOverviewChart = ({
   completedTasks,
   totalTasks,
   groups,
+  onNavigate,
 }) => {
   const safePercent = clampPercent(completionPercent);
   const pendingTasks = Math.max(totalTasks - completedTasks, 0);
@@ -6731,9 +6776,12 @@ const ProgressOverviewChart = ({
         {groups.map((group) => {
           const palette = getDashboardPalette(group.color);
           return (
-            <div
+            <button
+              type="button"
               key={group.key}
-              className="min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40"
+              onClick={() => onNavigate(group.view)}
+              aria-label={`Abrir ${group.label}`}
+              className="group min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-3 text-left shadow-sm transition-colors hover:border-[#8f8c85] dark:border-slate-800 dark:bg-slate-950/40 dark:hover:border-[#5b605c]"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -6771,7 +6819,7 @@ const ProgressOverviewChart = ({
                   }}
                 />
               </div>
-            </div>
+            </button>
           );
         })}
 
@@ -6817,6 +6865,8 @@ const DashboardView = ({
   managementTasks = [],
   currentUserProfile,
   onSignIn,
+  onNavigate,
+  onOpenTask,
 }) => {
   const [rankingRefDate, setRankingRefDate] = React.useState(getHondurasTodayStr());
 
@@ -6874,6 +6924,7 @@ const DashboardView = ({
       total: monthlyEditingTasks.length,
       completed: completedEditingTasks,
       color: "amber",
+      view: "editions",
     },
     {
       key: "account",
@@ -6882,6 +6933,7 @@ const DashboardView = ({
       total: monthlyAccountTasks.length,
       completed: completedAccountTasks,
       color: "indigo",
+      view: "account-room",
     },
     {
       key: "management",
@@ -6890,6 +6942,7 @@ const DashboardView = ({
       total: monthlyManagementTasks.length,
       completed: completedManagementTasks,
       color: "cyan",
+      view: "management-room",
     },
   ].map((group) => ({
     ...group,
@@ -6918,13 +6971,21 @@ const DashboardView = ({
           t.status !== "aprobado" &&
           t.status !== "publicado",
       )
-      .map((t) => ({ ...t, _type: "Edición" })),
+      .map((t) => ({
+        ...t,
+        _type: "Edición",
+        _taskType: "editingTask",
+      })),
     ...monthlyAccountTasks
       .filter(
         (t) =>
           isDateBeforeDateString(t.date, todayStr) && t.status !== "publicado",
       )
-      .map((t) => ({ ...t, _type: "Account" })),
+      .map((t) => ({
+        ...t,
+        _type: "Account",
+        _taskType: "accountTask",
+      })),
     ...monthlyManagementTasks
       .filter(
         (t) =>
@@ -6932,7 +6993,11 @@ const DashboardView = ({
             isDateBeforeDateString(t.date, todayStr)) &&
           t.status !== "cerrado",
       )
-      .map((t) => ({ ...t, _type: "Gestion" })),
+      .map((t) => ({
+        ...t,
+        _type: "Gestion",
+        _taskType: "managementTask",
+      })),
   ]
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .slice(0, 6);
@@ -6987,24 +7052,32 @@ const DashboardView = ({
           value={activos}
           icon="Briefcase"
           detail={`${realTotalClients} clientes en cartera`}
+          onClick={() => onNavigate("clients")}
+          actionLabel="Abrir clientes activos"
         />
         <StatCard
           title="Account Managers"
           value={managers.length}
           icon="Users"
           detail="Equipo asignado"
+          onClick={() => onNavigate("managers")}
+          actionLabel="Abrir equipo de Account Managers"
         />
         <StatCard
           title="Accounts pendientes"
           value={openMonthlyAccountTasks}
           icon="LayoutList"
           detail={`${monthlyAccountTasks.length} tareas del mes`}
+          onClick={() => onNavigate("account-room")}
+          actionLabel="Abrir tareas pendientes de Accounts"
         />
         <StatCard
           title="Edición pendiente"
           value={pendingMonthlyEditingTasks}
           icon="Video"
           detail={`${monthlyEditingTasks.length} tareas del mes`}
+          onClick={() => onNavigate("editions")}
+          actionLabel="Abrir tareas pendientes de Edición"
         />
       </div>
 
@@ -7025,6 +7098,7 @@ const DashboardView = ({
                 completedTasks={completedTasks}
                 totalTasks={totalTasks}
                 groups={progressGroups}
+                onNavigate={onNavigate}
               />
             </div>
           </div>
@@ -7055,9 +7129,12 @@ const DashboardView = ({
               <EmptyState icon="CheckCircle2" text="No hay tareas urgentes." />
             ) : (
               urgentTasks.map((t) => (
-                <div
+                <button
+                  type="button"
                   key={t.id}
-                  className="p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-start gap-3 group cursor-pointer min-w-0"
+                  onClick={() => onOpenTask(t, t._taskType)}
+                  aria-label={`Abrir tarea ${t.title}`}
+                  className="group flex min-w-0 w-full items-start gap-3 rounded-2xl border border-slate-100 p-3.5 text-left transition-colors hover:border-[#8f8c85] hover:bg-slate-50 dark:border-slate-800 dark:hover:border-[#5b605c] dark:hover:bg-slate-800/50"
                 >
                   <div
                     className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${isDateBeforeDateString(t.date, todayStr) ? "bg-red-500" : "bg-amber-500"}`}
@@ -7077,7 +7154,12 @@ const DashboardView = ({
                       </span>
                     </div>
                   </div>
-                </div>
+                  <Icon
+                    name="ArrowRight"
+                    size={16}
+                    className="mt-1 shrink-0 text-[#9a9893] transition-transform group-hover:translate-x-0.5 dark:text-[#8f8c85]"
+                  />
+                </button>
               ))
             )}
           </div>
@@ -7103,6 +7185,7 @@ const DashboardView = ({
           activos={activos}
           pausados={pausados}
           inactivos={inactivos}
+          onOpenClients={() => onNavigate("clients")}
         />
       </div>
 

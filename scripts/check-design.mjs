@@ -19,6 +19,8 @@ const checks = [
   ["monthly dashboard task scope", app.includes("monthlyEditingTasks") && app.includes("monthlyAccountTasks") && app.includes("monthlyManagementTasks")],
   ["dashboard period is visible", app.includes("dashboardPeriod.label") && app.includes("Resumen mensual")],
   ["dashboard charts use comparison bars", !app.includes("buildRingSegments") && !app.includes("strokeDasharray")],
+  ["dashboard cards navigate", app.includes('onClick={() => onNavigate("account-room")}') && app.includes('onClick={() => onNavigate("editions")}')],
+  ["urgent tasks open details", app.includes("onOpenTask(t, t._taskType)") && app.includes('_taskType: "managementTask"')],
   ["charcoal theme is the default", app.includes('localStorage.setItem("cluster_theme", "dark")') && html.includes("2026-07-charcoal-default")],
   ["company logo asset", fs.existsSync(path.join(root, "src/app/assets/cluster-symbol.webp")) && app.includes("cluster-symbol.webp")],
   ["two-font system", css.includes('font-family: Arial, sans-serif') && css.includes('font-family: "Newsreader"') && !/SF Mono|Geist Mono|Consolas/.test(css)],

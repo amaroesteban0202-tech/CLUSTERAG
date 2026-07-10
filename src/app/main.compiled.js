@@ -3894,7 +3894,13 @@ function App() {
       accountTasks,
       managementTasks,
       currentUserProfile,
-      onSignIn: handleGoogleSignIn
+      onSignIn: handleGoogleSignIn,
+      onNavigate: handleNavigate,
+      onOpenTask: (task, type) => setTaskDetailConfig({
+        isOpen: true,
+        task,
+        type
+      })
     }
   )), view === "clients" && /* @__PURE__ */ React.createElement(
     ClientsView,
@@ -4790,7 +4796,36 @@ var SearchBar = ({ searchTerm, setSearchTerm, placeholder }) => /* @__PURE__ */ 
     className: "min-h-[46px] w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-500"
   }
 ));
-var StatCard = ({ title, value, icon, detail = "" }) => /* @__PURE__ */ React.createElement("div", { className: "surface flex min-h-[118px] items-start justify-between p-5" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-medium text-[#787774] dark:text-[#aaa7a0]" }, title), /* @__PURE__ */ React.createElement("p", { className: "mono-meta mt-2 text-3xl font-semibold leading-none text-[#2f3437] dark:text-[#f1efe9]" }, value), detail && /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-xs text-[#9a9893] dark:text-[#8f8c85]" }, detail)), /* @__PURE__ */ React.createElement("div", { className: "rounded-lg bg-[#f1f0ed] p-2.5 text-[#555552] dark:bg-[#2a2a27] dark:text-[#d3d0c9]" }, /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 20 })));
+var StatCard = ({
+  title,
+  value,
+  icon,
+  detail = "",
+  onClick = null,
+  actionLabel = ""
+}) => {
+  const CardElement = onClick ? "button" : "div";
+  return /* @__PURE__ */ React.createElement(
+    CardElement,
+    {
+      ...onClick ? {
+        type: "button",
+        onClick,
+        "aria-label": actionLabel || `Abrir ${title}`
+      } : {},
+      className: `surface group flex min-h-[118px] w-full items-start justify-between p-5 text-left transition-colors ${onClick ? "hover:border-[#8f8c85] hover:bg-[#fbfbfa] dark:hover:border-[#5b605c] dark:hover:bg-[#242825]" : ""}`
+    },
+    /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-medium text-[#787774] dark:text-[#aaa7a0]" }, title), /* @__PURE__ */ React.createElement("p", { className: "mono-meta mt-2 text-3xl font-semibold leading-none text-[#2f3437] dark:text-[#f1efe9]" }, value), detail && /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-xs text-[#9a9893] dark:text-[#8f8c85]" }, detail)),
+    /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, onClick && /* @__PURE__ */ React.createElement(
+      Icon,
+      {
+        name: "ArrowRight",
+        size: 16,
+        className: "text-[#9a9893] transition-transform group-hover:translate-x-0.5 dark:text-[#8f8c85]"
+      }
+    ), /* @__PURE__ */ React.createElement("div", { className: "rounded-lg bg-[#f1f0ed] p-2.5 text-[#555552] dark:bg-[#2a2a27] dark:text-[#d3d0c9]" }, /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 20 })))
+  );
+};
 var Input = ({ label, id, className = "", ...props }) => {
   const reactId = useId();
   const inputId = id || `input-${slugifyId(label || props.name || props.placeholder || reactId)}`;
@@ -4924,7 +4959,8 @@ var PortfolioHealthChart = ({
   totalClients,
   activos,
   pausados,
-  inactivos
+  inactivos,
+  onOpenClients
 }) => {
   const segments = [
     {
@@ -4971,10 +5007,13 @@ var PortfolioHealthChart = ({
   ), /* @__PURE__ */ React.createElement("div", { className: "mt-3 flex flex-wrap gap-x-5 gap-y-2" }, segments.map((segment) => /* @__PURE__ */ React.createElement("span", { key: segment.key, className: "flex items-center gap-2 text-xs text-[#787774] dark:text-[#aaa7a0]" }, /* @__PURE__ */ React.createElement("span", { className: "h-2 w-2 rounded-full", style: { backgroundColor: segment.strong } }), segment.label, " ", /* @__PURE__ */ React.createElement("strong", { className: "mono-meta text-[#2f3437] dark:text-[#f1efe9]" }, segment.value)))))), /* @__PURE__ */ React.createElement("div", { className: "grid min-w-0 gap-3 sm:grid-cols-3" }, segments.map((segment) => {
     const percent = totalClients > 0 ? Math.round(segment.value / totalClients * 100) : 0;
     return /* @__PURE__ */ React.createElement(
-      "div",
+      "button",
       {
+        type: "button",
         key: segment.key,
-        className: "min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40"
+        onClick: onOpenClients,
+        "aria-label": `Ver clientes ${segment.label.toLowerCase()}`,
+        className: "group min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-3 text-left shadow-sm transition-colors hover:border-[#8f8c85] dark:border-slate-800 dark:bg-slate-950/40 dark:hover:border-[#5b605c]"
       },
       /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
         "span",
@@ -5000,7 +5039,8 @@ var ProgressOverviewChart = ({
   completionPercent,
   completedTasks,
   totalTasks,
-  groups
+  groups,
+  onNavigate
 }) => {
   const safePercent = clampPercent(completionPercent);
   const pendingTasks = Math.max(totalTasks - completedTasks, 0);
@@ -5021,10 +5061,13 @@ var ProgressOverviewChart = ({
   ))), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 space-y-3" }, groups.map((group) => {
     const palette = getDashboardPalette(group.color);
     return /* @__PURE__ */ React.createElement(
-      "div",
+      "button",
       {
+        type: "button",
         key: group.key,
-        className: "min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40"
+        onClick: () => onNavigate(group.view),
+        "aria-label": `Abrir ${group.label}`,
+        className: "group min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-3 text-left shadow-sm transition-colors hover:border-[#8f8c85] dark:border-slate-800 dark:bg-slate-950/40 dark:hover:border-[#5b605c]"
       },
       /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
         "span",
@@ -5063,7 +5106,9 @@ var DashboardView = ({
   accountTasks,
   managementTasks = [],
   currentUserProfile,
-  onSignIn
+  onSignIn,
+  onNavigate,
+  onOpenTask
 }) => {
   const [rankingRefDate, setRankingRefDate] = React.useState(getHondurasTodayStr());
   const goToPrevMonth = () => {
@@ -5113,7 +5158,8 @@ var DashboardView = ({
       note: "Produccion audiovisual",
       total: monthlyEditingTasks.length,
       completed: completedEditingTasks,
-      color: "amber"
+      color: "amber",
+      view: "editions"
     },
     {
       key: "account",
@@ -5121,7 +5167,8 @@ var DashboardView = ({
       note: "Seguimiento comercial",
       total: monthlyAccountTasks.length,
       completed: completedAccountTasks,
-      color: "indigo"
+      color: "indigo",
+      view: "account-room"
     },
     {
       key: "management",
@@ -5129,7 +5176,8 @@ var DashboardView = ({
       note: "Operacion interna",
       total: monthlyManagementTasks.length,
       completed: completedManagementTasks,
-      color: "cyan"
+      color: "cyan",
+      view: "management-room"
     }
   ].map((group) => ({
     ...group,
@@ -5147,13 +5195,25 @@ var DashboardView = ({
   const urgentTasks = [
     ...monthlyEditingTasks.filter(
       (t) => (t.priority === "urgente" || isDateBeforeDateString(t.date, todayStr)) && t.status !== "aprobado" && t.status !== "publicado"
-    ).map((t) => ({ ...t, _type: "Edici\xF3n" })),
+    ).map((t) => ({
+      ...t,
+      _type: "Edici\xF3n",
+      _taskType: "editingTask"
+    })),
     ...monthlyAccountTasks.filter(
       (t) => isDateBeforeDateString(t.date, todayStr) && t.status !== "publicado"
-    ).map((t) => ({ ...t, _type: "Account" })),
+    ).map((t) => ({
+      ...t,
+      _type: "Account",
+      _taskType: "accountTask"
+    })),
     ...monthlyManagementTasks.filter(
       (t) => (t.priority === "urgente" || isDateBeforeDateString(t.date, todayStr)) && t.status !== "cerrado"
-    ).map((t) => ({ ...t, _type: "Gestion" }))
+    ).map((t) => ({
+      ...t,
+      _type: "Gestion",
+      _taskType: "managementTask"
+    }))
   ].sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 6);
   const dateOptions = {
     weekday: "long",
@@ -5182,7 +5242,9 @@ var DashboardView = ({
       title: "Clientes Activos",
       value: activos,
       icon: "Briefcase",
-      detail: `${realTotalClients} clientes en cartera`
+      detail: `${realTotalClients} clientes en cartera`,
+      onClick: () => onNavigate("clients"),
+      actionLabel: "Abrir clientes activos"
     }
   ), /* @__PURE__ */ React.createElement(
     StatCard,
@@ -5190,7 +5252,9 @@ var DashboardView = ({
       title: "Account Managers",
       value: managers.length,
       icon: "Users",
-      detail: "Equipo asignado"
+      detail: "Equipo asignado",
+      onClick: () => onNavigate("managers"),
+      actionLabel: "Abrir equipo de Account Managers"
     }
   ), /* @__PURE__ */ React.createElement(
     StatCard,
@@ -5198,7 +5262,9 @@ var DashboardView = ({
       title: "Accounts pendientes",
       value: openMonthlyAccountTasks,
       icon: "LayoutList",
-      detail: `${monthlyAccountTasks.length} tareas del mes`
+      detail: `${monthlyAccountTasks.length} tareas del mes`,
+      onClick: () => onNavigate("account-room"),
+      actionLabel: "Abrir tareas pendientes de Accounts"
     }
   ), /* @__PURE__ */ React.createElement(
     StatCard,
@@ -5206,7 +5272,9 @@ var DashboardView = ({
       title: "Edici\xF3n pendiente",
       value: pendingMonthlyEditingTasks,
       icon: "Video",
-      detail: `${monthlyEditingTasks.length} tareas del mes`
+      detail: `${monthlyEditingTasks.length} tareas del mes`,
+      onClick: () => onNavigate("editions"),
+      actionLabel: "Abrir tareas pendientes de Edici\xF3n"
     }
   )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 gap-4 xl:grid-cols-12" }, /* @__PURE__ */ React.createElement("div", { className: "xl:col-span-7" }, /* @__PURE__ */ React.createElement("div", { className: "h-full" }, /* @__PURE__ */ React.createElement("div", { className: "surface h-full p-6" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-base font-semibold text-[#2f3437] dark:text-[#f1efe9] mb-1" }, "Avance del mes"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Edici\xF3n, Accounts y Gesti\xF3n \xB7 ", dashboardPeriod.label)), /* @__PURE__ */ React.createElement(
     ProgressOverviewChart,
@@ -5214,13 +5282,17 @@ var DashboardView = ({
       completionPercent: compPercent,
       completedTasks,
       totalTasks,
-      groups: progressGroups
+      groups: progressGroups,
+      onNavigate
     }
   )))), /* @__PURE__ */ React.createElement("div", { className: "surface flex min-h-[360px] flex-col p-6 xl:col-span-5" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-base font-semibold text-[#2f3437] dark:text-[#f1efe9] mb-1" }, "Atenci\xF3n Requerida"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Solo tareas de ", dashboardPeriod.label)), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-black tracking-[0.12em] uppercase text-slate-500 dark:text-slate-400" }, urgentTasks.length), /* @__PURE__ */ React.createElement("div", { className: "p-2.5 bg-[#fdebec] text-[#9f2f2d] rounded-lg" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 18 })))), /* @__PURE__ */ React.createElement("div", { className: "flex-1 overflow-y-auto space-y-2 custom-scroll pr-2" }, urgentTasks.length === 0 ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "CheckCircle2", text: "No hay tareas urgentes." }) : urgentTasks.map((t) => /* @__PURE__ */ React.createElement(
-    "div",
+    "button",
     {
+      type: "button",
       key: t.id,
-      className: "p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-start gap-3 group cursor-pointer min-w-0"
+      onClick: () => onOpenTask(t, t._taskType),
+      "aria-label": `Abrir tarea ${t.title}`,
+      className: "group flex min-w-0 w-full items-start gap-3 rounded-2xl border border-slate-100 p-3.5 text-left transition-colors hover:border-[#8f8c85] hover:bg-slate-50 dark:border-slate-800 dark:hover:border-[#5b605c] dark:hover:bg-slate-800/50"
     },
     /* @__PURE__ */ React.createElement(
       "div",
@@ -5235,14 +5307,23 @@ var DashboardView = ({
       },
       "Vence: ",
       t.date
-    )))
+    ))),
+    /* @__PURE__ */ React.createElement(
+      Icon,
+      {
+        name: "ArrowRight",
+        size: 16,
+        className: "mt-1 shrink-0 text-[#9a9893] transition-transform group-hover:translate-x-0.5 dark:text-[#8f8c85]"
+      }
+    )
   ))))), /* @__PURE__ */ React.createElement("div", { className: "surface p-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-base font-semibold text-[#2f3437] dark:text-[#f1efe9]" }, "Distribuci\xF3n de cartera"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs text-slate-500 dark:text-slate-400" }, "Estado actual de los clientes activos, pausados e inactivos")), /* @__PURE__ */ React.createElement("span", { className: "mono-meta text-xs text-[#787774] dark:text-[#aaa7a0]" }, realTotalClients, " clientes totales")), /* @__PURE__ */ React.createElement(
     PortfolioHealthChart,
     {
       totalClients: realTotalClients,
       activos,
       pausados,
-      inactivos
+      inactivos,
+      onOpenClients: () => onNavigate("clients")
     }
   )), /* @__PURE__ */ React.createElement("div", { className: "surface p-5 md:p-6 mt-6" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold text-[#2f3437] dark:text-[#f1efe9] mb-1" }, "KPI mensual por Account"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "KPI: 50% cumplimiento ponderado, 30% puntualidad verificada y 20% carga completada del mes.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
     "button",
