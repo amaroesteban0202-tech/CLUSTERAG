@@ -7919,6 +7919,7 @@ const KanbanCard = ({
   due,
   assignee,
   menuItems = [],
+  selected = false,
 }) => {
   const accent = isOverdue
     ? "border-l-red-500"
@@ -7941,12 +7942,12 @@ const KanbanCard = ({
       draggable={draggable ? "true" : undefined}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className={`task-card group relative cursor-pointer rounded-lg border border-[#e2e0da] border-l-[3px] bg-white p-3.5 transition-colors hover:border-[#b8b5ae] focus-visible:outline-none dark:border-white/10 dark:bg-[#232624] dark:hover:border-white/20 ${accent}`}
+      className={`task-card group relative cursor-pointer rounded-xl border border-[#ddd9d1] border-l-[3px] bg-white p-4 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-px hover:border-[#aaa69d] focus-visible:outline-none dark:border-white/10 dark:bg-[#232724] dark:hover:border-white/20 ${selected ? "ring-2 ring-[#b78000]/70 dark:ring-[#e4aa19]/70" : ""} ${accent}`}
     >
       <div className="flex items-start justify-between gap-2 mb-1.5 min-h-[20px]">
         <div className="min-w-0 flex-1">
           {client && (
-            <span className="inline-flex max-w-full items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500 dark:text-slate-400">
+            <span className="inline-flex max-w-full items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500 dark:text-slate-400">
               <Icon name="Briefcase" size={10} className="shrink-0" />
               <span className="truncate">{client}</span>
             </span>
@@ -7966,12 +7967,12 @@ const KanbanCard = ({
         </div>
       </div>
 
-      <p className="mb-2 line-clamp-2 text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100">
+      <p className="mb-2.5 line-clamp-2 text-[15px] font-semibold leading-snug text-slate-800 dark:text-slate-100">
         {title}
       </p>
 
       {badges.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-2">
+        <div className="mb-2.5 flex flex-wrap gap-1.5">
           {badges.map((b, i) => (
             <span
               key={i}
@@ -7991,7 +7992,7 @@ const KanbanCard = ({
         </p>
       )}
 
-      <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5 dark:border-white/5">
+      <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-white/5">
         {due ? (
           <span
             className={`inline-flex items-center gap-1 text-[11px] font-semibold ${
@@ -8038,6 +8039,7 @@ const KanbanCard = ({
 const KanbanColumn = ({
   dotColor = "slate",
   title,
+  subtitle,
   count,
   onAdd,
   onDragOver,
@@ -8049,24 +8051,31 @@ const KanbanColumn = ({
   const columnColor = getDashboardPalette(dotColor).strong;
   return (
     <section
-      className="flex h-[calc(100dvh-15rem)] min-h-[28rem] w-[86vw] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-[#e2e0da] bg-[#efeee9] transition-colors dark:border-white/10 dark:bg-[#1a1d1b] sm:w-80 md:h-full md:min-h-0 md:w-auto md:shrink"
+      className="task-room-column flex h-[calc(100dvh-15rem)] min-h-[32rem] w-[88vw] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-[#dedbd4] bg-[#efeee9] transition-colors dark:border-white/10 dark:bg-[#191d1a] sm:w-[24rem] lg:h-full lg:min-h-0 lg:w-auto lg:shrink"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       aria-label={`${title}: ${count} tareas`}
     >
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[#dfddd7] bg-[#f7f6f3]/80 px-3.5 py-3 dark:border-white/10 dark:bg-[#1f2220]/90">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className="h-2.5 w-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: columnColor }}
-          />
-          <span className="truncate text-[13px] font-semibold text-[#2f3437] dark:text-[#f1efe9]">
-            {title}
-          </span>
-          <span className="mono-meta shrink-0 rounded-md bg-[#e6e4df] px-2 py-0.5 text-[11px] font-semibold text-[#787774] dark:bg-[#2a2a27] dark:text-[#aaa7a0]">
-            {count}
-          </span>
+      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-[#dfddd7] bg-[#f7f6f3]/80 px-4 py-3.5 dark:border-white/10 dark:bg-[#1f2320]/90">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: columnColor }}
+            />
+            <span className="truncate text-sm font-semibold text-[#2f3437] dark:text-[#f1efe9]">
+              {title}
+            </span>
+            <span className="mono-meta shrink-0 rounded-md bg-[#e6e4df] px-2 py-0.5 text-[11px] font-semibold text-[#787774] dark:bg-[#2a2a27] dark:text-[#aaa7a0]">
+              {count}
+            </span>
+          </div>
+          {subtitle && (
+            <p className="mt-1.5 pl-5 text-[11px] text-slate-500 dark:text-slate-400">
+              {subtitle}
+            </p>
+          )}
         </div>
         {onAdd && (
           <button
@@ -8080,7 +8089,7 @@ const KanbanColumn = ({
           </button>
         )}
       </header>
-      <div className="custom-scroll flex-1 space-y-2.5 overflow-y-auto overscroll-contain p-2.5">
+      <div className="custom-scroll flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
         {isEmpty && (
           <div className="flex h-full min-h-40 select-none flex-col items-center justify-center gap-2 text-slate-300 dark:text-slate-600">
             <Icon name="Inbox" size={24} />
@@ -8092,6 +8101,276 @@ const KanbanColumn = ({
     </section>
   );
 };
+
+const KanbanStage = ({
+  title,
+  dotColor = "slate",
+  tasks,
+  renderTask,
+  showHeader = true,
+  collapsible = false,
+  collapsedLimit = 3,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const color = getDashboardPalette(dotColor).strong;
+  const canCollapse = collapsible && tasks.length > collapsedLimit;
+  const visibleTasks = canCollapse && !expanded ? tasks.slice(0, collapsedLimit) : tasks;
+
+  return (
+    <section
+      className="rounded-lg border border-transparent transition-colors [&.drag-over]:border-[#b78000] [&.drag-over]:bg-[#b78000]/5"
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      aria-label={`${title}: ${tasks.length} tareas`}
+    >
+      {showHeader && (
+        <div className="mb-2 flex items-center justify-between rounded-lg border border-[#dfddd7] bg-[#f7f6f3] px-3 py-2.5 dark:border-white/10 dark:bg-[#202421]">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+            <span className="truncate text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-600 dark:text-slate-300">
+              {title}
+            </span>
+            <span className="rounded bg-[#e9e7e1] px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-[#2c302c] dark:text-slate-400">
+              {tasks.length}
+            </span>
+          </div>
+          {canCollapse && (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-black/5 dark:text-slate-400 dark:hover:bg-white/5"
+              aria-label={expanded ? `Contraer ${title}` : `Expandir ${title}`}
+            >
+              <Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={14} />
+            </button>
+          )}
+        </div>
+      )}
+      <div className="space-y-2.5">
+        {visibleTasks.map((task) => renderTask(task))}
+      </div>
+      {canCollapse && !expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#cbc7bf] px-3 py-2.5 text-xs font-semibold text-slate-500 hover:border-[#aaa69d] hover:text-slate-700 dark:border-white/15 dark:text-slate-400 dark:hover:border-white/25 dark:hover:text-slate-200"
+        >
+          Ver {tasks.length - collapsedLimit} más
+          <Icon name="ChevronDown" size={14} />
+        </button>
+      )}
+    </section>
+  );
+};
+
+const TaskRoomInspector = ({
+  task,
+  client,
+  assignee,
+  status,
+  onClose,
+  onOpenFull,
+}) => {
+  if (!task) return null;
+  const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+  const completed = checklist.filter((item) => item.done).length;
+  const progress = checklist.length ? Math.round((completed / checklist.length) * 100) : 0;
+  const activity = [
+    ...(Array.isArray(task.comments)
+      ? task.comments.map((item) => ({
+          id: item.id,
+          author: item.authorName || "Equipo",
+          text: item.text,
+          date: item.createdAt,
+        }))
+      : []),
+    ...(Array.isArray(task.timeEntries)
+      ? task.timeEntries.map((item) => ({
+          id: item.id,
+          author: item.authorName || "Equipo",
+          text: "Registró tiempo en la tarea",
+          date: item.loggedAt,
+        }))
+      : []),
+  ]
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+    .slice(0, 3);
+  const priority = task.priority
+    ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1)
+    : "Normal";
+  const isOverdue = isDateBeforeDateString(task.date, getHondurasTodayStr()) &&
+    !isCompletedStatus(task.status);
+
+  return (
+    <aside className="task-room-inspector fixed inset-x-3 bottom-3 top-20 z-40 flex min-h-0 flex-col overflow-hidden rounded-xl border border-[#d8d5ce] bg-[#f7f6f2] shadow-2xl dark:border-white/10 dark:bg-[#1c201d] 2xl:static 2xl:z-auto 2xl:shadow-none">
+      <div className="custom-scroll flex-1 overflow-y-auto p-5">
+        <div className="mb-6 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            {client && (
+              <p className="mb-2 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
+                <Icon name="Briefcase" size={11} />
+                {client}
+              </p>
+            )}
+            <h3 className="text-lg font-semibold leading-snug text-slate-900 dark:text-[#f1efe9]">
+              {task.title}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-black/5 dark:text-slate-400 dark:hover:bg-white/5"
+            aria-label="Cerrar inspector"
+          >
+            <Icon name="X" size={18} />
+          </button>
+        </div>
+
+        <div className="mb-6 grid grid-cols-2 gap-2">
+          <div className="rounded-lg border border-[#dedbd4] bg-white px-3 py-2.5 dark:border-white/10 dark:bg-[#242824]">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">Estado</p>
+            <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200">{status?.title || "Sin estado"}</p>
+          </div>
+          <div className={`rounded-lg border px-3 py-2.5 ${priority.toLowerCase() === "urgente" ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300" : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300"}`}>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.08em] opacity-70">Prioridad</p>
+            <p className="mt-1 text-xs font-semibold">{priority}</p>
+          </div>
+        </div>
+
+        <div className="mb-6 grid grid-cols-2 gap-4 border-b border-[#dedbd4] pb-6 dark:border-white/10">
+          <div>
+            <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">Responsable</p>
+            <div className="flex items-center gap-2">
+              {assignee ? (
+                <>
+                  {assignee.photo ? (
+                    <img src={assignee.photo} alt="" className="h-8 w-8 rounded-full object-cover" />
+                  ) : (
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-bold ${assignee.className}`}>
+                      {assignee.initials}
+                    </span>
+                  )}
+                  <span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{assignee.name}</span>
+                </>
+              ) : (
+                <span className="text-xs text-slate-500">Sin asignar</span>
+              )}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">Vencimiento</p>
+            <p className={`inline-flex items-center gap-1.5 text-xs font-semibold ${isOverdue ? "text-red-500" : "text-slate-700 dark:text-slate-200"}`}>
+              <Icon name="CalendarDays" size={14} />
+              {formatShortDate(task.date)}{isOverdue ? " · atrasada" : ""}
+            </p>
+          </div>
+        </div>
+
+        <div className="mb-6 border-b border-[#dedbd4] pb-6 dark:border-white/10">
+          <div className="mb-2.5 flex items-center justify-between">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">Progreso</p>
+            <span className="text-xs font-semibold text-slate-500">{progress}%</span>
+          </div>
+          <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-[#dedbd4] dark:bg-white/10">
+            <span className="block h-full rounded-full bg-[#b78000] transition-[width]" style={{ width: `${progress}%` }} />
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {checklist.length ? `${completed} de ${checklist.length} completadas` : "Sin checklist"}
+          </p>
+        </div>
+
+        {task.notes && (
+          <div className="mb-6 border-b border-[#dedbd4] pb-6 dark:border-white/10">
+            <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">Descripción</p>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600 dark:text-slate-300">{task.notes}</p>
+          </div>
+        )}
+
+        <div>
+          <p className="mb-3 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">Actividad reciente</p>
+          {activity.length ? (
+            <div className="space-y-3">
+              {activity.map((item) => (
+                <div key={item.id} className="flex gap-2.5">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2f6f58] text-[9px] font-bold text-white">
+                    {getInitials(item.author)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{item.author}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{item.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 dark:text-slate-400">Sin actividad registrada.</p>
+          )}
+        </div>
+      </div>
+      <div className="border-t border-[#dedbd4] p-4 dark:border-white/10">
+        <button
+          type="button"
+          onClick={onOpenFull}
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#171817] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#30322f] dark:bg-[#f1efe9] dark:text-[#181817] dark:hover:bg-white"
+        >
+          Abrir tarea completa
+          <Icon name="ExternalLink" size={15} />
+        </button>
+      </div>
+    </aside>
+  );
+};
+
+const TaskRoomWorkspace = ({
+  groups,
+  onAdd,
+  canAdd = true,
+  renderTask,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  inspector,
+}) => (
+  <div className={`task-room-workspace grid min-h-0 flex-1 gap-3 ${inspector ? "2xl:grid-cols-[minmax(0,1fr)_22rem]" : ""}`}>
+    <div className="task-room-board flex min-h-0 gap-3 overflow-x-auto pb-4 snap-x snap-mandatory kanban-mobile-scroll lg:grid lg:grid-cols-3 lg:overflow-hidden lg:pb-0">
+      {groups.map((group) => {
+        const count = group.stages.reduce((total, stage) => total + stage.tasks.length, 0);
+        return (
+          <KanbanColumn
+            key={group.id}
+            dotColor={group.color}
+            title={group.title}
+            subtitle={group.subtitle}
+            count={count}
+            onAdd={canAdd ? onAdd : undefined}
+            isEmpty={count === 0}
+          >
+            {group.stages.map((stage) => (
+              <KanbanStage
+                key={stage.id}
+                title={stage.title}
+                dotColor={stage.color}
+                tasks={stage.tasks}
+                renderTask={(task) => renderTask(task, stage)}
+                showHeader={group.stages.length > 1}
+                collapsible={stage.collapsible}
+                collapsedLimit={stage.collapsedLimit}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={(event) => onDrop(event, stage.id)}
+              />
+            ))}
+          </KanbanColumn>
+        );
+      })}
+    </div>
+    {inspector}
+  </div>
+);
 
 const DateHeader = ({
   currentDate,
@@ -8113,11 +8392,17 @@ const DateHeader = ({
   onLoadHistory,
   historyLoaded = false,
   historyLoading = false,
+  taskCount = 0,
 }) => {
   const today = getHondurasTodayStr();
   const hasRangeSupport = Boolean(setRangeStart && setRangeEnd);
   const effectiveRangeStart = rangeStart || today;
   const effectiveRangeEnd = rangeEnd || today;
+  const periodDate = new Date(`${currentDate || today}T12:00:00`);
+  const periodLabel = new Intl.DateTimeFormat("es-HN", {
+    month: "long",
+    year: "numeric",
+  }).format(periodDate);
 
   const handleRangeStartChange = (e) => {
     const val = e.target.value;
@@ -8132,33 +8417,57 @@ const DateHeader = ({
   };
 
   const segBase =
-    "shrink-0 px-3 py-1.5 text-[13px] font-medium rounded-md transition-colors flex items-center gap-1.5";
+    "shrink-0 min-h-9 px-3 py-2 text-[12px] font-medium rounded-lg transition-colors flex items-center gap-1.5";
   const segActive =
-    "bg-[#111111] dark:bg-[#f1efe9] text-white dark:text-[#181817]";
+    "bg-white text-[#252724] shadow-sm dark:bg-[#30342f] dark:text-[#f1efe9]";
   const segIdle =
-    "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200";
+    "text-slate-500 dark:text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/5 dark:hover:text-slate-200";
 
   return (
-    <div className="surface flex flex-col xl:flex-row xl:items-center justify-between gap-4 px-4 py-3.5">
-      <div className="flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-3 min-w-0">
-        <div className="flex items-center gap-2.5 shrink-0">
-          <span
-            className="w-9 h-9 rounded-md flex items-center justify-center bg-[#f1f0ed] dark:bg-[#2a2a27] text-[#555552] dark:text-[#d3d0c9]"
-          >
-            <Icon name={btnIcon} size={18} />
-          </span>
-          <h2 className="editorial-title text-2xl text-[#2f3437] dark:text-[#f1efe9] truncate">
+    <header className="task-room-header shrink-0 border-b border-[#dedbd4] pb-3 dark:border-white/10">
+      <div className="mb-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <h2 className="editorial-title truncate text-[clamp(1.75rem,3vw,2.5rem)] leading-none text-[#2f3437] dark:text-[#f1efe9]">
             {title}
           </h2>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            {taskCount} {taskCount === 1 ? "tarea" : "tareas"} · {periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1)}
+          </p>
         </div>
+        <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center lg:w-auto">
+          <SearchBar
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            placeholder="Buscar tarea..."
+          />
+          <div className="shrink-0">
+            <Button
+              onClick={() =>
+                onAdd(
+                  filterMode === "date"
+                    ? currentDate
+                    : filterMode === "range"
+                      ? effectiveRangeStart
+                      : today,
+                )
+              }
+              color={btnColor}
+              icon={btnIcon}
+              full
+            >
+              Nueva Tarea
+            </Button>
+          </div>
+        </div>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-2 min-w-0">
-          {/* Filtro por FECHA */}
-          <div className="flex bg-[#f1f0ed] dark:bg-[#2a2a27] p-1 rounded-md max-w-full overflow-x-auto kanban-mobile-scroll">
+      <div className="flex flex-wrap items-center gap-2">
+          <div className="flex max-w-full overflow-x-auto rounded-lg bg-[#ebe9e3] p-1 kanban-mobile-scroll dark:bg-[#242824]">
             <button
               onClick={() => setFilterMode("date")}
               className={`${segBase} ${filterMode === "date" ? segActive : segIdle}`}
             >
+              <Icon name="CalendarDays" size={14} />
               Día específico
             </button>
             {hasRangeSupport && (
@@ -8172,7 +8481,7 @@ const DateHeader = ({
             )}
             <button
               onClick={() => setFilterMode("overdue")}
-              className={`${segBase} ${filterMode === "overdue" ? "bg-[#fdebec] text-[#9f2f2d]" : "text-slate-500 dark:text-slate-400 hover:text-[#9f2f2d]"}`}
+              className={`${segBase} ${filterMode === "overdue" ? "bg-[#fdebec] text-[#9f2f2d] dark:bg-red-500/15 dark:text-red-300" : segIdle}`}
             >
               Atrasadas <Icon name="Flame" size={14} />
             </button>
@@ -8196,9 +8505,8 @@ const DateHeader = ({
               </button>
             )}
           </div>
-          {/* Filtro por ASIGNACIÓN */}
           {setOwnershipFilter && (
-            <div className="flex bg-[#f1f0ed] dark:bg-[#2a2a27] p-1 rounded-md max-w-full overflow-x-auto kanban-mobile-scroll">
+            <div className="flex max-w-full overflow-x-auto rounded-lg bg-[#ebe9e3] p-1 kanban-mobile-scroll dark:bg-[#242824]">
               <button
                 onClick={() => setOwnershipFilter("all")}
                 className={`${segBase} ${ownershipFilter === "all" ? segActive : segIdle}`}
@@ -8207,8 +8515,9 @@ const DateHeader = ({
               </button>
               <button
                 onClick={() => setOwnershipFilter("mine")}
-                className={`${segBase} ${ownershipFilter === "mine" ? "bg-[#111111] dark:bg-[#f1efe9] text-white dark:text-[#181817]" : segIdle}`}
+                className={`${segBase} ${ownershipFilter === "mine" ? segActive : segIdle}`}
               >
+                <Icon name="User" size={14} />
                 Asignadas a mí
               </button>
             </div>
@@ -8219,7 +8528,7 @@ const DateHeader = ({
                 type="date"
                 value={currentDate}
                 onChange={(e) => setCurrentDate(e.target.value)}
-                className="min-h-[40px] text-[13px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none"
+                className="min-h-10 rounded-lg border border-[#d8d5ce] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[#8e8a82] dark:border-white/10 dark:bg-[#242824] dark:text-slate-300"
               />
               {currentDate === today && (
                 <span className="text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 font-bold px-2 py-1 rounded-full shrink-0">
@@ -8234,7 +8543,7 @@ const DateHeader = ({
                 type="date"
                 value={effectiveRangeStart}
                 onChange={handleRangeStartChange}
-                className="min-h-[40px] text-[13px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none"
+                className="min-h-10 rounded-lg border border-[#d8d5ce] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[#8e8a82] dark:border-white/10 dark:bg-[#242824] dark:text-slate-300"
               />
               <span className="text-xs font-semibold text-slate-400">→</span>
               <input
@@ -8242,38 +8551,12 @@ const DateHeader = ({
                 value={effectiveRangeEnd}
                 min={effectiveRangeStart}
                 onChange={handleRangeEndChange}
-                className="min-h-[40px] text-[13px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none"
+                className="min-h-10 rounded-lg border border-[#d8d5ce] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[#8e8a82] dark:border-white/10 dark:bg-[#242824] dark:text-slate-300"
               />
             </div>
           )}
-        </div>
       </div>
-      <div className="flex flex-col sm:flex-row sm:flex-wrap w-full xl:w-auto gap-2.5 items-stretch sm:items-center shrink-0">
-        <SearchBar
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-          placeholder="Buscar tarea..."
-        />
-        <div className="w-full sm:w-auto shrink-0">
-          <Button
-            onClick={() =>
-              onAdd(
-                filterMode === "date"
-                  ? currentDate
-                  : filterMode === "range"
-                    ? effectiveRangeStart
-                    : today,
-              )
-            }
-            color={btnColor}
-            icon={btnIcon}
-            full
-          >
-            Nueva Tarea
-          </Button>
-        </div>
-      </div>
-    </div>
+    </header>
   );
 };
 
@@ -8308,6 +8591,7 @@ const AccountRoomView = ({
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [draggedTaskId, setDraggedTaskId] = useState(null);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
   const todayStr = getHondurasTodayStr();
   const currentMonthPeriod = getRankingMonthPeriod(todayStr);
 
@@ -8430,6 +8714,99 @@ const AccountRoomView = ({
       : filterMode === "range"
         ? effectiveRangeStart
         : todayStr;
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) || null;
+  const selectedManager = selectedTask
+    ? managers.find((manager) => manager.id === selectedTask.contextId)
+    : null;
+  const selectedClient = selectedTask
+    ? clients.find((client) => client.id === selectedTask.clientId)
+    : null;
+  const accountGroups = [
+    {
+      id: "start",
+      title: "Por iniciar",
+      subtitle: "Tareas pendientes de comenzar",
+      color: "slate",
+      stages: [{ ...columns[0], tasks: filteredTasks.filter((task) => task.status === columns[0].id) }],
+    },
+    {
+      id: "production",
+      title: "En producción",
+      subtitle: "Validación y aprobación interna",
+      color: "blue",
+      stages: [{ ...columns[1], tasks: filteredTasks.filter((task) => task.status === columns[1].id) }],
+    },
+    {
+      id: "ready",
+      title: "Listas",
+      subtitle: "Aprobadas y publicadas",
+      color: "emerald",
+      stages: columns.slice(2).map((column) => ({
+        ...column,
+        tasks: filteredTasks.filter((task) => task.status === column.id),
+        collapsible: column.id === "publicado",
+        collapsedLimit: 3,
+      })),
+    },
+  ];
+
+  const renderAccountTask = (task, stage) => {
+    const columnIndex = columns.findIndex((column) => column.id === stage.id);
+    const previous = columns[columnIndex - 1];
+    const next = columns[columnIndex + 1];
+    const manager = managers.find((item) => item.id === task.contextId);
+    const client = clients.find((item) => item.id === task.clientId);
+    const isOverdue =
+      isDateBeforeDateString(task.date, todayStr) && stage.id !== "publicado";
+    const menuItems = [];
+    if (next)
+      menuItems.push({
+        key: "next",
+        label: next.id === "publicado" ? "Publicar" : `Avanzar a ${next.title}`,
+        icon: next.id === "publicado" ? "CheckCircle2" : "ArrowRight",
+        onClick: () => onChangeStatus(task, next.id),
+      });
+    if (previous)
+      menuItems.push({
+        key: "prev",
+        label: `Volver a ${previous.title}`,
+        icon: "ChevronLeft",
+        onClick: () => onChangeStatus(task, previous.id),
+      });
+    menuItems.push(
+      { key: "edit", label: "Editar", icon: "Edit", onClick: () => onEdit(task) },
+      { key: "delete", label: "Eliminar", icon: "Trash2", danger: true, onClick: () => onDelete(task.id) },
+    );
+
+    return (
+      <KanbanCard
+        key={task.id}
+        onClick={() => setSelectedTaskId(task.id)}
+        selected={selectedTaskId === task.id}
+        draggable
+        onDragStart={(event) => handleDragStart(event, task.id)}
+        onDragEnd={(event) => handleDragEnd(event, task.id)}
+        accentTone={stage.color}
+        isOverdue={isOverdue}
+        client={client?.name}
+        title={task.title}
+        badges={
+          task.priority
+            ? [{
+                label: task.priority,
+                tone: task.priority === "urgente" ? "red" : task.priority === "recurrente" ? "emerald" : "amber",
+              }]
+            : []
+        }
+        due={{
+          label: formatShortDate(task.date) + (isOverdue ? " · atrasada" : ""),
+          tone: isOverdue ? "red" : "slate",
+        }}
+        assignee={buildAssignee(manager, legacyColorMap)}
+        menuItems={menuItems}
+      />
+    );
+  };
 
   return (
     <div className="task-room min-h-0 flex flex-col gap-3 fade-in">
@@ -8453,110 +8830,28 @@ const AccountRoomView = ({
         onLoadHistory={onLoadHistory}
         historyLoaded={historyLoaded}
         historyLoading={historyLoading}
+        taskCount={filteredTasks.length}
       />
-      <div className="flex-1 flex md:grid md:grid-cols-4 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0">
-        {columns.map((col, colIndex) => {
-          const colTasks = filteredTasks.filter((t) => t.status === col.id);
-          const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
-          const nextStatus =
-            colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
-          const prevLabel = colIndex > 0 ? columns[colIndex - 1].title : "";
-          const nextLabel =
-            colIndex < columns.length - 1 ? columns[colIndex + 1].title : "";
-
-          return (
-            <KanbanColumn
-              key={col.id}
-              dotColor={col.color}
-              title={col.title}
-              count={colTasks.length}
-              onAdd={() => handleAddTask(defaultAddDate)}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, col.id)}
-              isEmpty={colTasks.length === 0}
-            >
-              {colTasks.map((t) => {
-                const manager = managers.find((m) => m.id === t.contextId);
-                const client = clients.find((c) => c.id === t.clientId);
-                const isOverdue =
-                  isDateBeforeDateString(t.date, todayStr) &&
-                  col.id !== "publicado";
-
-                const menuItems = [];
-                if (nextStatus)
-                  menuItems.push({
-                    key: "next",
-                    label:
-                      nextStatus === "publicado"
-                        ? "Publicar"
-                        : `Avanzar a ${nextLabel}`,
-                    icon:
-                      nextStatus === "publicado" ? "CheckCircle2" : "ArrowRight",
-                    onClick: () => onChangeStatus(t, nextStatus),
-                  });
-                if (prevStatus)
-                  menuItems.push({
-                    key: "prev",
-                    label: `Volver a ${prevLabel}`,
-                    icon: "ChevronLeft",
-                    onClick: () => onChangeStatus(t, prevStatus),
-                  });
-                menuItems.push({
-                  key: "edit",
-                  label: "Editar",
-                  icon: "Edit",
-                  onClick: () => onEdit(t),
-                });
-                menuItems.push({
-                  key: "delete",
-                  label: "Eliminar",
-                  icon: "Trash2",
-                  danger: true,
-                  onClick: () => onDelete(t.id),
-                });
-
-                return (
-                  <KanbanCard
-                    key={t.id}
-                    onClick={() => onTaskClick(t)}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, t.id)}
-                    onDragEnd={(e) => handleDragEnd(e, t.id)}
-                    accentTone={col.color}
-                    isOverdue={isOverdue}
-                    client={client?.name}
-                    title={t.title}
-                    badges={
-                      t.priority
-                        ? [
-                            {
-                              label: t.priority,
-                              tone:
-                                t.priority === "urgente"
-                                  ? "red"
-                                  : t.priority === "recurrente"
-                                    ? "emerald"
-                                    : "amber",
-                            },
-                          ]
-                        : []
-                    }
-                    due={{
-                      label:
-                        formatShortDate(t.date) +
-                        (isOverdue ? " · atrasada" : ""),
-                      tone: isOverdue ? "red" : "slate",
-                    }}
-                    assignee={buildAssignee(manager, legacyColorMap)}
-                    menuItems={menuItems}
-                  />
-                );
-              })}
-            </KanbanColumn>
-          );
-        })}
-      </div>
+      <TaskRoomWorkspace
+        groups={accountGroups}
+        onAdd={() => handleAddTask(defaultAddDate)}
+        renderTask={renderAccountTask}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        inspector={
+          selectedTask ? (
+            <TaskRoomInspector
+              task={selectedTask}
+              client={selectedClient?.name}
+              assignee={buildAssignee(selectedManager, legacyColorMap)}
+              status={columns.find((column) => column.id === selectedTask.status)}
+              onClose={() => setSelectedTaskId(null)}
+              onOpenFull={() => onTaskClick(selectedTask)}
+            />
+          ) : null
+        }
+      />
     </div>
   );
 };
@@ -8587,6 +8882,7 @@ const EditionsRoomView = ({
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [draggedTaskId, setDraggedTaskId] = useState(null);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
   const todayStr = getHondurasTodayStr();
   const currentMonthPeriod = getRankingMonthPeriod(todayStr);
 
@@ -8721,6 +9017,126 @@ const EditionsRoomView = ({
   };
 
   const defaultAddDate = filterMode === "date" ? currentDate : todayStr;
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) || null;
+  const selectedEditor = selectedTask
+    ? editors.find((editor) => editor.id === selectedTask.contextId)
+    : null;
+  const selectedClient = selectedTask
+    ? clients.find((client) => client.id === selectedTask.clientId)
+    : null;
+  const editingGroups = [
+    {
+      id: "start",
+      title: "Por iniciar",
+      subtitle: "Tareas pendientes de comenzar",
+      color: "slate",
+      stages: [{
+        ...columns[0],
+        tasks: displayTasks.filter(
+          (task) => normalizeEditingWorkflowStatus(task.status) === columns[0].id,
+        ),
+      }],
+    },
+    {
+      id: "production",
+      title: "En producción",
+      subtitle: "En edición o en revisión",
+      color: "amber",
+      stages: columns.slice(1, 3).map((column) => ({
+        ...column,
+        tasks: displayTasks.filter(
+          (task) => normalizeEditingWorkflowStatus(task.status) === column.id,
+        ),
+      })),
+    },
+    {
+      id: "ready",
+      title: "Listas",
+      subtitle: "Aprobadas y publicadas",
+      color: "emerald",
+      stages: columns.slice(3).map((column) => ({
+        ...column,
+        tasks: displayTasks.filter(
+          (task) => normalizeEditingWorkflowStatus(task.status) === column.id,
+        ),
+        collapsible: column.id === "publicado",
+        collapsedLimit: 3,
+      })),
+    },
+  ];
+
+  const renderEditingTask = (task, stage) => {
+    const columnIndex = columns.findIndex((column) => column.id === stage.id);
+    const previous = columns[columnIndex - 1];
+    const next = columns[columnIndex + 1];
+    const editor = editors.find((item) => item.id === task.contextId);
+    const client = clients.find((item) => item.id === task.clientId);
+    const isOverdue =
+      isDateBeforeDateString(task.date, todayStr) && !isCompletedStatus(task.status);
+    const hierarchyId = task.hierarchy || getEditingHierarchyId(task);
+    const hierarchyTone =
+      hierarchyId === "p1"
+        ? "red"
+        : hierarchyId === "p2"
+          ? "amber"
+          : hierarchyId === "p3"
+            ? "emerald"
+            : "slate";
+    const priorityTone =
+      task.priority === "urgente"
+        ? "red"
+        : task.priority === "recurrente"
+          ? "emerald"
+          : "amber";
+    const menuItems = [];
+    if (canManageEditingTasks) {
+      if (next)
+        menuItems.push({
+          key: "next",
+          label: next.id === "publicado" ? "Publicar" : `Avanzar a ${next.title}`,
+          icon: next.id === "publicado" ? "CheckCircle2" : "ArrowRight",
+          onClick: () => onChangeStatus(task, next.id),
+        });
+      if (previous)
+        menuItems.push({
+          key: "prev",
+          label: `Volver a ${previous.title}`,
+          icon: "ChevronLeft",
+          onClick: () => onChangeStatus(task, previous.id),
+        });
+      menuItems.push(
+        { key: "edit", label: "Editar", icon: "Edit", onClick: () => onEdit(task) },
+        { key: "delete", label: "Eliminar", icon: "Trash2", danger: true, onClick: () => onDelete(task.id) },
+      );
+    }
+
+    return (
+      <KanbanCard
+        key={task.id}
+        onClick={() => setSelectedTaskId(task.id)}
+        selected={selectedTaskId === task.id}
+        draggable
+        onDragStart={(event) => handleDragStart(event, task.id)}
+        onDragEnd={(event) => handleDragEnd(event, task.id)}
+        accentTone={hierarchyTone}
+        isOverdue={isOverdue}
+        client={client?.name}
+        rank={rankingMap[task.id]}
+        title={task.title}
+        notes={task.notes}
+        badges={[
+          { label: hierarchyId.toUpperCase(), tone: hierarchyTone },
+          { label: task.priority || "Normal", tone: priorityTone },
+        ]}
+        due={{
+          label: formatShortDate(task.date) + (isOverdue ? " · atrasada" : ""),
+          tone: isOverdue ? "red" : "slate",
+        }}
+        assignee={buildAssignee(editor)}
+        menuItems={menuItems}
+      />
+    );
+  };
 
   return (
     <div className="task-room min-h-0 flex flex-col gap-3 fade-in">
@@ -8740,126 +9156,31 @@ const EditionsRoomView = ({
         onLoadHistory={onLoadHistory}
         historyLoaded={historyLoaded}
         historyLoading={historyLoading}
+        taskCount={filteredTasks.length}
       />
-      <div className="flex-1 flex md:grid md:grid-cols-5 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0">
-        {columns.map((col, colIndex) => {
-          const colTasks = displayTasks.filter(
-            (task) => normalizeEditingWorkflowStatus(task.status) === col.id,
-          );
-          const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
-          const nextStatus =
-            colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
-          const prevLabel = colIndex > 0 ? columns[colIndex - 1].title : "";
-          const nextLabel =
-            colIndex < columns.length - 1 ? columns[colIndex + 1].title : "";
-
-          return (
-            <KanbanColumn
-              key={col.id}
-              dotColor={col.color}
-              title={col.title}
-              count={colTasks.length}
-              onAdd={
-                canManageEditingTasks
-                  ? () => handleAddTask(defaultAddDate)
-                  : undefined
-              }
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, col.id)}
-              isEmpty={colTasks.length === 0}
-            >
-              {colTasks.map((t) => {
-                const editor = editors.find((e) => e.id === t.contextId);
-                const client = clients.find((c) => c.id === t.clientId);
-                const isOverdue =
-                  isDateBeforeDateString(t.date, todayStr) &&
-                  !isCompletedStatus(t.status);
-                const hierarchyId = t.hierarchy || getEditingHierarchyId(t);
-                const hierTone =
-                  hierarchyId === "p1"
-                    ? "red"
-                    : hierarchyId === "p2"
-                      ? "amber"
-                      : hierarchyId === "p3"
-                        ? "emerald"
-                        : "slate";
-                const prioTone =
-                  t.priority === "urgente"
-                    ? "red"
-                    : t.priority === "recurrente"
-                      ? "emerald"
-                      : "amber";
-
-                const menuItems = [];
-                if (canManageEditingTasks) {
-                  if (nextStatus)
-                    menuItems.push({
-                      key: "next",
-                      label:
-                        nextStatus === "publicado"
-                          ? "Publicar"
-                          : `Avanzar a ${nextLabel}`,
-                      icon:
-                        nextStatus === "publicado"
-                          ? "CheckCircle2"
-                          : "ArrowRight",
-                      onClick: () => onChangeStatus(t, nextStatus),
-                    });
-                  if (prevStatus)
-                    menuItems.push({
-                      key: "prev",
-                      label: `Volver a ${prevLabel}`,
-                      icon: "ChevronLeft",
-                      onClick: () => onChangeStatus(t, prevStatus),
-                    });
-                  menuItems.push({
-                    key: "edit",
-                    label: "Editar",
-                    icon: "Edit",
-                    onClick: () => onEdit(t),
-                  });
-                  menuItems.push({
-                    key: "delete",
-                    label: "Eliminar",
-                    icon: "Trash2",
-                    danger: true,
-                    onClick: () => onDelete(t.id),
-                  });
-                }
-
-                return (
-                  <KanbanCard
-                    key={t.id}
-                    onClick={() => onTaskClick(t)}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, t.id)}
-                    onDragEnd={(e) => handleDragEnd(e, t.id)}
-                    accentTone={hierTone}
-                    isOverdue={isOverdue}
-                    client={client?.name}
-                    rank={rankingMap[t.id]}
-                    title={t.title}
-                    notes={t.notes}
-                    badges={[
-                      { label: hierarchyId.toUpperCase(), tone: hierTone },
-                      { label: t.priority || "Normal", tone: prioTone },
-                    ]}
-                    due={{
-                      label:
-                        formatShortDate(t.date) +
-                        (isOverdue ? " · atrasada" : ""),
-                      tone: isOverdue ? "red" : "slate",
-                    }}
-                    assignee={buildAssignee(editor)}
-                    menuItems={menuItems}
-                  />
-                );
-              })}
-            </KanbanColumn>
-          );
-        })}
-      </div>
+      <TaskRoomWorkspace
+        groups={editingGroups}
+        onAdd={() => handleAddTask(defaultAddDate)}
+        canAdd={canManageEditingTasks}
+        renderTask={renderEditingTask}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        inspector={
+          selectedTask ? (
+            <TaskRoomInspector
+              task={selectedTask}
+              client={selectedClient?.name}
+              assignee={buildAssignee(selectedEditor)}
+              status={columns.find(
+                (column) => column.id === normalizeEditingWorkflowStatus(selectedTask.status),
+              )}
+              onClose={() => setSelectedTaskId(null)}
+              onOpenFull={() => onTaskClick(selectedTask)}
+            />
+          ) : null
+        }
+      />
     </div>
   );
 };
@@ -8934,6 +9255,7 @@ const ManagementRoomView = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [showTeam, setShowTeam] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
   const todayStr = getHondurasTodayStr();
   const currentMonthPeriod = getRankingMonthPeriod(todayStr);
 
@@ -9008,6 +9330,114 @@ const ManagementRoomView = ({
       "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
     red: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
   };
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) || null;
+  const selectedMember = selectedTask
+    ? members.find((member) => member.id === selectedTask.contextId)
+    : null;
+  const selectedClient = selectedTask
+    ? clients.find((client) => client.id === selectedTask.clientId)
+    : null;
+  const buildManagementAssignee = (member) =>
+    member
+      ? {
+          name: member.name,
+          initials: getInitials(member.name),
+          className: `bg-${AVATAR_FAMILY[member.color] || "violet"}-600 text-white`,
+          photo: member.photo || "",
+        }
+      : null;
+  const managementGroups = [
+    {
+      id: "start",
+      title: "Por iniciar",
+      subtitle: "Tareas pendientes de comenzar",
+      color: "slate",
+      stages: [{ ...columns[0], tasks: filteredTasks.filter((task) => task.status === columns[0].id) }],
+    },
+    {
+      id: "production",
+      title: "En producción",
+      subtitle: "En proceso o en espera",
+      color: "violet",
+      stages: columns.slice(1, 3).map((column) => ({
+        ...column,
+        tasks: filteredTasks.filter((task) => task.status === column.id),
+      })),
+    },
+    {
+      id: "ready",
+      title: "Listas",
+      subtitle: "Trabajo finalizado",
+      color: "emerald",
+      stages: [{
+        ...columns[3],
+        tasks: filteredTasks.filter((task) => task.status === columns[3].id),
+        collapsible: true,
+        collapsedLimit: 3,
+      }],
+    },
+  ];
+
+  const renderManagementTask = (task, stage) => {
+    const columnIndex = columns.findIndex((column) => column.id === stage.id);
+    const previous = columns[columnIndex - 1];
+    const next = columns[columnIndex + 1];
+    const member = members.find((item) => item.id === task.contextId);
+    const client = clients.find((item) => item.id === task.clientId);
+    const isOverdue =
+      isDateBeforeDateString(task.date, todayStr) && stage.id !== "cerrado";
+    const dueBadge = computeManagementDueBadge(task);
+    const badges = [];
+    if (task.category)
+      badges.push({ label: task.category, className: getMgmtCategoryColor(task.category) });
+    if (dueBadge && stage.id !== "cerrado")
+      badges.push({ label: dueBadge.label, tone: dueBadge.tone });
+    const menuItems = [];
+    if (next)
+      menuItems.push({
+        key: "next",
+        label: next.id === "cerrado" ? "Cerrar tarea" : `Avanzar a ${next.title}`,
+        icon: next.id === "cerrado" ? "Check" : "ArrowRight",
+        onClick: () => onChangeStatus(task, next.id),
+      });
+    if (previous)
+      menuItems.push({
+        key: "prev",
+        label: `Volver a ${previous.title}`,
+        icon: "ChevronLeft",
+        onClick: () => onChangeStatus(task, previous.id),
+      });
+    menuItems.push(
+      { key: "edit", label: "Editar", icon: "Edit", onClick: () => onEdit(task) },
+      { key: "delete", label: "Eliminar", icon: "Trash2", danger: true, onClick: () => onDelete(task.id) },
+    );
+
+    return (
+      <KanbanCard
+        key={task.id}
+        onClick={() => setSelectedTaskId(task.id)}
+        selected={selectedTaskId === task.id}
+        draggable
+        onDragStart={(event) => handleDragStart(event, task.id)}
+        onDragEnd={handleDragEnd}
+        accentTone={stage.color}
+        isOverdue={isOverdue}
+        client={client?.name}
+        title={task.title}
+        notes={task.notes}
+        badges={badges}
+        due={{
+          label:
+            formatShortDate(task.date) +
+            (task.time ? ` · ${task.time}` : "") +
+            (isOverdue ? " · vencida" : ""),
+          tone: isOverdue ? "red" : "slate",
+        }}
+        assignee={buildManagementAssignee(member)}
+        menuItems={menuItems}
+      />
+    );
+  };
 
   return (
     <div className="task-room min-h-0 flex flex-col gap-3 fade-in">
@@ -9019,7 +9449,7 @@ const ManagementRoomView = ({
         setFilterMode={setFilterMode}
         ownershipFilter={ownershipFilter}
         setOwnershipFilter={setOwnershipFilter}
-        title="Sala de Gestion"
+        title="Sala de Gestión"
         onAdd={handleAddTask}
         btnColor="violet"
         btnIcon="ShieldCheck"
@@ -9028,6 +9458,7 @@ const ManagementRoomView = ({
         onLoadHistory={onLoadHistory}
         historyLoaded={historyLoaded}
         historyLoading={historyLoading}
+        taskCount={filteredTasks.length}
       />
 
       <div className="flex flex-col gap-2 lg:flex-row">
@@ -9201,119 +9632,26 @@ const ManagementRoomView = ({
         </div>
       )}
 
-      {/* Kanban */}
-      <div className="flex-1 flex md:grid md:grid-cols-4 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0">
-        {columns.map((col, colIndex) => {
-          const colTasks = filteredTasks.filter(
-            (task) => task.status === col.id,
-          );
-          const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
-          const nextStatus =
-            colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
-          const prevLabel = colIndex > 0 ? columns[colIndex - 1].title : "";
-          const nextLabel =
-            colIndex < columns.length - 1 ? columns[colIndex + 1].title : "";
-          return (
-            <KanbanColumn
-              key={col.id}
-              dotColor={col.color}
-              title={col.title}
-              count={colTasks.length}
-              onAdd={() =>
-                handleAddTask(filterMode === "date" ? currentDate : todayStr)
-              }
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, col.id)}
-              isEmpty={colTasks.length === 0}
-            >
-              {colTasks.map((task) => {
-                const member = members.find((m) => m.id === task.contextId);
-                const client = clients.find((c) => c.id === task.clientId);
-                const isOverdue =
-                  isDateBeforeDateString(task.date, todayStr) &&
-                  col.id !== "cerrado";
-                const dueBadge = computeManagementDueBadge(task);
-
-                const badges = [];
-                if (task.category)
-                  badges.push({
-                    label: task.category,
-                    className: getMgmtCategoryColor(task.category),
-                  });
-                if (dueBadge && col.id !== "cerrado")
-                  badges.push({ label: dueBadge.label, tone: dueBadge.tone });
-
-                const menuItems = [];
-                if (nextStatus)
-                  menuItems.push({
-                    key: "next",
-                    label:
-                      nextStatus === "cerrado"
-                        ? "Cerrar tarea"
-                        : `Avanzar a ${nextLabel}`,
-                    icon: nextStatus === "cerrado" ? "Check" : "ArrowRight",
-                    onClick: () => onChangeStatus(task, nextStatus),
-                  });
-                if (prevStatus)
-                  menuItems.push({
-                    key: "prev",
-                    label: `Volver a ${prevLabel}`,
-                    icon: "ChevronLeft",
-                    onClick: () => onChangeStatus(task, prevStatus),
-                  });
-                menuItems.push({
-                  key: "edit",
-                  label: "Editar",
-                  icon: "Edit",
-                  onClick: () => onEdit(task),
-                });
-                menuItems.push({
-                  key: "delete",
-                  label: "Eliminar",
-                  icon: "Trash2",
-                  danger: true,
-                  onClick: () => onDelete(task.id),
-                });
-
-                return (
-                  <KanbanCard
-                    key={task.id}
-                    onClick={() => onTaskClick(task)}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, task.id)}
-                    onDragEnd={handleDragEnd}
-                    accentTone={col.color}
-                    isOverdue={isOverdue}
-                    client={client?.name}
-                    title={task.title}
-                    notes={task.notes}
-                    badges={badges}
-                    due={{
-                      label:
-                        formatShortDate(task.date) +
-                        (task.time ? ` · ${task.time}` : "") +
-                        (isOverdue ? " · vencida" : ""),
-                      tone: isOverdue ? "red" : "slate",
-                    }}
-                    assignee={
-                      member
-                        ? {
-                            name: member.name,
-                            initials: getInitials(member.name),
-                            className: `bg-${AVATAR_FAMILY[member.color] || "violet"}-600 text-white`,
-                            photo: member.photo || "",
-                          }
-                        : null
-                    }
-                    menuItems={menuItems}
-                  />
-                );
-              })}
-            </KanbanColumn>
-          );
-        })}
-      </div>
+      <TaskRoomWorkspace
+        groups={managementGroups}
+        onAdd={() => handleAddTask(filterMode === "date" ? currentDate : todayStr)}
+        renderTask={renderManagementTask}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        inspector={
+          selectedTask ? (
+            <TaskRoomInspector
+              task={selectedTask}
+              client={selectedClient?.name}
+              assignee={buildManagementAssignee(selectedMember)}
+              status={columns.find((column) => column.id === selectedTask.status)}
+              onClose={() => setSelectedTaskId(null)}
+              onOpenFull={() => onTaskClick(selectedTask)}
+            />
+          ) : null
+        }
+      />
     </div>
   );
 };

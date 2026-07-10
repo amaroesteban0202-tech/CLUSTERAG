@@ -22,7 +22,7 @@ const checks = [
   ["dashboard cards navigate", app.includes('onClick={() => onNavigate("account-room")}') && app.includes('onClick={() => onNavigate("editions")}')],
   ["urgent tasks open details", app.includes("onOpenTask(t, t._taskType)") && app.includes('_taskType: "managementTask"')],
   ["task rooms stay viewport sized", css.includes("height: calc(100vh - 7rem)") && app.includes("task-room min-h-0")],
-  ["kanban columns scroll independently", app.includes("overflow-y-auto overscroll-contain") && app.includes("md:h-full md:min-h-0")],
+  ["kanban columns scroll independently", app.includes("overflow-y-auto overscroll-contain") && app.includes("lg:h-full lg:min-h-0")],
   ["task cards are keyboard accessible", app.includes('aria-label={`Abrir tarea ${title}`}') && app.includes('event.key === "Enter"')],
   ["task rooms default to current month", app.includes("Este mes") && app.includes("isDateWithinPeriod(t.date, currentMonthPeriod)") && app.includes("isDateWithinPeriod(task.date, currentMonthPeriod)")],
   ["history is explicit", app.includes('setFilterMode("history")') && app.includes("Histórico completo")],

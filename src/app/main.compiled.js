@@ -5796,7 +5796,8 @@ var KanbanCard = ({
   notes,
   due,
   assignee,
-  menuItems = []
+  menuItems = [],
+  selected = false
 }) => {
   const accent = isOverdue ? "border-l-red-500" : ACCENT_BORDER[accentTone] || "border-l-transparent";
   return /* @__PURE__ */ React.createElement(
@@ -5815,11 +5816,11 @@ var KanbanCard = ({
       draggable: draggable ? "true" : void 0,
       onDragStart,
       onDragEnd,
-      className: `task-card group relative cursor-pointer rounded-lg border border-[#e2e0da] border-l-[3px] bg-white p-3.5 transition-colors hover:border-[#b8b5ae] focus-visible:outline-none dark:border-white/10 dark:bg-[#232624] dark:hover:border-white/20 ${accent}`
+      className: `task-card group relative cursor-pointer rounded-xl border border-[#ddd9d1] border-l-[3px] bg-white p-4 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-px hover:border-[#aaa69d] focus-visible:outline-none dark:border-white/10 dark:bg-[#232724] dark:hover:border-white/20 ${selected ? "ring-2 ring-[#b78000]/70 dark:ring-[#e4aa19]/70" : ""} ${accent}`
     },
-    /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-2 mb-1.5 min-h-[20px]" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, client && /* @__PURE__ */ React.createElement("span", { className: "inline-flex max-w-full items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 10, className: "shrink-0" }), /* @__PURE__ */ React.createElement("span", { className: "truncate" }, client))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-0.5 shrink-0" }, rank != null && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 rounded px-1.5 py-0.5" }, "#", rank), menuItems.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "opacity-70 group-hover:opacity-100 transition-opacity" }, /* @__PURE__ */ React.createElement(CardMenu, { items: menuItems })))),
-    /* @__PURE__ */ React.createElement("p", { className: "mb-2 line-clamp-2 text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100" }, title),
-    badges.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap gap-1.5 mb-2" }, badges.map((b, i) => /* @__PURE__ */ React.createElement(
+    /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-2 mb-1.5 min-h-[20px]" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, client && /* @__PURE__ */ React.createElement("span", { className: "inline-flex max-w-full items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 10, className: "shrink-0" }), /* @__PURE__ */ React.createElement("span", { className: "truncate" }, client))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-0.5 shrink-0" }, rank != null && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 rounded px-1.5 py-0.5" }, "#", rank), menuItems.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "opacity-70 group-hover:opacity-100 transition-opacity" }, /* @__PURE__ */ React.createElement(CardMenu, { items: menuItems })))),
+    /* @__PURE__ */ React.createElement("p", { className: "mb-2.5 line-clamp-2 text-[15px] font-semibold leading-snug text-slate-800 dark:text-slate-100" }, title),
+    badges.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mb-2.5 flex flex-wrap gap-1.5" }, badges.map((b, i) => /* @__PURE__ */ React.createElement(
       "span",
       {
         key: i,
@@ -5828,7 +5829,7 @@ var KanbanCard = ({
       b.label
     ))),
     notes && /* @__PURE__ */ React.createElement("p", { className: "mb-2 line-clamp-1 text-[11.5px] leading-snug text-slate-400 dark:text-slate-500" }, notes),
-    /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5 dark:border-white/5" }, due ? /* @__PURE__ */ React.createElement(
+    /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-white/5" }, due ? /* @__PURE__ */ React.createElement(
       "span",
       {
         className: `inline-flex items-center gap-1 text-[11px] font-semibold ${due.tone === "red" ? "text-red-500 dark:text-red-400" : due.tone === "amber" ? "text-amber-600 dark:text-amber-400" : "text-slate-400 dark:text-slate-500"}`
@@ -5856,6 +5857,7 @@ var KanbanCard = ({
 var KanbanColumn = ({
   dotColor = "slate",
   title,
+  subtitle,
   count,
   onAdd,
   onDragOver,
@@ -5868,19 +5870,19 @@ var KanbanColumn = ({
   return /* @__PURE__ */ React.createElement(
     "section",
     {
-      className: "flex h-[calc(100dvh-15rem)] min-h-[28rem] w-[86vw] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-[#e2e0da] bg-[#efeee9] transition-colors dark:border-white/10 dark:bg-[#1a1d1b] sm:w-80 md:h-full md:min-h-0 md:w-auto md:shrink",
+      className: "task-room-column flex h-[calc(100dvh-15rem)] min-h-[32rem] w-[88vw] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-[#dedbd4] bg-[#efeee9] transition-colors dark:border-white/10 dark:bg-[#191d1a] sm:w-[24rem] lg:h-full lg:min-h-0 lg:w-auto lg:shrink",
       onDragOver,
       onDragLeave,
       onDrop,
       "aria-label": `${title}: ${count} tareas`
     },
-    /* @__PURE__ */ React.createElement("header", { className: "flex shrink-0 items-center justify-between gap-2 border-b border-[#dfddd7] bg-[#f7f6f3]/80 px-3.5 py-3 dark:border-white/10 dark:bg-[#1f2220]/90" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2.5" }, /* @__PURE__ */ React.createElement(
+    /* @__PURE__ */ React.createElement("header", { className: "flex shrink-0 items-start justify-between gap-3 border-b border-[#dfddd7] bg-[#f7f6f3]/80 px-4 py-3.5 dark:border-white/10 dark:bg-[#1f2320]/90" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2.5" }, /* @__PURE__ */ React.createElement(
       "span",
       {
         className: "h-2.5 w-2.5 shrink-0 rounded-full",
         style: { backgroundColor: columnColor }
       }
-    ), /* @__PURE__ */ React.createElement("span", { className: "truncate text-[13px] font-semibold text-[#2f3437] dark:text-[#f1efe9]" }, title), /* @__PURE__ */ React.createElement("span", { className: "mono-meta shrink-0 rounded-md bg-[#e6e4df] px-2 py-0.5 text-[11px] font-semibold text-[#787774] dark:bg-[#2a2a27] dark:text-[#aaa7a0]" }, count)), onAdd && /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("span", { className: "truncate text-sm font-semibold text-[#2f3437] dark:text-[#f1efe9]" }, title), /* @__PURE__ */ React.createElement("span", { className: "mono-meta shrink-0 rounded-md bg-[#e6e4df] px-2 py-0.5 text-[11px] font-semibold text-[#787774] dark:bg-[#2a2a27] dark:text-[#aaa7a0]" }, count)), subtitle && /* @__PURE__ */ React.createElement("p", { className: "mt-1.5 pl-5 text-[11px] text-slate-500 dark:text-slate-400" }, subtitle)), onAdd && /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
@@ -5891,9 +5893,147 @@ var KanbanColumn = ({
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 15 })
     )),
-    /* @__PURE__ */ React.createElement("div", { className: "custom-scroll flex-1 space-y-2.5 overflow-y-auto overscroll-contain p-2.5" }, isEmpty && /* @__PURE__ */ React.createElement("div", { className: "flex h-full min-h-40 select-none flex-col items-center justify-center gap-2 text-slate-300 dark:text-slate-600" }, /* @__PURE__ */ React.createElement(Icon, { name: "Inbox", size: 24 }), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] font-semibold" }, "Sin tareas en esta etapa")), children)
+    /* @__PURE__ */ React.createElement("div", { className: "custom-scroll flex-1 space-y-3 overflow-y-auto overscroll-contain p-3" }, isEmpty && /* @__PURE__ */ React.createElement("div", { className: "flex h-full min-h-40 select-none flex-col items-center justify-center gap-2 text-slate-300 dark:text-slate-600" }, /* @__PURE__ */ React.createElement(Icon, { name: "Inbox", size: 24 }), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] font-semibold" }, "Sin tareas en esta etapa")), children)
   );
 };
+var KanbanStage = ({
+  title,
+  dotColor = "slate",
+  tasks,
+  renderTask,
+  showHeader = true,
+  collapsible = false,
+  collapsedLimit = 3,
+  onDragOver,
+  onDragLeave,
+  onDrop
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const color = getDashboardPalette(dotColor).strong;
+  const canCollapse = collapsible && tasks.length > collapsedLimit;
+  const visibleTasks = canCollapse && !expanded ? tasks.slice(0, collapsedLimit) : tasks;
+  return /* @__PURE__ */ React.createElement(
+    "section",
+    {
+      className: "rounded-lg border border-transparent transition-colors [&.drag-over]:border-[#b78000] [&.drag-over]:bg-[#b78000]/5",
+      onDragOver,
+      onDragLeave,
+      onDrop,
+      "aria-label": `${title}: ${tasks.length} tareas`
+    },
+    showHeader && /* @__PURE__ */ React.createElement("div", { className: "mb-2 flex items-center justify-between rounded-lg border border-[#dfddd7] bg-[#f7f6f3] px-3 py-2.5 dark:border-white/10 dark:bg-[#202421]" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "h-2 w-2 shrink-0 rounded-full", style: { backgroundColor: color } }), /* @__PURE__ */ React.createElement("span", { className: "truncate text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-600 dark:text-slate-300" }, title), /* @__PURE__ */ React.createElement("span", { className: "rounded bg-[#e9e7e1] px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-[#2c302c] dark:text-slate-400" }, tasks.length)), canCollapse && /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        onClick: () => setExpanded((value) => !value),
+        className: "flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-black/5 dark:text-slate-400 dark:hover:bg-white/5",
+        "aria-label": expanded ? `Contraer ${title}` : `Expandir ${title}`
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: expanded ? "ChevronUp" : "ChevronDown", size: 14 })
+    )),
+    /* @__PURE__ */ React.createElement("div", { className: "space-y-2.5" }, visibleTasks.map((task) => renderTask(task))),
+    canCollapse && !expanded && /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        onClick: () => setExpanded(true),
+        className: "mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#cbc7bf] px-3 py-2.5 text-xs font-semibold text-slate-500 hover:border-[#aaa69d] hover:text-slate-700 dark:border-white/15 dark:text-slate-400 dark:hover:border-white/25 dark:hover:text-slate-200"
+      },
+      "Ver ",
+      tasks.length - collapsedLimit,
+      " m\xE1s",
+      /* @__PURE__ */ React.createElement(Icon, { name: "ChevronDown", size: 14 })
+    )
+  );
+};
+var TaskRoomInspector = ({
+  task,
+  client,
+  assignee,
+  status,
+  onClose,
+  onOpenFull
+}) => {
+  if (!task) return null;
+  const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+  const completed = checklist.filter((item) => item.done).length;
+  const progress = checklist.length ? Math.round(completed / checklist.length * 100) : 0;
+  const activity = [
+    ...Array.isArray(task.comments) ? task.comments.map((item) => ({
+      id: item.id,
+      author: item.authorName || "Equipo",
+      text: item.text,
+      date: item.createdAt
+    })) : [],
+    ...Array.isArray(task.timeEntries) ? task.timeEntries.map((item) => ({
+      id: item.id,
+      author: item.authorName || "Equipo",
+      text: "Registr\xF3 tiempo en la tarea",
+      date: item.loggedAt
+    })) : []
+  ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 3);
+  const priority = task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : "Normal";
+  const isOverdue = isDateBeforeDateString(task.date, getHondurasTodayStr()) && !isCompletedStatus(task.status);
+  return /* @__PURE__ */ React.createElement("aside", { className: "task-room-inspector fixed inset-x-3 bottom-3 top-20 z-40 flex min-h-0 flex-col overflow-hidden rounded-xl border border-[#d8d5ce] bg-[#f7f6f2] shadow-2xl dark:border-white/10 dark:bg-[#1c201d] 2xl:static 2xl:z-auto 2xl:shadow-none" }, /* @__PURE__ */ React.createElement("div", { className: "custom-scroll flex-1 overflow-y-auto p-5" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-start justify-between gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, client && /* @__PURE__ */ React.createElement("p", { className: "mb-2 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 11 }), client), /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold leading-snug text-slate-900 dark:text-[#f1efe9]" }, task.title)), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: onClose,
+      className: "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-black/5 dark:text-slate-400 dark:hover:bg-white/5",
+      "aria-label": "Cerrar inspector"
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 18 })
+  )), /* @__PURE__ */ React.createElement("div", { className: "mb-6 grid grid-cols-2 gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "rounded-lg border border-[#dedbd4] bg-white px-3 py-2.5 dark:border-white/10 dark:bg-[#242824]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Estado"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200" }, status?.title || "Sin estado")), /* @__PURE__ */ React.createElement("div", { className: `rounded-lg border px-3 py-2.5 ${priority.toLowerCase() === "urgente" ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300" : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300"}` }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] opacity-70" }, "Prioridad"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs font-semibold" }, priority))), /* @__PURE__ */ React.createElement("div", { className: "mb-6 grid grid-cols-2 gap-4 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Responsable"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, assignee ? /* @__PURE__ */ React.createElement(React.Fragment, null, assignee.photo ? /* @__PURE__ */ React.createElement("img", { src: assignee.photo, alt: "", className: "h-8 w-8 rounded-full object-cover" }) : /* @__PURE__ */ React.createElement("span", { className: `flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-bold ${assignee.className}` }, assignee.initials), /* @__PURE__ */ React.createElement("span", { className: "truncate text-xs font-semibold text-slate-700 dark:text-slate-200" }, assignee.name)) : /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500" }, "Sin asignar"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Vencimiento"), /* @__PURE__ */ React.createElement("p", { className: `inline-flex items-center gap-1.5 text-xs font-semibold ${isOverdue ? "text-red-500" : "text-slate-700 dark:text-slate-200"}` }, /* @__PURE__ */ React.createElement(Icon, { name: "CalendarDays", size: 14 }), formatShortDate(task.date), isOverdue ? " \xB7 atrasada" : ""))), /* @__PURE__ */ React.createElement("div", { className: "mb-6 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", { className: "mb-2.5 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Progreso"), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-semibold text-slate-500" }, progress, "%")), /* @__PURE__ */ React.createElement("div", { className: "mb-2 h-1.5 overflow-hidden rounded-full bg-[#dedbd4] dark:bg-white/10" }, /* @__PURE__ */ React.createElement("span", { className: "block h-full rounded-full bg-[#b78000] transition-[width]", style: { width: `${progress}%` } })), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, checklist.length ? `${completed} de ${checklist.length} completadas` : "Sin checklist")), task.notes && /* @__PURE__ */ React.createElement("div", { className: "mb-6 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Descripci\xF3n"), /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap text-sm leading-relaxed text-slate-600 dark:text-slate-300" }, task.notes)), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-3 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Actividad reciente"), activity.length ? /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, activity.map((item) => /* @__PURE__ */ React.createElement("div", { key: item.id, className: "flex gap-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2f6f58] text-[9px] font-bold text-white" }, getInitials(item.author)), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-semibold text-slate-700 dark:text-slate-200" }, item.author), /* @__PURE__ */ React.createElement("p", { className: "mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400" }, item.text))))) : /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Sin actividad registrada."))), /* @__PURE__ */ React.createElement("div", { className: "border-t border-[#dedbd4] p-4 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: onOpenFull,
+      className: "flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#171817] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#30322f] dark:bg-[#f1efe9] dark:text-[#181817] dark:hover:bg-white"
+    },
+    "Abrir tarea completa",
+    /* @__PURE__ */ React.createElement(Icon, { name: "ExternalLink", size: 15 })
+  )));
+};
+var TaskRoomWorkspace = ({
+  groups,
+  onAdd,
+  canAdd = true,
+  renderTask,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  inspector
+}) => /* @__PURE__ */ React.createElement("div", { className: `task-room-workspace grid min-h-0 flex-1 gap-3 ${inspector ? "2xl:grid-cols-[minmax(0,1fr)_22rem]" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: "task-room-board flex min-h-0 gap-3 overflow-x-auto pb-4 snap-x snap-mandatory kanban-mobile-scroll lg:grid lg:grid-cols-3 lg:overflow-hidden lg:pb-0" }, groups.map((group) => {
+  const count = group.stages.reduce((total, stage) => total + stage.tasks.length, 0);
+  return /* @__PURE__ */ React.createElement(
+    KanbanColumn,
+    {
+      key: group.id,
+      dotColor: group.color,
+      title: group.title,
+      subtitle: group.subtitle,
+      count,
+      onAdd: canAdd ? onAdd : void 0,
+      isEmpty: count === 0
+    },
+    group.stages.map((stage) => /* @__PURE__ */ React.createElement(
+      KanbanStage,
+      {
+        key: stage.id,
+        title: stage.title,
+        dotColor: stage.color,
+        tasks: stage.tasks,
+        renderTask: (task) => renderTask(task, stage),
+        showHeader: group.stages.length > 1,
+        collapsible: stage.collapsible,
+        collapsedLimit: stage.collapsedLimit,
+        onDragOver,
+        onDragLeave,
+        onDrop: (event) => onDrop(event, stage.id)
+      }
+    ))
+  );
+})), inspector);
 var DateHeader = ({
   currentDate,
   setCurrentDate,
@@ -5913,12 +6053,18 @@ var DateHeader = ({
   setRangeEnd,
   onLoadHistory,
   historyLoaded = false,
-  historyLoading = false
+  historyLoading = false,
+  taskCount = 0
 }) => {
   const today = getHondurasTodayStr();
   const hasRangeSupport = Boolean(setRangeStart && setRangeEnd);
   const effectiveRangeStart = rangeStart || today;
   const effectiveRangeEnd = rangeEnd || today;
+  const periodDate = /* @__PURE__ */ new Date(`${currentDate || today}T12:00:00`);
+  const periodLabel = new Intl.DateTimeFormat("es-HN", {
+    month: "long",
+    year: "numeric"
+  }).format(periodDate);
   const handleRangeStartChange = (e) => {
     const val = e.target.value;
     setRangeStart(val);
@@ -5930,21 +6076,34 @@ var DateHeader = ({
     if (compareDateOnlyStrings(val, effectiveRangeStart) < 0)
       setRangeStart(val);
   };
-  const segBase = "shrink-0 px-3 py-1.5 text-[13px] font-medium rounded-md transition-colors flex items-center gap-1.5";
-  const segActive = "bg-[#111111] dark:bg-[#f1efe9] text-white dark:text-[#181817]";
-  const segIdle = "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200";
-  return /* @__PURE__ */ React.createElement("div", { className: "surface flex flex-col xl:flex-row xl:items-center justify-between gap-4 px-4 py-3.5" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-3 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2.5 shrink-0" }, /* @__PURE__ */ React.createElement(
-    "span",
+  const segBase = "shrink-0 min-h-9 px-3 py-2 text-[12px] font-medium rounded-lg transition-colors flex items-center gap-1.5";
+  const segActive = "bg-white text-[#252724] shadow-sm dark:bg-[#30342f] dark:text-[#f1efe9]";
+  const segIdle = "text-slate-500 dark:text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/5 dark:hover:text-slate-200";
+  return /* @__PURE__ */ React.createElement("header", { className: "task-room-header shrink-0 border-b border-[#dedbd4] pb-3 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", { className: "mb-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("h2", { className: "editorial-title truncate text-[clamp(1.75rem,3vw,2.5rem)] leading-none text-[#2f3437] dark:text-[#f1efe9]" }, title), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-slate-500 dark:text-slate-400" }, taskCount, " ", taskCount === 1 ? "tarea" : "tareas", " \xB7 ", periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1))), /* @__PURE__ */ React.createElement("div", { className: "flex w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center lg:w-auto" }, /* @__PURE__ */ React.createElement(
+    SearchBar,
     {
-      className: "w-9 h-9 rounded-md flex items-center justify-center bg-[#f1f0ed] dark:bg-[#2a2a27] text-[#555552] dark:text-[#d3d0c9]"
+      searchTerm,
+      setSearchTerm,
+      placeholder: "Buscar tarea..."
+    }
+  ), /* @__PURE__ */ React.createElement("div", { className: "shrink-0" }, /* @__PURE__ */ React.createElement(
+    Button,
+    {
+      onClick: () => onAdd(
+        filterMode === "date" ? currentDate : filterMode === "range" ? effectiveRangeStart : today
+      ),
+      color: btnColor,
+      icon: btnIcon,
+      full: true
     },
-    /* @__PURE__ */ React.createElement(Icon, { name: btnIcon, size: 18 })
-  ), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-2xl text-[#2f3437] dark:text-[#f1efe9] truncate" }, title)), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-2 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex bg-[#f1f0ed] dark:bg-[#2a2a27] p-1 rounded-md max-w-full overflow-x-auto kanban-mobile-scroll" }, /* @__PURE__ */ React.createElement(
+    "Nueva Tarea"
+  )))), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "flex max-w-full overflow-x-auto rounded-lg bg-[#ebe9e3] p-1 kanban-mobile-scroll dark:bg-[#242824]" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setFilterMode("date"),
       className: `${segBase} ${filterMode === "date" ? segActive : segIdle}`
     },
+    /* @__PURE__ */ React.createElement(Icon, { name: "CalendarDays", size: 14 }),
     "D\xEDa espec\xEDfico"
   ), hasRangeSupport && /* @__PURE__ */ React.createElement(
     "button",
@@ -5958,7 +6117,7 @@ var DateHeader = ({
     "button",
     {
       onClick: () => setFilterMode("overdue"),
-      className: `${segBase} ${filterMode === "overdue" ? "bg-[#fdebec] text-[#9f2f2d]" : "text-slate-500 dark:text-slate-400 hover:text-[#9f2f2d]"}`
+      className: `${segBase} ${filterMode === "overdue" ? "bg-[#fdebec] text-[#9f2f2d] dark:bg-red-500/15 dark:text-red-300" : segIdle}`
     },
     "Atrasadas ",
     /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 14 })
@@ -5981,7 +6140,7 @@ var DateHeader = ({
     },
     /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 14 }),
     historyLoading ? "Cargando" : "Hist\xF3rico"
-  )), setOwnershipFilter && /* @__PURE__ */ React.createElement("div", { className: "flex bg-[#f1f0ed] dark:bg-[#2a2a27] p-1 rounded-md max-w-full overflow-x-auto kanban-mobile-scroll" }, /* @__PURE__ */ React.createElement(
+  )), setOwnershipFilter && /* @__PURE__ */ React.createElement("div", { className: "flex max-w-full overflow-x-auto rounded-lg bg-[#ebe9e3] p-1 kanban-mobile-scroll dark:bg-[#242824]" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setOwnershipFilter("all"),
@@ -5992,8 +6151,9 @@ var DateHeader = ({
     "button",
     {
       onClick: () => setOwnershipFilter("mine"),
-      className: `${segBase} ${ownershipFilter === "mine" ? "bg-[#111111] dark:bg-[#f1efe9] text-white dark:text-[#181817]" : segIdle}`
+      className: `${segBase} ${ownershipFilter === "mine" ? segActive : segIdle}`
     },
+    /* @__PURE__ */ React.createElement(Icon, { name: "User", size: 14 }),
     "Asignadas a m\xED"
   )), filterMode === "date" && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
     "input",
@@ -6001,7 +6161,7 @@ var DateHeader = ({
       type: "date",
       value: currentDate,
       onChange: (e) => setCurrentDate(e.target.value),
-      className: "min-h-[40px] text-[13px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none"
+      className: "min-h-10 rounded-lg border border-[#d8d5ce] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[#8e8a82] dark:border-white/10 dark:bg-[#242824] dark:text-slate-300"
     }
   ), currentDate === today && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 font-bold px-2 py-1 rounded-full shrink-0" }, "Hoy")), filterMode === "range" && hasRangeSupport && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 flex-wrap" }, /* @__PURE__ */ React.createElement(
     "input",
@@ -6009,7 +6169,7 @@ var DateHeader = ({
       type: "date",
       value: effectiveRangeStart,
       onChange: handleRangeStartChange,
-      className: "min-h-[40px] text-[13px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none"
+      className: "min-h-10 rounded-lg border border-[#d8d5ce] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[#8e8a82] dark:border-white/10 dark:bg-[#242824] dark:text-slate-300"
     }
   ), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-semibold text-slate-400" }, "\u2192"), /* @__PURE__ */ React.createElement(
     "input",
@@ -6018,26 +6178,8 @@ var DateHeader = ({
       value: effectiveRangeEnd,
       min: effectiveRangeStart,
       onChange: handleRangeEndChange,
-      className: "min-h-[40px] text-[13px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none"
+      className: "min-h-10 rounded-lg border border-[#d8d5ce] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[#8e8a82] dark:border-white/10 dark:bg-[#242824] dark:text-slate-300"
     }
-  )))), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row sm:flex-wrap w-full xl:w-auto gap-2.5 items-stretch sm:items-center shrink-0" }, /* @__PURE__ */ React.createElement(
-    SearchBar,
-    {
-      searchTerm,
-      setSearchTerm,
-      placeholder: "Buscar tarea..."
-    }
-  ), /* @__PURE__ */ React.createElement("div", { className: "w-full sm:w-auto shrink-0" }, /* @__PURE__ */ React.createElement(
-    Button,
-    {
-      onClick: () => onAdd(
-        filterMode === "date" ? currentDate : filterMode === "range" ? effectiveRangeStart : today
-      ),
-      color: btnColor,
-      icon: btnIcon,
-      full: true
-    },
-    "Nueva Tarea"
   ))));
 };
 var AccountRoomView = ({
@@ -6071,6 +6213,7 @@ var AccountRoomView = ({
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [draggedTaskId, setDraggedTaskId] = useState(null);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
   const todayStr = getHondurasTodayStr();
   const currentMonthPeriod = getRankingMonthPeriod(todayStr);
   const columns = [
@@ -6171,6 +6314,89 @@ var AccountRoomView = ({
     }
   };
   const defaultAddDate = filterMode === "date" ? currentDate : filterMode === "range" ? effectiveRangeStart : todayStr;
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) || null;
+  const selectedManager = selectedTask ? managers.find((manager) => manager.id === selectedTask.contextId) : null;
+  const selectedClient = selectedTask ? clients.find((client) => client.id === selectedTask.clientId) : null;
+  const accountGroups = [
+    {
+      id: "start",
+      title: "Por iniciar",
+      subtitle: "Tareas pendientes de comenzar",
+      color: "slate",
+      stages: [{ ...columns[0], tasks: filteredTasks.filter((task) => task.status === columns[0].id) }]
+    },
+    {
+      id: "production",
+      title: "En producci\xF3n",
+      subtitle: "Validaci\xF3n y aprobaci\xF3n interna",
+      color: "blue",
+      stages: [{ ...columns[1], tasks: filteredTasks.filter((task) => task.status === columns[1].id) }]
+    },
+    {
+      id: "ready",
+      title: "Listas",
+      subtitle: "Aprobadas y publicadas",
+      color: "emerald",
+      stages: columns.slice(2).map((column) => ({
+        ...column,
+        tasks: filteredTasks.filter((task) => task.status === column.id),
+        collapsible: column.id === "publicado",
+        collapsedLimit: 3
+      }))
+    }
+  ];
+  const renderAccountTask = (task, stage) => {
+    const columnIndex = columns.findIndex((column) => column.id === stage.id);
+    const previous = columns[columnIndex - 1];
+    const next = columns[columnIndex + 1];
+    const manager = managers.find((item) => item.id === task.contextId);
+    const client = clients.find((item) => item.id === task.clientId);
+    const isOverdue = isDateBeforeDateString(task.date, todayStr) && stage.id !== "publicado";
+    const menuItems = [];
+    if (next)
+      menuItems.push({
+        key: "next",
+        label: next.id === "publicado" ? "Publicar" : `Avanzar a ${next.title}`,
+        icon: next.id === "publicado" ? "CheckCircle2" : "ArrowRight",
+        onClick: () => onChangeStatus(task, next.id)
+      });
+    if (previous)
+      menuItems.push({
+        key: "prev",
+        label: `Volver a ${previous.title}`,
+        icon: "ChevronLeft",
+        onClick: () => onChangeStatus(task, previous.id)
+      });
+    menuItems.push(
+      { key: "edit", label: "Editar", icon: "Edit", onClick: () => onEdit(task) },
+      { key: "delete", label: "Eliminar", icon: "Trash2", danger: true, onClick: () => onDelete(task.id) }
+    );
+    return /* @__PURE__ */ React.createElement(
+      KanbanCard,
+      {
+        key: task.id,
+        onClick: () => setSelectedTaskId(task.id),
+        selected: selectedTaskId === task.id,
+        draggable: true,
+        onDragStart: (event) => handleDragStart(event, task.id),
+        onDragEnd: (event) => handleDragEnd(event, task.id),
+        accentTone: stage.color,
+        isOverdue,
+        client: client?.name,
+        title: task.title,
+        badges: task.priority ? [{
+          label: task.priority,
+          tone: task.priority === "urgente" ? "red" : task.priority === "recurrente" ? "emerald" : "amber"
+        }] : [],
+        due: {
+          label: formatShortDate(task.date) + (isOverdue ? " \xB7 atrasada" : ""),
+          tone: isOverdue ? "red" : "slate"
+        },
+        assignee: buildAssignee(manager, legacyColorMap),
+        menuItems
+      }
+    );
+  };
   return /* @__PURE__ */ React.createElement("div", { className: "task-room min-h-0 flex flex-col gap-3 fade-in" }, /* @__PURE__ */ React.createElement(
     DateHeader,
     {
@@ -6192,88 +6418,31 @@ var AccountRoomView = ({
       setRangeEnd,
       onLoadHistory,
       historyLoaded,
-      historyLoading
+      historyLoading,
+      taskCount: filteredTasks.length
     }
-  ), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-4 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
-    const colTasks = filteredTasks.filter((t) => t.status === col.id);
-    const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
-    const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
-    const prevLabel = colIndex > 0 ? columns[colIndex - 1].title : "";
-    const nextLabel = colIndex < columns.length - 1 ? columns[colIndex + 1].title : "";
-    return /* @__PURE__ */ React.createElement(
-      KanbanColumn,
-      {
-        key: col.id,
-        dotColor: col.color,
-        title: col.title,
-        count: colTasks.length,
-        onAdd: () => handleAddTask(defaultAddDate),
-        onDragOver: handleDragOver,
-        onDragLeave: handleDragLeave,
-        onDrop: (e) => handleDrop(e, col.id),
-        isEmpty: colTasks.length === 0
-      },
-      colTasks.map((t) => {
-        const manager = managers.find((m) => m.id === t.contextId);
-        const client = clients.find((c) => c.id === t.clientId);
-        const isOverdue = isDateBeforeDateString(t.date, todayStr) && col.id !== "publicado";
-        const menuItems = [];
-        if (nextStatus)
-          menuItems.push({
-            key: "next",
-            label: nextStatus === "publicado" ? "Publicar" : `Avanzar a ${nextLabel}`,
-            icon: nextStatus === "publicado" ? "CheckCircle2" : "ArrowRight",
-            onClick: () => onChangeStatus(t, nextStatus)
-          });
-        if (prevStatus)
-          menuItems.push({
-            key: "prev",
-            label: `Volver a ${prevLabel}`,
-            icon: "ChevronLeft",
-            onClick: () => onChangeStatus(t, prevStatus)
-          });
-        menuItems.push({
-          key: "edit",
-          label: "Editar",
-          icon: "Edit",
-          onClick: () => onEdit(t)
-        });
-        menuItems.push({
-          key: "delete",
-          label: "Eliminar",
-          icon: "Trash2",
-          danger: true,
-          onClick: () => onDelete(t.id)
-        });
-        return /* @__PURE__ */ React.createElement(
-          KanbanCard,
-          {
-            key: t.id,
-            onClick: () => onTaskClick(t),
-            draggable: true,
-            onDragStart: (e) => handleDragStart(e, t.id),
-            onDragEnd: (e) => handleDragEnd(e, t.id),
-            accentTone: col.color,
-            isOverdue,
-            client: client?.name,
-            title: t.title,
-            badges: t.priority ? [
-              {
-                label: t.priority,
-                tone: t.priority === "urgente" ? "red" : t.priority === "recurrente" ? "emerald" : "amber"
-              }
-            ] : [],
-            due: {
-              label: formatShortDate(t.date) + (isOverdue ? " \xB7 atrasada" : ""),
-              tone: isOverdue ? "red" : "slate"
-            },
-            assignee: buildAssignee(manager, legacyColorMap),
-            menuItems
-          }
-        );
-      })
-    );
-  })));
+  ), /* @__PURE__ */ React.createElement(
+    TaskRoomWorkspace,
+    {
+      groups: accountGroups,
+      onAdd: () => handleAddTask(defaultAddDate),
+      renderTask: renderAccountTask,
+      onDragOver: handleDragOver,
+      onDragLeave: handleDragLeave,
+      onDrop: handleDrop,
+      inspector: selectedTask ? /* @__PURE__ */ React.createElement(
+        TaskRoomInspector,
+        {
+          task: selectedTask,
+          client: selectedClient?.name,
+          assignee: buildAssignee(selectedManager, legacyColorMap),
+          status: columns.find((column) => column.id === selectedTask.status),
+          onClose: () => setSelectedTaskId(null),
+          onOpenFull: () => onTaskClick(selectedTask)
+        }
+      ) : null
+    }
+  ));
 };
 var EditionsRoomView = ({
   tasks,
@@ -6301,6 +6470,7 @@ var EditionsRoomView = ({
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [draggedTaskId, setDraggedTaskId] = useState(null);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
   const todayStr = getHondurasTodayStr();
   const currentMonthPeriod = getRankingMonthPeriod(todayStr);
   const columns = [
@@ -6417,6 +6587,108 @@ var EditionsRoomView = ({
     }
   };
   const defaultAddDate = filterMode === "date" ? currentDate : todayStr;
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) || null;
+  const selectedEditor = selectedTask ? editors.find((editor) => editor.id === selectedTask.contextId) : null;
+  const selectedClient = selectedTask ? clients.find((client) => client.id === selectedTask.clientId) : null;
+  const editingGroups = [
+    {
+      id: "start",
+      title: "Por iniciar",
+      subtitle: "Tareas pendientes de comenzar",
+      color: "slate",
+      stages: [{
+        ...columns[0],
+        tasks: displayTasks.filter(
+          (task) => normalizeEditingWorkflowStatus(task.status) === columns[0].id
+        )
+      }]
+    },
+    {
+      id: "production",
+      title: "En producci\xF3n",
+      subtitle: "En edici\xF3n o en revisi\xF3n",
+      color: "amber",
+      stages: columns.slice(1, 3).map((column) => ({
+        ...column,
+        tasks: displayTasks.filter(
+          (task) => normalizeEditingWorkflowStatus(task.status) === column.id
+        )
+      }))
+    },
+    {
+      id: "ready",
+      title: "Listas",
+      subtitle: "Aprobadas y publicadas",
+      color: "emerald",
+      stages: columns.slice(3).map((column) => ({
+        ...column,
+        tasks: displayTasks.filter(
+          (task) => normalizeEditingWorkflowStatus(task.status) === column.id
+        ),
+        collapsible: column.id === "publicado",
+        collapsedLimit: 3
+      }))
+    }
+  ];
+  const renderEditingTask = (task, stage) => {
+    const columnIndex = columns.findIndex((column) => column.id === stage.id);
+    const previous = columns[columnIndex - 1];
+    const next = columns[columnIndex + 1];
+    const editor = editors.find((item) => item.id === task.contextId);
+    const client = clients.find((item) => item.id === task.clientId);
+    const isOverdue = isDateBeforeDateString(task.date, todayStr) && !isCompletedStatus(task.status);
+    const hierarchyId = task.hierarchy || getEditingHierarchyId(task);
+    const hierarchyTone = hierarchyId === "p1" ? "red" : hierarchyId === "p2" ? "amber" : hierarchyId === "p3" ? "emerald" : "slate";
+    const priorityTone = task.priority === "urgente" ? "red" : task.priority === "recurrente" ? "emerald" : "amber";
+    const menuItems = [];
+    if (canManageEditingTasks) {
+      if (next)
+        menuItems.push({
+          key: "next",
+          label: next.id === "publicado" ? "Publicar" : `Avanzar a ${next.title}`,
+          icon: next.id === "publicado" ? "CheckCircle2" : "ArrowRight",
+          onClick: () => onChangeStatus(task, next.id)
+        });
+      if (previous)
+        menuItems.push({
+          key: "prev",
+          label: `Volver a ${previous.title}`,
+          icon: "ChevronLeft",
+          onClick: () => onChangeStatus(task, previous.id)
+        });
+      menuItems.push(
+        { key: "edit", label: "Editar", icon: "Edit", onClick: () => onEdit(task) },
+        { key: "delete", label: "Eliminar", icon: "Trash2", danger: true, onClick: () => onDelete(task.id) }
+      );
+    }
+    return /* @__PURE__ */ React.createElement(
+      KanbanCard,
+      {
+        key: task.id,
+        onClick: () => setSelectedTaskId(task.id),
+        selected: selectedTaskId === task.id,
+        draggable: true,
+        onDragStart: (event) => handleDragStart(event, task.id),
+        onDragEnd: (event) => handleDragEnd(event, task.id),
+        accentTone: hierarchyTone,
+        isOverdue,
+        client: client?.name,
+        rank: rankingMap[task.id],
+        title: task.title,
+        notes: task.notes,
+        badges: [
+          { label: hierarchyId.toUpperCase(), tone: hierarchyTone },
+          { label: task.priority || "Normal", tone: priorityTone }
+        ],
+        due: {
+          label: formatShortDate(task.date) + (isOverdue ? " \xB7 atrasada" : ""),
+          tone: isOverdue ? "red" : "slate"
+        },
+        assignee: buildAssignee(editor),
+        menuItems
+      }
+    );
+  };
   return /* @__PURE__ */ React.createElement("div", { className: "task-room min-h-0 flex flex-col gap-3 fade-in" }, /* @__PURE__ */ React.createElement(
     DateHeader,
     {
@@ -6434,95 +6706,34 @@ var EditionsRoomView = ({
       setSearchTerm,
       onLoadHistory,
       historyLoaded,
-      historyLoading
+      historyLoading,
+      taskCount: filteredTasks.length
     }
-  ), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-5 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
-    const colTasks = displayTasks.filter(
-      (task) => normalizeEditingWorkflowStatus(task.status) === col.id
-    );
-    const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
-    const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
-    const prevLabel = colIndex > 0 ? columns[colIndex - 1].title : "";
-    const nextLabel = colIndex < columns.length - 1 ? columns[colIndex + 1].title : "";
-    return /* @__PURE__ */ React.createElement(
-      KanbanColumn,
-      {
-        key: col.id,
-        dotColor: col.color,
-        title: col.title,
-        count: colTasks.length,
-        onAdd: canManageEditingTasks ? () => handleAddTask(defaultAddDate) : void 0,
-        onDragOver: handleDragOver,
-        onDragLeave: handleDragLeave,
-        onDrop: (e) => handleDrop(e, col.id),
-        isEmpty: colTasks.length === 0
-      },
-      colTasks.map((t) => {
-        const editor = editors.find((e) => e.id === t.contextId);
-        const client = clients.find((c) => c.id === t.clientId);
-        const isOverdue = isDateBeforeDateString(t.date, todayStr) && !isCompletedStatus(t.status);
-        const hierarchyId = t.hierarchy || getEditingHierarchyId(t);
-        const hierTone = hierarchyId === "p1" ? "red" : hierarchyId === "p2" ? "amber" : hierarchyId === "p3" ? "emerald" : "slate";
-        const prioTone = t.priority === "urgente" ? "red" : t.priority === "recurrente" ? "emerald" : "amber";
-        const menuItems = [];
-        if (canManageEditingTasks) {
-          if (nextStatus)
-            menuItems.push({
-              key: "next",
-              label: nextStatus === "publicado" ? "Publicar" : `Avanzar a ${nextLabel}`,
-              icon: nextStatus === "publicado" ? "CheckCircle2" : "ArrowRight",
-              onClick: () => onChangeStatus(t, nextStatus)
-            });
-          if (prevStatus)
-            menuItems.push({
-              key: "prev",
-              label: `Volver a ${prevLabel}`,
-              icon: "ChevronLeft",
-              onClick: () => onChangeStatus(t, prevStatus)
-            });
-          menuItems.push({
-            key: "edit",
-            label: "Editar",
-            icon: "Edit",
-            onClick: () => onEdit(t)
-          });
-          menuItems.push({
-            key: "delete",
-            label: "Eliminar",
-            icon: "Trash2",
-            danger: true,
-            onClick: () => onDelete(t.id)
-          });
+  ), /* @__PURE__ */ React.createElement(
+    TaskRoomWorkspace,
+    {
+      groups: editingGroups,
+      onAdd: () => handleAddTask(defaultAddDate),
+      canAdd: canManageEditingTasks,
+      renderTask: renderEditingTask,
+      onDragOver: handleDragOver,
+      onDragLeave: handleDragLeave,
+      onDrop: handleDrop,
+      inspector: selectedTask ? /* @__PURE__ */ React.createElement(
+        TaskRoomInspector,
+        {
+          task: selectedTask,
+          client: selectedClient?.name,
+          assignee: buildAssignee(selectedEditor),
+          status: columns.find(
+            (column) => column.id === normalizeEditingWorkflowStatus(selectedTask.status)
+          ),
+          onClose: () => setSelectedTaskId(null),
+          onOpenFull: () => onTaskClick(selectedTask)
         }
-        return /* @__PURE__ */ React.createElement(
-          KanbanCard,
-          {
-            key: t.id,
-            onClick: () => onTaskClick(t),
-            draggable: true,
-            onDragStart: (e) => handleDragStart(e, t.id),
-            onDragEnd: (e) => handleDragEnd(e, t.id),
-            accentTone: hierTone,
-            isOverdue,
-            client: client?.name,
-            rank: rankingMap[t.id],
-            title: t.title,
-            notes: t.notes,
-            badges: [
-              { label: hierarchyId.toUpperCase(), tone: hierTone },
-              { label: t.priority || "Normal", tone: prioTone }
-            ],
-            due: {
-              label: formatShortDate(t.date) + (isOverdue ? " \xB7 atrasada" : ""),
-              tone: isOverdue ? "red" : "slate"
-            },
-            assignee: buildAssignee(editor),
-            menuItems
-          }
-        );
-      })
-    );
-  })));
+      ) : null
+    }
+  ));
 };
 var computeManagementDueBadge = (task) => {
   if (!task?.date || !task?.time || !/^\d{2}:\d{2}$/.test(task.time))
@@ -6586,6 +6797,7 @@ var ManagementRoomView = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [showTeam, setShowTeam] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
   const todayStr = getHondurasTodayStr();
   const currentMonthPeriod = getRankingMonthPeriod(todayStr);
   const columns = [
@@ -6646,6 +6858,102 @@ var ManagementRoomView = ({
     amber: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
     red: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
   };
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) || null;
+  const selectedMember = selectedTask ? members.find((member) => member.id === selectedTask.contextId) : null;
+  const selectedClient = selectedTask ? clients.find((client) => client.id === selectedTask.clientId) : null;
+  const buildManagementAssignee = (member) => member ? {
+    name: member.name,
+    initials: getInitials(member.name),
+    className: `bg-${AVATAR_FAMILY[member.color] || "violet"}-600 text-white`,
+    photo: member.photo || ""
+  } : null;
+  const managementGroups = [
+    {
+      id: "start",
+      title: "Por iniciar",
+      subtitle: "Tareas pendientes de comenzar",
+      color: "slate",
+      stages: [{ ...columns[0], tasks: filteredTasks.filter((task) => task.status === columns[0].id) }]
+    },
+    {
+      id: "production",
+      title: "En producci\xF3n",
+      subtitle: "En proceso o en espera",
+      color: "violet",
+      stages: columns.slice(1, 3).map((column) => ({
+        ...column,
+        tasks: filteredTasks.filter((task) => task.status === column.id)
+      }))
+    },
+    {
+      id: "ready",
+      title: "Listas",
+      subtitle: "Trabajo finalizado",
+      color: "emerald",
+      stages: [{
+        ...columns[3],
+        tasks: filteredTasks.filter((task) => task.status === columns[3].id),
+        collapsible: true,
+        collapsedLimit: 3
+      }]
+    }
+  ];
+  const renderManagementTask = (task, stage) => {
+    const columnIndex = columns.findIndex((column) => column.id === stage.id);
+    const previous = columns[columnIndex - 1];
+    const next = columns[columnIndex + 1];
+    const member = members.find((item) => item.id === task.contextId);
+    const client = clients.find((item) => item.id === task.clientId);
+    const isOverdue = isDateBeforeDateString(task.date, todayStr) && stage.id !== "cerrado";
+    const dueBadge = computeManagementDueBadge(task);
+    const badges = [];
+    if (task.category)
+      badges.push({ label: task.category, className: getMgmtCategoryColor(task.category) });
+    if (dueBadge && stage.id !== "cerrado")
+      badges.push({ label: dueBadge.label, tone: dueBadge.tone });
+    const menuItems = [];
+    if (next)
+      menuItems.push({
+        key: "next",
+        label: next.id === "cerrado" ? "Cerrar tarea" : `Avanzar a ${next.title}`,
+        icon: next.id === "cerrado" ? "Check" : "ArrowRight",
+        onClick: () => onChangeStatus(task, next.id)
+      });
+    if (previous)
+      menuItems.push({
+        key: "prev",
+        label: `Volver a ${previous.title}`,
+        icon: "ChevronLeft",
+        onClick: () => onChangeStatus(task, previous.id)
+      });
+    menuItems.push(
+      { key: "edit", label: "Editar", icon: "Edit", onClick: () => onEdit(task) },
+      { key: "delete", label: "Eliminar", icon: "Trash2", danger: true, onClick: () => onDelete(task.id) }
+    );
+    return /* @__PURE__ */ React.createElement(
+      KanbanCard,
+      {
+        key: task.id,
+        onClick: () => setSelectedTaskId(task.id),
+        selected: selectedTaskId === task.id,
+        draggable: true,
+        onDragStart: (event) => handleDragStart(event, task.id),
+        onDragEnd: handleDragEnd,
+        accentTone: stage.color,
+        isOverdue,
+        client: client?.name,
+        title: task.title,
+        notes: task.notes,
+        badges,
+        due: {
+          label: formatShortDate(task.date) + (task.time ? ` \xB7 ${task.time}` : "") + (isOverdue ? " \xB7 vencida" : ""),
+          tone: isOverdue ? "red" : "slate"
+        },
+        assignee: buildManagementAssignee(member),
+        menuItems
+      }
+    );
+  };
   return /* @__PURE__ */ React.createElement("div", { className: "task-room min-h-0 flex flex-col gap-3 fade-in" }, /* @__PURE__ */ React.createElement(
     DateHeader,
     {
@@ -6655,7 +6963,7 @@ var ManagementRoomView = ({
       setFilterMode,
       ownershipFilter,
       setOwnershipFilter,
-      title: "Sala de Gestion",
+      title: "Sala de Gesti\xF3n",
       onAdd: handleAddTask,
       btnColor: "violet",
       btnIcon: "ShieldCheck",
@@ -6663,7 +6971,8 @@ var ManagementRoomView = ({
       setSearchTerm,
       onLoadHistory,
       historyLoaded,
-      historyLoading
+      historyLoading,
+      taskCount: filteredTasks.length
     }
   ), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-2 lg:flex-row" }, /* @__PURE__ */ React.createElement("div", { className: "surface-subtle flex flex-1 flex-wrap rounded-xl border border-[#e2e0da] p-1.5 dark:border-white/10" }, columns.map((col) => {
     const filteredCount = filteredTasks.filter(
@@ -6745,98 +7054,28 @@ var ManagementRoomView = ({
       )),
       openCount > 0 && /* @__PURE__ */ React.createElement("span", { className: "shrink-0 text-[10px] font-black bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-1 rounded-full" }, openCount, " activas")
     );
-  })), (filterMode !== "all" || ownershipFilter !== "all" || searchTerm) && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 flex-wrap" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Filtros activos:"), filterMode === "date" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "Calendar", size: 9 }), "Fecha: ", currentDate), filterMode === "overdue" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 9 }), "Solo atrasadas"), filterMode === "history" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" }, /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 9 }), "Hist\xF3rico completo"), ownershipFilter === "mine" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "User", size: 9 }), "Solo mis tareas"), searchTerm && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700" }, /* @__PURE__ */ React.createElement(Icon, { name: "Search", size: 9 }), '"', searchTerm, '"'), /* @__PURE__ */ React.createElement("span", { className: "text-[10px] text-slate-500" }, "\u2014 mostrando ", filteredTasks.length, " de ", tasks.length, " tareas")), /* @__PURE__ */ React.createElement("div", { className: "flex-1 flex md:grid md:grid-cols-4 gap-3 overflow-x-auto md:overflow-hidden pb-4 md:pb-0 snap-x snap-mandatory kanban-mobile-scroll -mx-4 px-4 md:mx-0 md:px-0 min-h-0" }, columns.map((col, colIndex) => {
-    const colTasks = filteredTasks.filter(
-      (task) => task.status === col.id
-    );
-    const prevStatus = colIndex > 0 ? columns[colIndex - 1].id : null;
-    const nextStatus = colIndex < columns.length - 1 ? columns[colIndex + 1].id : null;
-    const prevLabel = colIndex > 0 ? columns[colIndex - 1].title : "";
-    const nextLabel = colIndex < columns.length - 1 ? columns[colIndex + 1].title : "";
-    return /* @__PURE__ */ React.createElement(
-      KanbanColumn,
-      {
-        key: col.id,
-        dotColor: col.color,
-        title: col.title,
-        count: colTasks.length,
-        onAdd: () => handleAddTask(filterMode === "date" ? currentDate : todayStr),
-        onDragOver: handleDragOver,
-        onDragLeave: handleDragLeave,
-        onDrop: (e) => handleDrop(e, col.id),
-        isEmpty: colTasks.length === 0
-      },
-      colTasks.map((task) => {
-        const member = members.find((m) => m.id === task.contextId);
-        const client = clients.find((c) => c.id === task.clientId);
-        const isOverdue = isDateBeforeDateString(task.date, todayStr) && col.id !== "cerrado";
-        const dueBadge = computeManagementDueBadge(task);
-        const badges = [];
-        if (task.category)
-          badges.push({
-            label: task.category,
-            className: getMgmtCategoryColor(task.category)
-          });
-        if (dueBadge && col.id !== "cerrado")
-          badges.push({ label: dueBadge.label, tone: dueBadge.tone });
-        const menuItems = [];
-        if (nextStatus)
-          menuItems.push({
-            key: "next",
-            label: nextStatus === "cerrado" ? "Cerrar tarea" : `Avanzar a ${nextLabel}`,
-            icon: nextStatus === "cerrado" ? "Check" : "ArrowRight",
-            onClick: () => onChangeStatus(task, nextStatus)
-          });
-        if (prevStatus)
-          menuItems.push({
-            key: "prev",
-            label: `Volver a ${prevLabel}`,
-            icon: "ChevronLeft",
-            onClick: () => onChangeStatus(task, prevStatus)
-          });
-        menuItems.push({
-          key: "edit",
-          label: "Editar",
-          icon: "Edit",
-          onClick: () => onEdit(task)
-        });
-        menuItems.push({
-          key: "delete",
-          label: "Eliminar",
-          icon: "Trash2",
-          danger: true,
-          onClick: () => onDelete(task.id)
-        });
-        return /* @__PURE__ */ React.createElement(
-          KanbanCard,
-          {
-            key: task.id,
-            onClick: () => onTaskClick(task),
-            draggable: true,
-            onDragStart: (e) => handleDragStart(e, task.id),
-            onDragEnd: handleDragEnd,
-            accentTone: col.color,
-            isOverdue,
-            client: client?.name,
-            title: task.title,
-            notes: task.notes,
-            badges,
-            due: {
-              label: formatShortDate(task.date) + (task.time ? ` \xB7 ${task.time}` : "") + (isOverdue ? " \xB7 vencida" : ""),
-              tone: isOverdue ? "red" : "slate"
-            },
-            assignee: member ? {
-              name: member.name,
-              initials: getInitials(member.name),
-              className: `bg-${AVATAR_FAMILY[member.color] || "violet"}-600 text-white`,
-              photo: member.photo || ""
-            } : null,
-            menuItems
-          }
-        );
-      })
-    );
-  })));
+  })), (filterMode !== "all" || ownershipFilter !== "all" || searchTerm) && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 flex-wrap" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Filtros activos:"), filterMode === "date" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "Calendar", size: 9 }), "Fecha: ", currentDate), filterMode === "overdue" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 9 }), "Solo atrasadas"), filterMode === "history" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" }, /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 9 }), "Hist\xF3rico completo"), ownershipFilter === "mine" && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-500/30" }, /* @__PURE__ */ React.createElement(Icon, { name: "User", size: 9 }), "Solo mis tareas"), searchTerm && /* @__PURE__ */ React.createElement("span", { className: "flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700" }, /* @__PURE__ */ React.createElement(Icon, { name: "Search", size: 9 }), '"', searchTerm, '"'), /* @__PURE__ */ React.createElement("span", { className: "text-[10px] text-slate-500" }, "\u2014 mostrando ", filteredTasks.length, " de ", tasks.length, " tareas")), /* @__PURE__ */ React.createElement(
+    TaskRoomWorkspace,
+    {
+      groups: managementGroups,
+      onAdd: () => handleAddTask(filterMode === "date" ? currentDate : todayStr),
+      renderTask: renderManagementTask,
+      onDragOver: handleDragOver,
+      onDragLeave: handleDragLeave,
+      onDrop: handleDrop,
+      inspector: selectedTask ? /* @__PURE__ */ React.createElement(
+        TaskRoomInspector,
+        {
+          task: selectedTask,
+          client: selectedClient?.name,
+          assignee: buildManagementAssignee(selectedMember),
+          status: columns.find((column) => column.id === selectedTask.status),
+          onClose: () => setSelectedTaskId(null),
+          onOpenFull: () => onTaskClick(selectedTask)
+        }
+      ) : null
+    }
+  ));
 };
 var UsersAccessView = ({
   users,
