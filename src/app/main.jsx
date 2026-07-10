@@ -6263,6 +6263,73 @@ const MobileBottomNav = ({ view, onNavigate, currentUserProfile }) => {
   );
 };
 
+const LoginVectorArtwork = () => (
+  <svg
+    viewBox="0 0 620 540"
+    className="login-vector h-full w-full"
+    role="img"
+    aria-label="Equipo conectado alrededor de un flujo de trabajo"
+  >
+    <g fill="none" stroke="currentColor">
+      <circle cx="310" cy="252" r="174" strokeWidth="1" opacity="0.18" />
+      <circle
+        cx="310"
+        cy="252"
+        r="126"
+        strokeWidth="1.5"
+        strokeDasharray="6 12"
+        className="login-vector-orbit"
+        opacity="0.42"
+      />
+      <path
+        d="M175 184 C236 112 382 112 444 184 M175 320 C240 390 382 390 444 320"
+        strokeWidth="1.5"
+        opacity="0.3"
+      />
+      <path d="M205 252 H415 M310 142 V362" strokeWidth="1" opacity="0.2" />
+    </g>
+
+    <g className="login-vector-node login-vector-node-one">
+      <circle cx="174" cy="184" r="42" fill="#e1f3fe" />
+      <circle cx="174" cy="171" r="12" fill="#1f6c9f" />
+      <path d="M149 207 C153 187 195 187 199 207" fill="#1f6c9f" />
+    </g>
+    <g className="login-vector-node login-vector-node-two">
+      <circle cx="446" cy="184" r="42" fill="#edf3ec" />
+      <circle cx="446" cy="171" r="12" fill="#346538" />
+      <path d="M421 207 C425 187 467 187 471 207" fill="#346538" />
+    </g>
+    <g className="login-vector-node login-vector-node-three">
+      <circle cx="174" cy="320" r="42" fill="#fbf3db" />
+      <rect x="151" y="299" width="46" height="42" rx="7" fill="#956400" />
+      <path d="M160 311 H188 M160 321 H183 M160 331 H176" stroke="#fbf3db" strokeWidth="3" strokeLinecap="round" />
+    </g>
+    <g className="login-vector-node login-vector-node-four">
+      <circle cx="446" cy="320" r="42" fill="#fdebec" />
+      <rect x="424" y="300" width="44" height="40" rx="8" fill="#9f2f2d" />
+      <path d="M435 320 L443 328 L458 311" fill="none" stroke="#fdebec" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+    </g>
+
+    <g className="login-vector-core">
+      <circle cx="310" cy="252" r="76" fill="#f1f0ed" className="dark:fill-[#292d2a]" />
+      <circle cx="310" cy="252" r="57" fill="#161817" className="dark:fill-[#e9e6df]" />
+      <path
+        d="M278 257 L302 280 L344 226"
+        fill="none"
+        stroke="#e9e6df"
+        className="dark:stroke-[#161817]"
+        strokeWidth="8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </g>
+
+    <circle cx="310" cy="126" r="6" fill="#1f6c9f" className="login-vector-pulse" />
+    <circle cx="436" cy="252" r="6" fill="#346538" className="login-vector-pulse login-vector-delay" />
+    <circle cx="310" cy="378" r="6" fill="#956400" className="login-vector-pulse login-vector-delay-two" />
+  </svg>
+);
+
 const LoginScreen = ({
   onGoogleSignIn,
   isSigningIn,
@@ -6270,99 +6337,125 @@ const LoginScreen = ({
   onEmailChange,
   onEmailSubmit,
   isSendingLoginLink,
+  isDark,
+  onToggleTheme,
 }) => (
-  <div className="min-h-screen bg-[#f7f6f3] text-[#2f3437] dark:bg-[#181817] dark:text-[#f1efe9]">
-    <header className="flex min-h-[72px] items-center border-b border-[#e6e4df] px-6 dark:border-[#343431] sm:px-10 lg:px-16">
-      <div className="flex items-center gap-2.5">
-        <AgencyLogo className="h-8 w-8 rounded-md text-sm" />
+  <div className="login-screen min-h-screen bg-[#f7f6f3] text-[#2f3437] dark:bg-[#161817] dark:text-[#e9e6df]">
+    <header className="absolute inset-x-0 top-0 z-20 flex min-h-[76px] items-center justify-between px-5 sm:px-8 lg:px-12">
+      <div className="flex items-center gap-3">
+        <AgencyLogo className="h-9 w-9" />
         <div>
-          <p className="brand-name text-base font-bold leading-none text-[#2f3437] dark:text-white">
+          <p className="brand-name text-base font-bold leading-none text-[#2f3437] dark:text-[#e9e6df]">
             CLUSTER
           </p>
-          <p className="mono-meta mt-0.5 text-slate-500">
+          <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#787774] dark:text-[#a6a39c]">
             Agency OS
           </p>
         </div>
       </div>
+      <button
+        type="button"
+        onClick={onToggleTheme}
+        aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+        className="quiet-action h-10 min-h-0 w-10 min-w-0 p-0"
+      >
+        <Icon name={isDark ? "Sun" : "Moon"} size={17} />
+      </button>
     </header>
 
-    <main className="flex min-h-[calc(100vh-72px)] items-start justify-center px-5 pb-12 pt-16 sm:pt-24">
-      <section className="surface w-full max-w-[420px] p-7 sm:p-9" aria-labelledby="login-title">
-        <div className="mb-8">
-          <p className="eyebrow mb-2">Espacio de trabajo</p>
-          <h1
-            id="login-title"
-            className="editorial-title text-[38px] leading-tight text-[#2f3437] dark:text-white"
-          >
-            Iniciar sesion
-          </h1>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            Gestiona clientes, tareas y produccion desde un solo lugar.
-          </p>
-        </div>
-
-        <button
-          onClick={onGoogleSignIn}
-          disabled={isSigningIn || isSendingLoginLink}
-          className="quiet-action w-full justify-center px-4 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isSigningIn ? (
-            <Icon name="Loader2" size={17} className="animate-spin" />
-          ) : (
-            <span
-              className="text-base font-black text-blue-600"
-              aria-hidden="true"
-            >
-              G
-            </span>
-          )}
-          Continuar con Google
-        </button>
-
-        <div className="my-6 flex items-center gap-4">
-          <div className="h-px flex-1 bg-[#e6e4df] dark:bg-[#343431]" />
-          <span className="mono-meta text-slate-500">
-            O usa tu correo
-          </span>
-          <div className="h-px flex-1 bg-[#e6e4df] dark:bg-[#343431]" />
-        </div>
-
-        <form onSubmit={onEmailSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="login-email"
-              className="mb-2 block text-sm font-medium text-[#2f3437] dark:text-white"
-            >
-              Email
-            </label>
-            <input
-              id="login-email"
-              type="email"
-              value={email}
-              onChange={(event) => onEmailChange(event.target.value)}
-              placeholder="Ej. correo@cluster.com"
-              autoComplete="email"
-              className="min-h-[46px] w-full rounded-md border border-[#d8d6d0] bg-white px-4 text-sm text-[#2f3437] outline-none transition placeholder:text-slate-400 focus:border-[#111111] focus:ring-2 focus:ring-black/10 dark:border-[#454541] dark:bg-[#222220] dark:text-white"
-            />
+    <main className="flex min-h-screen items-center justify-center px-4 pb-4 pt-24 sm:px-6 lg:px-10">
+      <section className="login-frame grid w-full max-w-[1120px] overflow-hidden rounded-2xl border border-[#dedcd6] bg-white dark:border-white/10 dark:bg-[#1f2220] lg:grid-cols-[1.08fr_0.92fr]" aria-labelledby="login-title">
+        <div className="login-art-panel order-2 relative min-h-[280px] overflow-hidden border-t border-[#dedcd6] bg-[#efeee9] dark:border-white/10 dark:bg-[#1a1d1b] lg:order-1 lg:min-h-[600px] lg:border-r lg:border-t-0">
+          <div className="pointer-events-none absolute inset-x-0 top-4 h-[72%] opacity-90 lg:h-[76%]">
+            <LoginVectorArtwork />
           </div>
+          <div className="relative z-10 flex h-full min-h-[280px] flex-col justify-between p-6 sm:p-8 lg:min-h-[600px] lg:p-10">
+            <div className="flex items-center gap-2 text-xs font-semibold text-[#555552] dark:text-[#c4c1ba]">
+              <span className="h-2 w-2 rounded-full bg-[#346538] login-vector-pulse" />
+              Operación conectada
+            </div>
+            <div className="max-w-md">
+              <p className="eyebrow mb-3">Todo el equipo, una sola vista</p>
+              <h2 className="editorial-title text-3xl text-[#2f3437] dark:text-[#e9e6df] sm:text-4xl lg:text-5xl">
+                El trabajo fluye cuando todo está conectado.
+              </h2>
+              <div className="mt-5 hidden flex-wrap gap-2 sm:flex">
+                {["Clientes", "Producción", "Equipo"].map((label) => (
+                  <span key={label} className="rounded-full border border-[#d8d6d0] bg-white/70 px-3 py-1.5 text-xs font-semibold text-[#555552] dark:border-white/10 dark:bg-[#232624]/80 dark:text-[#c4c1ba]">
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
 
-          <button
-            type="submit"
-            disabled={isSigningIn || isSendingLoginLink}
-            className="primary-action w-full justify-center px-4 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Icon
-              name={isSendingLoginLink ? "Loader2" : "Send"}
-              size={17}
-              className={isSendingLoginLink ? "animate-spin" : ""}
-            />
-            {isSendingLoginLink ? "Enviando enlace" : "Enviar enlace"}
-          </button>
-        </form>
+        <div className="login-form-panel order-1 flex items-center p-6 sm:p-10 lg:order-2 lg:p-12">
+          <div className="w-full max-w-[390px] mx-auto">
+            <div className="mb-8">
+              <p className="eyebrow mb-2">Acceso seguro</p>
+              <h1 id="login-title" className="editorial-title text-[40px] leading-tight text-[#2f3437] dark:text-[#e9e6df]">
+                Bienvenido de nuevo
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-[#787774] dark:text-[#a6a39c]">
+                Entra a tu espacio para gestionar clientes, tareas y producción.
+              </p>
+            </div>
 
-        <p className="mt-6 text-center text-sm font-medium text-slate-500">
-          Acceso solo con cuenta autorizada.
-        </p>
+            <button
+              onClick={onGoogleSignIn}
+              disabled={isSigningIn || isSendingLoginLink}
+              className="quiet-action w-full justify-center px-4 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSigningIn ? (
+                <Icon name="Loader2" size={17} className="animate-spin" />
+              ) : (
+                <span className="text-base font-bold text-blue-600" aria-hidden="true">G</span>
+              )}
+              Continuar con Google
+            </button>
+
+            <div className="my-6 flex items-center gap-4">
+              <div className="h-px flex-1 bg-[#e6e4df] dark:bg-[#343431]" />
+              <span className="text-xs text-[#787774] dark:text-[#a6a39c]">O usa tu correo</span>
+              <div className="h-px flex-1 bg-[#e6e4df] dark:bg-[#343431]" />
+            </div>
+
+            <form onSubmit={onEmailSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="login-email" className="mb-2 block text-sm font-medium text-[#2f3437] dark:text-[#e9e6df]">
+                  Correo electrónico
+                </label>
+                <div className="relative">
+                  <Icon name="Mail" size={17} className="pointer-events-none absolute left-3.5 top-3.5 text-[#9a9893]" />
+                  <input
+                    id="login-email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => onEmailChange(event.target.value)}
+                    placeholder="nombre@empresa.com"
+                    autoComplete="email"
+                    className="min-h-[46px] w-full rounded-md border border-[#d8d6d0] bg-white pl-11 pr-4 text-sm text-[#2f3437] outline-none transition placeholder:text-slate-400 focus:border-[#111111] focus:ring-2 focus:ring-black/10 dark:border-[#454541] dark:bg-[#1a1d1b] dark:text-[#e9e6df]"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSigningIn || isSendingLoginLink}
+                className="primary-action w-full justify-center px-4 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Icon name={isSendingLoginLink ? "Loader2" : "Send"} size={17} className={isSendingLoginLink ? "animate-spin" : ""} />
+                {isSendingLoginLink ? "Enviando enlace" : "Enviar enlace de acceso"}
+              </button>
+            </form>
+
+            <div className="mt-6 flex items-center justify-center gap-2 text-xs text-[#787774] dark:text-[#a6a39c]">
+              <Icon name="ShieldCheck" size={15} />
+              Acceso exclusivo para cuentas autorizadas
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   </div>
