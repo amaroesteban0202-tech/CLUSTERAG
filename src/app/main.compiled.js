@@ -5798,7 +5798,7 @@ var KanbanCard = ({
   assignee,
   menuItems = [],
   selected = false,
-  mobileStatus = null
+  statusControl = null
 }) => {
   const accent = isOverdue ? "border-l-red-500" : ACCENT_BORDER[accentTone] || "border-l-transparent";
   return /* @__PURE__ */ React.createElement(
@@ -5829,10 +5829,10 @@ var KanbanCard = ({
       },
       b.label
     ))),
-    mobileStatus && /* @__PURE__ */ React.createElement(
+    statusControl && /* @__PURE__ */ React.createElement(
       "label",
       {
-        className: "mb-2.5 block lg:hidden",
+        className: "mb-2.5 block",
         onClick: (event) => event.stopPropagation(),
         onPointerDown: (event) => event.stopPropagation(),
         onTouchStart: (event) => event.stopPropagation()
@@ -5841,14 +5841,14 @@ var KanbanCard = ({
       /* @__PURE__ */ React.createElement("span", { className: "relative block" }, /* @__PURE__ */ React.createElement(
         "select",
         {
-          value: mobileStatus.value,
-          onChange: (event) => mobileStatus.onChange(event.target.value),
+          value: statusControl.value,
+          onChange: (event) => statusControl.onChange(event.target.value),
           onClick: (event) => event.stopPropagation(),
           onDragStart: (event) => event.stopPropagation(),
           "aria-label": `Cambiar estado de ${title}`,
-          className: "min-h-11 w-full appearance-none rounded-lg border border-[#d8d5ce] bg-[#f7f6f2] px-3 py-2 pr-10 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[#1b1f1c] dark:text-slate-200"
+          className: "min-h-11 w-full appearance-none rounded-lg border border-[#d8d5ce] bg-[#f7f6f2] px-3 py-2 pr-10 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[#1b1f1c] dark:text-slate-200 lg:min-h-9 lg:py-1.5 lg:text-xs"
         },
-        mobileStatus.options.map((option) => /* @__PURE__ */ React.createElement("option", { key: option.id, value: option.id }, option.label || option.title))
+        statusControl.options.map((option) => /* @__PURE__ */ React.createElement("option", { key: option.id, value: option.id }, option.label || option.title))
       ), /* @__PURE__ */ React.createElement(
         Icon,
         {
@@ -6424,7 +6424,7 @@ var AccountRoomView = ({
         },
         assignee: buildAssignee(manager, legacyColorMap),
         menuItems,
-        mobileStatus: {
+        statusControl: {
           value: task.status,
           options: columns,
           onChange: (status) => {
@@ -6723,7 +6723,7 @@ var EditionsRoomView = ({
         },
         assignee: buildAssignee(editor),
         menuItems,
-        mobileStatus: canManageEditingTasks ? {
+        statusControl: canManageEditingTasks ? {
           value: normalizeEditingWorkflowStatus(task.status),
           options: columns,
           onChange: (status) => {
@@ -6996,7 +6996,7 @@ var ManagementRoomView = ({
         },
         assignee: buildManagementAssignee(member),
         menuItems,
-        mobileStatus: {
+        statusControl: {
           value: task.status,
           options: columns,
           onChange: (status) => {

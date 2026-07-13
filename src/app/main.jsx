@@ -7920,7 +7920,7 @@ const KanbanCard = ({
   assignee,
   menuItems = [],
   selected = false,
-  mobileStatus = null,
+  statusControl = null,
 }) => {
   const accent = isOverdue
     ? "border-l-red-500"
@@ -7987,9 +7987,9 @@ const KanbanCard = ({
         </div>
       )}
 
-      {mobileStatus && (
+      {statusControl && (
         <label
-          className="mb-2.5 block lg:hidden"
+          className="mb-2.5 block"
           onClick={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
           onTouchStart={(event) => event.stopPropagation()}
@@ -7999,14 +7999,14 @@ const KanbanCard = ({
           </span>
           <span className="relative block">
             <select
-              value={mobileStatus.value}
-              onChange={(event) => mobileStatus.onChange(event.target.value)}
+              value={statusControl.value}
+              onChange={(event) => statusControl.onChange(event.target.value)}
               onClick={(event) => event.stopPropagation()}
               onDragStart={(event) => event.stopPropagation()}
               aria-label={`Cambiar estado de ${title}`}
-              className="min-h-11 w-full appearance-none rounded-lg border border-[#d8d5ce] bg-[#f7f6f2] px-3 py-2 pr-10 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[#1b1f1c] dark:text-slate-200"
+              className="min-h-11 w-full appearance-none rounded-lg border border-[#d8d5ce] bg-[#f7f6f2] px-3 py-2 pr-10 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[#1b1f1c] dark:text-slate-200 lg:min-h-9 lg:py-1.5 lg:text-xs"
             >
-              {mobileStatus.options.map((option) => (
+              {statusControl.options.map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.label || option.title}
                 </option>
@@ -8839,7 +8839,7 @@ const AccountRoomView = ({
         }}
         assignee={buildAssignee(manager, legacyColorMap)}
         menuItems={menuItems}
-        mobileStatus={{
+        statusControl={{
           value: task.status,
           options: columns,
           onChange: (status) => {
@@ -9176,7 +9176,7 @@ const EditionsRoomView = ({
         }}
         assignee={buildAssignee(editor)}
         menuItems={menuItems}
-        mobileStatus={
+        statusControl={
           canManageEditingTasks
             ? {
                 value: normalizeEditingWorkflowStatus(task.status),
@@ -9489,7 +9489,7 @@ const ManagementRoomView = ({
         }}
         assignee={buildManagementAssignee(member)}
         menuItems={menuItems}
-        mobileStatus={{
+        statusControl={{
           value: task.status,
           options: columns,
           onChange: (status) => {
