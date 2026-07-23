@@ -343,6 +343,7 @@ const VIEW_PERMISSIONS = {
   calendar: "view_calendar",
   "control-center": "view_users",
   reports: "view_dashboard",
+  performance: "view_dashboard",
 };
 
 const normalizeEmail = (value = "") =>
@@ -5128,6 +5129,15 @@ function App() {
               color="emerald"
             />
           )}
+          {canAccessView(currentUserProfile, "performance") && (
+            <SidebarItem
+              active={view === "performance"}
+              onClick={() => handleNavigate("performance")}
+              icon="BarChart3"
+              label="Rendimiento"
+              color="emerald"
+            />
+          )}
 
           {currentUserProfile && (
             <>
@@ -5700,6 +5710,13 @@ function App() {
               </div>
             </div>
           )}
+          {view === "performance" && (
+            <PerformanceView
+              editingTasks={editingTasks}
+              editors={editors}
+              users={appUsers}
+            />
+          )}
           {view === "reports" && (
             <ReportsView
               accountTasks={accountTasks}
@@ -6222,13 +6239,14 @@ const FirstTimeView = ({ role, onNavigate }) => {
 const MobileBottomNav = ({ view, onNavigate, currentUserProfile }) => {
   const items = [
     { view: "dashboard", icon: "LayoutDashboard", label: "Inicio" },
+    { view: "performance", icon: "BarChart3", label: "Rendimiento" },
     { view: "account-room", icon: "LayoutList", label: "Accounts" },
     { view: "editions", icon: "Video", label: "Edición" },
     { view: "management-room", icon: "ShieldCheck", label: "Gestión" },
     { view: "clients", icon: "Briefcase", label: "Clientes" },
   ]
     .filter((item) => canAccessView(currentUserProfile, item.view))
-    .slice(0, 5);
+    .slice(0, 6);
 
   if (items.length === 0) return null;
 
@@ -15328,6 +15346,298 @@ const ReportsView = ({
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+const PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
+  const todayStr = getHondurasTodayStr();
+  const now = new Date();
+  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const [fromDate, setFromDate] = useState(firstOfMonth);
+  const [toDate, setToDate] = useState(todayStr);
+  const [selectedEditorId, setSelectedEditorId] = useState("");
+
+  const inRange = (dateStr) => {
+    if (!dateStr) return false;
+    return (
+      compareDateOnlyStrings(dateStr, fromDate) >= 0 &&
+      compareDateOnlyStrings(dateStr, toDate) <= 0
+    );
+  };
+
+  const filteredEditingTasks = editingTasks.filter((task) => {
+    if (!inRange(task.date)) return false;
+    if (selectedEditorId && task.contextId !== selectedEditorId) return false;
+    return true;
+  });
+  const userById = new Map(users.map((item) => [item.id, item]));
+  const userByEditorId = new Map(
+    users
+      .filter((item) => item.linkedEditorId)
+      .map((item) => [item.linkedEditorId, item]),
+  );
+  const getEditorLoginRecency = (editor) => {
+    const editorUser =
+      userByEditorId.get(editor.id) ||
+      (editor.userId ? userById.get(editor.userId) : null);
+    const lastSeenAt = editorUser?.lastSeenAt || "";
+    const daysSinceLogin = lastSeenAt
+      ? Math.max(0, getDateOnlyDiffDays(todayStr, lastSeenAt))
+      : null;
+    const loginScore = daysSinceLogin === null
+      ? 0
+      : Math.max(0, 100 - Math.min(daysSinceLogin, 30) * 2);
+    return {
+      lastSeenAt,
+      daysSinceLogin,
+      loginScore,
+    };
+  };
+  const editorStats = editors
+    .map((editor) => {
+      const editorTasks = filteredEditingTasks.filter(
+        (task) => task.contextId === editor.id,
+      );
+      const delivered = editorTasks.filter(isEditingDelivered).length;
+      const approved = editorTasks.filter(
+        (task) => normalizeEditingWorkflowStatus(task.status) === "aprobado",
+      ).length;
+      const published = editorTasks.filter(
+        (task) => task.status === "publicado",
+      ).length;
+      const inRevision = editorTasks.filter(
+        (task) => normalizeEditingWorkflowStatus(task.status) === "revision_interna",
+      ).length;
+      const inProgress = editorTasks.filter(isEditingActionable).length;
+      const performance = editorTasks.length
+        ? Math.round((delivered / editorTasks.length) * 100)
+        : 0;
+      const loginRecency = getEditorLoginRecency(editor);
+      const weightedPerformance = editorTasks.length
+        ? Math.round(
+            performance * 0.75 + loginRecency.loginScore * 0.25,
+          )
+        : 0;
+      return {
+        ...editor,
+        total: editorTasks.length,
+        delivered,
+        approved,
+        published,
+        inRevision,
+        inProgress,
+        performance,
+        weightedPerformance,
+        lastSeenAt: loginRecency.lastSeenAt,
+        daysSinceLogin: loginRecency.daysSinceLogin,
+      };
+    })
+    .filter((editor) => editor.total > 0)
+    .sort(
+      (left, right) =>
+        right.weightedPerformance - left.weightedPerformance ||
+        right.performance - left.performance ||
+        right.total - left.total ||
+        String(left.name || "").localeCompare(String(right.name || "")),
+    );
+
+  const totalTasks = filteredEditingTasks.length;
+  const deliveredTasks = filteredEditingTasks.filter(isEditingDelivered).length;
+  const publishedTasks = filteredEditingTasks.filter(
+    (task) => task.status === "publicado",
+  ).length;
+  const averagePerformance = editorStats.length
+    ? Math.round(
+        editorStats.reduce((sum, editor) => sum + editor.performance, 0) /
+          editorStats.length,
+      )
+    : 0;
+  const editorsWithLogin = editorStats.filter(
+    (editor) => editor.daysSinceLogin !== null,
+  );
+  const averageLoginScore = editorsWithLogin.length
+    ? Math.round(
+        editorsWithLogin.reduce((sum, editor) => sum + editor.loginScore, 0) /
+          editorsWithLogin.length,
+      )
+    : 0;
+  const averageDaysSinceLogin = editorsWithLogin.length
+    ? Math.round(
+        editorsWithLogin.reduce(
+          (sum, editor) => sum + editor.daysSinceLogin,
+          0,
+        ) / editorsWithLogin.length,
+      )
+    : null;
+
+  const rowStyle = (i) =>
+    i % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : "";
+
+  return (
+    <div className="space-y-6 fade-in">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <p className="eyebrow">Rendimiento</p>
+          <h2 className="text-2xl font-black text-slate-800 dark:text-white">
+            Rendimiento de Editores
+          </h2>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
+            Un resumen de la capacidad de entrega y el avance de edición dentro del rango de fechas seleccionado.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedEditorId}
+              onChange={(e) => setSelectedEditorId(e.target.value)}
+              className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 outline-none"
+            >
+              <option value="">Todos los editores</option>
+              {editors.map((editor) => (
+                <option key={editor.id} value={editor.id}>
+                  {editor.name}
+                </option>
+              ))}
+            </select>
+            {selectedEditorId && (
+              <button
+                type="button"
+                onClick={() => setSelectedEditorId("")}
+                className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
+            <span className="text-xs font-black text-slate-500 uppercase">Desde</span>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none"
+            />
+          </div>
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
+            <span className="text-xs font-black text-slate-500 uppercase">Hasta</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <ReportStatCard
+          label="Tareas de Edición"
+          value={totalTasks}
+          color="amber"
+          icon="Video"
+          sub="en el rango"
+        />
+        <ReportStatCard
+          label="Entregadas"
+          value={deliveredTasks}
+          color="emerald"
+          icon="CheckCircle2"
+          sub="revisión interna o final"
+        />
+        <ReportStatCard
+          label="Publicadas"
+          value={publishedTasks}
+          color="indigo"
+          icon="Sparkles"
+          sub="finalizadas en el rango"
+        />
+        <ReportStatCard
+          label="Rendimiento combinado"
+          value={`${averagePerformance}%`}
+          color="purple"
+          icon="BarChart3"
+          sub={`Incluye frecuencia de login (${averageLoginScore}% promedio)`}
+        />
+      </div>
+
+      <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+        Se considera entregada cuando la tarea alcanza Revisión Interna o cualquier estado posterior. Esto mide la capacidad de los editores para avanzar las piezas dentro del flujo.
+      </p>
+
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        {editorStats.length === 0 ? (
+          <div className="p-16 text-center text-slate-500 font-bold">
+            Sin datos de rendimiento para este rango de fechas
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px]">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                  <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500">Editor</th>
+                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Total</th>
+                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">En Progreso</th>
+                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">En Revisión</th>
+                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Aprobadas</th>
+                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Publicadas</th>
+                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Último login</th>
+                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Rendimiento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {editorStats.map((editor, index) => (
+                  <tr
+                    key={editor.id}
+                    className={`border-b border-slate-50 dark:border-slate-800/50 ${rowStyle(index)}`}
+                  >
+                    <td className="p-4 font-bold text-slate-800 dark:text-white">{editor.name}</td>
+                    <td className="p-4 text-center font-black text-slate-800 dark:text-white">{editor.total}</td>
+                    <td className="p-4 text-center text-slate-500 dark:text-slate-400">{editor.inProgress}</td>
+                    <td className="p-4 text-center text-slate-500 dark:text-slate-400">{editor.inRevision}</td>
+                    <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">{editor.approved}</td>
+                    <td className="p-4 text-center font-bold text-indigo-600 dark:text-indigo-400">{editor.published}</td>
+                    <td className="p-4 text-center text-slate-500 dark:text-slate-400">
+                      {editor.lastSeenAt ? (
+                        <span className="block text-sm font-bold text-slate-800 dark:text-white">
+                          {normalizeDateOnlyString(editor.lastSeenAt)}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-slate-400">Sin registro</span>
+                      )}
+                      {editor.daysSinceLogin !== null && (
+                        <span className="block text-xs text-slate-500 dark:text-slate-400">
+                          {editor.daysSinceLogin} días
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              editor.weightedPerformance >= 80
+                                ? "bg-emerald-500"
+                                : editor.weightedPerformance >= 50
+                                ? "bg-amber-500"
+                                : "bg-red-500"
+                            }`}
+                            style={{ width: `${editor.weightedPerformance}%` }}
+                          />
+                        </div>
+                        <span className="w-10 text-right text-sm font-black text-slate-800 dark:text-white">
+                          {editor.weightedPerformance}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
