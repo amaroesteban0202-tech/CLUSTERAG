@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useId } from "react";
+import React, { useState, useEffect, useRef, useId, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { App as CapacitorApp } from "@capacitor/app";
 import {
@@ -332,6 +332,7 @@ const VIEW_PERMISSIONS = {
   dashboard: "view_dashboard",
   clients: "view_clients",
   "client-detail": "view_clients",
+  chat: "view_client_chat",
   managers: "view_managers",
   "manager-detail": "view_managers",
   editors: "view_editors",
@@ -1547,6 +1548,8 @@ function App() {
   const [isLoadingTaskHistory, setIsLoadingTaskHistory] = useState(false);
   const [appUsers, setAppUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [clientChats, setClientChats] = useState([]);
+  const [chatReads, setChatReads] = useState([]);
 
   useEffect(() => {
     window.__cluster_active_view = view;
@@ -1556,6 +1559,7 @@ function App() {
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedManager, setSelectedManager] = useState(null);
   const [selectedEditor, setSelectedEditor] = useState(null);
+  const [selectedChatClient, setSelectedChatClient] = useState(null);
 
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
@@ -1692,6 +1696,37 @@ function App() {
   const profileBlocked = Boolean(
     currentUserProfile && currentUserProfile.isActive === false,
   );
+
+  // Estado de lectura del chat por cliente para el usuario actual.
+  const chatReadMap = useMemo(() => {
+    const uid = String(currentUserProfile?.id || authEmail || "");
+    const map = {};
+    if (!uid) return map;
+    chatReads.forEach((entry) => {
+      if (String(entry.userId || "") === uid && entry.clientId) {
+        map[entry.clientId] = entry.lastReadAt || "";
+      }
+    });
+    return map;
+  }, [chatReads, currentUserProfile, authEmail]);
+
+  // No leídos por cliente + total (excluye los mensajes propios).
+  const chatUnread = useMemo(() => {
+    const myId = String(currentUserProfile?.id || "");
+    const byClient = {};
+    let total = 0;
+    clientChats.forEach((message) => {
+      if (!message.clientId || !message.createdAt) return;
+      if (myId && String(message.authorId || "") === myId) return;
+      const lastRead = chatReadMap[message.clientId] || "";
+      if (message.createdAt > lastRead) {
+        byClient[message.clientId] = (byClient[message.clientId] || 0) + 1;
+        total += 1;
+      }
+    });
+    return { byClient, total };
+  }, [clientChats, chatReadMap, currentUserProfile]);
+
   const appUserById = new Map(appUsers.map((item) => [item.id, item]));
   const managementMemberCandidates = [
     ...appUsers.filter((item) => item.isActive !== false),
@@ -2227,6 +2262,32 @@ function App() {
           );
           setUsersLoaded(true);
         },
+        errHandler,
+      ),
+      onSnapshot(
+        query(
+          dataCollection("client_chats"),
+          orderBy("createdAt", "desc"),
+          limit(500),
+        ),
+        (snapshot) =>
+          setClientChats(
+            snapshot.docs.map((docItem) => ({
+              id: docItem.id,
+              ...docItem.data(),
+            })),
+          ),
+        errHandler,
+      ),
+      onSnapshot(
+        dataCollection("chat_reads"),
+        (snapshot) =>
+          setChatReads(
+            snapshot.docs.map((docItem) => ({
+              id: docItem.id,
+              ...docItem.data(),
+            })),
+          ),
         errHandler,
       ),
     ];
@@ -4476,6 +4537,194 @@ function App() {
     }
   };
 
+  // Publica un mensaje en el chat interno de un cliente (opcionalmente ligado a
+  // una tarea) y notifica por email a los mencionados con @.
+  const addClientChatMessage = async ({
+    clientId,
+    text,
+    mentionedIds = [],
+    taskRef = null,
+  }) => {
+    const trimmed = (text || "").trim();
+    if (!clientId || !trimmed) return;
+    const senderName =
+      currentUserProfile?.name ||
+      (authEmail ? authEmail.split("@")[0] : "Usuario");
+    await addDoc(dataCollection("client_chats"), {
+      clientId,
+      text: trimmed,
+      authorName: senderName,
+      authorId: currentUserProfile?.id || "",
+      authorEmail: authEmail || "",
+      mentionedIds,
+      taskRef: taskRef
+        ? {
+            taskId: taskRef.taskId || "",
+            taskType: taskRef.taskType || "",
+            taskTitle: taskRef.taskTitle || "",
+          }
+        : null,
+      createdAt: nowIso(),
+    });
+    const client = clients.find((item) => item.id === clientId);
+    const clientName = client?.name || "Cliente";
+    const allPeople = [
+      ...(managementUsers || []),
+      ...(managers || []),
+      ...(editors || []),
+    ];
+    for (const uid of mentionedIds) {
+      const person = allPeople.find((p) => p.id === uid);
+      const email = person?.email || person?.authEmail;
+      if (email && uid !== (currentUserProfile?.id || "")) {
+        sendNotification({
+          to: email,
+          type: "chat_mention",
+          senderName,
+          clientName,
+          comment: trimmed,
+        });
+      }
+    }
+  };
+
+  // Marca como leído el hilo de un cliente para el usuario actual.
+  const markClientChatRead = (clientId) => {
+    if (!clientId) return;
+    const uid = currentUserProfile?.id || authEmail;
+    if (!uid) return;
+    setDoc(
+      dataDoc("chat_reads", `${uid}__${clientId}`),
+      { userId: String(uid), clientId, lastReadAt: nowIso() },
+      { merge: true },
+    ).catch((error) => console.warn("[chat:read]", error.message));
+  };
+
+  // Abre el chat de un cliente y lo marca como leído.
+  const openClientChat = (client) => {
+    setSelectedChatClient(client || null);
+    if (client?.id) markClientChatRead(client.id);
+  };
+
+  const deleteClientChatMessage = (message) => {
+    if (!message?.id) return;
+    deleteDoc(dataDoc("client_chats", message.id)).catch((error) =>
+      console.warn("[chat:delete]", error.message),
+    );
+  };
+
+  // Abre la tarea referenciada por un mensaje del chat (o su sala si ya no está
+  // cargada en memoria).
+  const openTaskFromChat = (taskRef) => {
+    if (!taskRef?.taskId) return;
+    const listByType = {
+      accountTask: accountTasks,
+      editingTask: editingTasks,
+      managementTask: managementTasks,
+    };
+    const task = (listByType[taskRef.taskType] || []).find(
+      (item) => item.id === taskRef.taskId,
+    );
+    if (task) {
+      setTaskDetailConfig({ isOpen: true, task, type: taskRef.taskType });
+      return;
+    }
+    const viewByType = {
+      accountTask: "account-room",
+      editingTask: "editions",
+      managementTask: "management-room",
+    };
+    handleNavigate(viewByType[taskRef.taskType] || "account-room");
+  };
+
+  // Personas mencionables en el chat (dedupe por id).
+  const chatMentionables = (() => {
+    const seen = new Set();
+    const result = [];
+    [...(managementUsers || []), ...(managers || []), ...(editors || [])].forEach(
+      (person) => {
+        if (!person?.id || !person.name || seen.has(person.id)) return;
+        seen.add(person.id);
+        result.push({ id: person.id, name: person.name, email: person.email });
+      },
+    );
+    return result;
+  })();
+
+  // Mientras el chat de un cliente está abierto, mantenerlo marcado como leído.
+  useEffect(() => {
+    if (view !== "chat" || !selectedChatClient?.id) return;
+    markClientChatRead(selectedChatClient.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedChatClient?.id, clientChats]);
+
+  // Notificación del navegador cuando te mencionan en el chat.
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof Notification === "undefined")
+      return;
+    const myId = String(currentUserProfile?.id || "");
+    if (!myId) return;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+    if (Notification.permission !== "granted") return;
+
+    const STORAGE_KEY = "cluster_chat_notifications_v1";
+    let notified = [];
+    try {
+      notified = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    } catch {
+      notified = [];
+    }
+    const notifiedSet = new Set(notified);
+    let changed = false;
+
+    clientChats.forEach((message) => {
+      if (!message.id || notifiedSet.has(message.id)) return;
+      if (String(message.authorId || "") === myId) return;
+      const mentionsMe =
+        Array.isArray(message.mentionedIds) &&
+        message.mentionedIds.includes(myId);
+      if (!mentionsMe) return;
+      // Solo mensajes recientes (evita ráfaga la primera vez que se cargan).
+      const age = Date.now() - new Date(message.createdAt || 0).getTime();
+      if (age >= 0 && age < 15 * 60 * 1000) {
+        const client = clients.find((item) => item.id === message.clientId);
+        try {
+          const notif = new Notification(
+            `💬 Chat · ${client?.name || "Cliente"}`,
+            {
+              body: `${message.authorName || "Alguien"}: ${message.text}`,
+              tag: `chat-${message.id}`,
+            },
+          );
+          notif.onclick = () => {
+            window.focus();
+            if (client) openClientChat(client);
+            handleNavigate("chat");
+            notif.close();
+          };
+        } catch {
+          /* noop */
+        }
+      }
+      notifiedSet.add(message.id);
+      changed = true;
+    });
+
+    if (changed) {
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify([...notifiedSet].slice(-500)),
+        );
+      } catch {
+        /* noop */
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientChats, currentUserProfile]);
+
   const addTaskTimeEntry = async (task, type, durationMs) => {
     const colMap = {
       accountTask: "account_tasks",
@@ -5043,6 +5292,16 @@ function App() {
               color="slate"
             />
           )}
+          {canAccessView(currentUserProfile, "chat") && (
+            <SidebarItem
+              active={view === "chat"}
+              onClick={() => handleNavigate("chat")}
+              icon="MessageSquare"
+              label="Chat"
+              color="blue"
+              badge={chatUnread.total > 0 ? chatUnread.total : null}
+            />
+          )}
 
           <div className="pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2">
             Salas de trabajo
@@ -5329,6 +5588,32 @@ function App() {
                   isEdit: true,
                 })
               }
+              chatUnread={chatUnread.byClient?.[selectedClient.id] || 0}
+              onOpenChat={() => {
+                openClientChat(selectedClient);
+                handleNavigate("chat");
+              }}
+            />
+          )}
+          {view === "chat" && (
+            <ClientChatView
+              clients={clients}
+              clientChats={clientChats}
+              chatUnread={chatUnread}
+              activeClient={selectedChatClient}
+              onSelectClient={openClientChat}
+              onSendMessage={addClientChatMessage}
+              onOpenTask={openTaskFromChat}
+              onDeleteMessage={deleteClientChatMessage}
+              currentUserProfile={currentUserProfile}
+              canModerate={userHasPermission(
+                currentUserProfile,
+                "moderate_client_chat",
+              )}
+              mentionables={chatMentionables}
+              accountTasks={accountTasks}
+              editingTasks={editingTasks}
+              managementTasks={managementTasks}
             />
           )}
           {view === "managers" && (
@@ -5872,6 +6157,13 @@ function App() {
         onAddTimeEntry={addTaskTimeEntry}
         onUpdateChecklist={updateTaskChecklist}
         onChangePriority={changeTaskPriority}
+        clientChats={clientChats}
+        onSendClientChatMessage={addClientChatMessage}
+        onOpenClientChat={(clientId) => {
+          const client = clients.find((item) => item.id === clientId);
+          openClientChat(client || null);
+          handleNavigate("chat");
+        }}
         onChangeAssignee={changeTaskAssignee}
         onChangeAssignees={changeTaskAssignees}
         sendNotification={sendNotification}
@@ -10634,6 +10926,8 @@ const ClientDetail = ({
   onUpdate,
   onDelete,
   onEdit,
+  onOpenChat,
+  chatUnread = 0,
 }) => (
   <div className="space-y-6 max-w-5xl mx-auto fade-in">
     <Breadcrumb
@@ -10683,6 +10977,19 @@ const ClientDetail = ({
                 buttonClassName="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 text-white font-bold text-xs transition-all max-w-full"
               />
             </div>
+            {onOpenChat && (
+              <button
+                onClick={onOpenChat}
+                className="mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-blue-700"
+              >
+                <Icon name="MessageSquare" size={14} /> Abrir chat interno
+                {chatUnread > 0 && (
+                  <span className="rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-black">
+                    {chatUnread}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
@@ -10744,6 +11051,497 @@ const ClientDetail = ({
     </div>
   </div>
 );
+
+const CHAT_TASK_CHIP_STYLES = {
+  accountTask:
+    "text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/30",
+  editingTask:
+    "text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30",
+  managementTask:
+    "text-violet-600 dark:text-violet-300 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30",
+};
+const CHAT_TASK_LABELS = {
+  accountTask: "Account",
+  editingTask: "Edición",
+  managementTask: "Gestión",
+};
+
+const renderChatText = (text = "") =>
+  String(text)
+    .split(/(@[^\s@]+)/g)
+    .map((part, index) =>
+      part.startsWith("@") ? (
+        <span
+          key={index}
+          className="font-semibold text-blue-600 dark:text-blue-400"
+        >
+          {part}
+        </span>
+      ) : (
+        <React.Fragment key={index}>{part}</React.Fragment>
+      ),
+    );
+
+// Chat interno por cliente: lista de clientes + hilo + composer con @menciones
+// y enlace opcional a una tarea del cliente.
+const ClientChatView = ({
+  clients = [],
+  clientChats = [],
+  chatUnread = { byClient: {}, total: 0 },
+  activeClient,
+  onSelectClient,
+  onSendMessage,
+  onOpenTask,
+  onDeleteMessage,
+  currentUserProfile,
+  canModerate = false,
+  mentionables = [],
+  accountTasks = [],
+  editingTasks = [],
+  managementTasks = [],
+}) => {
+  const [search, setSearch] = useState("");
+  const [text, setText] = useState("");
+  const [mentionedIds, setMentionedIds] = useState([]);
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionStart, setMentionStart] = useState(-1);
+  const [taskRef, setTaskRef] = useState(null);
+  const [taskPickerOpen, setTaskPickerOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const textareaRef = useRef(null);
+  const scrollRef = useRef(null);
+
+  const myId = String(currentUserProfile?.id || "");
+
+  const lastMsgByClient = {};
+  clientChats.forEach((message) => {
+    if (!message.clientId) return;
+    const prev = lastMsgByClient[message.clientId];
+    if (!prev || (message.createdAt || "") > (prev.createdAt || "")) {
+      lastMsgByClient[message.clientId] = message;
+    }
+  });
+
+  const term = search.trim().toLowerCase();
+  const sortedClients = [...clients]
+    .filter((client) => !term || (client.name || "").toLowerCase().includes(term))
+    .sort((a, b) => {
+      const aTime = lastMsgByClient[a.id]?.createdAt || "";
+      const bTime = lastMsgByClient[b.id]?.createdAt || "";
+      if (aTime !== bTime) return aTime > bTime ? -1 : 1;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+
+  const messages = activeClient
+    ? clientChats
+        .filter((message) => message.clientId === activeClient.id)
+        .sort((a, b) => ((a.createdAt || "") > (b.createdAt || "") ? 1 : -1))
+    : [];
+
+  const clientTasks = activeClient
+    ? [
+        ...accountTasks
+          .filter((task) => task.clientId === activeClient.id)
+          .map((task) => ({ id: task.id, title: task.title, type: "accountTask" })),
+        ...editingTasks
+          .filter((task) => task.clientId === activeClient.id)
+          .map((task) => ({ id: task.id, title: task.title, type: "editingTask" })),
+        ...managementTasks
+          .filter((task) => task.clientId === activeClient.id)
+          .map((task) => ({ id: task.id, title: task.title, type: "managementTask" })),
+      ]
+    : [];
+
+  const mentionSuggestions = mentionOpen
+    ? mentionables
+        .filter(
+          (person) =>
+            person.name &&
+            person.name.toLowerCase().includes(mentionQuery.toLowerCase()),
+        )
+        .slice(0, 6)
+    : [];
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [activeClient?.id, messages.length]);
+
+  const handleTextChange = (event) => {
+    const value = event.target.value;
+    setText(value);
+    const caret = event.target.selectionStart ?? value.length;
+    const before = value.slice(0, caret);
+    const atMatch = before.match(/@([^\s@]*)$/);
+    if (atMatch) {
+      setMentionOpen(true);
+      setMentionQuery(atMatch[1]);
+      setMentionStart(before.lastIndexOf("@"));
+    } else {
+      setMentionOpen(false);
+      setMentionQuery("");
+      setMentionStart(-1);
+    }
+  };
+
+  const insertMention = (person) => {
+    const before = text.slice(0, mentionStart);
+    const after = text.slice(mentionStart + 1 + mentionQuery.length);
+    setText(`${before}@${person.name} ${after}`);
+    setMentionedIds((prev) =>
+      prev.includes(person.id) ? prev : [...prev, person.id],
+    );
+    setMentionOpen(false);
+    setMentionQuery("");
+    setMentionStart(-1);
+    setTimeout(() => textareaRef.current && textareaRef.current.focus(), 0);
+  };
+
+  const handleSubmit = async () => {
+    const trimmed = text.trim();
+    if (!trimmed || submitting || !activeClient) return;
+    setSubmitting(true);
+    try {
+      await onSendMessage({
+        clientId: activeClient.id,
+        text: trimmed,
+        mentionedIds,
+        taskRef,
+      });
+      setText("");
+      setMentionedIds([]);
+      setTaskRef(null);
+      setMentionOpen(false);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="flex h-[75vh] min-h-[500px] overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 fade-in">
+      {/* Lista de clientes */}
+      <aside
+        className={`${activeClient ? "hidden md:flex" : "flex"} w-full flex-col border-r border-slate-200 dark:border-slate-800 md:w-72 lg:w-80 shrink-0`}
+      >
+        <div className="p-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2 mb-3">
+            <Icon
+              name="MessageSquare"
+              size={18}
+              className="text-slate-500 dark:text-slate-400"
+            />
+            <h2 className="text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">
+              Chat interno
+            </h2>
+          </div>
+          <div className="relative">
+            <Icon
+              name="Search"
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar cliente..."
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto custom-scroll">
+          {sortedClients.length === 0 && (
+            <p className="p-4 text-center text-sm text-slate-400">
+              No hay clientes.
+            </p>
+          )}
+          {sortedClients.map((client) => {
+            const unread = chatUnread.byClient?.[client.id] || 0;
+            const last = lastMsgByClient[client.id];
+            const isActive = activeClient?.id === client.id;
+            return (
+              <button
+                key={client.id}
+                onClick={() => onSelectClient(client)}
+                className={`flex w-full items-center gap-3 border-b border-slate-50 px-3 py-2.5 text-left transition-colors dark:border-slate-800/60 ${isActive ? "bg-blue-50 dark:bg-blue-500/10" : "hover:bg-slate-50 dark:hover:bg-slate-800/50"}`}
+              >
+                {client.photo ? (
+                  <img
+                    src={client.photo}
+                    alt={client.name}
+                    className="h-9 w-9 shrink-0 rounded-lg object-cover"
+                  />
+                ) : (
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white">
+                    {(client.name || "C").slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`truncate text-sm font-bold ${isActive ? "text-blue-700 dark:text-blue-300" : "text-slate-700 dark:text-slate-200"}`}
+                  >
+                    {client.name || "Cliente"}
+                  </p>
+                  <p className="truncate text-xs text-slate-400">
+                    {last
+                      ? `${last.authorName ? `${last.authorName}: ` : ""}${last.text}`
+                      : "Sin mensajes"}
+                  </p>
+                </div>
+                {unread > 0 && (
+                  <span className="ml-1 shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-black text-white">
+                    {unread}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+
+      {/* Hilo del cliente */}
+      <section
+        className={`${activeClient ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col`}
+      >
+        {!activeClient ? (
+          <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
+            <Icon name="MessageSquare" size={40} className="mb-3 text-slate-300" />
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+              Elige un cliente para ver la conversación
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+              <button
+                onClick={() => onSelectClient(null)}
+                aria-label="Volver a la lista"
+                className="md:hidden text-slate-500 hover:text-slate-700"
+              >
+                <Icon name="ChevronLeft" size={20} />
+              </button>
+              {activeClient.photo ? (
+                <img
+                  src={activeClient.photo}
+                  alt={activeClient.name}
+                  className="h-9 w-9 rounded-lg object-cover"
+                />
+              ) : (
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white">
+                  {(activeClient.name || "C").slice(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-slate-700 dark:text-slate-200">
+                  {activeClient.name || "Cliente"}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {messages.length} mensaje{messages.length === 1 ? "" : "s"}
+                </p>
+              </div>
+            </div>
+
+            <div
+              ref={scrollRef}
+              className="flex-1 space-y-4 overflow-y-auto bg-slate-50/50 p-4 custom-scroll dark:bg-slate-950/30"
+            >
+              {messages.length === 0 && (
+                <div className="mt-8 text-center">
+                  <Icon
+                    name="MessageSquare"
+                    size={22}
+                    className="mx-auto mb-2 text-slate-300"
+                  />
+                  <p className="text-sm text-slate-400">
+                    Sé el primero en escribir sobre este cliente.
+                  </p>
+                </div>
+              )}
+              {messages.map((message) => {
+                const mine = myId && String(message.authorId || "") === myId;
+                return (
+                  <div key={message.id} className="group flex gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[10px] font-black text-white">
+                      {(message.authorName || "U").slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                          {message.authorName || "Usuario"}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {relativeTime(message.createdAt)}
+                        </span>
+                        {(mine || canModerate) && (
+                          <button
+                            onClick={() => onDeleteMessage(message)}
+                            aria-label="Eliminar mensaje"
+                            className="ml-auto text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+                          >
+                            <Icon name="Trash2" size={13} />
+                          </button>
+                        )}
+                      </div>
+                      <div className="mt-1 inline-block max-w-full rounded-lg rounded-tl-none border border-slate-200 bg-white px-3.5 py-2.5 dark:border-white/10 dark:bg-slate-800">
+                        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                          {renderChatText(message.text)}
+                        </p>
+                        {message.taskRef?.taskId && (
+                          <button
+                            onClick={() => onOpenTask(message.taskRef)}
+                            className={`mt-2 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
+                          >
+                            <Icon name="Paperclip" size={11} className="shrink-0" />
+                            <span className="truncate">
+                              {message.taskRef.taskTitle || "Tarea"}
+                            </span>
+                            <span className="opacity-70">
+                              · {CHAT_TASK_LABELS[message.taskRef.taskType] || ""}
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Composer */}
+            <div className="border-t border-slate-100 p-3 dark:border-slate-800">
+              {taskRef && (
+                <div className="mb-2 flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
+                  >
+                    <Icon name="Paperclip" size={11} />
+                    <span className="max-w-[220px] truncate">{taskRef.taskTitle}</span>
+                    <button
+                      onClick={() => setTaskRef(null)}
+                      aria-label="Quitar tarea"
+                      className="opacity-70 hover:opacity-100"
+                    >
+                      <Icon name="X" size={11} />
+                    </button>
+                  </span>
+                </div>
+              )}
+              <div className="flex items-end gap-2">
+                <div className="relative flex-1">
+                  <textarea
+                    ref={textareaRef}
+                    value={text}
+                    onChange={handleTextChange}
+                    onKeyDown={(event) => {
+                      if (mentionOpen && event.key === "Escape") {
+                        setMentionOpen(false);
+                        event.preventDefault();
+                        return;
+                      }
+                      if (
+                        event.key === "Enter" &&
+                        (event.metaKey || event.ctrlKey)
+                      ) {
+                        event.preventDefault();
+                        handleSubmit();
+                      }
+                    }}
+                    placeholder="Escribe un mensaje o menciona con @"
+                    rows={text ? 2 : 1}
+                    className="w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  />
+                  {mentionOpen && mentionSuggestions.length > 0 && (
+                    <div className="absolute bottom-full left-0 z-30 mb-1 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                      <p className="px-3 pb-1 pt-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Mencionar
+                      </p>
+                      {mentionSuggestions.map((person) => (
+                        <button
+                          key={person.id}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            insertMention(person);
+                          }}
+                          className="flex w-full items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
+                        >
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white">
+                            {person.name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <span className="flex-1 text-left text-sm font-semibold text-slate-700 dark:text-slate-200">
+                            {person.name}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {taskPickerOpen && (
+                    <div className="absolute bottom-full left-0 z-30 mb-1 max-h-64 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800">
+                      <p className="px-3 pb-1 pt-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Enlazar tarea del cliente
+                      </p>
+                      {clientTasks.length === 0 && (
+                        <p className="px-3 py-2 text-xs text-slate-400">
+                          Este cliente no tiene tareas.
+                        </p>
+                      )}
+                      {clientTasks.map((task) => (
+                        <button
+                          key={`${task.type}-${task.id}`}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            setTaskRef({
+                              taskId: task.id,
+                              taskType: task.type,
+                              taskTitle: task.title || "Tarea",
+                            });
+                            setTaskPickerOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
+                        >
+                          <span
+                            className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black ${CHAT_TASK_CHIP_STYLES[task.type]}`}
+                          >
+                            {CHAT_TASK_LABELS[task.type]}
+                          </span>
+                          <span className="flex-1 truncate text-sm text-slate-700 dark:text-slate-200">
+                            {task.title || "(sin título)"}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    setTaskPickerOpen((open) => !open);
+                    setMentionOpen(false);
+                  }}
+                  aria-label="Enlazar tarea"
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors ${taskRef || taskPickerOpen ? "border-blue-300 bg-blue-50 text-blue-600 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-400" : "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"}`}
+                >
+                  <Icon name="Paperclip" size={18} />
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={submitting || !text.trim()}
+                  aria-label="Enviar mensaje"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Icon
+                    name={submitting ? "Loader2" : "Send"}
+                    size={18}
+                    className={submitting ? "animate-spin" : ""}
+                  />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </section>
+    </div>
+  );
+};
 
 const CalendarGrid = ({
   events,
@@ -11385,6 +12183,9 @@ const TaskDetailModal = ({
   accountTasks = [],
   editingTasks = [],
   managementTasks = [],
+  clientChats = [],
+  onSendClientChatMessage,
+  onOpenClientChat,
 }) => {
   const [commentText, setCommentText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -11406,6 +12207,8 @@ const TaskDetailModal = ({
   const dialogRef = useDialogA11y(config.isOpen, onClose);
   const dialogTitleId = useId();
   const [fullAttachments, setFullAttachments] = useState(null);
+  const [clientChatText, setClientChatText] = useState("");
+  const [sendingClientChat, setSendingClientChat] = useState(false);
 
   // Cerrar dropdowns al click fuera
   useEffect(() => {
@@ -11500,6 +12303,32 @@ const TaskDetailModal = ({
     config.task;
 
   const client = clients.find((c) => c.id === task.clientId);
+  // Mensajes del chat del cliente que referencian esta tarea.
+  const taskChatMessages = clientChats
+    .filter((message) => message.taskRef?.taskId === task.id)
+    .sort((a, b) => ((a.createdAt || "") > (b.createdAt || "") ? 1 : -1));
+  const handleSendClientChat = async () => {
+    const trimmed = clientChatText.trim();
+    if (
+      !trimmed ||
+      sendingClientChat ||
+      !task.clientId ||
+      !onSendClientChatMessage
+    )
+      return;
+    setSendingClientChat(true);
+    try {
+      await onSendClientChatMessage({
+        clientId: task.clientId,
+        text: trimmed,
+        mentionedIds: [],
+        taskRef: { taskId: task.id, taskType: type, taskTitle: task.title || "" },
+      });
+      setClientChatText("");
+    } finally {
+      setSendingClientChat(false);
+    }
+  };
   const assignee =
     type === "accountTask"
       ? managers.find((m) => m.id === task.contextId)
@@ -12237,6 +13066,107 @@ const TaskDetailModal = ({
                   </section>
                 );
               })()}
+
+              {/* Chat del cliente — referencia esta tarea */}
+              <section className="rounded-xl border border-blue-200 bg-blue-50/40 p-5 dark:border-blue-500/20 dark:bg-blue-500/5">
+                <div className="mb-4 flex items-center gap-2">
+                  <Icon
+                    name="MessageSquare"
+                    size={13}
+                    className="text-blue-600 dark:text-blue-400"
+                  />
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">
+                    Chat del cliente
+                  </p>
+                  {client?.name && (
+                    <span className="truncate text-xs font-semibold text-slate-500">
+                      · {client.name}
+                    </span>
+                  )}
+                  {task.clientId && onOpenClientChat && (
+                    <button
+                      onClick={() => onOpenClientChat(task.clientId)}
+                      className="ml-auto shrink-0 text-[11px] font-bold text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Abrir chat completo
+                    </button>
+                  )}
+                </div>
+
+                {!task.clientId ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Esta tarea no tiene cliente asignado, así que no tiene chat.
+                  </p>
+                ) : (
+                  <>
+                    {taskChatMessages.length > 0 && (
+                      <div className="mb-4 space-y-3">
+                        {taskChatMessages.slice(-4).map((message) => (
+                          <div key={message.id} className="flex gap-2.5">
+                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white">
+                              {(message.authorName || "U")
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-baseline gap-2">
+                                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                                  {message.authorName || "Usuario"}
+                                </span>
+                                <span className="text-[11px] text-slate-400">
+                                  {relativeTime(message.createdAt)}
+                                </span>
+                              </div>
+                              <p className="whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200">
+                                {renderChatText(message.text)}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                        {taskChatMessages.length > 4 && onOpenClientChat && (
+                          <button
+                            onClick={() => onOpenClientChat(task.clientId)}
+                            className="text-[11px] font-bold text-blue-600 hover:underline dark:text-blue-400"
+                          >
+                            Ver los {taskChatMessages.length} mensajes en el chat
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex items-end gap-2">
+                      <textarea
+                        value={clientChatText}
+                        onChange={(e) => setClientChatText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                            e.preventDefault();
+                            handleSendClientChat();
+                          }
+                        }}
+                        placeholder="Comenta esta tarea en el chat del cliente…"
+                        rows={1}
+                        className="min-h-[42px] flex-1 resize-none rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                      />
+                      <button
+                        onClick={handleSendClientChat}
+                        disabled={sendingClientChat || !clientChatText.trim()}
+                        className="flex h-[42px] shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        <Icon
+                          name={sendingClientChat ? "Loader2" : "Send"}
+                          size={13}
+                          className={sendingClientChat ? "animate-spin" : ""}
+                        />
+                        Enviar
+                      </button>
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-slate-400">
+                      Se publicará en el chat de {client?.name || "el cliente"} con
+                      esta tarea enlazada.
+                    </p>
+                  </>
+                )}
+              </section>
 
               {/* Actividad — en el contenido principal, estilo Jira */}
               <section

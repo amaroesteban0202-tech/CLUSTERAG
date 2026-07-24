@@ -1,5 +1,5 @@
 // src/app/main.jsx
-import React, { useState, useEffect, useRef, useId } from "react";
+import React, { useState, useEffect, useRef, useId, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { App as CapacitorApp } from "@capacitor/app";
 import {
@@ -313,6 +313,7 @@ var VIEW_PERMISSIONS = {
   dashboard: "view_dashboard",
   clients: "view_clients",
   "client-detail": "view_clients",
+  chat: "view_client_chat",
   managers: "view_managers",
   "manager-detail": "view_managers",
   editors: "view_editors",
@@ -323,7 +324,8 @@ var VIEW_PERMISSIONS = {
   "general-calendar": "view_general_calendar",
   calendar: "view_calendar",
   "control-center": "view_users",
-  reports: "view_dashboard"
+  reports: "view_dashboard",
+  performance: "view_dashboard"
 };
 var normalizeEmail = (value = "") => String(value || "").trim().toLowerCase();
 var normalizeNameKey = (value = "") => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
@@ -873,6 +875,8 @@ function App() {
   const [isLoadingTaskHistory, setIsLoadingTaskHistory] = useState(false);
   const [appUsers, setAppUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [clientChats, setClientChats] = useState([]);
+  const [chatReads, setChatReads] = useState([]);
   useEffect(() => {
     window.__cluster_active_view = view;
     window.dispatchEvent(new Event("cluster:viewchange"));
@@ -880,6 +884,7 @@ function App() {
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedManager, setSelectedManager] = useState(null);
   const [selectedEditor, setSelectedEditor] = useState(null);
+  const [selectedChatClient, setSelectedChatClient] = useState(null);
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
     type: null,
@@ -963,6 +968,32 @@ function App() {
   const profileBlocked = Boolean(
     currentUserProfile && currentUserProfile.isActive === false
   );
+  const chatReadMap = useMemo(() => {
+    const uid = String(currentUserProfile?.id || authEmail || "");
+    const map = {};
+    if (!uid) return map;
+    chatReads.forEach((entry) => {
+      if (String(entry.userId || "") === uid && entry.clientId) {
+        map[entry.clientId] = entry.lastReadAt || "";
+      }
+    });
+    return map;
+  }, [chatReads, currentUserProfile, authEmail]);
+  const chatUnread = useMemo(() => {
+    const myId = String(currentUserProfile?.id || "");
+    const byClient = {};
+    let total = 0;
+    clientChats.forEach((message) => {
+      if (!message.clientId || !message.createdAt) return;
+      if (myId && String(message.authorId || "") === myId) return;
+      const lastRead = chatReadMap[message.clientId] || "";
+      if (message.createdAt > lastRead) {
+        byClient[message.clientId] = (byClient[message.clientId] || 0) + 1;
+        total += 1;
+      }
+    });
+    return { byClient, total };
+  }, [clientChats, chatReadMap, currentUserProfile]);
   const appUserById = new Map(appUsers.map((item) => [item.id, item]));
   const managementMemberCandidates = [
     ...appUsers.filter((item) => item.isActive !== false),
@@ -1404,6 +1435,30 @@ function App() {
           );
           setUsersLoaded(true);
         },
+        errHandler
+      ),
+      onSnapshot(
+        query(
+          dataCollection("client_chats"),
+          orderBy("createdAt", "desc"),
+          limit(500)
+        ),
+        (snapshot) => setClientChats(
+          snapshot.docs.map((docItem) => ({
+            id: docItem.id,
+            ...docItem.data()
+          }))
+        ),
+        errHandler
+      ),
+      onSnapshot(
+        dataCollection("chat_reads"),
+        (snapshot) => setChatReads(
+          snapshot.docs.map((docItem) => ({
+            id: docItem.id,
+            ...docItem.data()
+          }))
+        ),
         errHandler
       )
     ];
@@ -3239,6 +3294,164 @@ function App() {
       }
     }
   };
+  const addClientChatMessage = async ({
+    clientId,
+    text,
+    mentionedIds = [],
+    taskRef = null
+  }) => {
+    const trimmed = (text || "").trim();
+    if (!clientId || !trimmed) return;
+    const senderName = currentUserProfile?.name || (authEmail ? authEmail.split("@")[0] : "Usuario");
+    await addDoc(dataCollection("client_chats"), {
+      clientId,
+      text: trimmed,
+      authorName: senderName,
+      authorId: currentUserProfile?.id || "",
+      authorEmail: authEmail || "",
+      mentionedIds,
+      taskRef: taskRef ? {
+        taskId: taskRef.taskId || "",
+        taskType: taskRef.taskType || "",
+        taskTitle: taskRef.taskTitle || ""
+      } : null,
+      createdAt: nowIso()
+    });
+    const client = clients.find((item) => item.id === clientId);
+    const clientName = client?.name || "Cliente";
+    const allPeople = [
+      ...managementUsers || [],
+      ...managers || [],
+      ...editors || []
+    ];
+    for (const uid of mentionedIds) {
+      const person = allPeople.find((p) => p.id === uid);
+      const email = person?.email || person?.authEmail;
+      if (email && uid !== (currentUserProfile?.id || "")) {
+        sendNotification({
+          to: email,
+          type: "chat_mention",
+          senderName,
+          clientName,
+          comment: trimmed
+        });
+      }
+    }
+  };
+  const markClientChatRead = (clientId) => {
+    if (!clientId) return;
+    const uid = currentUserProfile?.id || authEmail;
+    if (!uid) return;
+    setDoc(
+      dataDoc("chat_reads", `${uid}__${clientId}`),
+      { userId: String(uid), clientId, lastReadAt: nowIso() },
+      { merge: true }
+    ).catch((error) => console.warn("[chat:read]", error.message));
+  };
+  const openClientChat = (client) => {
+    setSelectedChatClient(client || null);
+    if (client?.id) markClientChatRead(client.id);
+  };
+  const deleteClientChatMessage = (message) => {
+    if (!message?.id) return;
+    deleteDoc(dataDoc("client_chats", message.id)).catch(
+      (error) => console.warn("[chat:delete]", error.message)
+    );
+  };
+  const openTaskFromChat = (taskRef) => {
+    if (!taskRef?.taskId) return;
+    const listByType = {
+      accountTask: accountTasks,
+      editingTask: editingTasks,
+      managementTask: managementTasks
+    };
+    const task = (listByType[taskRef.taskType] || []).find(
+      (item) => item.id === taskRef.taskId
+    );
+    if (task) {
+      setTaskDetailConfig({ isOpen: true, task, type: taskRef.taskType });
+      return;
+    }
+    const viewByType = {
+      accountTask: "account-room",
+      editingTask: "editions",
+      managementTask: "management-room"
+    };
+    handleNavigate(viewByType[taskRef.taskType] || "account-room");
+  };
+  const chatMentionables = (() => {
+    const seen = /* @__PURE__ */ new Set();
+    const result = [];
+    [...managementUsers || [], ...managers || [], ...editors || []].forEach(
+      (person) => {
+        if (!person?.id || !person.name || seen.has(person.id)) return;
+        seen.add(person.id);
+        result.push({ id: person.id, name: person.name, email: person.email });
+      }
+    );
+    return result;
+  })();
+  useEffect(() => {
+    if (view !== "chat" || !selectedChatClient?.id) return;
+    markClientChatRead(selectedChatClient.id);
+  }, [view, selectedChatClient?.id, clientChats]);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof Notification === "undefined")
+      return;
+    const myId = String(currentUserProfile?.id || "");
+    if (!myId) return;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {
+      });
+    }
+    if (Notification.permission !== "granted") return;
+    const STORAGE_KEY = "cluster_chat_notifications_v1";
+    let notified = [];
+    try {
+      notified = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    } catch {
+      notified = [];
+    }
+    const notifiedSet = new Set(notified);
+    let changed = false;
+    clientChats.forEach((message) => {
+      if (!message.id || notifiedSet.has(message.id)) return;
+      if (String(message.authorId || "") === myId) return;
+      const mentionsMe = Array.isArray(message.mentionedIds) && message.mentionedIds.includes(myId);
+      if (!mentionsMe) return;
+      const age = Date.now() - new Date(message.createdAt || 0).getTime();
+      if (age >= 0 && age < 15 * 60 * 1e3) {
+        const client = clients.find((item) => item.id === message.clientId);
+        try {
+          const notif = new Notification(
+            `\u{1F4AC} Chat \xB7 ${client?.name || "Cliente"}`,
+            {
+              body: `${message.authorName || "Alguien"}: ${message.text}`,
+              tag: `chat-${message.id}`
+            }
+          );
+          notif.onclick = () => {
+            window.focus();
+            if (client) openClientChat(client);
+            handleNavigate("chat");
+            notif.close();
+          };
+        } catch {
+        }
+      }
+      notifiedSet.add(message.id);
+      changed = true;
+    });
+    if (changed) {
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify([...notifiedSet].slice(-500))
+        );
+      } catch {
+      }
+    }
+  }, [clientChats, currentUserProfile]);
   const addTaskTimeEntry = async (task, type, durationMs) => {
     const colMap = {
       accountTask: "account_tasks",
@@ -3724,6 +3937,17 @@ function App() {
           color: "slate"
         }
       ),
+      canAccessView(currentUserProfile, "chat") && /* @__PURE__ */ React.createElement(
+        SidebarItem,
+        {
+          active: view === "chat",
+          onClick: () => handleNavigate("chat"),
+          icon: "MessageSquare",
+          label: "Chat",
+          color: "blue",
+          badge: chatUnread.total > 0 ? chatUnread.total : null
+        }
+      ),
       /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2" }, "Salas de trabajo"),
       canAccessView(currentUserProfile, "account-room") && /* @__PURE__ */ React.createElement(
         SidebarItem,
@@ -3781,6 +4005,16 @@ function App() {
           onClick: () => handleNavigate("reports"),
           icon: "BarChart3",
           label: "Reportes",
+          color: "emerald"
+        }
+      ),
+      canAccessView(currentUserProfile, "performance") && /* @__PURE__ */ React.createElement(
+        SidebarItem,
+        {
+          active: view === "performance",
+          onClick: () => handleNavigate("performance"),
+          icon: "BarChart3",
+          label: "Rendimiento",
           color: "emerald"
         }
       ),
@@ -3935,7 +4169,33 @@ function App() {
         type: "client",
         data: selectedClient,
         isEdit: true
-      })
+      }),
+      chatUnread: chatUnread.byClient?.[selectedClient.id] || 0,
+      onOpenChat: () => {
+        openClientChat(selectedClient);
+        handleNavigate("chat");
+      }
+    }
+  ), view === "chat" && /* @__PURE__ */ React.createElement(
+    ClientChatView,
+    {
+      clients,
+      clientChats,
+      chatUnread,
+      activeClient: selectedChatClient,
+      onSelectClient: openClientChat,
+      onSendMessage: addClientChatMessage,
+      onOpenTask: openTaskFromChat,
+      onDeleteMessage: deleteClientChatMessage,
+      currentUserProfile,
+      canModerate: userHasPermission(
+        currentUserProfile,
+        "moderate_client_chat"
+      ),
+      mentionables: chatMentionables,
+      accountTasks,
+      editingTasks,
+      managementTasks
     }
   ), view === "managers" && /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement(
     ViewTabs,
@@ -4246,7 +4506,14 @@ function App() {
       }),
       onEventClick: (e) => handleEventClick(e, "event")
     }
-  ))), view === "reports" && /* @__PURE__ */ React.createElement(
+  ))), view === "performance" && /* @__PURE__ */ React.createElement(
+    PerformanceView,
+    {
+      editingTasks,
+      editors,
+      users: appUsers
+    }
+  ), view === "reports" && /* @__PURE__ */ React.createElement(
     ReportsView,
     {
       accountTasks,
@@ -4392,6 +4659,13 @@ function App() {
       onAddTimeEntry: addTaskTimeEntry,
       onUpdateChecklist: updateTaskChecklist,
       onChangePriority: changeTaskPriority,
+      clientChats,
+      onSendClientChatMessage: addClientChatMessage,
+      onOpenClientChat: (clientId) => {
+        const client = clients.find((item) => item.id === clientId);
+        openClientChat(client || null);
+        handleNavigate("chat");
+      },
       onChangeAssignee: changeTaskAssignee,
       onChangeAssignees: changeTaskAssignees,
       sendNotification,
@@ -4683,11 +4957,12 @@ var FirstTimeView = ({ role, onNavigate }) => {
 var MobileBottomNav = ({ view, onNavigate, currentUserProfile }) => {
   const items = [
     { view: "dashboard", icon: "LayoutDashboard", label: "Inicio" },
+    { view: "performance", icon: "BarChart3", label: "Rendimiento" },
     { view: "account-room", icon: "LayoutList", label: "Accounts" },
     { view: "editions", icon: "Video", label: "Edici\xF3n" },
     { view: "management-room", icon: "ShieldCheck", label: "Gesti\xF3n" },
     { view: "clients", icon: "Briefcase", label: "Clientes" }
-  ].filter((item) => canAccessView(currentUserProfile, item.view)).slice(0, 5);
+  ].filter((item) => canAccessView(currentUserProfile, item.view)).slice(0, 6);
   if (items.length === 0) return null;
   const isItemActive = (itemView) => view === itemView || itemView === "clients" && view === "client-detail";
   return /* @__PURE__ */ React.createElement(
@@ -7494,7 +7769,9 @@ var ClientDetail = ({
   onBack,
   onUpdate,
   onDelete,
-  onEdit
+  onEdit,
+  onOpenChat,
+  chatUnread = 0
 }) => /* @__PURE__ */ React.createElement("div", { className: "space-y-6 max-w-5xl mx-auto fade-in" }, /* @__PURE__ */ React.createElement(
   Breadcrumb,
   {
@@ -7536,7 +7813,16 @@ var ClientDetail = ({
     placeholder: "Asignar Account Manager...",
     buttonClassName: "flex items-center gap-2 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 text-white font-bold text-xs transition-all max-w-full"
   }
-)))), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-start md:items-end gap-1.5 shrink-0 mt-4 md:mt-0" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-bold uppercase tracking-widest text-white/50" }, "Estado"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-1 bg-white/10 p-1 rounded-xl" }, CLIENT_STATUSES.map((s) => {
+)), onOpenChat && /* @__PURE__ */ React.createElement(
+  "button",
+  {
+    onClick: onOpenChat,
+    className: "mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-blue-700"
+  },
+  /* @__PURE__ */ React.createElement(Icon, { name: "MessageSquare", size: 14 }),
+  " Abrir chat interno",
+  chatUnread > 0 && /* @__PURE__ */ React.createElement("span", { className: "rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-black" }, chatUnread)
+))), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-start md:items-end gap-1.5 shrink-0 mt-4 md:mt-0" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-bold uppercase tracking-widest text-white/50" }, "Estado"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-1 bg-white/10 p-1 rounded-xl" }, CLIENT_STATUSES.map((s) => {
   const active = (client.status || "Activo") === s.id;
   return /* @__PURE__ */ React.createElement(
     "button",
@@ -7576,6 +7862,344 @@ var ClientDetail = ({
   /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 14 }),
   " ELIMINAR CLIENTE"
 )))));
+var CHAT_TASK_CHIP_STYLES = {
+  accountTask: "text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/30",
+  editingTask: "text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30",
+  managementTask: "text-violet-600 dark:text-violet-300 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30"
+};
+var CHAT_TASK_LABELS = {
+  accountTask: "Account",
+  editingTask: "Edici\xF3n",
+  managementTask: "Gesti\xF3n"
+};
+var renderChatText = (text = "") => String(text).split(/(@[^\s@]+)/g).map(
+  (part, index) => part.startsWith("@") ? /* @__PURE__ */ React.createElement(
+    "span",
+    {
+      key: index,
+      className: "font-semibold text-blue-600 dark:text-blue-400"
+    },
+    part
+  ) : /* @__PURE__ */ React.createElement(React.Fragment, { key: index }, part)
+);
+var ClientChatView = ({
+  clients = [],
+  clientChats = [],
+  chatUnread = { byClient: {}, total: 0 },
+  activeClient,
+  onSelectClient,
+  onSendMessage,
+  onOpenTask,
+  onDeleteMessage,
+  currentUserProfile,
+  canModerate = false,
+  mentionables = [],
+  accountTasks = [],
+  editingTasks = [],
+  managementTasks = []
+}) => {
+  const [search, setSearch] = useState("");
+  const [text, setText] = useState("");
+  const [mentionedIds, setMentionedIds] = useState([]);
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionStart, setMentionStart] = useState(-1);
+  const [taskRef, setTaskRef] = useState(null);
+  const [taskPickerOpen, setTaskPickerOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const textareaRef = useRef(null);
+  const scrollRef = useRef(null);
+  const myId = String(currentUserProfile?.id || "");
+  const lastMsgByClient = {};
+  clientChats.forEach((message) => {
+    if (!message.clientId) return;
+    const prev = lastMsgByClient[message.clientId];
+    if (!prev || (message.createdAt || "") > (prev.createdAt || "")) {
+      lastMsgByClient[message.clientId] = message;
+    }
+  });
+  const term = search.trim().toLowerCase();
+  const sortedClients = [...clients].filter((client) => !term || (client.name || "").toLowerCase().includes(term)).sort((a, b) => {
+    const aTime = lastMsgByClient[a.id]?.createdAt || "";
+    const bTime = lastMsgByClient[b.id]?.createdAt || "";
+    if (aTime !== bTime) return aTime > bTime ? -1 : 1;
+    return (a.name || "").localeCompare(b.name || "");
+  });
+  const messages = activeClient ? clientChats.filter((message) => message.clientId === activeClient.id).sort((a, b) => (a.createdAt || "") > (b.createdAt || "") ? 1 : -1) : [];
+  const clientTasks = activeClient ? [
+    ...accountTasks.filter((task) => task.clientId === activeClient.id).map((task) => ({ id: task.id, title: task.title, type: "accountTask" })),
+    ...editingTasks.filter((task) => task.clientId === activeClient.id).map((task) => ({ id: task.id, title: task.title, type: "editingTask" })),
+    ...managementTasks.filter((task) => task.clientId === activeClient.id).map((task) => ({ id: task.id, title: task.title, type: "managementTask" }))
+  ] : [];
+  const mentionSuggestions = mentionOpen ? mentionables.filter(
+    (person) => person.name && person.name.toLowerCase().includes(mentionQuery.toLowerCase())
+  ).slice(0, 6) : [];
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [activeClient?.id, messages.length]);
+  const handleTextChange = (event) => {
+    const value = event.target.value;
+    setText(value);
+    const caret = event.target.selectionStart ?? value.length;
+    const before = value.slice(0, caret);
+    const atMatch = before.match(/@([^\s@]*)$/);
+    if (atMatch) {
+      setMentionOpen(true);
+      setMentionQuery(atMatch[1]);
+      setMentionStart(before.lastIndexOf("@"));
+    } else {
+      setMentionOpen(false);
+      setMentionQuery("");
+      setMentionStart(-1);
+    }
+  };
+  const insertMention = (person) => {
+    const before = text.slice(0, mentionStart);
+    const after = text.slice(mentionStart + 1 + mentionQuery.length);
+    setText(`${before}@${person.name} ${after}`);
+    setMentionedIds(
+      (prev) => prev.includes(person.id) ? prev : [...prev, person.id]
+    );
+    setMentionOpen(false);
+    setMentionQuery("");
+    setMentionStart(-1);
+    setTimeout(() => textareaRef.current && textareaRef.current.focus(), 0);
+  };
+  const handleSubmit = async () => {
+    const trimmed = text.trim();
+    if (!trimmed || submitting || !activeClient) return;
+    setSubmitting(true);
+    try {
+      await onSendMessage({
+        clientId: activeClient.id,
+        text: trimmed,
+        mentionedIds,
+        taskRef
+      });
+      setText("");
+      setMentionedIds([]);
+      setTaskRef(null);
+      setMentionOpen(false);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  return /* @__PURE__ */ React.createElement("div", { className: "flex h-[75vh] min-h-[500px] overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 fade-in" }, /* @__PURE__ */ React.createElement(
+    "aside",
+    {
+      className: `${activeClient ? "hidden md:flex" : "flex"} w-full flex-col border-r border-slate-200 dark:border-slate-800 md:w-72 lg:w-80 shrink-0`
+    },
+    /* @__PURE__ */ React.createElement("div", { className: "p-3 border-b border-slate-100 dark:border-slate-800" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-3" }, /* @__PURE__ */ React.createElement(
+      Icon,
+      {
+        name: "MessageSquare",
+        size: 18,
+        className: "text-slate-500 dark:text-slate-400"
+      }
+    ), /* @__PURE__ */ React.createElement("h2", { className: "text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide" }, "Chat interno")), /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
+      Icon,
+      {
+        name: "Search",
+        size: 14,
+        className: "absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+      }
+    ), /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        value: search,
+        onChange: (event) => setSearch(event.target.value),
+        placeholder: "Buscar cliente...",
+        className: "w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+      }
+    ))),
+    /* @__PURE__ */ React.createElement("div", { className: "flex-1 overflow-y-auto custom-scroll" }, sortedClients.length === 0 && /* @__PURE__ */ React.createElement("p", { className: "p-4 text-center text-sm text-slate-400" }, "No hay clientes."), sortedClients.map((client) => {
+      const unread = chatUnread.byClient?.[client.id] || 0;
+      const last = lastMsgByClient[client.id];
+      const isActive = activeClient?.id === client.id;
+      return /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          key: client.id,
+          onClick: () => onSelectClient(client),
+          className: `flex w-full items-center gap-3 border-b border-slate-50 px-3 py-2.5 text-left transition-colors dark:border-slate-800/60 ${isActive ? "bg-blue-50 dark:bg-blue-500/10" : "hover:bg-slate-50 dark:hover:bg-slate-800/50"}`
+        },
+        client.photo ? /* @__PURE__ */ React.createElement(
+          "img",
+          {
+            src: client.photo,
+            alt: client.name,
+            className: "h-9 w-9 shrink-0 rounded-lg object-cover"
+          }
+        ) : /* @__PURE__ */ React.createElement("div", { className: "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white" }, (client.name || "C").slice(0, 2).toUpperCase()),
+        /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement(
+          "p",
+          {
+            className: `truncate text-sm font-bold ${isActive ? "text-blue-700 dark:text-blue-300" : "text-slate-700 dark:text-slate-200"}`
+          },
+          client.name || "Cliente"
+        ), /* @__PURE__ */ React.createElement("p", { className: "truncate text-xs text-slate-400" }, last ? `${last.authorName ? `${last.authorName}: ` : ""}${last.text}` : "Sin mensajes")),
+        unread > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-1 shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-black text-white" }, unread)
+      );
+    }))
+  ), /* @__PURE__ */ React.createElement(
+    "section",
+    {
+      className: `${activeClient ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col`
+    },
+    !activeClient ? /* @__PURE__ */ React.createElement("div", { className: "flex flex-1 flex-col items-center justify-center p-8 text-center" }, /* @__PURE__ */ React.createElement(Icon, { name: "MessageSquare", size: 40, className: "mb-3 text-slate-300" }), /* @__PURE__ */ React.createElement("p", { className: "text-sm font-semibold text-slate-500 dark:text-slate-400" }, "Elige un cliente para ver la conversaci\xF3n")) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => onSelectClient(null),
+        "aria-label": "Volver a la lista",
+        className: "md:hidden text-slate-500 hover:text-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "ChevronLeft", size: 20 })
+    ), activeClient.photo ? /* @__PURE__ */ React.createElement(
+      "img",
+      {
+        src: activeClient.photo,
+        alt: activeClient.name,
+        className: "h-9 w-9 rounded-lg object-cover"
+      }
+    ) : /* @__PURE__ */ React.createElement("div", { className: "flex h-9 w-9 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white" }, (activeClient.name || "C").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-black text-slate-700 dark:text-slate-200" }, activeClient.name || "Cliente"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-400" }, messages.length, " mensaje", messages.length === 1 ? "" : "s"))), /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        ref: scrollRef,
+        className: "flex-1 space-y-4 overflow-y-auto bg-slate-50/50 p-4 custom-scroll dark:bg-slate-950/30"
+      },
+      messages.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-8 text-center" }, /* @__PURE__ */ React.createElement(
+        Icon,
+        {
+          name: "MessageSquare",
+          size: 22,
+          className: "mx-auto mb-2 text-slate-300"
+        }
+      ), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-400" }, "S\xE9 el primero en escribir sobre este cliente.")),
+      messages.map((message) => {
+        const mine = myId && String(message.authorId || "") === myId;
+        return /* @__PURE__ */ React.createElement("div", { key: message.id, className: "group flex gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[10px] font-black text-white" }, (message.authorName || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm font-bold text-slate-700 dark:text-slate-200" }, message.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-400" }, relativeTime(message.createdAt)), (mine || canModerate) && /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            onClick: () => onDeleteMessage(message),
+            "aria-label": "Eliminar mensaje",
+            className: "ml-auto text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+          },
+          /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 13 })
+        )), /* @__PURE__ */ React.createElement("div", { className: "mt-1 inline-block max-w-full rounded-lg rounded-tl-none border border-slate-200 bg-white px-3.5 py-2.5 dark:border-white/10 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-200" }, renderChatText(message.text)), message.taskRef?.taskId && /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            onClick: () => onOpenTask(message.taskRef),
+            className: `mt-2 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`
+          },
+          /* @__PURE__ */ React.createElement(Icon, { name: "Paperclip", size: 11, className: "shrink-0" }),
+          /* @__PURE__ */ React.createElement("span", { className: "truncate" }, message.taskRef.taskTitle || "Tarea"),
+          /* @__PURE__ */ React.createElement("span", { className: "opacity-70" }, "\xB7 ", CHAT_TASK_LABELS[message.taskRef.taskType] || "")
+        ))));
+      })
+    ), /* @__PURE__ */ React.createElement("div", { className: "border-t border-slate-100 p-3 dark:border-slate-800" }, taskRef && /* @__PURE__ */ React.createElement("div", { className: "mb-2 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+      "span",
+      {
+        className: `inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "Paperclip", size: 11 }),
+      /* @__PURE__ */ React.createElement("span", { className: "max-w-[220px] truncate" }, taskRef.taskTitle),
+      /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => setTaskRef(null),
+          "aria-label": "Quitar tarea",
+          className: "opacity-70 hover:opacity-100"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 11 })
+      )
+    )), /* @__PURE__ */ React.createElement("div", { className: "flex items-end gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "relative flex-1" }, /* @__PURE__ */ React.createElement(
+      "textarea",
+      {
+        ref: textareaRef,
+        value: text,
+        onChange: handleTextChange,
+        onKeyDown: (event) => {
+          if (mentionOpen && event.key === "Escape") {
+            setMentionOpen(false);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            handleSubmit();
+          }
+        },
+        placeholder: "Escribe un mensaje o menciona con @",
+        rows: text ? 2 : 1,
+        className: "w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+      }
+    ), mentionOpen && mentionSuggestions.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full left-0 z-30 mb-1 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement("p", { className: "px-3 pb-1 pt-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Mencionar"), mentionSuggestions.map((person) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: person.id,
+        onMouseDown: (event) => {
+          event.preventDefault();
+          insertMention(person);
+        },
+        className: "flex w-full items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white" }, person.name.slice(0, 2).toUpperCase()),
+      /* @__PURE__ */ React.createElement("span", { className: "flex-1 text-left text-sm font-semibold text-slate-700 dark:text-slate-200" }, person.name)
+    ))), taskPickerOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full left-0 z-30 mb-1 max-h-64 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement("p", { className: "px-3 pb-1 pt-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Enlazar tarea del cliente"), clientTasks.length === 0 && /* @__PURE__ */ React.createElement("p", { className: "px-3 py-2 text-xs text-slate-400" }, "Este cliente no tiene tareas."), clientTasks.map((task) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: `${task.type}-${task.id}`,
+        onMouseDown: (event) => {
+          event.preventDefault();
+          setTaskRef({
+            taskId: task.id,
+            taskType: task.type,
+            taskTitle: task.title || "Tarea"
+          });
+          setTaskPickerOpen(false);
+        },
+        className: "flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(
+        "span",
+        {
+          className: `shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black ${CHAT_TASK_CHIP_STYLES[task.type]}`
+        },
+        CHAT_TASK_LABELS[task.type]
+      ),
+      /* @__PURE__ */ React.createElement("span", { className: "flex-1 truncate text-sm text-slate-700 dark:text-slate-200" }, task.title || "(sin t\xEDtulo)")
+    )))), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => {
+          setTaskPickerOpen((open) => !open);
+          setMentionOpen(false);
+        },
+        "aria-label": "Enlazar tarea",
+        className: `flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors ${taskRef || taskPickerOpen ? "border-blue-300 bg-blue-50 text-blue-600 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-400" : "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"}`
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "Paperclip", size: 18 })
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: handleSubmit,
+        disabled: submitting || !text.trim(),
+        "aria-label": "Enviar mensaje",
+        className: "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+      },
+      /* @__PURE__ */ React.createElement(
+        Icon,
+        {
+          name: submitting ? "Loader2" : "Send",
+          size: 18,
+          className: submitting ? "animate-spin" : ""
+        }
+      )
+    ))))
+  ));
+};
 var CalendarGrid = ({
   events,
   onAdd,
@@ -8102,7 +8726,10 @@ var TaskDetailModal = ({
   currentUserProfile,
   accountTasks = [],
   editingTasks = [],
-  managementTasks = []
+  managementTasks = [],
+  clientChats = [],
+  onSendClientChatMessage,
+  onOpenClientChat
 }) => {
   const [commentText, setCommentText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -8124,6 +8751,8 @@ var TaskDetailModal = ({
   const dialogRef = useDialogA11y(config.isOpen, onClose);
   const dialogTitleId = useId();
   const [fullAttachments, setFullAttachments] = useState(null);
+  const [clientChatText, setClientChatText] = useState("");
+  const [sendingClientChat, setSendingClientChat] = useState(false);
   useEffect(() => {
     if (!statusOpen && !priorityOpen && !assigneeOpen && !actionsOpen) return;
     const handler = (e) => {
@@ -8192,6 +8821,24 @@ var TaskDetailModal = ({
   };
   const task = (liveArrays[type] || []).find((t) => t.id === config.task.id) || config.task;
   const client = clients.find((c) => c.id === task.clientId);
+  const taskChatMessages = clientChats.filter((message) => message.taskRef?.taskId === task.id).sort((a, b) => (a.createdAt || "") > (b.createdAt || "") ? 1 : -1);
+  const handleSendClientChat = async () => {
+    const trimmed = clientChatText.trim();
+    if (!trimmed || sendingClientChat || !task.clientId || !onSendClientChatMessage)
+      return;
+    setSendingClientChat(true);
+    try {
+      await onSendClientChatMessage({
+        clientId: task.clientId,
+        text: trimmed,
+        mentionedIds: [],
+        taskRef: { taskId: task.id, taskType: type, taskTitle: task.title || "" }
+      });
+      setClientChatText("");
+    } finally {
+      setSendingClientChat(false);
+    }
+  };
   const assignee = type === "accountTask" ? managers.find((m) => m.id === task.contextId) : type === "managementTask" ? users.find((u) => u.id === task.contextId) : editors.find((e) => e.id === task.contextId);
   const currentAssigneeIds = Array.isArray(task.assignees) ? task.assignees : task.contextId ? [task.contextId] : [];
   const tagColor = type === "accountTask" ? "indigo" : type === "managementTask" ? "violet" : "amber";
@@ -8732,7 +9379,61 @@ var TaskDetailModal = ({
             /* @__PURE__ */ React.createElement("span", { className: "text-left" }, /* @__PURE__ */ React.createElement("strong", { className: "block font-semibold text-slate-700 dark:text-slate-200" }, "Selecciona un archivo"), /* @__PURE__ */ React.createElement("span", { className: "mt-0.5 block text-xs text-slate-500" }, "Im\xE1genes, documentos, hojas de c\xE1lculo o video"))
           )
         );
-      })(), /* @__PURE__ */ React.createElement(
+      })(), /* @__PURE__ */ React.createElement("section", { className: "rounded-xl border border-blue-200 bg-blue-50/40 p-5 dark:border-blue-500/20 dark:bg-blue-500/5" }, /* @__PURE__ */ React.createElement("div", { className: "mb-4 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+        Icon,
+        {
+          name: "MessageSquare",
+          size: 13,
+          className: "text-blue-600 dark:text-blue-400"
+        }
+      ), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400" }, "Chat del cliente"), client?.name && /* @__PURE__ */ React.createElement("span", { className: "truncate text-xs font-semibold text-slate-500" }, "\xB7 ", client.name), task.clientId && onOpenClientChat && /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => onOpenClientChat(task.clientId),
+          className: "ml-auto shrink-0 text-[11px] font-bold text-blue-600 hover:underline dark:text-blue-400"
+        },
+        "Abrir chat completo"
+      )), !task.clientId ? /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400" }, "Esta tarea no tiene cliente asignado, as\xED que no tiene chat.") : /* @__PURE__ */ React.createElement(React.Fragment, null, taskChatMessages.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mb-4 space-y-3" }, taskChatMessages.slice(-4).map((message) => /* @__PURE__ */ React.createElement("div", { key: message.id, className: "flex gap-2.5" }, /* @__PURE__ */ React.createElement("div", { className: "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white" }, (message.authorName || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-bold text-slate-700 dark:text-slate-200" }, message.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] text-slate-400" }, relativeTime(message.createdAt))), /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200" }, renderChatText(message.text))))), taskChatMessages.length > 4 && onOpenClientChat && /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => onOpenClientChat(task.clientId),
+          className: "text-[11px] font-bold text-blue-600 hover:underline dark:text-blue-400"
+        },
+        "Ver los ",
+        taskChatMessages.length,
+        " mensajes en el chat"
+      )), /* @__PURE__ */ React.createElement("div", { className: "flex items-end gap-2" }, /* @__PURE__ */ React.createElement(
+        "textarea",
+        {
+          value: clientChatText,
+          onChange: (e) => setClientChatText(e.target.value),
+          onKeyDown: (e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              handleSendClientChat();
+            }
+          },
+          placeholder: "Comenta esta tarea en el chat del cliente\u2026",
+          rows: 1,
+          className: "min-h-[42px] flex-1 resize-none rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+        }
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: handleSendClientChat,
+          disabled: sendingClientChat || !clientChatText.trim(),
+          className: "flex h-[42px] shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+        },
+        /* @__PURE__ */ React.createElement(
+          Icon,
+          {
+            name: sendingClientChat ? "Loader2" : "Send",
+            size: 13,
+            className: sendingClientChat ? "animate-spin" : ""
+          }
+        ),
+        "Enviar"
+      )), /* @__PURE__ */ React.createElement("p", { className: "mt-1.5 text-[11px] text-slate-400" }, "Se publicar\xE1 en el chat de ", client?.name || "el cliente", " con esta tarea enlazada."))), /* @__PURE__ */ React.createElement(
         "section",
         {
           id: "task-activity",
@@ -10950,6 +11651,185 @@ var ReportsView = ({
       icon: "CheckCircle2"
     }
   ))));
+};
+var PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
+  const todayStr = getHondurasTodayStr();
+  const now = /* @__PURE__ */ new Date();
+  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const [fromDate, setFromDate] = useState(firstOfMonth);
+  const [toDate, setToDate] = useState(todayStr);
+  const [selectedEditorId, setSelectedEditorId] = useState("");
+  const inRange = (dateStr) => {
+    if (!dateStr) return false;
+    return compareDateOnlyStrings(dateStr, fromDate) >= 0 && compareDateOnlyStrings(dateStr, toDate) <= 0;
+  };
+  const filteredEditingTasks = editingTasks.filter((task) => {
+    if (!inRange(task.date)) return false;
+    if (selectedEditorId && task.contextId !== selectedEditorId) return false;
+    return true;
+  });
+  const userById = new Map(users.map((item) => [item.id, item]));
+  const userByEditorId = new Map(
+    users.filter((item) => item.linkedEditorId).map((item) => [item.linkedEditorId, item])
+  );
+  const getEditorLoginRecency = (editor) => {
+    const editorUser = userByEditorId.get(editor.id) || (editor.userId ? userById.get(editor.userId) : null);
+    const lastSeenAt = editorUser?.lastSeenAt || "";
+    const daysSinceLogin = lastSeenAt ? Math.max(0, getDateOnlyDiffDays(todayStr, lastSeenAt)) : null;
+    const loginScore = daysSinceLogin === null ? 0 : Math.max(0, 100 - Math.min(daysSinceLogin, 30) * 2);
+    return {
+      lastSeenAt,
+      daysSinceLogin,
+      loginScore
+    };
+  };
+  const editorStats = editors.map((editor) => {
+    const editorTasks = filteredEditingTasks.filter(
+      (task) => task.contextId === editor.id
+    );
+    const delivered = editorTasks.filter(isEditingDelivered).length;
+    const approved = editorTasks.filter(
+      (task) => normalizeEditingWorkflowStatus(task.status) === "aprobado"
+    ).length;
+    const published = editorTasks.filter(
+      (task) => task.status === "publicado"
+    ).length;
+    const inRevision = editorTasks.filter(
+      (task) => normalizeEditingWorkflowStatus(task.status) === "revision_interna"
+    ).length;
+    const inProgress = editorTasks.filter(isEditingActionable).length;
+    const performance = editorTasks.length ? Math.round(delivered / editorTasks.length * 100) : 0;
+    const loginRecency = getEditorLoginRecency(editor);
+    const weightedPerformance = editorTasks.length ? Math.round(
+      performance * 0.75 + loginRecency.loginScore * 0.25
+    ) : 0;
+    return {
+      ...editor,
+      total: editorTasks.length,
+      delivered,
+      approved,
+      published,
+      inRevision,
+      inProgress,
+      performance,
+      weightedPerformance,
+      lastSeenAt: loginRecency.lastSeenAt,
+      daysSinceLogin: loginRecency.daysSinceLogin
+    };
+  }).filter((editor) => editor.total > 0).sort(
+    (left, right) => right.weightedPerformance - left.weightedPerformance || right.performance - left.performance || right.total - left.total || String(left.name || "").localeCompare(String(right.name || ""))
+  );
+  const totalTasks = filteredEditingTasks.length;
+  const deliveredTasks = filteredEditingTasks.filter(isEditingDelivered).length;
+  const publishedTasks = filteredEditingTasks.filter(
+    (task) => task.status === "publicado"
+  ).length;
+  const averagePerformance = editorStats.length ? Math.round(
+    editorStats.reduce((sum, editor) => sum + editor.performance, 0) / editorStats.length
+  ) : 0;
+  const editorsWithLogin = editorStats.filter(
+    (editor) => editor.daysSinceLogin !== null
+  );
+  const averageLoginScore = editorsWithLogin.length ? Math.round(
+    editorsWithLogin.reduce((sum, editor) => sum + editor.loginScore, 0) / editorsWithLogin.length
+  ) : 0;
+  const averageDaysSinceLogin = editorsWithLogin.length ? Math.round(
+    editorsWithLogin.reduce(
+      (sum, editor) => sum + editor.daysSinceLogin,
+      0
+    ) / editorsWithLogin.length
+  ) : null;
+  const rowStyle = (i) => i % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : "";
+  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between flex-wrap gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Rendimiento"), /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Rendimiento de Editores"), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-2xl" }, "Un resumen de la capacidad de entrega y el avance de edici\xF3n dentro del rango de fechas seleccionado.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 flex-wrap" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: selectedEditorId,
+      onChange: (e) => setSelectedEditorId(e.target.value),
+      className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 outline-none"
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "" }, "Todos los editores"),
+    editors.map((editor) => /* @__PURE__ */ React.createElement("option", { key: editor.id, value: editor.id }, editor.name))
+  ), selectedEditorId && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => setSelectedEditorId(""),
+      className: "text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+    },
+    "Limpiar"
+  )), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Desde"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: fromDate,
+      onChange: (e) => setFromDate(e.target.value),
+      className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none"
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Hasta"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: toDate,
+      onChange: (e) => setToDate(e.target.value),
+      className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none"
+    }
+  )))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-4" }, /* @__PURE__ */ React.createElement(
+    ReportStatCard,
+    {
+      label: "Tareas de Edici\xF3n",
+      value: totalTasks,
+      color: "amber",
+      icon: "Video",
+      sub: "en el rango"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    ReportStatCard,
+    {
+      label: "Entregadas",
+      value: deliveredTasks,
+      color: "emerald",
+      icon: "CheckCircle2",
+      sub: "revisi\xF3n interna o final"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    ReportStatCard,
+    {
+      label: "Publicadas",
+      value: publishedTasks,
+      color: "indigo",
+      icon: "Sparkles",
+      sub: "finalizadas en el rango"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    ReportStatCard,
+    {
+      label: "Rendimiento combinado",
+      value: `${averagePerformance}%`,
+      color: "purple",
+      icon: "BarChart3",
+      sub: `Incluye frecuencia de login (${averageLoginScore}% promedio)`
+    }
+  )), /* @__PURE__ */ React.createElement("p", { className: "rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300" }, "Se considera entregada cuando la tarea alcanza Revisi\xF3n Interna o cualquier estado posterior. Esto mide la capacidad de los editores para avanzar las piezas dentro del flujo."), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden" }, editorStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 font-bold" }, "Sin datos de rendimiento para este rango de fechas") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[860px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Editor"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Total"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "En Progreso"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "En Revisi\xF3n"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Aprobadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Publicadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "\xDAltimo login"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Rendimiento"))), /* @__PURE__ */ React.createElement("tbody", null, editorStats.map((editor, index) => /* @__PURE__ */ React.createElement(
+    "tr",
+    {
+      key: editor.id,
+      className: `border-b border-slate-50 dark:border-slate-800/50 ${rowStyle(index)}`
+    },
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 font-bold text-slate-800 dark:text-white" }, editor.name),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-black text-slate-800 dark:text-white" }, editor.total),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center text-slate-500 dark:text-slate-400" }, editor.inProgress),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center text-slate-500 dark:text-slate-400" }, editor.inRevision),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-bold text-emerald-600 dark:text-emerald-400" }, editor.approved),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-bold text-indigo-600 dark:text-indigo-400" }, editor.published),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center text-slate-500 dark:text-slate-400" }, editor.lastSeenAt ? /* @__PURE__ */ React.createElement("span", { className: "block text-sm font-bold text-slate-800 dark:text-white" }, normalizeDateOnlyString(editor.lastSeenAt)) : /* @__PURE__ */ React.createElement("span", { className: "text-sm text-slate-400" }, "Sin registro"), editor.daysSinceLogin !== null && /* @__PURE__ */ React.createElement("span", { className: "block text-xs text-slate-500 dark:text-slate-400" }, editor.daysSinceLogin, " d\xEDas")),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-center gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden" }, /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `h-full rounded-full ${editor.weightedPerformance >= 80 ? "bg-emerald-500" : editor.weightedPerformance >= 50 ? "bg-amber-500" : "bg-red-500"}`,
+        style: { width: `${editor.weightedPerformance}%` }
+      }
+    )), /* @__PURE__ */ React.createElement("span", { className: "w-10 text-right text-sm font-black text-slate-800 dark:text-white" }, editor.weightedPerformance, "%")))
+  )))))));
 };
 var root = createRoot(document.getElementById("root"));
 root.render(/* @__PURE__ */ React.createElement(App, null));

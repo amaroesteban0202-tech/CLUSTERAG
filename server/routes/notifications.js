@@ -18,16 +18,20 @@ const escHtml = (s = '') => String(s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-const buildEmail = ({ type, senderName, taskTitle, taskType, comment, appUrl }) => {
-    const accent = taskType === 'accountTask' ? '#4f46e5'
+const buildEmail = ({ type, senderName, taskTitle, taskType, comment, appUrl, clientName }) => {
+    const isChat = type === 'chat_mention';
+    const accent = isChat ? '#0ea5e9'
+                 : taskType === 'accountTask' ? '#4f46e5'
                  : taskType === 'editingTask' ? '#d97706'
                  : '#7c3aed';
-    const typeLabel = taskType === 'accountTask' ? 'Account'
+    const typeLabel = isChat ? 'Chat'
+                    : taskType === 'accountTask' ? 'Account'
                     : taskType === 'editingTask' ? 'Edición'
                     : 'Gestión';
 
+    const linkLabel = isChat ? 'Abrir chat en Cluster OS' : 'Abrir tarea en Cluster OS';
     const link = appUrl
-        ? `<p style="margin:20px 0 0;"><a href="${escHtml(appUrl)}" style="background:${accent};color:#fff;padding:11px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;">Abrir tarea en Cluster OS</a></p>`
+        ? `<p style="margin:20px 0 0;"><a href="${escHtml(appUrl)}" style="background:${accent};color:#fff;padding:11px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;">${linkLabel}</a></p>`
         : '';
 
     let subject, heading, body;
@@ -40,6 +44,13 @@ const buildEmail = ({ type, senderName, taskTitle, taskType, comment, appUrl }) 
         subject = `💬 ${senderName} te mencionó en: ${taskTitle}`;
         heading = 'Te mencionaron en un comentario';
         body = `<strong>${escHtml(senderName)}</strong> te mencionó en la tarea <strong>"${escHtml(taskTitle)}"</strong>:<br/><br/>
+            <blockquote style="margin:12px 0;padding:12px 16px;background:#f8fafc;border-left:3px solid ${accent};border-radius:0 8px 8px 0;color:#475569;font-style:italic;">
+                "${escHtml(comment)}"
+            </blockquote>`;
+    } else if (type === 'chat_mention') {
+        subject = `💬 ${senderName} te mencionó en el chat de ${clientName}`;
+        heading = 'Te mencionaron en el chat';
+        body = `<strong>${escHtml(senderName)}</strong> te mencionó en el chat interno de <strong>"${escHtml(clientName)}"</strong>:<br/><br/>
             <blockquote style="margin:12px 0;padding:12px 16px;background:#f8fafc;border-left:3px solid ${accent};border-radius:0 8px 8px 0;color:#475569;font-style:italic;">
                 "${escHtml(comment)}"
             </blockquote>`;
@@ -66,10 +77,10 @@ const buildEmail = ({ type, senderName, taskTitle, taskType, comment, appUrl }) 
 // POST /api/notifications/send
 router.post('/send', async (req, res) => {
     try {
-        const { to, type, senderName, taskTitle, taskType, comment, appUrl } = req.body;
+        const { to, type, senderName, taskTitle, taskType, comment, appUrl, clientName } = req.body;
         if (!to || !type) return res.status(400).json({ error: { message: 'Missing to or type' } });
 
-        const { subject, html } = buildEmail({ type, senderName, taskTitle, taskType, comment, appUrl });
+        const { subject, html } = buildEmail({ type, senderName, taskTitle, taskType, comment, appUrl, clientName });
         const mailer = getTransporter();
 
         if (!mailer) {

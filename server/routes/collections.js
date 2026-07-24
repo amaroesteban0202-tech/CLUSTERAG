@@ -74,6 +74,16 @@ const canUpdateOwnManagementTask = (userRecord, existing = null) => {
     return Boolean(userEmail && normalizeEmail(existing.assignedByEmail) === userEmail);
 };
 
+// El autor de un mensaje de chat puede editar/borrar el suyo aunque no tenga
+// el permiso de moderacion.
+const canUpdateOwnChatMessage = (userRecord, existing = null) => {
+    if (!existing || !hasPermission(userRecord, 'send_client_chat')) return false;
+    const userId = String(userRecord?.id || '');
+    if (userId && String(existing.authorId || '') === userId) return true;
+    const userEmail = normalizeEmail(userRecord?.email);
+    return Boolean(userEmail && existing.authorEmail && normalizeEmail(existing.authorEmail) === userEmail);
+};
+
 const ensureCollectionUpdatePermission = async (req, recordId) => {
     const userRecord = requireAuthenticatedUser(req);
     const collectionName = getCollectionName(req);
@@ -87,7 +97,9 @@ const ensureCollectionUpdatePermission = async (req, recordId) => {
         throw createHttpError(404, 'El documento no existe.', 'document/not-found');
     }
 
-    if (hasPermission(userRecord, permission) || (collectionName === 'management_tasks' && canUpdateOwnManagementTask(userRecord, existing))) {
+    if (hasPermission(userRecord, permission)
+        || (collectionName === 'management_tasks' && canUpdateOwnManagementTask(userRecord, existing))
+        || (collectionName === 'client_chats' && canUpdateOwnChatMessage(userRecord, existing))) {
         return { userRecord, collectionName, existing, selfEdit: false };
     }
 
@@ -312,7 +324,21 @@ router.patch('/:collectionName/:recordId', asyncHandler(async (req, res) => {
 }));
 
 router.delete('/:collectionName/:recordId', asyncHandler(async (req, res) => {
-    const { collectionName } = ensureCollectionPermission(req, 'delete');
+    const userRecord = requireAuthenticatedUser(req);
+    const collectionName = getCollectionName(req);
+    const permission = getCollectionPermission(collectionName, 'delete');
+    if (!permission) {
+        throw createHttpError(404, 'La coleccion no existe.', 'collection/not-found');
+    }
+    if (!hasPermission(userRecord, permission)) {
+        // El autor puede borrar su propio mensaje de chat sin ser moderador.
+        const existing = collectionName === 'client_chats'
+            ? await getRecord({ collectionName, recordId: req.params.recordId })
+            : null;
+        if (!(collectionName === 'client_chats' && canUpdateOwnChatMessage(userRecord, existing))) {
+            throw createHttpError(403, 'No tienes permisos para esta accion.', 'auth/insufficient-permission');
+        }
+    }
     await deleteRecord({
         collectionName,
         recordId: req.params.recordId
