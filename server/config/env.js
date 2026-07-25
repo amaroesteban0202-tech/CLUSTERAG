@@ -49,15 +49,17 @@ const normalizePem = (raw = '') => {
         key = key.slice(1, -1);
     }
     key = key.replace(/\\r/g, '').replace(/\\n/g, '\n').trim();
-    if (!key.includes('BEGIN')) {
+    // Si no trae la cabecera PEM (los guiones nunca existen en base64), asumimos
+    // que es base64 del PEM completo y lo decodificamos.
+    if (!key.includes('-----BEGIN')) {
         try {
-            const decoded = Buffer.from(key, 'base64').toString('utf8');
-            if (decoded.includes('BEGIN')) key = decoded.trim();
+            const decoded = Buffer.from(key.replace(/\s+/g, ''), 'base64').toString('utf8');
+            if (decoded.includes('-----BEGIN')) key = decoded.trim();
         } catch {
             /* no era base64 */
         }
     }
-    if (key.includes('BEGIN') && !key.includes('\n')) {
+    if (key.includes('-----BEGIN') && !key.includes('\n')) {
         const match = key.match(/-----BEGIN ([A-Z0-9 ]+?)-----(.*?)-----END \1-----/);
         if (match) {
             const label = match[1].trim();
