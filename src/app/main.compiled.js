@@ -8189,6 +8189,25 @@ var renderChatText = (text = "", onColored = false) => String(text).split(/(@[^\
   ) : /* @__PURE__ */ React.createElement(React.Fragment, { key: index }, part)
 );
 var CHAT_REACTION_EMOJIS = ["\u{1F44D}", "\u2764\uFE0F", "\u{1F602}", "\u{1F62E}", "\u{1F622}", "\u{1F64F}", "\u2705"];
+var jaasScriptPromise = null;
+var loadJaasExternalApi = (appId2) => {
+  if (typeof window !== "undefined" && window.JitsiMeetExternalAPI) {
+    return Promise.resolve();
+  }
+  if (jaasScriptPromise) return jaasScriptPromise;
+  jaasScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = `https://8x8.vc/${appId2}/external_api.js`;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      jaasScriptPromise = null;
+      reject(new Error("No se pudo cargar el SDK de la llamada."));
+    };
+    document.body.appendChild(script);
+  });
+  return jaasScriptPromise;
+};
 var buildChatRoomId = (clientName = "") => {
   const slug = String(clientName).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24) || "sala";
   return `cluster-${slug}-${Math.random().toString(36).slice(2, 8)}`;
@@ -8255,6 +8274,9 @@ var ClientChatView = ({
   const [callSelected, setCallSelected] = useState([]);
   const [callSearch, setCallSearch] = useState("");
   const [activeCall, setActiveCall] = useState(null);
+  const [callError, setCallError] = useState("");
+  const callContainerRef = useRef(null);
+  const jitsiApiRef = useRef(null);
   const [text, setText] = useState("");
   const [mentionedIds, setMentionedIds] = useState([]);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -8361,6 +8383,58 @@ var ClientChatView = ({
       cancelled = true;
     };
   }, [activeClient?.id, messages.length]);
+  useEffect(() => {
+    if (!activeCall) return;
+    let disposed = false;
+    let api = null;
+    setCallError("");
+    (async () => {
+      try {
+        const tok = await apiFetch("/api/calls/jaas-token", {
+          method: "POST",
+          body: JSON.stringify({
+            name: currentUserProfile?.name || "Usuario",
+            email: currentUserProfile?.email || "",
+            moderator: !!activeCall.isHost
+          })
+        });
+        if (disposed || !tok?.jwt || !tok?.appId) return;
+        await loadJaasExternalApi(tok.appId);
+        if (disposed || !callContainerRef.current || !window.JitsiMeetExternalAPI)
+          return;
+        api = new window.JitsiMeetExternalAPI("8x8.vc", {
+          roomName: `${tok.appId}/${activeCall.roomId}`,
+          jwt: tok.jwt,
+          parentNode: callContainerRef.current,
+          configOverwrite: { prejoinPageEnabled: false },
+          userInfo: {
+            displayName: currentUserProfile?.name || "Usuario",
+            email: currentUserProfile?.email || ""
+          }
+        });
+        jitsiApiRef.current = api;
+        api.addEventListener("readyToClose", () => {
+          if (activeCall.isHost && onEndCall) {
+            onEndCall(activeCall.messageId, {
+              roomId: activeCall.roomId,
+              provider: "jaas"
+            });
+          }
+          setActiveCall(null);
+        });
+      } catch (error) {
+        if (!disposed) setCallError(error.message || "No se pudo iniciar la llamada.");
+      }
+    })();
+    return () => {
+      disposed = true;
+      try {
+        if (api) api.dispose();
+      } catch {
+      }
+      jitsiApiRef.current = null;
+    };
+  }, [activeCall?.roomId]);
   const handleTextChange = (event) => {
     const value = event.target.value;
     setText(value);
@@ -9420,15 +9494,12 @@ var ClientChatView = ({
       /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 14 }),
       activeCall.isHost ? "Finalizar llamada" : "Salir"
     ))), /* @__PURE__ */ React.createElement(
-      "iframe",
+      "div",
       {
-        title: "Videollamada",
-        src: `https://meet.jit.si/${activeCall.roomId}#config.prejoinPageEnabled=false&userInfo.displayName=${encodeURIComponent(
-          `"${currentUserProfile?.name || "Usuario"}"`
-        )}`,
-        allow: "camera; microphone; fullscreen; display-capture; autoplay; clipboard-write",
-        className: "min-h-0 w-full flex-1 border-0"
-      }
+        ref: callContainerRef,
+        className: "relative min-h-0 w-full flex-1 [&_iframe]:h-full [&_iframe]:w-full"
+      },
+      callError && /* @__PURE__ */ React.createElement("div", { className: "absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center" }, /* @__PURE__ */ React.createElement(Icon, { name: "VideoCamera", size: 32, className: "text-white/40" }), /* @__PURE__ */ React.createElement("p", { className: "max-w-sm text-sm text-white/80" }, callError))
     )),
     document.body
   ));

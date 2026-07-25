@@ -105,5 +105,11 @@ export const env = {
         messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
         appId: process.env.FIREBASE_APP_ID || '',
         measurementId: process.env.FIREBASE_MEASUREMENT_ID || ''
+    },
+    // Jitsi as a Service (8x8). La private key va SOLO en variables de entorno.
+    jaas: {
+        appId: process.env.JAAS_APP_ID || '',
+        kid: process.env.JAAS_KID || '',
+        privateKey: (process.env.JAAS_PRIVATE_KEY || '').replace(/\\n/g, '\n')
     }
 };

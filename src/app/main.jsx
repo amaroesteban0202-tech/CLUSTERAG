@@ -11397,6 +11397,26 @@ const renderChatText = (text = "", onColored = false) =>
     );
 
 const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "✅"];
+let jaasScriptPromise = null;
+const loadJaasExternalApi = (appId) => {
+  if (typeof window !== "undefined" && window.JitsiMeetExternalAPI) {
+    return Promise.resolve();
+  }
+  if (jaasScriptPromise) return jaasScriptPromise;
+  jaasScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = `https://8x8.vc/${appId}/external_api.js`;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      jaasScriptPromise = null;
+      reject(new Error("No se pudo cargar el SDK de la llamada."));
+    };
+    document.body.appendChild(script);
+  });
+  return jaasScriptPromise;
+};
+
 const buildChatRoomId = (clientName = "") => {
   const slug =
     String(clientName)
@@ -11474,6 +11494,9 @@ const ClientChatView = ({
   const [callSelected, setCallSelected] = useState([]);
   const [callSearch, setCallSearch] = useState("");
   const [activeCall, setActiveCall] = useState(null);
+  const [callError, setCallError] = useState("");
+  const callContainerRef = useRef(null);
+  const jitsiApiRef = useRef(null);
   const [text, setText] = useState("");
   const [mentionedIds, setMentionedIds] = useState([]);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -11621,6 +11644,66 @@ const ClientChatView = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClient?.id, messages.length]);
+
+  // Monta la videollamada (Jitsi as a Service) cuando hay una llamada activa.
+  useEffect(() => {
+    if (!activeCall) return;
+    let disposed = false;
+    let api = null;
+    setCallError("");
+    (async () => {
+      try {
+        const tok = await apiFetch("/api/calls/jaas-token", {
+          method: "POST",
+          body: JSON.stringify({
+            name: currentUserProfile?.name || "Usuario",
+            email: currentUserProfile?.email || "",
+            moderator: !!activeCall.isHost,
+          }),
+        });
+        if (disposed || !tok?.jwt || !tok?.appId) return;
+        await loadJaasExternalApi(tok.appId);
+        if (
+          disposed ||
+          !callContainerRef.current ||
+          !window.JitsiMeetExternalAPI
+        )
+          return;
+        api = new window.JitsiMeetExternalAPI("8x8.vc", {
+          roomName: `${tok.appId}/${activeCall.roomId}`,
+          jwt: tok.jwt,
+          parentNode: callContainerRef.current,
+          configOverwrite: { prejoinPageEnabled: false },
+          userInfo: {
+            displayName: currentUserProfile?.name || "Usuario",
+            email: currentUserProfile?.email || "",
+          },
+        });
+        jitsiApiRef.current = api;
+        api.addEventListener("readyToClose", () => {
+          if (activeCall.isHost && onEndCall) {
+            onEndCall(activeCall.messageId, {
+              roomId: activeCall.roomId,
+              provider: "jaas",
+            });
+          }
+          setActiveCall(null);
+        });
+      } catch (error) {
+        if (!disposed) setCallError(error.message || "No se pudo iniciar la llamada.");
+      }
+    })();
+    return () => {
+      disposed = true;
+      try {
+        if (api) api.dispose();
+      } catch {
+        /* noop */
+      }
+      jitsiApiRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCall?.roomId]);
 
   const handleTextChange = (event) => {
     const value = event.target.value;
@@ -12938,14 +13021,17 @@ const ClientChatView = ({
               </button>
             </div>
           </div>
-          <iframe
-            title="Videollamada"
-            src={`https://meet.jit.si/${activeCall.roomId}#config.prejoinPageEnabled=false&userInfo.displayName=${encodeURIComponent(
-              `"${currentUserProfile?.name || "Usuario"}"`,
-            )}`}
-            allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write"
-            className="min-h-0 w-full flex-1 border-0"
-          />
+          <div
+            ref={callContainerRef}
+            className="relative min-h-0 w-full flex-1 [&_iframe]:h-full [&_iframe]:w-full"
+          >
+            {callError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center">
+                <Icon name="VideoCamera" size={32} className="text-white/40" />
+                <p className="max-w-sm text-sm text-white/80">{callError}</p>
+              </div>
+            )}
+          </div>
         </div>,
           document.body,
         )}
