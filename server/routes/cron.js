@@ -2,6 +2,7 @@ import express from 'express';
 import { env } from '../config/env.js';
 import { asyncHandler, createHttpError } from '../lib/http.js';
 import { processManagementTaskReminders } from '../lib/management-notifications.js';
+import { sendDailyRoleReports } from '../lib/daily-reports.js';
 
 const router = express.Router();
 
@@ -33,6 +34,22 @@ router.get('/management-task-reminders', asyncHandler(async (req, res) => {
 router.post('/management-task-reminders', asyncHandler(async (req, res) => {
     authorize(req);
     const report = await processManagementTaskReminders();
+    res.json({ ok: true, report });
+}));
+
+router.get('/daily-role-reports', asyncHandler(async (req, res) => {
+    authorize(req);
+    const report = await sendDailyRoleReports({
+        to: process.env.DAILY_REPORT_EMAIL || 'info@cluster.marketing'
+    });
+    res.json({ ok: true, report });
+}));
+
+router.post('/daily-role-reports', asyncHandler(async (req, res) => {
+    authorize(req);
+    const report = await sendDailyRoleReports({
+        to: process.env.DAILY_REPORT_EMAIL || 'info@cluster.marketing'
+    });
     res.json({ ok: true, report });
 }));
 
