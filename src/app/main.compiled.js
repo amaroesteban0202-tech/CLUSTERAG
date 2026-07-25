@@ -137,6 +137,37 @@ import {
   normalizeEditingWorkflowStatus,
   rankPendingEditingTasks
 } from "/src/app/utils/kpi.js";
+
+// src/app/lib/backend-api.js
+var LOCAL_HOSTNAMES = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"]);
+var isLocalWebOrigin = () => typeof window !== "undefined" && ["http:", "https:"].includes(window.location.protocol) && LOCAL_HOSTNAMES.has(window.location.hostname);
+var resolveApiBaseUrl = () => {
+  const configuredBaseUrl = String(window.__cluster_api_base_url || "").replace(/\/+$/, "");
+  if (isLocalWebOrigin() && configuredBaseUrl === "https://clusterag.vercel.app") return "";
+  return configuredBaseUrl;
+};
+var buildApiUrl = (path) => `${resolveApiBaseUrl()}${path}`;
+var apiFetch = async (path, options = {}) => {
+  const response = await fetch(buildApiUrl(path), {
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+      ...options.headers || {}
+    },
+    ...options
+  });
+  const hasJson = response.headers.get("content-type")?.includes("application/json");
+  const payload = hasJson ? await response.json() : null;
+  if (!response.ok) {
+    const error = new Error(payload?.error?.message || `Request failed with status ${response.status}`);
+    error.status = response.status;
+    error.code = payload?.error?.code || "";
+    throw error;
+  }
+  return payload;
+};
+
+// src/app/main.jsx
 var IconsMap = {
   LayoutDashboard,
   Users,
@@ -887,6 +918,7 @@ function App() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [clientChats, setClientChats] = useState([]);
   const [chatReads, setChatReads] = useState([]);
+  const [chatDirectory, setChatDirectory] = useState([]);
   useEffect(() => {
     window.__cluster_active_view = view;
     window.dispatchEvent(new Event("cluster:viewchange"));
@@ -3400,6 +3432,7 @@ function App() {
     handleNavigate(viewByType[taskRef.taskType] || "account-room");
   };
   const chatMentionables = (() => {
+    if (chatDirectory.length > 0) return chatDirectory;
     const seenEmail = /* @__PURE__ */ new Set();
     const seenId = /* @__PURE__ */ new Set();
     const result = [];
@@ -3424,6 +3457,18 @@ function App() {
     editors.forEach(add);
     return result.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   })();
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    apiFetch("/api/directory").then((payload) => {
+      if (!cancelled && Array.isArray(payload?.people)) {
+        setChatDirectory(payload.people);
+      }
+    }).catch((error) => console.warn("[chat:directory]", error.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
   useEffect(() => {
     if (view !== "chat" || !selectedChatClient?.id) return;
     markClientChatRead(selectedChatClient.id);

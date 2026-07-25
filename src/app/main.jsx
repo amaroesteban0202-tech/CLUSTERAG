@@ -136,6 +136,7 @@ import {
   normalizeEditingWorkflowStatus,
   rankPendingEditingTasks,
 } from "/src/app/utils/kpi.js";
+import { apiFetch } from "./lib/backend-api.js";
 
 void TAILWIND_SAFELIST;
 
@@ -1560,6 +1561,7 @@ function App() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [clientChats, setClientChats] = useState([]);
   const [chatReads, setChatReads] = useState([]);
+  const [chatDirectory, setChatDirectory] = useState([]);
 
   useEffect(() => {
     window.__cluster_active_view = view;
@@ -4662,10 +4664,13 @@ function App() {
     handleNavigate(viewByType[taskRef.taskType] || "account-room");
   };
 
-  // Personas mencionables en el chat: TODOS los usuarios de la plataforma
-  // (más managers/editores), deduplicados por correo. El chat es para
-  // comunicarse con todo el equipo, no solo con los asignados al cliente.
+  // Personas mencionables en el chat: TODOS los usuarios de la plataforma. El
+  // chat es para comunicarse con todo el equipo, no solo con los asignados al
+  // cliente. Se usa el directorio del servidor (accesible a cualquier rol,
+  // incluidos editores/viewers); si aún no cargó, se arma un fallback local con
+  // lo que haya en memoria (usuarios + managers + editores).
   const chatMentionables = (() => {
+    if (chatDirectory.length > 0) return chatDirectory;
     const seenEmail = new Set();
     const seenId = new Set();
     const result = [];
@@ -4690,6 +4695,22 @@ function App() {
     editors.forEach(add);
     return result.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   })();
+
+  // Carga el directorio de personas para @menciones (accesible a todos los roles).
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    apiFetch("/api/directory")
+      .then((payload) => {
+        if (!cancelled && Array.isArray(payload?.people)) {
+          setChatDirectory(payload.people);
+        }
+      })
+      .catch((error) => console.warn("[chat:directory]", error.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // Mientras el chat de un cliente está abierto, mantenerlo marcado como leído.
   useEffect(() => {
