@@ -55,6 +55,10 @@
       "destination": "/api/cron-entry"
     },
     {
+      "source": "/api/:path*",
+      "destination": "/api/collections-entry"
+    },
+    {
       "source": "/",
       "destination": "/index.html"
     },
