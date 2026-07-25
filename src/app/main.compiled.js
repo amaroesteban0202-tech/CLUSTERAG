@@ -3334,14 +3334,9 @@ function App() {
     });
     const client = clients.find((item) => item.id === clientId);
     const clientName = client?.name || "Cliente";
-    const allPeople = [
-      ...managementUsers || [],
-      ...managers || [],
-      ...editors || []
-    ];
     for (const uid of mentionedIds) {
-      const person = allPeople.find((p) => p.id === uid);
-      const email = person?.email || person?.authEmail;
+      const person = chatMentionables.find((p) => p.id === uid);
+      const email = person?.email;
       if (email && uid !== (currentUserProfile?.id || "")) {
         sendNotification({
           to: email,
@@ -3405,16 +3400,29 @@ function App() {
     handleNavigate(viewByType[taskRef.taskType] || "account-room");
   };
   const chatMentionables = (() => {
-    const seen = /* @__PURE__ */ new Set();
+    const seenEmail = /* @__PURE__ */ new Set();
+    const seenId = /* @__PURE__ */ new Set();
     const result = [];
-    [...managementUsers || [], ...managers || [], ...editors || []].forEach(
-      (person) => {
-        if (!person?.id || !person.name || seen.has(person.id)) return;
-        seen.add(person.id);
-        result.push({ id: person.id, name: person.name, email: person.email });
+    const add = (person) => {
+      const email = normalizeEmail(person?.email);
+      const id = person?.id ? String(person.id) : "";
+      const name = person?.name || email || "";
+      if (!name && !email) return;
+      if (email) {
+        if (seenEmail.has(email)) return;
+        seenEmail.add(email);
+      } else if (id) {
+        if (seenId.has(id)) return;
+        seenId.add(id);
+      } else {
+        return;
       }
-    );
-    return result;
+      result.push({ id: id || email, name, email });
+    };
+    appUsers.filter((item) => item.isActive !== false).forEach(add);
+    managers.forEach(add);
+    editors.forEach(add);
+    return result.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   })();
   useEffect(() => {
     if (view !== "chat" || !selectedChatClient?.id) return;
@@ -8028,9 +8036,11 @@ var ClientChatView = ({
     ...editingTasks.filter((task) => task.clientId === activeClient.id).map((task) => ({ id: task.id, title: task.title, type: "editingTask" })),
     ...managementTasks.filter((task) => task.clientId === activeClient.id).map((task) => ({ id: task.id, title: task.title, type: "managementTask" }))
   ] : [];
-  const mentionSuggestions = mentionOpen ? mentionables.filter(
-    (person) => person.name && person.name.toLowerCase().includes(mentionQuery.toLowerCase())
-  ).slice(0, 6) : [];
+  const mentionSuggestions = mentionOpen ? mentionables.filter((person) => {
+    const q = mentionQuery.toLowerCase();
+    if (!q) return true;
+    return (person.name || "").toLowerCase().includes(q) || (person.email || "").toLowerCase().includes(q);
+  }).slice(0, 30) : [];
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -8076,6 +8086,8 @@ var ClientChatView = ({
       setMentionOpen(true);
       setMentionQuery(atMatch[1]);
       setMentionStart(before.lastIndexOf("@"));
+      setTaskPickerOpen(false);
+      setAttachMenuOpen(false);
     } else {
       setMentionOpen(false);
       setMentionQuery("");
@@ -8427,7 +8439,18 @@ var ClientChatView = ({
         className: "absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-white"
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 11 })
-    )))), /* @__PURE__ */ React.createElement("div", { className: "relative rounded-xl border border-slate-300 bg-white focus-within:border-blue-500 dark:border-white/15 dark:bg-[#222529]" }, mentionOpen && mentionSuggestions.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full left-0 z-30 mb-1 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement("p", { className: "px-3 pb-1 pt-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Mencionar"), mentionSuggestions.map((person) => /* @__PURE__ */ React.createElement(
+    )))), /* @__PURE__ */ React.createElement("div", { className: "relative rounded-xl border border-slate-300 bg-white focus-within:border-blue-500 dark:border-white/15 dark:bg-[#222529]" }, mentionOpen && mentionSuggestions.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full left-0 z-40 mb-1 max-h-72 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between px-3 pb-1 pt-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Mencionar"), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onMouseDown: (event) => {
+          event.preventDefault();
+          setMentionOpen(false);
+        },
+        "aria-label": "Cerrar",
+        className: "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 13 })
+    )), mentionSuggestions.map((person) => /* @__PURE__ */ React.createElement(
       "button",
       {
         key: person.id,
@@ -8437,9 +8460,20 @@ var ClientChatView = ({
         },
         className: "flex w-full items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
       },
-      /* @__PURE__ */ React.createElement("div", { className: "flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white" }, person.name.slice(0, 2).toUpperCase()),
-      /* @__PURE__ */ React.createElement("span", { className: "flex-1 text-left text-sm font-semibold text-slate-700 dark:text-slate-200" }, person.name)
-    ))), taskPickerOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full left-0 z-30 mb-1 max-h-64 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement("p", { className: "px-3 pb-1 pt-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Enlazar tarea del cliente"), clientTasks.length === 0 && /* @__PURE__ */ React.createElement("p", { className: "px-3 py-2 text-xs text-slate-400" }, "Este cliente no tiene tareas."), clientTasks.map((task) => /* @__PURE__ */ React.createElement(
+      /* @__PURE__ */ React.createElement("div", { className: "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white" }, (person.name || person.email || "?").slice(0, 2).toUpperCase()),
+      /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1 text-left" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-semibold text-slate-700 dark:text-slate-200" }, person.name || person.email), person.email && /* @__PURE__ */ React.createElement("p", { className: "truncate text-[11px] text-slate-400" }, person.email))
+    ))), taskPickerOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full left-0 z-30 mb-1 max-h-64 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between px-3 pb-1 pt-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Enlazar tarea del cliente"), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onMouseDown: (event) => {
+          event.preventDefault();
+          setTaskPickerOpen(false);
+        },
+        "aria-label": "Cerrar",
+        className: "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 13 })
+    )), clientTasks.length === 0 && /* @__PURE__ */ React.createElement("p", { className: "px-3 py-2 text-xs text-slate-400" }, "Este cliente no tiene tareas."), clientTasks.map((task) => /* @__PURE__ */ React.createElement(
       "button",
       {
         key: `${task.type}-${task.id}`,
@@ -8469,8 +8503,10 @@ var ClientChatView = ({
         value: text,
         onChange: handleTextChange,
         onKeyDown: (event) => {
-          if (mentionOpen && event.key === "Escape") {
+          if (event.key === "Escape" && (mentionOpen || taskPickerOpen || attachMenuOpen)) {
             setMentionOpen(false);
+            setTaskPickerOpen(false);
+            setAttachMenuOpen(false);
             event.preventDefault();
             return;
           }

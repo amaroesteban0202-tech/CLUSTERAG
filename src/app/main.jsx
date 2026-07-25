@@ -4585,14 +4585,9 @@ function App() {
     });
     const client = clients.find((item) => item.id === clientId);
     const clientName = client?.name || "Cliente";
-    const allPeople = [
-      ...(managementUsers || []),
-      ...(managers || []),
-      ...(editors || []),
-    ];
     for (const uid of mentionedIds) {
-      const person = allPeople.find((p) => p.id === uid);
-      const email = person?.email || person?.authEmail;
+      const person = chatMentionables.find((p) => p.id === uid);
+      const email = person?.email;
       if (email && uid !== (currentUserProfile?.id || "")) {
         sendNotification({
           to: email,
@@ -4667,18 +4662,33 @@ function App() {
     handleNavigate(viewByType[taskRef.taskType] || "account-room");
   };
 
-  // Personas mencionables en el chat (dedupe por id).
+  // Personas mencionables en el chat: TODOS los usuarios de la plataforma
+  // (más managers/editores), deduplicados por correo. El chat es para
+  // comunicarse con todo el equipo, no solo con los asignados al cliente.
   const chatMentionables = (() => {
-    const seen = new Set();
+    const seenEmail = new Set();
+    const seenId = new Set();
     const result = [];
-    [...(managementUsers || []), ...(managers || []), ...(editors || [])].forEach(
-      (person) => {
-        if (!person?.id || !person.name || seen.has(person.id)) return;
-        seen.add(person.id);
-        result.push({ id: person.id, name: person.name, email: person.email });
-      },
-    );
-    return result;
+    const add = (person) => {
+      const email = normalizeEmail(person?.email);
+      const id = person?.id ? String(person.id) : "";
+      const name = person?.name || email || "";
+      if (!name && !email) return;
+      if (email) {
+        if (seenEmail.has(email)) return;
+        seenEmail.add(email);
+      } else if (id) {
+        if (seenId.has(id)) return;
+        seenId.add(id);
+      } else {
+        return;
+      }
+      result.push({ id: id || email, name, email });
+    };
+    appUsers.filter((item) => item.isActive !== false).forEach(add);
+    managers.forEach(add);
+    editors.forEach(add);
+    return result.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   })();
 
   // Mientras el chat de un cliente está abierto, mantenerlo marcado como leído.
@@ -11242,12 +11252,15 @@ const ClientChatView = ({
 
   const mentionSuggestions = mentionOpen
     ? mentionables
-        .filter(
-          (person) =>
-            person.name &&
-            person.name.toLowerCase().includes(mentionQuery.toLowerCase()),
-        )
-        .slice(0, 6)
+        .filter((person) => {
+          const q = mentionQuery.toLowerCase();
+          if (!q) return true;
+          return (
+            (person.name || "").toLowerCase().includes(q) ||
+            (person.email || "").toLowerCase().includes(q)
+          );
+        })
+        .slice(0, 30)
     : [];
 
   useEffect(() => {
@@ -11299,6 +11312,9 @@ const ClientChatView = ({
       setMentionOpen(true);
       setMentionQuery(atMatch[1]);
       setMentionStart(before.lastIndexOf("@"));
+      // Evita que se superpongan los desplegables.
+      setTaskPickerOpen(false);
+      setAttachMenuOpen(false);
     } else {
       setMentionOpen(false);
       setMentionQuery("");
@@ -11771,10 +11787,22 @@ const ClientChatView = ({
               )}
               <div className="relative rounded-xl border border-slate-300 bg-white focus-within:border-blue-500 dark:border-white/15 dark:bg-[#222529]">
                 {mentionOpen && mentionSuggestions.length > 0 && (
-                  <div className="absolute bottom-full left-0 z-30 mb-1 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
-                    <p className="px-3 pb-1 pt-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      Mencionar
-                    </p>
+                  <div className="absolute bottom-full left-0 z-40 mb-1 max-h-72 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800">
+                    <div className="flex items-center justify-between px-3 pb-1 pt-1.5">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Mencionar
+                      </p>
+                      <button
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setMentionOpen(false);
+                        }}
+                        aria-label="Cerrar"
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      >
+                        <Icon name="X" size={13} />
+                      </button>
+                    </div>
                     {mentionSuggestions.map((person) => (
                       <button
                         key={person.id}
@@ -11784,21 +11812,42 @@ const ClientChatView = ({
                         }}
                         className="flex w-full items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
                       >
-                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white">
-                          {person.name.slice(0, 2).toUpperCase()}
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white">
+                          {(person.name || person.email || "?")
+                            .slice(0, 2)
+                            .toUpperCase()}
                         </div>
-                        <span className="flex-1 text-left text-sm font-semibold text-slate-700 dark:text-slate-200">
-                          {person.name}
-                        </span>
+                        <div className="min-w-0 flex-1 text-left">
+                          <p className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
+                            {person.name || person.email}
+                          </p>
+                          {person.email && (
+                            <p className="truncate text-[11px] text-slate-400">
+                              {person.email}
+                            </p>
+                          )}
+                        </div>
                       </button>
                     ))}
                   </div>
                 )}
                 {taskPickerOpen && (
                   <div className="absolute bottom-full left-0 z-30 mb-1 max-h-64 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800">
-                    <p className="px-3 pb-1 pt-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      Enlazar tarea del cliente
-                    </p>
+                    <div className="flex items-center justify-between px-3 pb-1 pt-1.5">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Enlazar tarea del cliente
+                      </p>
+                      <button
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setTaskPickerOpen(false);
+                        }}
+                        aria-label="Cerrar"
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      >
+                        <Icon name="X" size={13} />
+                      </button>
+                    </div>
                     {clientTasks.length === 0 && (
                       <p className="px-3 py-2 text-xs text-slate-400">
                         Este cliente no tiene tareas.
@@ -11835,8 +11884,13 @@ const ClientChatView = ({
                   value={text}
                   onChange={handleTextChange}
                   onKeyDown={(event) => {
-                    if (mentionOpen && event.key === "Escape") {
+                    if (
+                      event.key === "Escape" &&
+                      (mentionOpen || taskPickerOpen || attachMenuOpen)
+                    ) {
                       setMentionOpen(false);
+                      setTaskPickerOpen(false);
+                      setAttachMenuOpen(false);
                       event.preventDefault();
                       return;
                     }
