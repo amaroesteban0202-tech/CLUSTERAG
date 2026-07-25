@@ -1,6 +1,12 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env.js';
 
+const createAttachmentBuffer = (buffer, filename, contentType = 'application/pdf') => ({
+    filename,
+    content: buffer,
+    contentType
+});
+
 let transporter = null;
 
 const hasSmtpConfig = () => Boolean(env.smtp.host && env.smtp.user && env.smtp.password);
@@ -122,6 +128,37 @@ export const sendManagementTaskReminderEmail = async (context = {}) => {
         to: context.to,
         subject,
         html
+    });
+
+    return { mode: 'smtp' };
+};
+
+export const sendDailyReportEmail = async ({ to, subject, editorPdf, accountPdf, generatedAt }) => {
+    const mailer = getTransporter();
+    const html = `
+        <div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:24px;background:#f8fafc;">
+            <div style="background:#fff;border-radius:16px;padding:24px;border:1px solid #e2e8f0;">
+                <h2 style="margin:0 0 8px;color:#0f172a;">Resumen diario de Editores y Accounts</h2>
+                <p style="margin:0 0 16px;color:#475569;">Se adjuntan dos PDFs separados con el resumen del día generado el ${generatedAt}.</p>
+                <p style="margin:0;color:#64748b;font-size:13px;">Este correo fue generado automáticamente por Cluster OS.</p>
+            </div>
+        </div>
+    `;
+
+    if (!mailer) {
+        console.info(`[daily-report:${to}] ${subject}`);
+        return { mode: 'console' };
+    }
+
+    await mailer.sendMail({
+        from: env.smtp.from,
+        to,
+        subject,
+        html,
+        attachments: [
+            ...(editorPdf ? [createAttachmentBuffer(editorPdf, 'resumen-editores.pdf')] : []),
+            ...(accountPdf ? [createAttachmentBuffer(accountPdf, 'resumen-accounts.pdf')] : [])
+        ]
     });
 
     return { mode: 'smtp' };

@@ -5712,8 +5712,10 @@ function App() {
           )}
           {view === "performance" && (
             <PerformanceView
+              accountTasks={accountTasks}
               editingTasks={editingTasks}
               editors={editors}
+              managers={managers}
               users={appUsers}
             />
           )}
@@ -15350,13 +15352,13 @@ const ReportsView = ({
   );
 };
 
-const PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
+const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], managers = [], users = [] }) => {
   const todayStr = getHondurasTodayStr();
   const now = new Date();
   const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   const [fromDate, setFromDate] = useState(firstOfMonth);
   const [toDate, setToDate] = useState(todayStr);
-  const [selectedEditorId, setSelectedEditorId] = useState("");
+  const [selectedPersonKey, setSelectedPersonKey] = useState("");
 
   const inRange = (dateStr) => {
     if (!dateStr) return false;
@@ -15366,40 +15368,62 @@ const PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
     );
   };
 
+  const matchesSelectedPerson = (task, type) => {
+    if (!selectedPersonKey) return true;
+    const [personType, personId] = selectedPersonKey.split(":");
+    if (personType === "editor") return type === "editing" && task.contextId === personId;
+    if (personType === "manager") return type === "account" && task.contextId === personId;
+    return false;
+  };
+
   const filteredEditingTasks = editingTasks.filter((task) => {
     if (!inRange(task.date)) return false;
-    if (selectedEditorId && task.contextId !== selectedEditorId) return false;
-    return true;
+    return matchesSelectedPerson(task, "editing");
   });
+  const filteredAccountTasks = accountTasks.filter((task) => {
+    if (!inRange(task.date)) return false;
+    return matchesSelectedPerson(task, "account");
+  });
+
   const userById = new Map(users.map((item) => [item.id, item]));
   const userByEditorId = new Map(
     users
       .filter((item) => item.linkedEditorId)
       .map((item) => [item.linkedEditorId, item]),
   );
-  const getEditorLoginRecency = (editor) => {
-    const editorUser =
-      userByEditorId.get(editor.id) ||
-      (editor.userId ? userById.get(editor.userId) : null);
-    const lastSeenAt = editorUser?.lastSeenAt || "";
+  const userByManagerId = new Map(
+    users
+      .filter((item) => item.linkedManagerId)
+      .map((item) => [item.linkedManagerId, item]),
+  );
+
+  const getPersonLoginRecency = (personType, personId, personUserId = "") => {
+    const personUser =
+      personType === "editor"
+        ? userByEditorId.get(personId) ||
+          (personUserId ? userById.get(personUserId) : null)
+        : userByManagerId.get(personId) ||
+          (personUserId ? userById.get(personUserId) : null);
+    const lastSeenAt = personUser?.lastSeenAt || "";
     const daysSinceLogin = lastSeenAt
       ? Math.max(0, getDateOnlyDiffDays(todayStr, lastSeenAt))
       : null;
-    const loginScore = daysSinceLogin === null
-      ? 0
-      : Math.max(0, 100 - Math.min(daysSinceLogin, 30) * 2);
     return {
       lastSeenAt,
       daysSinceLogin,
-      loginScore,
     };
   };
+
+  const isEditingDeliveredTask = (task) => isEditingDelivered(task);
+  const isAccountDelivered = (task) =>
+    ["aprobado_internamente", "publicado"].includes(task.status);
+
   const editorStats = editors
     .map((editor) => {
       const editorTasks = filteredEditingTasks.filter(
         (task) => task.contextId === editor.id,
       );
-      const delivered = editorTasks.filter(isEditingDelivered).length;
+      const delivered = editorTasks.filter(isEditingDeliveredTask).length;
       const approved = editorTasks.filter(
         (task) => normalizeEditingWorkflowStatus(task.status) === "aprobado",
       ).length;
@@ -15410,66 +15434,133 @@ const PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
         (task) => normalizeEditingWorkflowStatus(task.status) === "revision_interna",
       ).length;
       const inProgress = editorTasks.filter(isEditingActionable).length;
-      const performance = editorTasks.length
-        ? Math.round((delivered / editorTasks.length) * 100)
+      const total = editorTasks.length;
+      const deliveryPerformance = total
+        ? Math.round((delivered / total) * 100)
         : 0;
-      const loginRecency = getEditorLoginRecency(editor);
-      const weightedPerformance = editorTasks.length
+      const approvalPerformance = total
+        ? Math.round((approved / total) * 100)
+        : 0;
+      const publicationPerformance = total
+        ? Math.round((published / total) * 100)
+        : 0;
+      const loginRecency = getPersonLoginRecency("editor", editor.id, editor.userId);
+      const loginScore = loginRecency.daysSinceLogin === null
+        ? 0
+        : Math.max(0, 100 - Math.min(loginRecency.daysSinceLogin, 30) * 2);
+      const overallPerformance = total
         ? Math.round(
-            performance * 0.75 + loginRecency.loginScore * 0.25,
+            publicationPerformance * 0.6 +
+              approvalPerformance * 0.2 +
+              deliveryPerformance * 0.15 +
+              loginScore * 0.05,
           )
         : 0;
       return {
         ...editor,
-        total: editorTasks.length,
+        kind: "editor",
+        kindLabel: "Editor",
+        total,
         delivered,
         approved,
         published,
         inRevision,
         inProgress,
-        performance,
-        weightedPerformance,
+        deliveryPerformance,
+        approvalPerformance,
+        publicationPerformance,
+        overallPerformance,
         lastSeenAt: loginRecency.lastSeenAt,
         daysSinceLogin: loginRecency.daysSinceLogin,
       };
     })
-    .filter((editor) => editor.total > 0)
-    .sort(
-      (left, right) =>
-        right.weightedPerformance - left.weightedPerformance ||
-        right.performance - left.performance ||
-        right.total - left.total ||
-        String(left.name || "").localeCompare(String(right.name || "")),
-    );
+    .filter((editor) => editor.total > 0);
 
-  const totalTasks = filteredEditingTasks.length;
-  const deliveredTasks = filteredEditingTasks.filter(isEditingDelivered).length;
-  const publishedTasks = filteredEditingTasks.filter(
-    (task) => task.status === "publicado",
-  ).length;
-  const averagePerformance = editorStats.length
-    ? Math.round(
-        editorStats.reduce((sum, editor) => sum + editor.performance, 0) /
-          editorStats.length,
-      )
-    : 0;
-  const editorsWithLogin = editorStats.filter(
-    (editor) => editor.daysSinceLogin !== null,
+  const managerStats = managers
+    .map((manager) => {
+      const managerTasks = filteredAccountTasks.filter(
+        (task) => task.contextId === manager.id,
+      );
+      const delivered = managerTasks.filter(isAccountDelivered).length;
+      const approved = managerTasks.filter((task) => task.status === "aprobado_internamente")
+        .length;
+      const published = managerTasks.filter((task) => task.status === "publicado")
+        .length;
+      const inProgress = managerTasks.filter(
+        (task) => !["aprobado_internamente", "publicado"].includes(task.status),
+      ).length;
+      const total = managerTasks.length;
+      const deliveryPerformance = total
+        ? Math.round((delivered / total) * 100)
+        : 0;
+      const approvalPerformance = total
+        ? Math.round((approved / total) * 100)
+        : 0;
+      const publicationPerformance = total
+        ? Math.round((published / total) * 100)
+        : 0;
+      const loginRecency = getPersonLoginRecency("manager", manager.id, manager.userId);
+      const loginScore = loginRecency.daysSinceLogin === null
+        ? 0
+        : Math.max(0, 100 - Math.min(loginRecency.daysSinceLogin, 30) * 2);
+      const overallPerformance = total
+        ? Math.round(
+            publicationPerformance * 0.6 +
+              approvalPerformance * 0.2 +
+              deliveryPerformance * 0.15 +
+              loginScore * 0.05,
+          )
+        : 0;
+      return {
+        ...manager,
+        kind: "manager",
+        kindLabel: "Account Manager",
+        total,
+        delivered,
+        published,
+        inProgress,
+        deliveryPerformance,
+        approvalPerformance,
+        publicationPerformance,
+        overallPerformance,
+        lastSeenAt: loginRecency.lastSeenAt,
+        daysSinceLogin: loginRecency.daysSinceLogin,
+      };
+    })
+    .filter((manager) => manager.total > 0);
+
+  const personStats = [...editorStats, ...managerStats].sort(
+    (left, right) =>
+      right.overallPerformance - left.overallPerformance ||
+      right.total - left.total ||
+      String(left.name || "").localeCompare(String(right.name || "")),
   );
-  const averageLoginScore = editorsWithLogin.length
+
+  const totalTasks = filteredEditingTasks.length + filteredAccountTasks.length;
+  const deliveredTasks =
+    filteredEditingTasks.filter(isEditingDeliveredTask).length +
+    filteredAccountTasks.filter(isAccountDelivered).length;
+  const publishedTasks =
+    filteredEditingTasks.filter((task) => task.status === "publicado").length +
+    filteredAccountTasks.filter((task) => task.status === "publicado").length;
+  const averagePerformance = personStats.length
     ? Math.round(
-        editorsWithLogin.reduce((sum, editor) => sum + editor.loginScore, 0) /
-          editorsWithLogin.length,
+        personStats.reduce((sum, person) => sum + person.overallPerformance, 0) /
+          personStats.length,
       )
     : 0;
-  const averageDaysSinceLogin = editorsWithLogin.length
-    ? Math.round(
-        editorsWithLogin.reduce(
-          (sum, editor) => sum + editor.daysSinceLogin,
-          0,
-        ) / editorsWithLogin.length,
-      )
-    : null;
+
+  const peopleOptions = [
+    { value: "", label: "Todos" },
+    ...editors.map((editor) => ({
+      value: `editor:${editor.id}`,
+      label: `Editor - ${editor.name || "Sin nombre"}`,
+    })),
+    ...managers.map((manager) => ({
+      value: `manager:${manager.id}`,
+      label: `Account Manager - ${manager.name || "Sin nombre"}`,
+    })),
+  ];
 
   const rowStyle = (i) =>
     i % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : "";
@@ -15480,30 +15571,29 @@ const PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
         <div>
           <p className="eyebrow">Rendimiento</p>
           <h2 className="text-2xl font-black text-slate-800 dark:text-white">
-            Rendimiento de Editores
+            Rendimiento de Editores y Account Managers
           </h2>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
-            Un resumen de la capacidad de entrega y el avance de edición dentro del rango de fechas seleccionado.
+            Un resumen del avance de tareas y la capacidad de entrega dentro del rango de fechas seleccionado, tanto para edición como para accounts.
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <select
-              value={selectedEditorId}
-              onChange={(e) => setSelectedEditorId(e.target.value)}
+              value={selectedPersonKey}
+              onChange={(e) => setSelectedPersonKey(e.target.value)}
               className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 outline-none"
             >
-              <option value="">Todos los editores</option>
-              {editors.map((editor) => (
-                <option key={editor.id} value={editor.id}>
-                  {editor.name}
+              {peopleOptions.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
-            {selectedEditorId && (
+            {selectedPersonKey && (
               <button
                 type="button"
-                onClick={() => setSelectedEditorId("")}
+                onClick={() => setSelectedPersonKey("")}
                 className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
               >
                 Limpiar
@@ -15533,18 +15623,18 @@ const PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <ReportStatCard
-          label="Tareas de Edición"
+          label="Tareas del rango"
           value={totalTasks}
           color="amber"
           icon="Video"
-          sub="en el rango"
+          sub="edición + accounts"
         />
         <ReportStatCard
           label="Entregadas"
           value={deliveredTasks}
           color="emerald"
           icon="CheckCircle2"
-          sub="revisión interna o final"
+          sub="aprobadas o publicadas"
         />
         <ReportStatCard
           label="Publicadas"
@@ -15554,61 +15644,61 @@ const PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
           sub="finalizadas en el rango"
         />
         <ReportStatCard
-          label="Rendimiento combinado"
+          label="Rendimiento promedio"
           value={`${averagePerformance}%`}
           color="purple"
           icon="BarChart3"
-          sub={`Incluye frecuencia de login (${averageLoginScore}% promedio)`}
+          sub="promedio por persona"
         />
       </div>
 
       <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-        Se considera entregada cuando la tarea alcanza Revisión Interna o cualquier estado posterior. Esto mide la capacidad de los editores para avanzar las piezas dentro del flujo.
+        El porcentaje de rendimiento prioriza lo que realmente mueve el negocio: publicaciones, luego entregas y aprobaciones, con un ajuste menor por frecuencia de login.
       </p>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-        {editorStats.length === 0 ? (
+        {personStats.length === 0 ? (
           <div className="p-16 text-center text-slate-500 font-bold">
             Sin datos de rendimiento para este rango de fechas
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px]">
+            <table className="w-full min-w-[900px]">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-                  <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500">Editor</th>
+                  <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500">Persona</th>
+                  <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500">Tipo</th>
                   <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Total</th>
                   <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">En Progreso</th>
-                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">En Revisión</th>
-                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Aprobadas</th>
+                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Entregadas</th>
                   <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Publicadas</th>
                   <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Último login</th>
                   <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Rendimiento</th>
                 </tr>
               </thead>
               <tbody>
-                {editorStats.map((editor, index) => (
+                {personStats.map((person, index) => (
                   <tr
-                    key={editor.id}
+                    key={`${person.kind}-${person.id}`}
                     className={`border-b border-slate-50 dark:border-slate-800/50 ${rowStyle(index)}`}
                   >
-                    <td className="p-4 font-bold text-slate-800 dark:text-white">{editor.name}</td>
-                    <td className="p-4 text-center font-black text-slate-800 dark:text-white">{editor.total}</td>
-                    <td className="p-4 text-center text-slate-500 dark:text-slate-400">{editor.inProgress}</td>
-                    <td className="p-4 text-center text-slate-500 dark:text-slate-400">{editor.inRevision}</td>
-                    <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">{editor.approved}</td>
-                    <td className="p-4 text-center font-bold text-indigo-600 dark:text-indigo-400">{editor.published}</td>
+                    <td className="p-4 font-bold text-slate-800 dark:text-white">{person.name}</td>
+                    <td className="p-4 text-sm font-semibold text-slate-600 dark:text-slate-300">{person.kindLabel}</td>
+                    <td className="p-4 text-center font-black text-slate-800 dark:text-white">{person.total}</td>
+                    <td className="p-4 text-center text-slate-500 dark:text-slate-400">{person.inProgress}</td>
+                    <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">{person.delivered}</td>
+                    <td className="p-4 text-center font-bold text-indigo-600 dark:text-indigo-400">{person.published}</td>
                     <td className="p-4 text-center text-slate-500 dark:text-slate-400">
-                      {editor.lastSeenAt ? (
+                      {person.lastSeenAt ? (
                         <span className="block text-sm font-bold text-slate-800 dark:text-white">
-                          {normalizeDateOnlyString(editor.lastSeenAt)}
+                          {normalizeDateOnlyString(person.lastSeenAt)}
                         </span>
                       ) : (
                         <span className="text-sm text-slate-400">Sin registro</span>
                       )}
-                      {editor.daysSinceLogin !== null && (
+                      {person.daysSinceLogin !== null && (
                         <span className="block text-xs text-slate-500 dark:text-slate-400">
-                          {editor.daysSinceLogin} días
+                          {person.daysSinceLogin} días
                         </span>
                       )}
                     </td>
@@ -15617,19 +15707,22 @@ const PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
                         <div className="w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${
-                              editor.weightedPerformance >= 80
+                              person.overallPerformance >= 80
                                 ? "bg-emerald-500"
-                                : editor.weightedPerformance >= 50
+                                : person.overallPerformance >= 50
                                 ? "bg-amber-500"
                                 : "bg-red-500"
                             }`}
-                            style={{ width: `${editor.weightedPerformance}%` }}
+                            style={{ width: `${person.overallPerformance}%` }}
                           />
                         </div>
                         <span className="w-10 text-right text-sm font-black text-slate-800 dark:text-white">
-                          {editor.weightedPerformance}%
+                          {person.overallPerformance}%
                         </span>
                       </div>
+                      <p className="mt-1 text-[11px] text-center text-slate-500 dark:text-slate-400">
+                        {person.deliveryPerformance}% entregadas · {person.approvalPerformance}% aprobadas · {person.publicationPerformance}% publicadas
+                      </p>
                     </td>
                   </tr>
                 ))}
