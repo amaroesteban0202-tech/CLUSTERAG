@@ -4794,8 +4794,10 @@ function App() {
       view === "performance" && /* @__PURE__ */ React.createElement(
         PerformanceView,
         {
+          accountTasks,
           editingTasks,
           editors,
+          managers,
           users: appUsers
         }
       ),
@@ -8547,7 +8549,7 @@ var ClientChatView = ({
       /* @__PURE__ */ React.createElement("span", { className: "text-slate-400" }, att.data ? formatChatBytes(att.size) : "cargando\u2026")
     );
   };
-  return /* @__PURE__ */ React.createElement("div", { className: "flex h-full min-h-0 overflow-hidden bg-white dark:bg-[#1a1d21] fade-in" }, /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "flex h-full min-h-0 overflow-hidden bg-white dark:bg-[#1a1d21]" }, /* @__PURE__ */ React.createElement(
     "aside",
     {
       className: `${activeClient ? "hidden md:flex" : "flex"} min-h-0 w-full flex-col border-r border-slate-200 dark:border-white/10 md:w-72 lg:w-80 shrink-0`
@@ -12825,42 +12827,55 @@ var ReportsView = ({
     }
   ))));
 };
-var PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
+var PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], managers = [], users = [] }) => {
   const todayStr = getHondurasTodayStr();
   const now = /* @__PURE__ */ new Date();
   const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   const [fromDate, setFromDate] = useState(firstOfMonth);
   const [toDate, setToDate] = useState(todayStr);
-  const [selectedEditorId, setSelectedEditorId] = useState("");
+  const [selectedPersonKey, setSelectedPersonKey] = useState("");
   const inRange = (dateStr) => {
     if (!dateStr) return false;
     return compareDateOnlyStrings(dateStr, fromDate) >= 0 && compareDateOnlyStrings(dateStr, toDate) <= 0;
   };
+  const matchesSelectedPerson = (task, type) => {
+    if (!selectedPersonKey) return true;
+    const [personType, personId] = selectedPersonKey.split(":");
+    if (personType === "editor") return type === "editing" && task.contextId === personId;
+    if (personType === "manager") return type === "account" && task.contextId === personId;
+    return false;
+  };
   const filteredEditingTasks = editingTasks.filter((task) => {
     if (!inRange(task.date)) return false;
-    if (selectedEditorId && task.contextId !== selectedEditorId) return false;
-    return true;
+    return matchesSelectedPerson(task, "editing");
+  });
+  const filteredAccountTasks = accountTasks.filter((task) => {
+    if (!inRange(task.date)) return false;
+    return matchesSelectedPerson(task, "account");
   });
   const userById = new Map(users.map((item) => [item.id, item]));
   const userByEditorId = new Map(
     users.filter((item) => item.linkedEditorId).map((item) => [item.linkedEditorId, item])
   );
-  const getEditorLoginRecency = (editor) => {
-    const editorUser = userByEditorId.get(editor.id) || (editor.userId ? userById.get(editor.userId) : null);
-    const lastSeenAt = editorUser?.lastSeenAt || "";
+  const userByManagerId = new Map(
+    users.filter((item) => item.linkedManagerId).map((item) => [item.linkedManagerId, item])
+  );
+  const getPersonLoginRecency = (personType, personId, personUserId = "") => {
+    const personUser = personType === "editor" ? userByEditorId.get(personId) || (personUserId ? userById.get(personUserId) : null) : userByManagerId.get(personId) || (personUserId ? userById.get(personUserId) : null);
+    const lastSeenAt = personUser?.lastSeenAt || "";
     const daysSinceLogin = lastSeenAt ? Math.max(0, getDateOnlyDiffDays(todayStr, lastSeenAt)) : null;
-    const loginScore = daysSinceLogin === null ? 0 : Math.max(0, 100 - Math.min(daysSinceLogin, 30) * 2);
     return {
       lastSeenAt,
-      daysSinceLogin,
-      loginScore
+      daysSinceLogin
     };
   };
+  const isEditingDeliveredTask = (task) => isEditingDelivered(task);
+  const isAccountDelivered = (task) => ["aprobado_internamente", "publicado"].includes(task.status);
   const editorStats = editors.map((editor) => {
     const editorTasks = filteredEditingTasks.filter(
       (task) => task.contextId === editor.id
     );
-    const delivered = editorTasks.filter(isEditingDelivered).length;
+    const delivered = editorTasks.filter(isEditingDeliveredTask).length;
     const approved = editorTasks.filter(
       (task) => normalizeEditingWorkflowStatus(task.status) === "aprobado"
     ).length;
@@ -12871,62 +12886,102 @@ var PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
       (task) => normalizeEditingWorkflowStatus(task.status) === "revision_interna"
     ).length;
     const inProgress = editorTasks.filter(isEditingActionable).length;
-    const performance = editorTasks.length ? Math.round(delivered / editorTasks.length * 100) : 0;
-    const loginRecency = getEditorLoginRecency(editor);
-    const weightedPerformance = editorTasks.length ? Math.round(
-      performance * 0.75 + loginRecency.loginScore * 0.25
+    const total = editorTasks.length;
+    const deliveryPerformance = total ? Math.round(delivered / total * 100) : 0;
+    const approvalPerformance = total ? Math.round(approved / total * 100) : 0;
+    const publicationPerformance = total ? Math.round(published / total * 100) : 0;
+    const loginRecency = getPersonLoginRecency("editor", editor.id, editor.userId);
+    const loginScore = loginRecency.daysSinceLogin === null ? 0 : Math.max(0, 100 - Math.min(loginRecency.daysSinceLogin, 30) * 2);
+    const overallPerformance = total ? Math.round(
+      publicationPerformance * 0.6 + approvalPerformance * 0.2 + deliveryPerformance * 0.15 + loginScore * 0.05
     ) : 0;
     return {
       ...editor,
-      total: editorTasks.length,
+      kind: "editor",
+      kindLabel: "Editor",
+      total,
       delivered,
       approved,
       published,
       inRevision,
       inProgress,
-      performance,
-      weightedPerformance,
+      deliveryPerformance,
+      approvalPerformance,
+      publicationPerformance,
+      overallPerformance,
       lastSeenAt: loginRecency.lastSeenAt,
       daysSinceLogin: loginRecency.daysSinceLogin
     };
-  }).filter((editor) => editor.total > 0).sort(
-    (left, right) => right.weightedPerformance - left.weightedPerformance || right.performance - left.performance || right.total - left.total || String(left.name || "").localeCompare(String(right.name || ""))
+  }).filter((editor) => editor.total > 0);
+  const managerStats = managers.map((manager) => {
+    const managerTasks = filteredAccountTasks.filter(
+      (task) => task.contextId === manager.id
+    );
+    const delivered = managerTasks.filter(isAccountDelivered).length;
+    const approved = managerTasks.filter((task) => task.status === "aprobado_internamente").length;
+    const published = managerTasks.filter((task) => task.status === "publicado").length;
+    const inProgress = managerTasks.filter(
+      (task) => !["aprobado_internamente", "publicado"].includes(task.status)
+    ).length;
+    const total = managerTasks.length;
+    const deliveryPerformance = total ? Math.round(delivered / total * 100) : 0;
+    const approvalPerformance = total ? Math.round(approved / total * 100) : 0;
+    const publicationPerformance = total ? Math.round(published / total * 100) : 0;
+    const loginRecency = getPersonLoginRecency("manager", manager.id, manager.userId);
+    const loginScore = loginRecency.daysSinceLogin === null ? 0 : Math.max(0, 100 - Math.min(loginRecency.daysSinceLogin, 30) * 2);
+    const overallPerformance = total ? Math.round(
+      publicationPerformance * 0.6 + approvalPerformance * 0.2 + deliveryPerformance * 0.15 + loginScore * 0.05
+    ) : 0;
+    return {
+      ...manager,
+      kind: "manager",
+      kindLabel: "Account Manager",
+      total,
+      delivered,
+      published,
+      inProgress,
+      deliveryPerformance,
+      approvalPerformance,
+      publicationPerformance,
+      overallPerformance,
+      lastSeenAt: loginRecency.lastSeenAt,
+      daysSinceLogin: loginRecency.daysSinceLogin
+    };
+  }).filter((manager) => manager.total > 0);
+  const personStats = [...editorStats, ...managerStats].sort(
+    (left, right) => right.overallPerformance - left.overallPerformance || right.total - left.total || String(left.name || "").localeCompare(String(right.name || ""))
   );
-  const totalTasks = filteredEditingTasks.length;
-  const deliveredTasks = filteredEditingTasks.filter(isEditingDelivered).length;
-  const publishedTasks = filteredEditingTasks.filter(
-    (task) => task.status === "publicado"
-  ).length;
-  const averagePerformance = editorStats.length ? Math.round(
-    editorStats.reduce((sum, editor) => sum + editor.performance, 0) / editorStats.length
+  const totalTasks = filteredEditingTasks.length + filteredAccountTasks.length;
+  const deliveredTasks = filteredEditingTasks.filter(isEditingDeliveredTask).length + filteredAccountTasks.filter(isAccountDelivered).length;
+  const publishedTasks = filteredEditingTasks.filter((task) => task.status === "publicado").length + filteredAccountTasks.filter((task) => task.status === "publicado").length;
+  const averagePerformance = personStats.length ? Math.round(
+    personStats.reduce((sum, person) => sum + person.overallPerformance, 0) / personStats.length
   ) : 0;
-  const editorsWithLogin = editorStats.filter(
-    (editor) => editor.daysSinceLogin !== null
-  );
-  const averageLoginScore = editorsWithLogin.length ? Math.round(
-    editorsWithLogin.reduce((sum, editor) => sum + editor.loginScore, 0) / editorsWithLogin.length
-  ) : 0;
-  const averageDaysSinceLogin = editorsWithLogin.length ? Math.round(
-    editorsWithLogin.reduce(
-      (sum, editor) => sum + editor.daysSinceLogin,
-      0
-    ) / editorsWithLogin.length
-  ) : null;
+  const peopleOptions = [
+    { value: "", label: "Todos" },
+    ...editors.map((editor) => ({
+      value: `editor:${editor.id}`,
+      label: `Editor - ${editor.name || "Sin nombre"}`
+    })),
+    ...managers.map((manager) => ({
+      value: `manager:${manager.id}`,
+      label: `Account Manager - ${manager.name || "Sin nombre"}`
+    }))
+  ];
   const rowStyle = (i) => i % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : "";
-  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between flex-wrap gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Rendimiento"), /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Rendimiento de Editores"), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-2xl" }, "Un resumen de la capacidad de entrega y el avance de edici\xF3n dentro del rango de fechas seleccionado.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 flex-wrap" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between flex-wrap gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Rendimiento"), /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Rendimiento de Editores y Account Managers"), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-2xl" }, "Un resumen del avance de tareas y la capacidad de entrega dentro del rango de fechas seleccionado, tanto para edici\xF3n como para accounts.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 flex-wrap" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
     "select",
     {
-      value: selectedEditorId,
-      onChange: (e) => setSelectedEditorId(e.target.value),
+      value: selectedPersonKey,
+      onChange: (e) => setSelectedPersonKey(e.target.value),
       className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 outline-none"
     },
-    /* @__PURE__ */ React.createElement("option", { value: "" }, "Todos los editores"),
-    editors.map((editor) => /* @__PURE__ */ React.createElement("option", { key: editor.id, value: editor.id }, editor.name))
-  ), selectedEditorId && /* @__PURE__ */ React.createElement(
+    peopleOptions.map((option) => /* @__PURE__ */ React.createElement("option", { key: option.value || "all", value: option.value }, option.label))
+  ), selectedPersonKey && /* @__PURE__ */ React.createElement(
     "button",
     {
       type: "button",
-      onClick: () => setSelectedEditorId(""),
+      onClick: () => setSelectedPersonKey(""),
       className: "text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
     },
     "Limpiar"
@@ -12949,11 +13004,11 @@ var PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
   )))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-4" }, /* @__PURE__ */ React.createElement(
     ReportStatCard,
     {
-      label: "Tareas de Edici\xF3n",
+      label: "Tareas del rango",
       value: totalTasks,
       color: "amber",
       icon: "Video",
-      sub: "en el rango"
+      sub: "edici\xF3n + accounts"
     }
   ), /* @__PURE__ */ React.createElement(
     ReportStatCard,
@@ -12962,7 +13017,7 @@ var PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
       value: deliveredTasks,
       color: "emerald",
       icon: "CheckCircle2",
-      sub: "revisi\xF3n interna o final"
+      sub: "aprobadas o publicadas"
     }
   ), /* @__PURE__ */ React.createElement(
     ReportStatCard,
@@ -12976,32 +13031,32 @@ var PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
   ), /* @__PURE__ */ React.createElement(
     ReportStatCard,
     {
-      label: "Rendimiento combinado",
+      label: "Rendimiento promedio",
       value: `${averagePerformance}%`,
       color: "purple",
       icon: "BarChart3",
-      sub: `Incluye frecuencia de login (${averageLoginScore}% promedio)`
+      sub: "promedio por persona"
     }
-  )), /* @__PURE__ */ React.createElement("p", { className: "rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300" }, "Se considera entregada cuando la tarea alcanza Revisi\xF3n Interna o cualquier estado posterior. Esto mide la capacidad de los editores para avanzar las piezas dentro del flujo."), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden" }, editorStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 font-bold" }, "Sin datos de rendimiento para este rango de fechas") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[860px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Editor"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Total"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "En Progreso"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "En Revisi\xF3n"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Aprobadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Publicadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "\xDAltimo login"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Rendimiento"))), /* @__PURE__ */ React.createElement("tbody", null, editorStats.map((editor, index) => /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("p", { className: "rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300" }, "El porcentaje de rendimiento prioriza lo que realmente mueve el negocio: publicaciones, luego entregas y aprobaciones, con un ajuste menor por frecuencia de login."), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden" }, personStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 font-bold" }, "Sin datos de rendimiento para este rango de fechas") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[900px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Persona"), /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Tipo"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Total"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "En Progreso"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Entregadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Publicadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "\xDAltimo login"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Rendimiento"))), /* @__PURE__ */ React.createElement("tbody", null, personStats.map((person, index) => /* @__PURE__ */ React.createElement(
     "tr",
     {
-      key: editor.id,
+      key: `${person.kind}-${person.id}`,
       className: `border-b border-slate-50 dark:border-slate-800/50 ${rowStyle(index)}`
     },
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 font-bold text-slate-800 dark:text-white" }, editor.name),
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-black text-slate-800 dark:text-white" }, editor.total),
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center text-slate-500 dark:text-slate-400" }, editor.inProgress),
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center text-slate-500 dark:text-slate-400" }, editor.inRevision),
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-bold text-emerald-600 dark:text-emerald-400" }, editor.approved),
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-bold text-indigo-600 dark:text-indigo-400" }, editor.published),
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center text-slate-500 dark:text-slate-400" }, editor.lastSeenAt ? /* @__PURE__ */ React.createElement("span", { className: "block text-sm font-bold text-slate-800 dark:text-white" }, normalizeDateOnlyString(editor.lastSeenAt)) : /* @__PURE__ */ React.createElement("span", { className: "text-sm text-slate-400" }, "Sin registro"), editor.daysSinceLogin !== null && /* @__PURE__ */ React.createElement("span", { className: "block text-xs text-slate-500 dark:text-slate-400" }, editor.daysSinceLogin, " d\xEDas")),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 font-bold text-slate-800 dark:text-white" }, person.name),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm font-semibold text-slate-600 dark:text-slate-300" }, person.kindLabel),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-black text-slate-800 dark:text-white" }, person.total),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center text-slate-500 dark:text-slate-400" }, person.inProgress),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-bold text-emerald-600 dark:text-emerald-400" }, person.delivered),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-bold text-indigo-600 dark:text-indigo-400" }, person.published),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center text-slate-500 dark:text-slate-400" }, person.lastSeenAt ? /* @__PURE__ */ React.createElement("span", { className: "block text-sm font-bold text-slate-800 dark:text-white" }, normalizeDateOnlyString(person.lastSeenAt)) : /* @__PURE__ */ React.createElement("span", { className: "text-sm text-slate-400" }, "Sin registro"), person.daysSinceLogin !== null && /* @__PURE__ */ React.createElement("span", { className: "block text-xs text-slate-500 dark:text-slate-400" }, person.daysSinceLogin, " d\xEDas")),
     /* @__PURE__ */ React.createElement("td", { className: "p-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-center gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden" }, /* @__PURE__ */ React.createElement(
       "div",
       {
-        className: `h-full rounded-full ${editor.weightedPerformance >= 80 ? "bg-emerald-500" : editor.weightedPerformance >= 50 ? "bg-amber-500" : "bg-red-500"}`,
-        style: { width: `${editor.weightedPerformance}%` }
+        className: `h-full rounded-full ${person.overallPerformance >= 80 ? "bg-emerald-500" : person.overallPerformance >= 50 ? "bg-amber-500" : "bg-red-500"}`,
+        style: { width: `${person.overallPerformance}%` }
       }
-    )), /* @__PURE__ */ React.createElement("span", { className: "w-10 text-right text-sm font-black text-slate-800 dark:text-white" }, editor.weightedPerformance, "%")))
+    )), /* @__PURE__ */ React.createElement("span", { className: "w-10 text-right text-sm font-black text-slate-800 dark:text-white" }, person.overallPerformance, "%")), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-[11px] text-center text-slate-500 dark:text-slate-400" }, person.deliveryPerformance, "% entregadas \xB7 ", person.approvalPerformance, "% aprobadas \xB7 ", person.publicationPerformance, "% publicadas"))
   )))))));
 };
 var root = createRoot(document.getElementById("root"));
