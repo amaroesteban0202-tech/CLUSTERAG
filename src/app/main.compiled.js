@@ -1867,12 +1867,12 @@ function App() {
     editors
   ]);
   useEffect(() => {
-    if (!currentUserProfile) return;
+    if (!currentUserProfile || !usersLoaded || currentUserProfile.pending) return;
     if (profileBlocked || !canAccessView(currentUserProfile, view)) {
       setView("dashboard");
       localStorage.setItem("cluster_os_view", "dashboard");
     }
-  }, [currentUserProfile, profileBlocked, view]);
+  }, [currentUserProfile, profileBlocked, view, usersLoaded]);
   useEffect(() => {
     if (typeof window === "undefined" || typeof Notification === "undefined")
       return;
@@ -3412,7 +3412,7 @@ function App() {
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
     if (!clientId || !trimmed && safeAttachments.length === 0 && !call) return;
     const senderName = currentUserProfile?.name || (authEmail ? authEmail.split("@")[0] : "Usuario");
-    await addDoc(dataCollection("client_chats"), {
+    const createdMessage = await addDoc(dataCollection("client_chats"), {
       clientId,
       text: trimmed,
       authorName: senderName,
@@ -3457,6 +3457,19 @@ function App() {
           }
         );
       }
+    }
+    return createdMessage;
+  };
+  const endClientCall = async (messageId, callObj) => {
+    if (!messageId) return;
+    const base = callObj || clientChats.find((item) => item.id === messageId)?.call || {};
+    try {
+      await updateDoc(dataDoc("client_chats", messageId), {
+        call: { ...base, ended: true, endedAt: nowIso() },
+        updatedAt: nowIso()
+      });
+    } catch (error) {
+      console.warn("[chat:end-call]", error.message);
     }
   };
   const markClientChatRead = (clientId) => {
@@ -4458,6 +4471,7 @@ function App() {
           onReact: toggleChatReaction,
           onPin: toggleChatPin,
           onForward: forwardChatMessage,
+          onEndCall: endClientCall,
           currentUserId: currentUserProfile?.id || authEmail || "",
           currentUserProfile,
           canModerate: userHasPermission(
@@ -8218,6 +8232,7 @@ var ClientChatView = ({
   onReact,
   onPin,
   onForward,
+  onEndCall,
   currentUserId = "",
   currentUserProfile,
   canModerate = false,
@@ -8237,7 +8252,7 @@ var ClientChatView = ({
   const [callPicker, setCallPicker] = useState(null);
   const [callSelected, setCallSelected] = useState([]);
   const [callSearch, setCallSearch] = useState("");
-  const [activeCallRoom, setActiveCallRoom] = useState(null);
+  const [activeCall, setActiveCall] = useState(null);
   const [text, setText] = useState("");
   const [mentionedIds, setMentionedIds] = useState([]);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -8843,10 +8858,33 @@ var ClientChatView = ({
               ),
               /* @__PURE__ */ React.createElement("span", { className: "truncate" }, message.taskRef.taskTitle || "Tarea"),
               /* @__PURE__ */ React.createElement("span", { className: "opacity-70" }, "\xB7", " ", CHAT_TASK_LABELS[message.taskRef.taskType] || "")
-            ), message.call?.roomId && /* @__PURE__ */ React.createElement(
+            ), message.call?.roomId && (message.call.ended ? /* @__PURE__ */ React.createElement(
+              "div",
+              {
+                className: `mt-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2 ${mine ? "border-white/20 bg-black/10" : "border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-slate-700/40"}`
+              },
+              /* @__PURE__ */ React.createElement(
+                "span",
+                {
+                  className: `flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${mine ? "bg-white/15 text-white/70" : "bg-slate-300 text-slate-600 dark:bg-slate-600 dark:text-slate-300"}`
+                },
+                /* @__PURE__ */ React.createElement(Icon, { name: "Phone", size: 15 })
+              ),
+              /* @__PURE__ */ React.createElement("span", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement(
+                "span",
+                {
+                  className: `block text-xs font-bold ${mine ? "text-white/80" : "text-slate-600 dark:text-slate-300"}`
+                },
+                "Llamada finalizada"
+              ))
+            ) : /* @__PURE__ */ React.createElement(
               "button",
               {
-                onClick: () => setActiveCallRoom(message.call.roomId),
+                onClick: () => setActiveCall({
+                  roomId: message.call.roomId,
+                  messageId: message.id,
+                  isHost: !!myId && String(message.authorId || "") === myId
+                }),
                 className: `mt-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left ${mine ? "border-white/30 bg-black/10" : "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10"}`
               },
               /* @__PURE__ */ React.createElement(
@@ -8869,7 +8907,7 @@ var ClientChatView = ({
                 },
                 "Toca para unirte"
               ))
-            )),
+            ))),
             /* @__PURE__ */ React.createElement(
               "span",
               {
@@ -9316,17 +9354,24 @@ var ClientChatView = ({
       /* @__PURE__ */ React.createElement("div", { className: "border-t border-slate-100 p-3 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
         "button",
         {
-          onClick: () => {
+          onClick: async () => {
             const room = callPicker.mode === "add" ? callPicker.roomId : buildChatRoomId(activeClient?.name);
+            let created = null;
             if (onSendMessage) {
-              onSendMessage({
+              created = await onSendMessage({
                 clientId: activeClient.id,
                 text: callPicker.mode === "add" ? "\u{1F4DE} Invit\xF3 a la llamada" : "\u{1F4DE} Inici\xF3 una llamada",
                 mentionedIds: callSelected,
                 call: { roomId: room, provider: "jitsi" }
               });
             }
-            if (callPicker.mode !== "add") setActiveCallRoom(room);
+            if (callPicker.mode !== "add") {
+              setActiveCall({
+                roomId: room,
+                messageId: created?.id || null,
+                isHost: true
+              });
+            }
             setCallPicker(null);
             setCallSelected([]);
           },
@@ -9336,7 +9381,7 @@ var ClientChatView = ({
         callPicker.mode === "add" ? "Invitar" : "Iniciar llamada"
       ))
     )
-  ), activeCallRoom && /* @__PURE__ */ React.createElement("div", { className: "fixed inset-0 z-40 flex flex-col bg-slate-900" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2.5" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2 text-white" }, /* @__PURE__ */ React.createElement(
+  ), activeCall && /* @__PURE__ */ React.createElement("div", { className: "fixed inset-0 z-40 flex flex-col bg-slate-900" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2.5" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2 text-white" }, /* @__PURE__ */ React.createElement(
     Icon,
     {
       name: "VideoCamera",
@@ -9349,7 +9394,7 @@ var ClientChatView = ({
       onClick: () => {
         setCallSelected([]);
         setCallSearch("");
-        setCallPicker({ mode: "add", roomId: activeCallRoom });
+        setCallPicker({ mode: "add", roomId: activeCall.roomId });
       },
       className: "flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20"
     },
@@ -9358,16 +9403,24 @@ var ClientChatView = ({
   ), /* @__PURE__ */ React.createElement(
     "button",
     {
-      onClick: () => setActiveCallRoom(null),
+      onClick: () => {
+        if (activeCall.isHost && onEndCall) {
+          onEndCall(activeCall.messageId, {
+            roomId: activeCall.roomId,
+            provider: "jitsi"
+          });
+        }
+        setActiveCall(null);
+      },
       className: "flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700"
     },
     /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 14 }),
-    " Salir"
+    activeCall.isHost ? "Finalizar llamada" : "Salir"
   ))), /* @__PURE__ */ React.createElement(
     "iframe",
     {
       title: "Videollamada",
-      src: `https://meet.jit.si/${activeCallRoom}#config.prejoinPageEnabled=false&userInfo.displayName=${encodeURIComponent(
+      src: `https://meet.jit.si/${activeCall.roomId}#config.prejoinPageEnabled=false&userInfo.displayName=${encodeURIComponent(
         `"${currentUserProfile?.name || "Usuario"}"`
       )}`,
       allow: "camera; microphone; fullscreen; display-capture; autoplay; clipboard-write",

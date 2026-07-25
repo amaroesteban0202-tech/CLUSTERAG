@@ -2796,12 +2796,15 @@ function App() {
   ]);
 
   useEffect(() => {
-    if (!currentUserProfile) return;
+    // No redirigir mientras el perfil aún se resuelve: al volver de otra pestaña
+    // o app, la sesión se revalida y el perfil cae un instante a estado
+    // "pending" (rol menor), lo que antes mandaba a Inicio cualquier panel.
+    if (!currentUserProfile || !usersLoaded || currentUserProfile.pending) return;
     if (profileBlocked || !canAccessView(currentUserProfile, view)) {
       setView("dashboard");
       localStorage.setItem("cluster_os_view", "dashboard");
     }
-  }, [currentUserProfile, profileBlocked, view]);
+  }, [currentUserProfile, profileBlocked, view, usersLoaded]);
 
   // Notificaciones locales para tareas asignadas al usuario.
   useEffect(() => {
@@ -4636,7 +4639,7 @@ function App() {
     const senderName =
       currentUserProfile?.name ||
       (authEmail ? authEmail.split("@")[0] : "Usuario");
-    await addDoc(dataCollection("client_chats"), {
+    const createdMessage = await addDoc(dataCollection("client_chats"), {
       clientId,
       text: trimmed,
       authorName: senderName,
@@ -4689,6 +4692,25 @@ function App() {
               },
         );
       }
+    }
+    return createdMessage;
+  };
+
+  // Finaliza una llamada (solo el host): marca el mensaje de llamada como
+  // terminado para que la tarjeta deje de ser "unible".
+  const endClientCall = async (messageId, callObj) => {
+    if (!messageId) return;
+    const base =
+      callObj ||
+      clientChats.find((item) => item.id === messageId)?.call ||
+      {};
+    try {
+      await updateDoc(dataDoc("client_chats", messageId), {
+        call: { ...base, ended: true, endedAt: nowIso() },
+        updatedAt: nowIso(),
+      });
+    } catch (error) {
+      console.warn("[chat:end-call]", error.message);
     }
   };
 
@@ -5883,6 +5905,7 @@ function App() {
               onReact={toggleChatReaction}
               onPin={toggleChatPin}
               onForward={forwardChatMessage}
+              onEndCall={endClientCall}
               currentUserId={currentUserProfile?.id || authEmail || ""}
               currentUserProfile={currentUserProfile}
               canModerate={userHasPermission(
@@ -11425,6 +11448,7 @@ const ClientChatView = ({
   onReact,
   onPin,
   onForward,
+  onEndCall,
   currentUserId = "",
   currentUserProfile,
   canModerate = false,
@@ -11444,7 +11468,7 @@ const ClientChatView = ({
   const [callPicker, setCallPicker] = useState(null);
   const [callSelected, setCallSelected] = useState([]);
   const [callSearch, setCallSearch] = useState("");
-  const [activeCallRoom, setActiveCallRoom] = useState(null);
+  const [activeCall, setActiveCall] = useState(null);
   const [text, setText] = useState("");
   const [mentionedIds, setMentionedIds] = useState([]);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -12195,32 +12219,56 @@ const ClientChatView = ({
                                 </span>
                               </button>
                             )}
-                            {message.call?.roomId && (
-                              <button
-                                onClick={() =>
-                                  setActiveCallRoom(message.call.roomId)
-                                }
-                                className={`mt-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left ${mine ? "border-white/30 bg-black/10" : "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10"}`}
-                              >
-                                <span
-                                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${mine ? "bg-white/20 text-white" : "bg-emerald-600 text-white"}`}
+                            {message.call?.roomId &&
+                              (message.call.ended ? (
+                                <div
+                                  className={`mt-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2 ${mine ? "border-white/20 bg-black/10" : "border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-slate-700/40"}`}
                                 >
-                                  <Icon name="VideoCamera" size={16} />
-                                </span>
-                                <span className="min-w-0 flex-1">
                                   <span
-                                    className={`block text-xs font-bold ${mine ? "" : "text-emerald-700 dark:text-emerald-300"}`}
+                                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${mine ? "bg-white/15 text-white/70" : "bg-slate-300 text-slate-600 dark:bg-slate-600 dark:text-slate-300"}`}
                                   >
-                                    Videollamada
+                                    <Icon name="Phone" size={15} />
                                   </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span
+                                      className={`block text-xs font-bold ${mine ? "text-white/80" : "text-slate-600 dark:text-slate-300"}`}
+                                    >
+                                      Llamada finalizada
+                                    </span>
+                                  </span>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    setActiveCall({
+                                      roomId: message.call.roomId,
+                                      messageId: message.id,
+                                      isHost:
+                                        !!myId &&
+                                        String(message.authorId || "") === myId,
+                                    })
+                                  }
+                                  className={`mt-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left ${mine ? "border-white/30 bg-black/10" : "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10"}`}
+                                >
                                   <span
-                                    className={`block text-[11px] ${mine ? "text-white/70" : "text-slate-500 dark:text-slate-400"}`}
+                                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${mine ? "bg-white/20 text-white" : "bg-emerald-600 text-white"}`}
                                   >
-                                    Toca para unirte
+                                    <Icon name="VideoCamera" size={16} />
                                   </span>
-                                </span>
-                              </button>
-                            )}
+                                  <span className="min-w-0 flex-1">
+                                    <span
+                                      className={`block text-xs font-bold ${mine ? "" : "text-emerald-700 dark:text-emerald-300"}`}
+                                    >
+                                      Videollamada
+                                    </span>
+                                    <span
+                                      className={`block text-[11px] ${mine ? "text-white/70" : "text-slate-500 dark:text-slate-400"}`}
+                                    >
+                                      Toca para unirte
+                                    </span>
+                                  </span>
+                                </button>
+                              ))}
                           </>
                         )}
                         <span
@@ -12804,13 +12852,14 @@ const ClientChatView = ({
             </div>
             <div className="border-t border-slate-100 p-3 dark:border-white/10">
               <button
-                onClick={() => {
+                onClick={async () => {
                   const room =
                     callPicker.mode === "add"
                       ? callPicker.roomId
                       : buildChatRoomId(activeClient?.name);
+                  let created = null;
                   if (onSendMessage) {
-                    onSendMessage({
+                    created = await onSendMessage({
                       clientId: activeClient.id,
                       text:
                         callPicker.mode === "add"
@@ -12820,7 +12869,13 @@ const ClientChatView = ({
                       call: { roomId: room, provider: "jitsi" },
                     });
                   }
-                  if (callPicker.mode !== "add") setActiveCallRoom(room);
+                  if (callPicker.mode !== "add") {
+                    setActiveCall({
+                      roomId: room,
+                      messageId: created?.id || null,
+                      isHost: true,
+                    });
+                  }
                   setCallPicker(null);
                   setCallSelected([]);
                 }}
@@ -12835,7 +12890,7 @@ const ClientChatView = ({
       )}
 
       {/* Llamada embebida (Jitsi) */}
-      {activeCallRoom && (
+      {activeCall && (
         <div className="fixed inset-0 z-40 flex flex-col bg-slate-900">
           <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2.5">
             <div className="flex min-w-0 items-center gap-2 text-white">
@@ -12853,23 +12908,32 @@ const ClientChatView = ({
                 onClick={() => {
                   setCallSelected([]);
                   setCallSearch("");
-                  setCallPicker({ mode: "add", roomId: activeCallRoom });
+                  setCallPicker({ mode: "add", roomId: activeCall.roomId });
                 }}
                 className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20"
               >
                 <Icon name="UserPlus" size={14} /> Agregar personas
               </button>
               <button
-                onClick={() => setActiveCallRoom(null)}
+                onClick={() => {
+                  if (activeCall.isHost && onEndCall) {
+                    onEndCall(activeCall.messageId, {
+                      roomId: activeCall.roomId,
+                      provider: "jitsi",
+                    });
+                  }
+                  setActiveCall(null);
+                }}
                 className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700"
               >
-                <Icon name="X" size={14} /> Salir
+                <Icon name="X" size={14} />
+                {activeCall.isHost ? "Finalizar llamada" : "Salir"}
               </button>
             </div>
           </div>
           <iframe
             title="Videollamada"
-            src={`https://meet.jit.si/${activeCallRoom}#config.prejoinPageEnabled=false&userInfo.displayName=${encodeURIComponent(
+            src={`https://meet.jit.si/${activeCall.roomId}#config.prejoinPageEnabled=false&userInfo.displayName=${encodeURIComponent(
               `"${currentUserProfile?.name || "Usuario"}"`,
             )}`}
             allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write"
