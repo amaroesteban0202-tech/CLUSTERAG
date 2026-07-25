@@ -38,6 +38,37 @@ const parseJson = (value, fallback) => {
     }
 };
 
+// Normaliza una private key PEM guardada como variable de entorno. Tolera:
+// comillas envolventes, \n literales, base64 del PEM completo, o el PEM en una
+// sola línea (reconstruye los saltos). Así el firmado funciona sin importar
+// cómo lo guarde Vercel/el shell.
+const normalizePem = (raw = '') => {
+    let key = String(raw || '').trim();
+    if (!key) return '';
+    if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+        key = key.slice(1, -1);
+    }
+    key = key.replace(/\\r/g, '').replace(/\\n/g, '\n').trim();
+    if (!key.includes('BEGIN')) {
+        try {
+            const decoded = Buffer.from(key, 'base64').toString('utf8');
+            if (decoded.includes('BEGIN')) key = decoded.trim();
+        } catch {
+            /* no era base64 */
+        }
+    }
+    if (key.includes('BEGIN') && !key.includes('\n')) {
+        const match = key.match(/-----BEGIN ([A-Z0-9 ]+?)-----(.*?)-----END \1-----/);
+        if (match) {
+            const label = match[1].trim();
+            const body = match[2].replace(/\s+/g, '');
+            const wrapped = (body.match(/.{1,64}/g) || [body]).join('\n');
+            key = `-----BEGIN ${label}-----\n${wrapped}\n-----END ${label}-----`;
+        }
+    }
+    return key;
+};
+
 const defaultFirebaseProjectId = process.env.FIREBASE_PROJECT_ID || 'cluster-41f73';
 const databaseUrl = process.env.DATABASE_URL
     || process.env.POSTGRES_URL
@@ -110,6 +141,6 @@ export const env = {
     jaas: {
         appId: process.env.JAAS_APP_ID || '',
         kid: process.env.JAAS_KID || '',
-        privateKey: (process.env.JAAS_PRIVATE_KEY || '').replace(/\\n/g, '\n')
+        privateKey: normalizePem(process.env.JAAS_PRIVATE_KEY)
     }
 };

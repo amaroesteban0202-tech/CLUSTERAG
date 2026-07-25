@@ -62,6 +62,7 @@ router.post('/jaas-token', asyncHandler(async (req, res) => {
         signer.end();
         signature = signer.sign(privateKey).toString('base64url');
     } catch (error) {
+        console.error('[jaas] fallo al firmar el token:', error?.message || error);
         throw createHttpError(500, 'No se pudo firmar el token de la llamada.', 'jaas/sign-failed');
     }
 
