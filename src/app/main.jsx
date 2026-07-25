@@ -11210,14 +11210,18 @@ const CHAT_TASK_LABELS = {
   managementTask: "Gestión",
 };
 
-const renderChatText = (text = "") =>
+const renderChatText = (text = "", onColored = false) =>
   String(text)
     .split(/(@[^\s@]+)/g)
     .map((part, index) =>
       part.startsWith("@") ? (
         <span
           key={index}
-          className="font-semibold text-blue-600 dark:text-blue-400"
+          className={
+            onColored
+              ? "font-bold underline"
+              : "font-semibold text-blue-600 dark:text-blue-400"
+          }
         >
           {part}
         </span>
@@ -11276,6 +11280,7 @@ const ClientChatView = ({
 }) => {
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [menuFor, setMenuFor] = useState(null);
   const [text, setText] = useState("");
   const [mentionedIds, setMentionedIds] = useState([]);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -11768,80 +11773,128 @@ const ClientChatView = ({
                 return (
                   <div
                     key={message.id}
-                    className={`group flex gap-3 px-4 ${grouped ? "mt-0.5 py-0.5" : "mt-3 py-0.5"} hover:bg-slate-50 dark:hover:bg-white/5`}
+                    className={`group flex px-4 ${grouped ? "mt-0.5" : "mt-3"} ${mine ? "justify-end" : "justify-start"}`}
                   >
-                    <div className="w-9 shrink-0">
-                      {grouped ? (
-                        <span className="hidden pt-1 text-right text-[10px] text-slate-400 group-hover:block">
+                    {!mine && (
+                      <div className="mr-2 w-8 shrink-0 self-end">
+                        {!grouped && (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#555552] text-[10px] font-black text-white">
+                            {(message.authorName || "U").slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="relative min-w-0 max-w-[78%]">
+                      {!mine && !grouped && (
+                        <p className="mb-0.5 px-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                          {message.authorName || "Usuario"}
+                        </p>
+                      )}
+                      <div
+                        className={`relative rounded-2xl px-3 py-2 ${mine ? "rounded-br-sm bg-emerald-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}
+                      >
+                        {!message.deleted && (
+                          <button
+                            onClick={() =>
+                              setMenuFor(menuFor === message.id ? null : message.id)
+                            }
+                            aria-label="Opciones del mensaje"
+                            className={`absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100 ${mine ? "text-white/80 hover:bg-black/20" : "text-slate-400 hover:bg-black/5 dark:hover:bg-white/10"}`}
+                          >
+                            <Icon name="ChevronDown" size={14} />
+                          </button>
+                        )}
+                        {menuFor === message.id && (
+                          <div className="absolute right-0 top-7 z-30 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-slate-700 shadow-xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                            {message.text && (
+                              <button
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  if (navigator.clipboard) {
+                                    navigator.clipboard.writeText(message.text);
+                                  }
+                                  setMenuFor(null);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                              >
+                                <Icon
+                                  name="ClipboardList"
+                                  size={14}
+                                  className="text-slate-500"
+                                />
+                                Copiar
+                              </button>
+                            )}
+                            {mine && (
+                              <button
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  setMenuFor(null);
+                                  setDeleteTarget(message);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+                              >
+                                <Icon name="Trash2" size={14} /> Eliminar
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {message.deleted ? (
+                          <p
+                            className={`flex items-center gap-1.5 pr-6 text-sm italic ${mine ? "text-white/70" : "text-slate-400"}`}
+                          >
+                            <Icon name="Trash2" size={12} /> Este mensaje fue
+                            eliminado
+                          </p>
+                        ) : (
+                          <>
+                            {message.text && (
+                              <p className="whitespace-pre-wrap break-words pr-5 text-sm leading-relaxed">
+                                {renderChatText(message.text, mine)}
+                              </p>
+                            )}
+                            {atts.length > 0 && (
+                              <div className="mt-1.5 flex flex-wrap gap-2">
+                                {atts.map((att) => renderAttachment(att))}
+                              </div>
+                            )}
+                            {message.taskRef?.taskId && (
+                              <button
+                                onClick={() => onOpenTask(message.taskRef)}
+                                className={`mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
+                              >
+                                <Icon
+                                  name="ClipboardList"
+                                  size={11}
+                                  className="shrink-0"
+                                />
+                                <span className="truncate">
+                                  {message.taskRef.taskTitle || "Tarea"}
+                                </span>
+                                <span className="opacity-70">
+                                  ·{" "}
+                                  {CHAT_TASK_LABELS[message.taskRef.taskType] || ""}
+                                </span>
+                              </button>
+                            )}
+                          </>
+                        )}
+                        <span
+                          className={`mt-0.5 block text-right text-[10px] ${mine ? "text-white/70" : "text-slate-400"}`}
+                        >
                           {chatShortTime(message.createdAt)}
                         </span>
-                      ) : (
-                        <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-[#555552] text-[11px] font-black text-white">
-                          {(message.authorName || "U").slice(0, 2).toUpperCase()}
-                        </div>
-                      )}
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      {!grouped && (
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-sm font-black text-slate-800 dark:text-slate-100">
-                            {message.authorName || "Usuario"}
-                          </span>
-                          <span className="text-[11px] text-slate-400">
-                            {relativeTime(message.createdAt)}
-                          </span>
-                        </div>
-                      )}
-                      {message.deleted ? (
-                        <p className="flex items-center gap-1.5 text-sm italic text-slate-400">
-                          <Icon name="Trash2" size={12} /> Este mensaje fue
-                          eliminado
-                        </p>
-                      ) : (
-                        <>
-                          {message.text && (
-                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-200">
-                              {renderChatText(message.text)}
-                            </p>
-                          )}
-                          {atts.length > 0 && (
-                            <div className="mt-1.5 flex flex-wrap gap-2">
-                              {atts.map((att) => renderAttachment(att))}
-                            </div>
-                          )}
-                          {message.taskRef?.taskId && (
-                            <button
-                              onClick={() => onOpenTask(message.taskRef)}
-                              className={`mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
-                            >
-                              <Icon
-                                name="ClipboardList"
-                                size={11}
-                                className="shrink-0"
-                              />
-                              <span className="truncate">
-                                {message.taskRef.taskTitle || "Tarea"}
-                              </span>
-                              <span className="opacity-70">
-                                · {CHAT_TASK_LABELS[message.taskRef.taskType] || ""}
-                              </span>
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                    {mine && !message.deleted && (
-                      <button
-                        onClick={() => setDeleteTarget(message)}
-                        aria-label="Eliminar mensaje"
-                        className="self-start text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
-                      >
-                        <Icon name="Trash2" size={13} />
-                      </button>
-                    )}
                   </div>
                 );
               })}
+              {menuFor && (
+                <div
+                  className="fixed inset-0 z-20"
+                  onClick={() => setMenuFor(null)}
+                />
+              )}
             </div>
 
             {/* Composer estilo Slack */}

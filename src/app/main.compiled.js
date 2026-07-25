@@ -8042,12 +8042,12 @@ var CHAT_TASK_LABELS = {
   editingTask: "Edici\xF3n",
   managementTask: "Gesti\xF3n"
 };
-var renderChatText = (text = "") => String(text).split(/(@[^\s@]+)/g).map(
+var renderChatText = (text = "", onColored = false) => String(text).split(/(@[^\s@]+)/g).map(
   (part, index) => part.startsWith("@") ? /* @__PURE__ */ React.createElement(
     "span",
     {
       key: index,
-      className: "font-semibold text-blue-600 dark:text-blue-400"
+      className: onColored ? "font-bold underline" : "font-semibold text-blue-600 dark:text-blue-400"
     },
     part
   ) : /* @__PURE__ */ React.createElement(React.Fragment, { key: index }, part)
@@ -8098,6 +8098,7 @@ var ClientChatView = ({
 }) => {
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [menuFor, setMenuFor] = useState(null);
   const [text, setText] = useState("");
   const [mentionedIds, setMentionedIds] = useState([]);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -8488,37 +8489,98 @@ var ClientChatView = ({
           "div",
           {
             key: message.id,
-            className: `group flex gap-3 px-4 ${grouped ? "mt-0.5 py-0.5" : "mt-3 py-0.5"} hover:bg-slate-50 dark:hover:bg-white/5`
+            className: `group flex px-4 ${grouped ? "mt-0.5" : "mt-3"} ${mine ? "justify-end" : "justify-start"}`
           },
-          /* @__PURE__ */ React.createElement("div", { className: "w-9 shrink-0" }, grouped ? /* @__PURE__ */ React.createElement("span", { className: "hidden pt-1 text-right text-[10px] text-slate-400 group-hover:block" }, chatShortTime(message.createdAt)) : /* @__PURE__ */ React.createElement("div", { className: "mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-[#555552] text-[11px] font-black text-white" }, (message.authorName || "U").slice(0, 2).toUpperCase())),
-          /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, !grouped && /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm font-black text-slate-800 dark:text-slate-100" }, message.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] text-slate-400" }, relativeTime(message.createdAt))), message.deleted ? /* @__PURE__ */ React.createElement("p", { className: "flex items-center gap-1.5 text-sm italic text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 12 }), " Este mensaje fue eliminado") : /* @__PURE__ */ React.createElement(React.Fragment, null, message.text && /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-200" }, renderChatText(message.text)), atts.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap gap-2" }, atts.map((att) => renderAttachment(att))), message.taskRef?.taskId && /* @__PURE__ */ React.createElement(
-            "button",
+          !mine && /* @__PURE__ */ React.createElement("div", { className: "mr-2 w-8 shrink-0 self-end" }, !grouped && /* @__PURE__ */ React.createElement("div", { className: "flex h-8 w-8 items-center justify-center rounded-full bg-[#555552] text-[10px] font-black text-white" }, (message.authorName || "U").slice(0, 2).toUpperCase())),
+          /* @__PURE__ */ React.createElement("div", { className: "relative min-w-0 max-w-[78%]" }, !mine && !grouped && /* @__PURE__ */ React.createElement("p", { className: "mb-0.5 px-1 text-[11px] font-bold text-slate-500 dark:text-slate-400" }, message.authorName || "Usuario"), /* @__PURE__ */ React.createElement(
+            "div",
             {
-              onClick: () => onOpenTask(message.taskRef),
-              className: `mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`
+              className: `relative rounded-2xl px-3 py-2 ${mine ? "rounded-br-sm bg-emerald-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`
             },
-            /* @__PURE__ */ React.createElement(
-              Icon,
+            !message.deleted && /* @__PURE__ */ React.createElement(
+              "button",
               {
-                name: "ClipboardList",
-                size: 11,
-                className: "shrink-0"
-              }
+                onClick: () => setMenuFor(menuFor === message.id ? null : message.id),
+                "aria-label": "Opciones del mensaje",
+                className: `absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100 ${mine ? "text-white/80 hover:bg-black/20" : "text-slate-400 hover:bg-black/5 dark:hover:bg-white/10"}`
+              },
+              /* @__PURE__ */ React.createElement(Icon, { name: "ChevronDown", size: 14 })
             ),
-            /* @__PURE__ */ React.createElement("span", { className: "truncate" }, message.taskRef.taskTitle || "Tarea"),
-            /* @__PURE__ */ React.createElement("span", { className: "opacity-70" }, "\xB7 ", CHAT_TASK_LABELS[message.taskRef.taskType] || "")
-          ))),
-          mine && !message.deleted && /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              onClick: () => setDeleteTarget(message),
-              "aria-label": "Eliminar mensaje",
-              className: "self-start text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
-            },
-            /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 13 })
-          )
+            menuFor === message.id && /* @__PURE__ */ React.createElement("div", { className: "absolute right-0 top-7 z-30 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-slate-700 shadow-xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" }, message.text && /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                onMouseDown: (event) => {
+                  event.preventDefault();
+                  if (navigator.clipboard) {
+                    navigator.clipboard.writeText(message.text);
+                  }
+                  setMenuFor(null);
+                },
+                className: "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+              },
+              /* @__PURE__ */ React.createElement(
+                Icon,
+                {
+                  name: "ClipboardList",
+                  size: 14,
+                  className: "text-slate-500"
+                }
+              ),
+              "Copiar"
+            ), mine && /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                onMouseDown: (event) => {
+                  event.preventDefault();
+                  setMenuFor(null);
+                  setDeleteTarget(message);
+                },
+                className: "flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+              },
+              /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 14 }),
+              " Eliminar"
+            )),
+            message.deleted ? /* @__PURE__ */ React.createElement(
+              "p",
+              {
+                className: `flex items-center gap-1.5 pr-6 text-sm italic ${mine ? "text-white/70" : "text-slate-400"}`
+              },
+              /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 12 }),
+              " Este mensaje fue eliminado"
+            ) : /* @__PURE__ */ React.createElement(React.Fragment, null, message.text && /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words pr-5 text-sm leading-relaxed" }, renderChatText(message.text, mine)), atts.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap gap-2" }, atts.map((att) => renderAttachment(att))), message.taskRef?.taskId && /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                onClick: () => onOpenTask(message.taskRef),
+                className: `mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`
+              },
+              /* @__PURE__ */ React.createElement(
+                Icon,
+                {
+                  name: "ClipboardList",
+                  size: 11,
+                  className: "shrink-0"
+                }
+              ),
+              /* @__PURE__ */ React.createElement("span", { className: "truncate" }, message.taskRef.taskTitle || "Tarea"),
+              /* @__PURE__ */ React.createElement("span", { className: "opacity-70" }, "\xB7", " ", CHAT_TASK_LABELS[message.taskRef.taskType] || "")
+            )),
+            /* @__PURE__ */ React.createElement(
+              "span",
+              {
+                className: `mt-0.5 block text-right text-[10px] ${mine ? "text-white/70" : "text-slate-400"}`
+              },
+              chatShortTime(message.createdAt)
+            )
+          ))
         );
-      })
+      }),
+      menuFor && /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          className: "fixed inset-0 z-20",
+          onClick: () => setMenuFor(null)
+        }
+      )
     ), /* @__PURE__ */ React.createElement("div", { className: "shrink-0 border-t border-slate-200 p-3 pb-mobile-nav md:pb-3 dark:border-white/10" }, (taskRef || pending.length > 0) && /* @__PURE__ */ React.createElement("div", { className: "mb-2 flex flex-wrap items-center gap-2" }, taskRef && /* @__PURE__ */ React.createElement(
       "span",
       {
