@@ -5,6 +5,7 @@ firestore-debug.log
 ui-debug.log
 node_modules/
 public/
+.claude/
 .env
 .env.local
 .tmp/*.sqlite

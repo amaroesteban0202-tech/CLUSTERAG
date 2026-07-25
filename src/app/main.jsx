@@ -4544,9 +4544,11 @@ function App() {
     text,
     mentionedIds = [],
     taskRef = null,
+    attachments = [],
   }) => {
     const trimmed = (text || "").trim();
-    if (!clientId || !trimmed) return;
+    const safeAttachments = Array.isArray(attachments) ? attachments : [];
+    if (!clientId || (!trimmed && safeAttachments.length === 0)) return;
     const senderName =
       currentUserProfile?.name ||
       (authEmail ? authEmail.split("@")[0] : "Usuario");
@@ -4557,6 +4559,7 @@ function App() {
       authorId: currentUserProfile?.id || "",
       authorEmail: authEmail || "",
       mentionedIds,
+      attachments: safeAttachments,
       taskRef: taskRef
         ? {
             taskId: taskRef.taskId || "",
@@ -4611,6 +4614,19 @@ function App() {
     deleteDoc(dataDoc("client_chats", message.id)).catch((error) =>
       console.warn("[chat:delete]", error.message),
     );
+  };
+
+  // Los listados llegan sin el base64 de los adjuntos; se pide el mensaje
+  // completo bajo demanda para previsualizar/descargar archivos.
+  const fetchClientChatMessage = async (messageId) => {
+    if (!messageId) return null;
+    try {
+      const snap = await getDoc(dataDoc("client_chats", messageId));
+      return snap.data();
+    } catch (error) {
+      console.warn("[chat:fetch]", error.message);
+      return null;
+    }
   };
 
   // Abre la tarea referenciada por un mensaje del chat (o su sala si ya no está
@@ -5522,8 +5538,16 @@ function App() {
       </aside>
 
       {/* Vistas Principales */}
-      <main className="app-main flex-1 overflow-y-auto relative w-full h-full">
-        <div className="p-4 md:p-8 max-w-[1360px] mx-auto min-h-full pb-mobile-nav md:pb-20">
+      <main
+        className={`app-main flex-1 relative w-full h-full ${view === "chat" ? "overflow-hidden" : "overflow-y-auto"}`}
+      >
+        <div
+          className={
+            view === "chat"
+              ? "h-full"
+              : "p-4 md:p-8 max-w-[1360px] mx-auto min-h-full pb-mobile-nav md:pb-20"
+          }
+        >
           {view === "dashboard" &&
             (isFirstTimeWorkspace ? (
               <FirstTimeView
@@ -5614,6 +5638,7 @@ function App() {
               accountTasks={accountTasks}
               editingTasks={editingTasks}
               managementTasks={managementTasks}
+              fetchFullMessage={fetchClientChatMessage}
             />
           )}
           {view === "managers" && (
@@ -11082,8 +11107,34 @@ const renderChatText = (text = "") =>
       ),
     );
 
-// Chat interno por cliente: lista de clientes + hilo + composer con @menciones
-// y enlace opcional a una tarea del cliente.
+const CHAT_MAX_FILE = 8 * 1024 * 1024; // 8 MB por archivo
+const chatFileToBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+const formatChatBytes = (bytes = 0) => {
+  if (!bytes) return "";
+  const kb = bytes / 1024;
+  return kb < 1024 ? `${Math.round(kb)} KB` : `${(kb / 1024).toFixed(1)} MB`;
+};
+const isChatImage = (type = "") => String(type).startsWith("image/");
+const isChatVideo = (type = "") => String(type).startsWith("video/");
+const chatShortTime = (iso) => {
+  try {
+    return new Date(iso).toLocaleTimeString("es", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+};
+
+// Chat interno por cliente (estilo Slack): lista de clientes + hilo + composer
+// con @menciones, enlace opcional a una tarea y adjuntos (imágenes/video/PDF).
 const ClientChatView = ({
   clients = [],
   clientChats = [],
@@ -11099,6 +11150,7 @@ const ClientChatView = ({
   accountTasks = [],
   editingTasks = [],
   managementTasks = [],
+  fetchFullMessage,
 }) => {
   const [search, setSearch] = useState("");
   const [text, setText] = useState("");
@@ -11109,8 +11161,12 @@ const ClientChatView = ({
   const [taskRef, setTaskRef] = useState(null);
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [pending, setPending] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [fullMap, setFullMap] = useState({});
   const textareaRef = useRef(null);
   const scrollRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const myId = String(currentUserProfile?.id || "");
 
@@ -11122,6 +11178,15 @@ const ClientChatView = ({
       lastMsgByClient[message.clientId] = message;
     }
   });
+
+  const previewText = (message) => {
+    if (!message) return "Sin mensajes";
+    if (message.text) return message.text;
+    const count = Array.isArray(message.attachments)
+      ? message.attachments.length
+      : 0;
+    return count > 0 ? `📎 ${count} archivo${count === 1 ? "" : "s"}` : "…";
+  };
 
   const term = search.trim().toLowerCase();
   const sortedClients = [...clients]
@@ -11169,6 +11234,39 @@ const ClientChatView = ({
     }
   }, [activeClient?.id, messages.length]);
 
+  // Trae el base64 de los adjuntos (los listados llegan solo con metadata).
+  useEffect(() => {
+    if (!activeClient || typeof fetchFullMessage !== "function") return;
+    let cancelled = false;
+    const need = messages.filter((message) => {
+      const atts = message.attachments || [];
+      if (atts.length === 0 || fullMap[message.id]) return false;
+      if (atts.some((a) => a.data)) return false;
+      return atts.some((a) => a.hasData);
+    });
+    if (need.length === 0) return;
+    (async () => {
+      const results = await Promise.all(
+        need.map(async (message) => [
+          message.id,
+          (await fetchFullMessage(message.id))?.attachments || [],
+        ]),
+      );
+      if (cancelled) return;
+      setFullMap((prev) => {
+        const next = { ...prev };
+        results.forEach(([id, atts]) => {
+          next[id] = atts;
+        });
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClient?.id, messages.length]);
+
   const handleTextChange = (event) => {
     const value = event.target.value;
     setText(value);
@@ -11199,9 +11297,37 @@ const ClientChatView = ({
     setTimeout(() => textareaRef.current && textareaRef.current.focus(), 0);
   };
 
+  const handleFiles = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of files) {
+        if (file.size > CHAT_MAX_FILE) {
+          alert(`"${file.name}" supera el máximo de 8 MB.`);
+          continue;
+        }
+        const data = await chatFileToBase64(file);
+        setPending((prev) => [
+          ...prev,
+          {
+            id: Math.random().toString(36).slice(2, 10),
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            data,
+          },
+        ]);
+      }
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const handleSubmit = async () => {
     const trimmed = text.trim();
-    if (!trimmed || submitting || !activeClient) return;
+    if ((!trimmed && pending.length === 0) || submitting || !activeClient) return;
     setSubmitting(true);
     try {
       await onSendMessage({
@@ -11209,23 +11335,74 @@ const ClientChatView = ({
         text: trimmed,
         mentionedIds,
         taskRef,
+        attachments: pending,
       });
       setText("");
       setMentionedIds([]);
       setTaskRef(null);
+      setPending([]);
       setMentionOpen(false);
     } finally {
       setSubmitting(false);
     }
   };
 
-  return (
-    <div className="flex h-[75vh] min-h-[500px] overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 fade-in">
-      {/* Lista de clientes */}
-      <aside
-        className={`${activeClient ? "hidden md:flex" : "flex"} w-full flex-col border-r border-slate-200 dark:border-slate-800 md:w-72 lg:w-80 shrink-0`}
+  const renderAttachment = (att) => {
+    const key = att.id || att.name;
+    if (att.data && isChatImage(att.type)) {
+      return (
+        <a
+          key={key}
+          href={att.data}
+          target="_blank"
+          rel="noreferrer"
+          className="block"
+        >
+          <img
+            src={att.data}
+            alt={att.name}
+            className="max-h-56 max-w-[260px] rounded-lg border border-slate-200 object-cover dark:border-white/10"
+          />
+        </a>
+      );
+    }
+    if (att.data && isChatVideo(att.type)) {
+      return (
+        <video
+          key={key}
+          src={att.data}
+          controls
+          className="max-h-60 max-w-[300px] rounded-lg border border-slate-200 dark:border-white/10"
+        />
+      );
+    }
+    return (
+      <a
+        key={key}
+        href={att.data || undefined}
+        download={att.name}
+        target="_blank"
+        rel="noreferrer"
+        className={`inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-white/10 dark:bg-slate-800 ${att.data ? "hover:bg-slate-50 dark:hover:bg-slate-700" : "opacity-60"}`}
       >
-        <div className="p-3 border-b border-slate-100 dark:border-slate-800">
+        <Icon name="Paperclip" size={14} className="shrink-0 text-slate-500" />
+        <span className="max-w-[180px] truncate font-semibold text-slate-700 dark:text-slate-200">
+          {att.name}
+        </span>
+        <span className="text-slate-400">
+          {att.data ? formatChatBytes(att.size) : "cargando…"}
+        </span>
+      </a>
+    );
+  };
+
+  return (
+    <div className="flex h-full min-h-0 overflow-hidden bg-white dark:bg-[#1a1d21] fade-in">
+      {/* Lista de clientes (canales) */}
+      <aside
+        className={`${activeClient ? "hidden md:flex" : "flex"} min-h-0 w-full flex-col border-r border-slate-200 dark:border-white/10 md:w-72 lg:w-80 shrink-0`}
+      >
+        <div className="p-3 border-b border-slate-100 dark:border-white/10">
           <div className="flex items-center gap-2 mb-3">
             <Icon
               name="MessageSquare"
@@ -11250,7 +11427,7 @@ const ClientChatView = ({
             />
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto custom-scroll">
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scroll pb-mobile-nav md:pb-0">
           {sortedClients.length === 0 && (
             <p className="p-4 text-center text-sm text-slate-400">
               No hay clientes.
@@ -11264,7 +11441,7 @@ const ClientChatView = ({
               <button
                 key={client.id}
                 onClick={() => onSelectClient(client)}
-                className={`flex w-full items-center gap-3 border-b border-slate-50 px-3 py-2.5 text-left transition-colors dark:border-slate-800/60 ${isActive ? "bg-blue-50 dark:bg-blue-500/10" : "hover:bg-slate-50 dark:hover:bg-slate-800/50"}`}
+                className={`flex w-full items-center gap-3 border-b border-slate-50 px-3 py-2.5 text-left transition-colors dark:border-white/5 ${isActive ? "bg-blue-50 dark:bg-blue-500/10" : "hover:bg-slate-50 dark:hover:bg-white/5"}`}
               >
                 {client.photo ? (
                   <img
@@ -11279,13 +11456,13 @@ const ClientChatView = ({
                 )}
                 <div className="min-w-0 flex-1">
                   <p
-                    className={`truncate text-sm font-bold ${isActive ? "text-blue-700 dark:text-blue-300" : "text-slate-700 dark:text-slate-200"}`}
+                    className={`truncate text-sm ${unread > 0 ? "font-black" : "font-bold"} ${isActive ? "text-blue-700 dark:text-blue-300" : "text-slate-700 dark:text-slate-200"}`}
                   >
                     {client.name || "Cliente"}
                   </p>
                   <p className="truncate text-xs text-slate-400">
                     {last
-                      ? `${last.authorName ? `${last.authorName}: ` : ""}${last.text}`
+                      ? `${last.authorName ? `${last.authorName}: ` : ""}${previewText(last)}`
                       : "Sin mensajes"}
                   </p>
                 </div>
@@ -11302,7 +11479,7 @@ const ClientChatView = ({
 
       {/* Hilo del cliente */}
       <section
-        className={`${activeClient ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col`}
+        className={`${activeClient ? "flex" : "hidden md:flex"} min-h-0 min-w-0 flex-1 flex-col`}
       >
         {!activeClient ? (
           <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
@@ -11313,7 +11490,7 @@ const ClientChatView = ({
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+            <div className="flex shrink-0 items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-white/10">
               <button
                 onClick={() => onSelectClient(null)}
                 aria-label="Volver a la lista"
@@ -11344,7 +11521,7 @@ const ClientChatView = ({
 
             <div
               ref={scrollRef}
-              className="flex-1 space-y-4 overflow-y-auto bg-slate-50/50 p-4 custom-scroll dark:bg-slate-950/30"
+              className="flex-1 min-h-0 overflow-y-auto py-3 custom-scroll bg-white dark:bg-[#1a1d21]"
             >
               {messages.length === 0 && (
                 <div className="mt-8 text-center">
@@ -11358,182 +11535,267 @@ const ClientChatView = ({
                   </p>
                 </div>
               )}
-              {messages.map((message) => {
+              {messages.map((message, index) => {
                 const mine = myId && String(message.authorId || "") === myId;
+                const prev = messages[index - 1];
+                const grouped =
+                  prev &&
+                  String(prev.authorId || "") === String(message.authorId || "") &&
+                  (prev.authorName || "") === (message.authorName || "") &&
+                  message.createdAt &&
+                  prev.createdAt &&
+                  new Date(message.createdAt) - new Date(prev.createdAt) <
+                    5 * 60 * 1000;
+                const atts = fullMap[message.id] || message.attachments || [];
                 return (
-                  <div key={message.id} className="group flex gap-3">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[10px] font-black text-white">
-                      {(message.authorName || "U").slice(0, 2).toUpperCase()}
+                  <div
+                    key={message.id}
+                    className={`group flex gap-3 px-4 ${grouped ? "mt-0.5 py-0.5" : "mt-3 py-0.5"} hover:bg-slate-50 dark:hover:bg-white/5`}
+                  >
+                    <div className="w-9 shrink-0">
+                      {grouped ? (
+                        <span className="hidden pt-1 text-right text-[10px] text-slate-400 group-hover:block">
+                          {chatShortTime(message.createdAt)}
+                        </span>
+                      ) : (
+                        <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-[#555552] text-[11px] font-black text-white">
+                          {(message.authorName || "U").slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                          {message.authorName || "Usuario"}
-                        </span>
-                        <span className="text-xs text-slate-400">
-                          {relativeTime(message.createdAt)}
-                        </span>
-                        {(mine || canModerate) && (
-                          <button
-                            onClick={() => onDeleteMessage(message)}
-                            aria-label="Eliminar mensaje"
-                            className="ml-auto text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
-                          >
-                            <Icon name="Trash2" size={13} />
-                          </button>
-                        )}
-                      </div>
-                      <div className="mt-1 inline-block max-w-full rounded-lg rounded-tl-none border border-slate-200 bg-white px-3.5 py-2.5 dark:border-white/10 dark:bg-slate-800">
+                      {!grouped && (
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-sm font-black text-slate-800 dark:text-slate-100">
+                            {message.authorName || "Usuario"}
+                          </span>
+                          <span className="text-[11px] text-slate-400">
+                            {relativeTime(message.createdAt)}
+                          </span>
+                        </div>
+                      )}
+                      {message.text && (
                         <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-200">
                           {renderChatText(message.text)}
                         </p>
-                        {message.taskRef?.taskId && (
-                          <button
-                            onClick={() => onOpenTask(message.taskRef)}
-                            className={`mt-2 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
-                          >
-                            <Icon name="Paperclip" size={11} className="shrink-0" />
-                            <span className="truncate">
-                              {message.taskRef.taskTitle || "Tarea"}
-                            </span>
-                            <span className="opacity-70">
-                              · {CHAT_TASK_LABELS[message.taskRef.taskType] || ""}
-                            </span>
-                          </button>
-                        )}
-                      </div>
+                      )}
+                      {atts.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-2">
+                          {atts.map((att) => renderAttachment(att))}
+                        </div>
+                      )}
+                      {message.taskRef?.taskId && (
+                        <button
+                          onClick={() => onOpenTask(message.taskRef)}
+                          className={`mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
+                        >
+                          <Icon name="Paperclip" size={11} className="shrink-0" />
+                          <span className="truncate">
+                            {message.taskRef.taskTitle || "Tarea"}
+                          </span>
+                          <span className="opacity-70">
+                            · {CHAT_TASK_LABELS[message.taskRef.taskType] || ""}
+                          </span>
+                        </button>
+                      )}
                     </div>
+                    {(mine || canModerate) && (
+                      <button
+                        onClick={() => onDeleteMessage(message)}
+                        aria-label="Eliminar mensaje"
+                        className="self-start text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+                      >
+                        <Icon name="Trash2" size={13} />
+                      </button>
+                    )}
                   </div>
                 );
               })}
             </div>
 
-            {/* Composer */}
-            <div className="border-t border-slate-100 p-3 dark:border-slate-800">
-              {taskRef && (
-                <div className="mb-2 flex items-center gap-2">
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
-                  >
-                    <Icon name="Paperclip" size={11} />
-                    <span className="max-w-[220px] truncate">{taskRef.taskTitle}</span>
-                    <button
-                      onClick={() => setTaskRef(null)}
-                      aria-label="Quitar tarea"
-                      className="opacity-70 hover:opacity-100"
+            {/* Composer estilo Slack */}
+            <div className="shrink-0 border-t border-slate-200 p-3 pb-mobile-nav md:pb-3 dark:border-white/10">
+              {(taskRef || pending.length > 0) && (
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  {taskRef && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
                     >
-                      <Icon name="X" size={11} />
-                    </button>
-                  </span>
+                      <Icon name="Paperclip" size={11} />
+                      <span className="max-w-[220px] truncate">
+                        {taskRef.taskTitle}
+                      </span>
+                      <button
+                        onClick={() => setTaskRef(null)}
+                        aria-label="Quitar tarea"
+                        className="opacity-70 hover:opacity-100"
+                      >
+                        <Icon name="X" size={11} />
+                      </button>
+                    </span>
+                  )}
+                  {pending.map((att) => (
+                    <div key={att.id} className="relative">
+                      {isChatImage(att.type) ? (
+                        <img
+                          src={att.data}
+                          alt={att.name}
+                          className="h-16 w-16 rounded-lg border border-slate-200 object-cover dark:border-white/10"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-36 items-center gap-1.5 rounded-lg border border-slate-200 px-2 dark:border-white/10">
+                          <Icon
+                            name="Paperclip"
+                            size={14}
+                            className="shrink-0 text-slate-500"
+                          />
+                          <span className="truncate text-[11px] text-slate-600 dark:text-slate-300">
+                            {att.name}
+                          </span>
+                        </div>
+                      )}
+                      <button
+                        onClick={() =>
+                          setPending((prev) =>
+                            prev.filter((item) => item.id !== att.id),
+                          )
+                        }
+                        aria-label="Quitar archivo"
+                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-white"
+                      >
+                        <Icon name="X" size={11} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
-              <div className="flex items-end gap-2">
-                <div className="relative flex-1">
-                  <textarea
-                    ref={textareaRef}
-                    value={text}
-                    onChange={handleTextChange}
-                    onKeyDown={(event) => {
-                      if (mentionOpen && event.key === "Escape") {
-                        setMentionOpen(false);
-                        event.preventDefault();
-                        return;
-                      }
-                      if (
-                        event.key === "Enter" &&
-                        (event.metaKey || event.ctrlKey)
-                      ) {
-                        event.preventDefault();
-                        handleSubmit();
-                      }
-                    }}
-                    placeholder="Escribe un mensaje o menciona con @"
-                    rows={text ? 2 : 1}
-                    className="w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                  />
-                  {mentionOpen && mentionSuggestions.length > 0 && (
-                    <div className="absolute bottom-full left-0 z-30 mb-1 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
-                      <p className="px-3 pb-1 pt-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                        Mencionar
+              <div className="relative rounded-xl border border-slate-300 bg-white focus-within:border-blue-500 dark:border-white/15 dark:bg-[#222529]">
+                {mentionOpen && mentionSuggestions.length > 0 && (
+                  <div className="absolute bottom-full left-0 z-30 mb-1 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                    <p className="px-3 pb-1 pt-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Mencionar
+                    </p>
+                    {mentionSuggestions.map((person) => (
+                      <button
+                        key={person.id}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          insertMention(person);
+                        }}
+                        className="flex w-full items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
+                      >
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white">
+                          {person.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <span className="flex-1 text-left text-sm font-semibold text-slate-700 dark:text-slate-200">
+                          {person.name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {taskPickerOpen && (
+                  <div className="absolute bottom-full left-0 z-30 mb-1 max-h-64 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800">
+                    <p className="px-3 pb-1 pt-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Enlazar tarea del cliente
+                    </p>
+                    {clientTasks.length === 0 && (
+                      <p className="px-3 py-2 text-xs text-slate-400">
+                        Este cliente no tiene tareas.
                       </p>
-                      {mentionSuggestions.map((person) => (
-                        <button
-                          key={person.id}
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            insertMention(person);
-                          }}
-                          className="flex w-full items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
+                    )}
+                    {clientTasks.map((task) => (
+                      <button
+                        key={`${task.type}-${task.id}`}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setTaskRef({
+                            taskId: task.id,
+                            taskType: task.type,
+                            taskTitle: task.title || "Tarea",
+                          });
+                          setTaskPickerOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
+                      >
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black ${CHAT_TASK_CHIP_STYLES[task.type]}`}
                         >
-                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white">
-                            {person.name.slice(0, 2).toUpperCase()}
-                          </div>
-                          <span className="flex-1 text-left text-sm font-semibold text-slate-700 dark:text-slate-200">
-                            {person.name}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {taskPickerOpen && (
-                    <div className="absolute bottom-full left-0 z-30 mb-1 max-h-64 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800">
-                      <p className="px-3 pb-1 pt-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                        Enlazar tarea del cliente
-                      </p>
-                      {clientTasks.length === 0 && (
-                        <p className="px-3 py-2 text-xs text-slate-400">
-                          Este cliente no tiene tareas.
-                        </p>
-                      )}
-                      {clientTasks.map((task) => (
-                        <button
-                          key={`${task.type}-${task.id}`}
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            setTaskRef({
-                              taskId: task.id,
-                              taskType: task.type,
-                              taskTitle: task.title || "Tarea",
-                            });
-                            setTaskPickerOpen(false);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
-                        >
-                          <span
-                            className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black ${CHAT_TASK_CHIP_STYLES[task.type]}`}
-                          >
-                            {CHAT_TASK_LABELS[task.type]}
-                          </span>
-                          <span className="flex-1 truncate text-sm text-slate-700 dark:text-slate-200">
-                            {task.title || "(sin título)"}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => {
-                    setTaskPickerOpen((open) => !open);
-                    setMentionOpen(false);
+                          {CHAT_TASK_LABELS[task.type]}
+                        </span>
+                        <span className="flex-1 truncate text-sm text-slate-700 dark:text-slate-200">
+                          {task.title || "(sin título)"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <textarea
+                  ref={textareaRef}
+                  value={text}
+                  onChange={handleTextChange}
+                  onKeyDown={(event) => {
+                    if (mentionOpen && event.key === "Escape") {
+                      setMentionOpen(false);
+                      event.preventDefault();
+                      return;
+                    }
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      handleSubmit();
+                    }
                   }}
-                  aria-label="Enlazar tarea"
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors ${taskRef || taskPickerOpen ? "border-blue-300 bg-blue-50 text-blue-600 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-400" : "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"}`}
-                >
-                  <Icon name="Paperclip" size={18} />
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting || !text.trim()}
-                  aria-label="Enviar mensaje"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
-                >
-                  <Icon
-                    name={submitting ? "Loader2" : "Send"}
-                    size={18}
-                    className={submitting ? "animate-spin" : ""}
+                  placeholder={`Mensaje para ${activeClient.name || "el cliente"}`}
+                  rows={text ? 2 : 1}
+                  className="w-full resize-none bg-transparent px-3.5 pt-2.5 text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200"
+                />
+                <div className="flex items-center gap-1 px-2 pb-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+                    className="hidden"
+                    onChange={(event) => handleFiles(event.target.files)}
                   />
-                </button>
+                  <button
+                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                    aria-label="Adjuntar archivo"
+                    disabled={uploading}
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-white/10"
+                  >
+                    <Icon
+                      name={uploading ? "Loader2" : "Plus"}
+                      size={18}
+                      className={uploading ? "animate-spin" : ""}
+                    />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTaskPickerOpen((open) => !open);
+                      setMentionOpen(false);
+                    }}
+                    aria-label="Enlazar tarea"
+                    className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${taskRef || taskPickerOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`}
+                  >
+                    <Icon name="Paperclip" size={17} />
+                  </button>
+                  <span className="ml-auto text-[10px] text-slate-400 hidden sm:block">
+                    Enter para enviar · Shift+Enter salto de línea
+                  </span>
+                  <button
+                    onClick={handleSubmit}
+                    disabled={submitting || (!text.trim() && pending.length === 0)}
+                    aria-label="Enviar mensaje"
+                    className="ml-2 flex h-8 w-8 items-center justify-center rounded-md bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
+                  >
+                    <Icon
+                      name={submitting ? "Loader2" : "Send"}
+                      size={16}
+                      className={submitting ? "animate-spin" : ""}
+                    />
+                  </button>
+                </div>
               </div>
             </div>
           </>
