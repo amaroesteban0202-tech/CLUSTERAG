@@ -2179,9 +2179,13 @@ function App() {
           consumeAppUrl(result?.url || "").catch(() => {});
         })
         .catch(() => {});
+      // Al volver el foco (en web, "resume" se dispara al cambiar de pestaña),
+      // NO redirigir a Inicio si el usuario ya estaba autenticado. Solo tratamos
+      // esto como un inicio de sesión nuevo cuando antes no había sesión.
+      const wasSignedIn = Boolean(auth.currentUser?.email);
       completeGoogleRedirectIfNeeded(auth)
         .then((completed) => {
-          if (completed) {
+          if (completed && !wasSignedIn) {
             setUser(auth.currentUser);
             setView("dashboard");
             localStorage.setItem("cluster_os_view", "dashboard");

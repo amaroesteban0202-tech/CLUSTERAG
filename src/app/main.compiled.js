@@ -1394,8 +1394,9 @@ function App() {
         });
       }).catch(() => {
       });
+      const wasSignedIn = Boolean(auth.currentUser?.email);
       completeGoogleRedirectIfNeeded(auth).then((completed) => {
-        if (completed) {
+        if (completed && !wasSignedIn) {
           setUser(auth.currentUser);
           setView("dashboard");
           localStorage.setItem("cluster_os_view", "dashboard");
