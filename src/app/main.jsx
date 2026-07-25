@@ -11960,7 +11960,7 @@ const ClientChatView = ({
                 return (
                   <div
                     key={message.id}
-                    className={`group flex px-4 ${grouped ? "mt-0.5" : "mt-3"} ${mine ? "justify-end" : "justify-start"}`}
+                    className={`group flex px-4 ${grouped ? "mt-1" : "mt-4"} ${mine ? "justify-end" : "justify-start"}`}
                   >
                     {!mine && (
                       <div className="mr-2 w-8 shrink-0 self-end">
@@ -11992,7 +11992,9 @@ const ClientChatView = ({
                           </button>
                         )}
                         {reactionPickerFor === message.id && (
-                          <div className="absolute right-0 top-8 z-40 flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                          <div
+                            className={`absolute bottom-full z-40 mb-2 flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-2xl dark:border-slate-600 dark:bg-slate-800 ${mine ? "right-0" : "left-0"}`}
+                          >
                             {CHAT_REACTION_EMOJIS.map((emoji) => (
                               <button
                                 key={emoji}
@@ -12001,7 +12003,7 @@ const ClientChatView = ({
                                   if (onReact) onReact(message, emoji);
                                   setReactionPickerFor(null);
                                 }}
-                                className="rounded-full p-1 text-lg leading-none transition-transform hover:scale-125"
+                                className="flex h-9 w-9 items-center justify-center rounded-full text-xl leading-none transition-transform hover:scale-125 hover:bg-slate-100 dark:hover:bg-slate-700"
                               >
                                 {emoji}
                               </button>
@@ -12009,7 +12011,9 @@ const ClientChatView = ({
                           </div>
                         )}
                         {menuFor === message.id && (
-                          <div className="absolute right-0 top-7 z-40 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-slate-700 shadow-xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                          <div
+                            className={`absolute top-7 z-40 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-slate-700 shadow-2xl dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 ${mine ? "right-0" : "left-0"}`}
+                          >
                             <button
                               onMouseDown={(event) => {
                                 event.preventDefault();
