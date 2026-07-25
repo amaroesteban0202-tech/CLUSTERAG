@@ -76,6 +76,8 @@ import {
   Image as ImageIcon,
   Stop,
   FilePlus,
+  PushPin as PinIcon,
+  ArrowBendUpLeft as ReplyIcon,
 } from "@phosphor-icons/react";
 import {
   signInAnonymously,
@@ -215,6 +217,8 @@ const IconsMap = {
   Image: ImageIcon,
   Stop,
   FilePlus,
+  Pin: PinIcon,
+  Reply: ReplyIcon,
 };
 
 const Icon = ({ name, size = 18, className = "", ...props }) => {
@@ -1562,6 +1566,8 @@ function App() {
   const [clientChats, setClientChats] = useState([]);
   const [chatReads, setChatReads] = useState([]);
   const [chatHidden, setChatHidden] = useState([]);
+  const [chatReactions, setChatReactions] = useState([]);
+  const [chatPins, setChatPins] = useState([]);
   const [chatDirectory, setChatDirectory] = useState([]);
 
   useEffect(() => {
@@ -2332,6 +2338,28 @@ function App() {
         dataCollection("chat_hidden"),
         (snapshot) =>
           setChatHidden(
+            snapshot.docs.map((docItem) => ({
+              id: docItem.id,
+              ...docItem.data(),
+            })),
+          ),
+        errHandler,
+      ),
+      onSnapshot(
+        dataCollection("chat_reactions"),
+        (snapshot) =>
+          setChatReactions(
+            snapshot.docs.map((docItem) => ({
+              id: docItem.id,
+              ...docItem.data(),
+            })),
+          ),
+        errHandler,
+      ),
+      onSnapshot(
+        dataCollection("chat_pins"),
+        (snapshot) =>
+          setChatPins(
             snapshot.docs.map((docItem) => ({
               id: docItem.id,
               ...docItem.data(),
@@ -4594,6 +4622,8 @@ function App() {
     mentionedIds = [],
     taskRef = null,
     attachments = [],
+    replyTo = null,
+    forwarded = false,
   }) => {
     const trimmed = (text || "").trim();
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
@@ -4609,6 +4639,14 @@ function App() {
       authorEmail: authEmail || "",
       mentionedIds,
       attachments: safeAttachments,
+      forwarded: Boolean(forwarded),
+      replyTo: replyTo
+        ? {
+            id: replyTo.id || "",
+            authorName: replyTo.authorName || "",
+            text: (replyTo.text || "").slice(0, 140),
+          }
+        : null,
       taskRef: taskRef
         ? {
             taskId: taskRef.taskId || "",
@@ -4697,6 +4735,79 @@ function App() {
     } catch (error) {
       console.warn("[chat:hide]", error.message);
     }
+  };
+
+  // Reaccionar (1 emoji por usuario y mensaje). Volver a tocar el mismo lo quita.
+  const toggleChatReaction = async (message, emoji) => {
+    if (!message?.id || !emoji) return;
+    const uid = currentUserProfile?.id || authEmail;
+    if (!uid) return;
+    const recordId = `${message.id}__${uid}`;
+    const existing = chatReactions.find((item) => item.id === recordId);
+    try {
+      if (existing && existing.emoji === emoji) {
+        await deleteDoc(dataDoc("chat_reactions", recordId));
+      } else {
+        await setDoc(
+          dataDoc("chat_reactions", recordId),
+          {
+            messageId: String(message.id),
+            userId: String(uid),
+            userName:
+              currentUserProfile?.name ||
+              (authEmail ? authEmail.split("@")[0] : "Usuario"),
+            clientId: message.clientId || "",
+            emoji,
+          },
+          { merge: false },
+        );
+      }
+    } catch (error) {
+      console.warn("[chat:react]", error.message);
+    }
+  };
+
+  // Fijar / desfijar un mensaje en el hilo (visible para todos).
+  const toggleChatPin = async (message) => {
+    if (!message?.id || !message.clientId) return;
+    const recordId = `${message.clientId}__${message.id}`;
+    const existing = chatPins.find((item) => item.id === recordId);
+    try {
+      if (existing) {
+        await deleteDoc(dataDoc("chat_pins", recordId));
+      } else {
+        await setDoc(
+          dataDoc("chat_pins", recordId),
+          {
+            clientId: message.clientId,
+            messageId: String(message.id),
+            pinnedByName:
+              currentUserProfile?.name ||
+              (authEmail ? authEmail.split("@")[0] : "Usuario"),
+            pinnedAt: nowIso(),
+          },
+          { merge: true },
+        );
+      }
+    } catch (error) {
+      console.warn("[chat:pin]", error.message);
+    }
+  };
+
+  // Reenviar un mensaje a otro cliente (copia texto y adjuntos).
+  const forwardChatMessage = async (message, targetClientId) => {
+    if (!message?.id || !targetClientId) return;
+    let attachments = Array.isArray(message.attachments) ? message.attachments : [];
+    if (attachments.some((a) => a && a.hasData && !a.data)) {
+      const full = await fetchClientChatMessage(message.id);
+      if (full?.attachments) attachments = full.attachments;
+    }
+    await addClientChatMessage({
+      clientId: targetClientId,
+      text: message.text || "",
+      attachments,
+      forwarded: true,
+    });
   };
 
   // Los listados llegan sin el base64 de los adjuntos; se pide el mensaje
@@ -5748,6 +5859,12 @@ function App() {
               onDeleteForEveryone={deleteChatForEveryone}
               onDeleteForMe={hideChatForMe}
               hiddenIds={chatHiddenIds}
+              reactions={chatReactions}
+              pins={chatPins}
+              onReact={toggleChatReaction}
+              onPin={toggleChatPin}
+              onForward={forwardChatMessage}
+              currentUserId={currentUserProfile?.id || authEmail || ""}
               currentUserProfile={currentUserProfile}
               canModerate={userHasPermission(
                 currentUserProfile,
@@ -11230,6 +11347,7 @@ const renderChatText = (text = "", onColored = false) =>
       ),
     );
 
+const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "✅"];
 const CHAT_MAX_FILE = 8 * 1024 * 1024; // 8 MB por archivo
 const chatFileToBase64 = (file) =>
   new Promise((resolve, reject) => {
@@ -11270,6 +11388,12 @@ const ClientChatView = ({
   onDeleteForEveryone,
   onDeleteForMe,
   hiddenIds,
+  reactions = [],
+  pins = [],
+  onReact,
+  onPin,
+  onForward,
+  currentUserId = "",
   currentUserProfile,
   canModerate = false,
   mentionables = [],
@@ -11281,6 +11405,10 @@ const ClientChatView = ({
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [menuFor, setMenuFor] = useState(null);
+  const [reactionPickerFor, setReactionPickerFor] = useState(null);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [forwardTarget, setForwardTarget] = useState(null);
+  const [forwardSearch, setForwardSearch] = useState("");
   const [text, setText] = useState("");
   const [mentionedIds, setMentionedIds] = useState([]);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -11342,6 +11470,26 @@ const ClientChatView = ({
         )
         .sort((a, b) => ((a.createdAt || "") > (b.createdAt || "") ? 1 : -1))
     : [];
+
+  // Reacciones agrupadas por mensaje: { messageId: { emoji: {count, mine, names} } }
+  const reactionsByMessage = {};
+  reactions.forEach((reaction) => {
+    if (!reaction.messageId || !reaction.emoji) return;
+    const byEmoji = (reactionsByMessage[reaction.messageId] ||= {});
+    const entry = (byEmoji[reaction.emoji] ||= { count: 0, mine: false, names: [] });
+    entry.count += 1;
+    if (reaction.userName) entry.names.push(reaction.userName);
+    if (String(reaction.userId || "") === String(currentUserId)) entry.mine = true;
+  });
+
+  const pinnedIds = new Set(
+    pins
+      .filter((pin) => activeClient && pin.clientId === activeClient.id)
+      .map((pin) => String(pin.messageId)),
+  );
+  const pinnedMessages = messages.filter(
+    (message) => pinnedIds.has(String(message.id)) && !message.deleted,
+  );
 
   const clientTasks = activeClient
     ? [
@@ -11554,11 +11702,19 @@ const ClientChatView = ({
         mentionedIds,
         taskRef,
         attachments: pending,
+        replyTo: replyingTo
+          ? {
+              id: replyingTo.id,
+              authorName: replyingTo.authorName,
+              text: replyingTo.text,
+            }
+          : null,
       });
       setText("");
       setMentionedIds([]);
       setTaskRef(null);
       setPending([]);
+      setReplyingTo(null);
       setMentionOpen(false);
     } finally {
       setSubmitting(false);
@@ -11742,6 +11898,37 @@ const ClientChatView = ({
               </div>
             </div>
 
+            {pinnedMessages.length > 0 && (
+              <div className="shrink-0 space-y-1 border-b border-slate-100 bg-amber-50/60 px-4 py-2 dark:border-white/10 dark:bg-amber-500/5">
+                {pinnedMessages.slice(-3).map((pinned) => (
+                  <div key={pinned.id} className="flex items-center gap-2 text-xs">
+                    <Icon
+                      name="Pin"
+                      size={12}
+                      className="shrink-0 text-amber-600 dark:text-amber-400"
+                    />
+                    <span className="shrink-0 font-bold text-slate-600 dark:text-slate-300">
+                      {pinned.authorName}:
+                    </span>
+                    <span className="truncate text-slate-500 dark:text-slate-400">
+                      {pinned.text ||
+                        (Array.isArray(pinned.attachments) &&
+                        pinned.attachments.length
+                          ? "📎 Adjunto"
+                          : "")}
+                    </span>
+                    <button
+                      onClick={() => onPin && onPin(pinned)}
+                      aria-label="Desfijar"
+                      className="ml-auto shrink-0 text-slate-400 hover:text-red-500"
+                    >
+                      <Icon name="X" size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div
               ref={scrollRef}
               className="flex-1 min-h-0 overflow-y-auto py-3 custom-scroll bg-white dark:bg-[#1a1d21]"
@@ -11804,8 +11991,59 @@ const ClientChatView = ({
                             <Icon name="ChevronDown" size={14} />
                           </button>
                         )}
+                        {reactionPickerFor === message.id && (
+                          <div className="absolute right-0 top-8 z-40 flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                            {CHAT_REACTION_EMOJIS.map((emoji) => (
+                              <button
+                                key={emoji}
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  if (onReact) onReact(message, emoji);
+                                  setReactionPickerFor(null);
+                                }}
+                                className="rounded-full p-1 text-lg leading-none transition-transform hover:scale-125"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         {menuFor === message.id && (
-                          <div className="absolute right-0 top-7 z-30 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-slate-700 shadow-xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                          <div className="absolute right-0 top-7 z-40 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-slate-700 shadow-xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                setMenuFor(null);
+                                setReplyingTo(message);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="Reply" size={14} className="text-slate-500" />
+                              Responder
+                            </button>
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                setMenuFor(null);
+                                setReactionPickerFor(message.id);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="Smile" size={14} className="text-slate-500" />
+                              Reaccionar
+                            </button>
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                setMenuFor(null);
+                                setForwardTarget(message);
+                                setForwardSearch("");
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="Send" size={14} className="text-slate-500" />
+                              Reenviar
+                            </button>
                             {message.text && (
                               <button
                                 onMouseDown={(event) => {
@@ -11825,6 +12063,17 @@ const ClientChatView = ({
                                 Copiar
                               </button>
                             )}
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                setMenuFor(null);
+                                if (onPin) onPin(message);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="Pin" size={14} className="text-slate-500" />
+                              {pinnedIds.has(String(message.id)) ? "Desfijar" : "Fijar"}
+                            </button>
                             {mine && (
                               <button
                                 onMouseDown={(event) => {
@@ -11848,6 +12097,25 @@ const ClientChatView = ({
                           </p>
                         ) : (
                           <>
+                            {message.forwarded && (
+                              <p
+                                className={`mb-1 flex items-center gap-1 text-[11px] italic ${mine ? "text-white/70" : "text-slate-400"}`}
+                              >
+                                <Icon name="Send" size={10} /> Reenviado
+                              </p>
+                            )}
+                            {message.replyTo && (
+                              <div
+                                className={`mb-1 rounded-md border-l-2 px-2 py-1 text-xs ${mine ? "border-white/60 bg-black/15" : "border-blue-400 bg-black/5 dark:bg-white/5"}`}
+                              >
+                                <p className="font-bold opacity-80">
+                                  {message.replyTo.authorName || "Mensaje"}
+                                </p>
+                                <p className="truncate opacity-70">
+                                  {message.replyTo.text}
+                                </p>
+                              </div>
+                            )}
                             {message.text && (
                               <p className="whitespace-pre-wrap break-words pr-5 text-sm leading-relaxed">
                                 {renderChatText(message.text, mine)}
@@ -11885,20 +12153,73 @@ const ClientChatView = ({
                           {chatShortTime(message.createdAt)}
                         </span>
                       </div>
+                      {reactionsByMessage[message.id] &&
+                        Object.keys(reactionsByMessage[message.id]).length > 0 && (
+                          <div
+                            className={`mt-1 flex flex-wrap gap-1 ${mine ? "justify-end" : ""}`}
+                          >
+                            {Object.entries(reactionsByMessage[message.id]).map(
+                              ([emoji, info]) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => onReact && onReact(message, emoji)}
+                                  title={info.names.join(", ")}
+                                  className={`flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] ${info.mine ? "border-blue-300 bg-blue-50 dark:border-blue-500/40 dark:bg-blue-500/10" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"}`}
+                                >
+                                  <span>{emoji}</span>
+                                  <span className="font-semibold text-slate-600 dark:text-slate-300">
+                                    {info.count}
+                                  </span>
+                                </button>
+                              ),
+                            )}
+                          </div>
+                        )}
                     </div>
                   </div>
                 );
               })}
-              {menuFor && (
+              {(menuFor || reactionPickerFor) && (
                 <div
-                  className="fixed inset-0 z-20"
-                  onClick={() => setMenuFor(null)}
+                  className="fixed inset-0 z-30"
+                  onClick={() => {
+                    setMenuFor(null);
+                    setReactionPickerFor(null);
+                  }}
                 />
               )}
             </div>
 
             {/* Composer estilo Slack */}
             <div className="shrink-0 border-t border-slate-200 p-3 pb-mobile-nav md:pb-3 dark:border-white/10">
+              {replyingTo && (
+                <div className="mb-2 flex items-center gap-2 rounded-lg border-l-4 border-blue-500 bg-slate-50 px-3 py-2 dark:bg-slate-800">
+                  <Icon
+                    name="Reply"
+                    size={14}
+                    className="shrink-0 text-blue-500"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                      Respondiendo a {replyingTo.authorName || "mensaje"}
+                    </p>
+                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                      {replyingTo.text ||
+                        (Array.isArray(replyingTo.attachments) &&
+                        replyingTo.attachments.length
+                          ? "📎 Adjunto"
+                          : "")}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setReplyingTo(null)}
+                    aria-label="Cancelar respuesta"
+                    className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <Icon name="X" size={14} />
+                  </button>
+                </div>
+              )}
               {(taskRef || pending.length > 0) && (
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   {taskRef && (
@@ -12255,6 +12576,67 @@ const ClientChatView = ({
               >
                 Cancelar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reenviar a otro cliente */}
+      {forwardTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setForwardTarget(null)}
+        >
+          <div
+            className="flex max-h-[70vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-white/10">
+              <h3 className="text-base font-black text-slate-800 dark:text-slate-100">
+                Reenviar a…
+              </h3>
+              <button
+                onClick={() => setForwardTarget(null)}
+                aria-label="Cerrar"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <Icon name="X" size={18} />
+              </button>
+            </div>
+            <div className="p-3">
+              <input
+                value={forwardSearch}
+                onChange={(event) => setForwardSearch(event.target.value)}
+                placeholder="Buscar cliente..."
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scroll">
+              {clients
+                .filter(
+                  (client) =>
+                    !forwardSearch.trim() ||
+                    (client.name || "")
+                      .toLowerCase()
+                      .includes(forwardSearch.trim().toLowerCase()),
+                )
+                .map((client) => (
+                  <button
+                    key={client.id}
+                    onClick={() => {
+                      if (onForward) onForward(forwardTarget, client.id);
+                      setForwardTarget(null);
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#555552] text-[10px] font-black text-white">
+                      {(client.name || "C").slice(0, 2).toUpperCase()}
+                    </div>
+                    <span className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      {client.name || "Cliente"}
+                    </span>
+                  </button>
+                ))}
             </div>
           </div>
         </div>
