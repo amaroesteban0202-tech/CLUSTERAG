@@ -172,6 +172,7 @@ var apiFetch = async (path, options = {}) => {
 };
 
 // src/app/main.jsx
+import { createPortal } from "react-dom";
 var IconsMap = {
   LayoutDashboard,
   Users,
@@ -9381,52 +9382,55 @@ var ClientChatView = ({
         callPicker.mode === "add" ? "Invitar" : "Iniciar llamada"
       ))
     )
-  ), activeCall && /* @__PURE__ */ React.createElement("div", { className: "fixed inset-0 z-40 flex flex-col bg-slate-900" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2.5" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2 text-white" }, /* @__PURE__ */ React.createElement(
-    Icon,
-    {
-      name: "VideoCamera",
-      size: 16,
-      className: "shrink-0 text-emerald-400"
-    }
-  ), /* @__PURE__ */ React.createElement("span", { className: "truncate text-sm font-bold" }, "Llamada \xB7 ", activeClient?.name || "Cliente")), /* @__PURE__ */ React.createElement("div", { className: "flex shrink-0 items-center gap-2" }, /* @__PURE__ */ React.createElement(
-    "button",
-    {
-      onClick: () => {
-        setCallSelected([]);
-        setCallSearch("");
-        setCallPicker({ mode: "add", roomId: activeCall.roomId });
+  ), activeCall && createPortal(
+    /* @__PURE__ */ React.createElement("div", { className: "fixed inset-0 z-[70] flex flex-col bg-slate-900" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2.5" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2 text-white" }, /* @__PURE__ */ React.createElement(
+      Icon,
+      {
+        name: "VideoCamera",
+        size: 16,
+        className: "shrink-0 text-emerald-400"
+      }
+    ), /* @__PURE__ */ React.createElement("span", { className: "truncate text-sm font-bold" }, "Llamada \xB7 ", activeClient?.name || "Cliente")), /* @__PURE__ */ React.createElement("div", { className: "flex shrink-0 items-center gap-2" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => {
+          setCallSelected([]);
+          setCallSearch("");
+          setCallPicker({ mode: "add", roomId: activeCall.roomId });
+        },
+        className: "flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20"
       },
-      className: "flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20"
-    },
-    /* @__PURE__ */ React.createElement(Icon, { name: "UserPlus", size: 14 }),
-    " Agregar personas"
-  ), /* @__PURE__ */ React.createElement(
-    "button",
-    {
-      onClick: () => {
-        if (activeCall.isHost && onEndCall) {
-          onEndCall(activeCall.messageId, {
-            roomId: activeCall.roomId,
-            provider: "jitsi"
-          });
-        }
-        setActiveCall(null);
+      /* @__PURE__ */ React.createElement(Icon, { name: "UserPlus", size: 14 }),
+      " Agregar personas"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => {
+          if (activeCall.isHost && onEndCall) {
+            onEndCall(activeCall.messageId, {
+              roomId: activeCall.roomId,
+              provider: "jitsi"
+            });
+          }
+          setActiveCall(null);
+        },
+        className: "flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700"
       },
-      className: "flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700"
-    },
-    /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 14 }),
-    activeCall.isHost ? "Finalizar llamada" : "Salir"
-  ))), /* @__PURE__ */ React.createElement(
-    "iframe",
-    {
-      title: "Videollamada",
-      src: `https://meet.jit.si/${activeCall.roomId}#config.prejoinPageEnabled=false&userInfo.displayName=${encodeURIComponent(
-        `"${currentUserProfile?.name || "Usuario"}"`
-      )}`,
-      allow: "camera; microphone; fullscreen; display-capture; autoplay; clipboard-write",
-      className: "min-h-0 w-full flex-1 border-0"
-    }
-  )));
+      /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 14 }),
+      activeCall.isHost ? "Finalizar llamada" : "Salir"
+    ))), /* @__PURE__ */ React.createElement(
+      "iframe",
+      {
+        title: "Videollamada",
+        src: `https://meet.jit.si/${activeCall.roomId}#config.prejoinPageEnabled=false&userInfo.displayName=${encodeURIComponent(
+          `"${currentUserProfile?.name || "Usuario"}"`
+        )}`,
+        allow: "camera; microphone; fullscreen; display-capture; autoplay; clipboard-write",
+        className: "min-h-0 w-full flex-1 border-0"
+      }
+    )),
+    document.body
+  ));
 };
 var CalendarGrid = ({
   events,

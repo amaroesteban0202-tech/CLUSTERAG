@@ -141,6 +141,7 @@ import {
   rankPendingEditingTasks,
 } from "/src/app/utils/kpi.js";
 import { apiFetch } from "./lib/backend-api.js";
+import { createPortal } from "react-dom";
 
 void TAILWIND_SAFELIST;
 
@@ -12889,9 +12890,11 @@ const ClientChatView = ({
         </div>
       )}
 
-      {/* Llamada embebida (Jitsi) */}
-      {activeCall && (
-        <div className="fixed inset-0 z-40 flex flex-col bg-slate-900">
+      {/* Llamada embebida (Jitsi) — portal a body para ocupar toda la ventana
+          sin que ningún contenedor con transform la recorte */}
+      {activeCall &&
+        createPortal(
+          <div className="fixed inset-0 z-[70] flex flex-col bg-slate-900">
           <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2.5">
             <div className="flex min-w-0 items-center gap-2 text-white">
               <Icon
@@ -12939,8 +12942,9 @@ const ClientChatView = ({
             allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write"
             className="min-h-0 w-full flex-1 border-0"
           />
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </div>
   );
 };
