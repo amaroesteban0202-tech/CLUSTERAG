@@ -1561,6 +1561,7 @@ function App() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [clientChats, setClientChats] = useState([]);
   const [chatReads, setChatReads] = useState([]);
+  const [chatHidden, setChatHidden] = useState([]);
   const [chatDirectory, setChatDirectory] = useState([]);
 
   useEffect(() => {
@@ -1722,6 +1723,19 @@ function App() {
     return map;
   }, [chatReads, currentUserProfile, authEmail]);
 
+  // Mensajes que el usuario actual ocultó ("eliminar para mí").
+  const chatHiddenIds = useMemo(() => {
+    const uid = String(currentUserProfile?.id || authEmail || "");
+    const set = new Set();
+    if (!uid) return set;
+    chatHidden.forEach((entry) => {
+      if (String(entry.userId || "") === uid && entry.messageId) {
+        set.add(String(entry.messageId));
+      }
+    });
+    return set;
+  }, [chatHidden, currentUserProfile, authEmail]);
+
   // No leídos por cliente + total (excluye los mensajes propios y el hilo que
   // está abierto en este momento, que se considera leído al instante).
   const chatUnread = useMemo(() => {
@@ -1733,6 +1747,7 @@ function App() {
     clientChats.forEach((message) => {
       if (!message.clientId || !message.createdAt) return;
       if (myId && String(message.authorId || "") === myId) return;
+      if (message.deleted || chatHiddenIds.has(String(message.id))) return;
       if (openClientId && String(message.clientId) === openClientId) return;
       const lastRead = chatReadMap[message.clientId] || "";
       if (message.createdAt > lastRead) {
@@ -1741,7 +1756,14 @@ function App() {
       }
     });
     return { byClient, total };
-  }, [clientChats, chatReadMap, currentUserProfile, view, selectedChatClient]);
+  }, [
+    clientChats,
+    chatReadMap,
+    chatHiddenIds,
+    currentUserProfile,
+    view,
+    selectedChatClient,
+  ]);
 
   const appUserById = new Map(appUsers.map((item) => [item.id, item]));
   const managementMemberCandidates = [
@@ -2299,6 +2321,17 @@ function App() {
         dataCollection("chat_reads"),
         (snapshot) =>
           setChatReads(
+            snapshot.docs.map((docItem) => ({
+              id: docItem.id,
+              ...docItem.data(),
+            })),
+          ),
+        errHandler,
+      ),
+      onSnapshot(
+        dataCollection("chat_hidden"),
+        (snapshot) =>
+          setChatHidden(
             snapshot.docs.map((docItem) => ({
               id: docItem.id,
               ...docItem.data(),
@@ -4620,11 +4653,50 @@ function App() {
     if (client?.id) markClientChatRead(client.id);
   };
 
-  const deleteClientChatMessage = (message) => {
+  // "Eliminar para todos": borrado suave (deja registro de quién y cuándo lo
+  // borró). Solo el autor puede hacerlo (validado también en el backend).
+  const deleteChatForEveryone = async (message) => {
     if (!message?.id) return;
-    deleteDoc(dataDoc("client_chats", message.id)).catch((error) =>
-      console.warn("[chat:delete]", error.message),
-    );
+    const myId = String(currentUserProfile?.id || "");
+    const myEmail = normalizeEmail(authEmail);
+    const isAuthor =
+      (myId && String(message.authorId || "") === myId) ||
+      (myEmail && normalizeEmail(message.authorEmail) === myEmail);
+    if (!isAuthor) return;
+    try {
+      await updateDoc(dataDoc("client_chats", message.id), {
+        deleted: true,
+        deletedAt: nowIso(),
+        deletedById: myId,
+        deletedByName:
+          currentUserProfile?.name ||
+          (authEmail ? authEmail.split("@")[0] : "Usuario"),
+        updatedAt: nowIso(),
+      });
+    } catch (error) {
+      console.warn("[chat:delete-all]", error.message);
+    }
+  };
+
+  // "Eliminar para mí": oculta el mensaje solo para el usuario actual.
+  const hideChatForMe = async (message) => {
+    if (!message?.id) return;
+    const uid = currentUserProfile?.id || authEmail;
+    if (!uid) return;
+    try {
+      await setDoc(
+        dataDoc("chat_hidden", `${uid}__${message.id}`),
+        {
+          userId: String(uid),
+          messageId: String(message.id),
+          clientId: message.clientId || "",
+          hiddenAt: nowIso(),
+        },
+        { merge: true },
+      );
+    } catch (error) {
+      console.warn("[chat:hide]", error.message);
+    }
   };
 
   // Los listados llegan sin el base64 de los adjuntos; se pide el mensaje
@@ -5673,7 +5745,9 @@ function App() {
               onSelectClient={openClientChat}
               onSendMessage={addClientChatMessage}
               onOpenTask={openTaskFromChat}
-              onDeleteMessage={deleteClientChatMessage}
+              onDeleteForEveryone={deleteChatForEveryone}
+              onDeleteForMe={hideChatForMe}
+              hiddenIds={chatHiddenIds}
               currentUserProfile={currentUserProfile}
               canModerate={userHasPermission(
                 currentUserProfile,
@@ -11189,7 +11263,9 @@ const ClientChatView = ({
   onSelectClient,
   onSendMessage,
   onOpenTask,
-  onDeleteMessage,
+  onDeleteForEveryone,
+  onDeleteForMe,
+  hiddenIds,
   currentUserProfile,
   canModerate = false,
   mentionables = [],
@@ -11199,6 +11275,7 @@ const ClientChatView = ({
   fetchFullMessage,
 }) => {
   const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [text, setText] = useState("");
   const [mentionedIds, setMentionedIds] = useState([]);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -11253,7 +11330,11 @@ const ClientChatView = ({
 
   const messages = activeClient
     ? clientChats
-        .filter((message) => message.clientId === activeClient.id)
+        .filter(
+          (message) =>
+            message.clientId === activeClient.id &&
+            !(hiddenIds && hiddenIds.has(String(message.id))),
+        )
         .sort((a, b) => ((a.createdAt || "") > (b.createdAt || "") ? 1 : -1))
     : [];
 
@@ -11711,34 +11792,47 @@ const ClientChatView = ({
                           </span>
                         </div>
                       )}
-                      {message.text && (
-                        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-200">
-                          {renderChatText(message.text)}
+                      {message.deleted ? (
+                        <p className="flex items-center gap-1.5 text-sm italic text-slate-400">
+                          <Icon name="Trash2" size={12} /> Este mensaje fue
+                          eliminado
                         </p>
-                      )}
-                      {atts.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-2">
-                          {atts.map((att) => renderAttachment(att))}
-                        </div>
-                      )}
-                      {message.taskRef?.taskId && (
-                        <button
-                          onClick={() => onOpenTask(message.taskRef)}
-                          className={`mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
-                        >
-                          <Icon name="ClipboardList" size={11} className="shrink-0" />
-                          <span className="truncate">
-                            {message.taskRef.taskTitle || "Tarea"}
-                          </span>
-                          <span className="opacity-70">
-                            · {CHAT_TASK_LABELS[message.taskRef.taskType] || ""}
-                          </span>
-                        </button>
+                      ) : (
+                        <>
+                          {message.text && (
+                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                              {renderChatText(message.text)}
+                            </p>
+                          )}
+                          {atts.length > 0 && (
+                            <div className="mt-1.5 flex flex-wrap gap-2">
+                              {atts.map((att) => renderAttachment(att))}
+                            </div>
+                          )}
+                          {message.taskRef?.taskId && (
+                            <button
+                              onClick={() => onOpenTask(message.taskRef)}
+                              className={`mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
+                            >
+                              <Icon
+                                name="ClipboardList"
+                                size={11}
+                                className="shrink-0"
+                              />
+                              <span className="truncate">
+                                {message.taskRef.taskTitle || "Tarea"}
+                              </span>
+                              <span className="opacity-70">
+                                · {CHAT_TASK_LABELS[message.taskRef.taskType] || ""}
+                              </span>
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
-                    {(mine || canModerate) && (
+                    {mine && !message.deleted && (
                       <button
-                        onClick={() => onDeleteMessage(message)}
+                        onClick={() => setDeleteTarget(message)}
                         aria-label="Eliminar mensaje"
                         className="self-start text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
                       >
@@ -12066,6 +12160,52 @@ const ClientChatView = ({
           </>
         )}
       </section>
+
+      {/* Popup de confirmación de borrado (estilo WhatsApp) */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-800"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-base font-black text-slate-800 dark:text-slate-100">
+              ¿Eliminar mensaje?
+            </h3>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Elige cómo eliminarlo. Queda registro de que se eliminó.
+            </p>
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  if (onDeleteForEveryone) onDeleteForEveryone(deleteTarget);
+                  setDeleteTarget(null);
+                }}
+                className="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-700"
+              >
+                Eliminar para todos
+              </button>
+              <button
+                onClick={() => {
+                  if (onDeleteForMe) onDeleteForMe(deleteTarget);
+                  setDeleteTarget(null);
+                }}
+                className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                Eliminar para mí
+              </button>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="w-full rounded-lg px-4 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

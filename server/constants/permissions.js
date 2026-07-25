@@ -190,5 +190,11 @@ export const COLLECTION_PERMISSIONS = {
         create: 'view_client_chat',
         update: 'view_client_chat',
         delete: 'view_client_chat'
+    },
+    chat_hidden: {
+        read: 'view_client_chat',
+        create: 'view_client_chat',
+        update: 'view_client_chat',
+        delete: 'view_client_chat'
     }
 };

@@ -4,7 +4,7 @@ const registry = new Map();
 const DEFAULT_POLL_MS = 120000;
 const IDLE_AFTER_MS = 240000;
 const TASK_COLLECTIONS = new Set(['account_tasks', 'editing', 'management_tasks']);
-const STATIC_COLLECTIONS = new Set(['clients', 'events', 'managers', 'editors', 'users', 'client_chats', 'chat_reads']);
+const STATIC_COLLECTIONS = new Set(['clients', 'events', 'managers', 'editors', 'users', 'client_chats', 'chat_reads', 'chat_hidden']);
 const CLOSED_STATUS_BY_COLLECTION = {
     account_tasks: new Set(['publicado']),
     editing: new Set(['aprobado', 'publicado']),

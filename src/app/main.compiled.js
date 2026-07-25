@@ -918,6 +918,7 @@ function App() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [clientChats, setClientChats] = useState([]);
   const [chatReads, setChatReads] = useState([]);
+  const [chatHidden, setChatHidden] = useState([]);
   const [chatDirectory, setChatDirectory] = useState([]);
   useEffect(() => {
     window.__cluster_active_view = view;
@@ -1021,6 +1022,17 @@ function App() {
     });
     return map;
   }, [chatReads, currentUserProfile, authEmail]);
+  const chatHiddenIds = useMemo(() => {
+    const uid = String(currentUserProfile?.id || authEmail || "");
+    const set = /* @__PURE__ */ new Set();
+    if (!uid) return set;
+    chatHidden.forEach((entry) => {
+      if (String(entry.userId || "") === uid && entry.messageId) {
+        set.add(String(entry.messageId));
+      }
+    });
+    return set;
+  }, [chatHidden, currentUserProfile, authEmail]);
   const chatUnread = useMemo(() => {
     const myId = String(currentUserProfile?.id || "");
     const openClientId = view === "chat" ? String(selectedChatClient?.id || "") : "";
@@ -1029,6 +1041,7 @@ function App() {
     clientChats.forEach((message) => {
       if (!message.clientId || !message.createdAt) return;
       if (myId && String(message.authorId || "") === myId) return;
+      if (message.deleted || chatHiddenIds.has(String(message.id))) return;
       if (openClientId && String(message.clientId) === openClientId) return;
       const lastRead = chatReadMap[message.clientId] || "";
       if (message.createdAt > lastRead) {
@@ -1037,7 +1050,14 @@ function App() {
       }
     });
     return { byClient, total };
-  }, [clientChats, chatReadMap, currentUserProfile, view, selectedChatClient]);
+  }, [
+    clientChats,
+    chatReadMap,
+    chatHiddenIds,
+    currentUserProfile,
+    view,
+    selectedChatClient
+  ]);
   const appUserById = new Map(appUsers.map((item) => [item.id, item]));
   const managementMemberCandidates = [
     ...appUsers.filter((item) => item.isActive !== false),
@@ -1498,6 +1518,16 @@ function App() {
       onSnapshot(
         dataCollection("chat_reads"),
         (snapshot) => setChatReads(
+          snapshot.docs.map((docItem) => ({
+            id: docItem.id,
+            ...docItem.data()
+          }))
+        ),
+        errHandler
+      ),
+      onSnapshot(
+        dataCollection("chat_hidden"),
+        (snapshot) => setChatHidden(
           snapshot.docs.map((docItem) => ({
             id: docItem.id,
             ...docItem.data()
@@ -3394,11 +3424,42 @@ function App() {
     setSelectedChatClient(client || null);
     if (client?.id) markClientChatRead(client.id);
   };
-  const deleteClientChatMessage = (message) => {
+  const deleteChatForEveryone = async (message) => {
     if (!message?.id) return;
-    deleteDoc(dataDoc("client_chats", message.id)).catch(
-      (error) => console.warn("[chat:delete]", error.message)
-    );
+    const myId = String(currentUserProfile?.id || "");
+    const myEmail = normalizeEmail(authEmail);
+    const isAuthor = myId && String(message.authorId || "") === myId || myEmail && normalizeEmail(message.authorEmail) === myEmail;
+    if (!isAuthor) return;
+    try {
+      await updateDoc(dataDoc("client_chats", message.id), {
+        deleted: true,
+        deletedAt: nowIso(),
+        deletedById: myId,
+        deletedByName: currentUserProfile?.name || (authEmail ? authEmail.split("@")[0] : "Usuario"),
+        updatedAt: nowIso()
+      });
+    } catch (error) {
+      console.warn("[chat:delete-all]", error.message);
+    }
+  };
+  const hideChatForMe = async (message) => {
+    if (!message?.id) return;
+    const uid = currentUserProfile?.id || authEmail;
+    if (!uid) return;
+    try {
+      await setDoc(
+        dataDoc("chat_hidden", `${uid}__${message.id}`),
+        {
+          userId: String(uid),
+          messageId: String(message.id),
+          clientId: message.clientId || "",
+          hiddenAt: nowIso()
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.warn("[chat:hide]", error.message);
+    }
   };
   const fetchClientChatMessage = async (messageId) => {
     if (!messageId) return null;
@@ -4277,7 +4338,9 @@ function App() {
           onSelectClient: openClientChat,
           onSendMessage: addClientChatMessage,
           onOpenTask: openTaskFromChat,
-          onDeleteMessage: deleteClientChatMessage,
+          onDeleteForEveryone: deleteChatForEveryone,
+          onDeleteForMe: hideChatForMe,
+          hiddenIds: chatHiddenIds,
           currentUserProfile,
           canModerate: userHasPermission(
             currentUserProfile,
@@ -8022,7 +8085,9 @@ var ClientChatView = ({
   onSelectClient,
   onSendMessage,
   onOpenTask,
-  onDeleteMessage,
+  onDeleteForEveryone,
+  onDeleteForMe,
+  hiddenIds,
   currentUserProfile,
   canModerate = false,
   mentionables = [],
@@ -8032,6 +8097,7 @@ var ClientChatView = ({
   fetchFullMessage
 }) => {
   const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [text, setText] = useState("");
   const [mentionedIds, setMentionedIds] = useState([]);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -8075,7 +8141,9 @@ var ClientChatView = ({
     if (aTime !== bTime) return aTime > bTime ? -1 : 1;
     return (a.name || "").localeCompare(b.name || "");
   });
-  const messages = activeClient ? clientChats.filter((message) => message.clientId === activeClient.id).sort((a, b) => (a.createdAt || "") > (b.createdAt || "") ? 1 : -1) : [];
+  const messages = activeClient ? clientChats.filter(
+    (message) => message.clientId === activeClient.id && !(hiddenIds && hiddenIds.has(String(message.id)))
+  ).sort((a, b) => (a.createdAt || "") > (b.createdAt || "") ? 1 : -1) : [];
   const clientTasks = activeClient ? [
     ...accountTasks.filter((task) => task.clientId === activeClient.id).map((task) => ({ id: task.id, title: task.title, type: "accountTask" })),
     ...editingTasks.filter((task) => task.clientId === activeClient.id).map((task) => ({ id: task.id, title: task.title, type: "editingTask" })),
@@ -8423,20 +8491,27 @@ var ClientChatView = ({
             className: `group flex gap-3 px-4 ${grouped ? "mt-0.5 py-0.5" : "mt-3 py-0.5"} hover:bg-slate-50 dark:hover:bg-white/5`
           },
           /* @__PURE__ */ React.createElement("div", { className: "w-9 shrink-0" }, grouped ? /* @__PURE__ */ React.createElement("span", { className: "hidden pt-1 text-right text-[10px] text-slate-400 group-hover:block" }, chatShortTime(message.createdAt)) : /* @__PURE__ */ React.createElement("div", { className: "mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-[#555552] text-[11px] font-black text-white" }, (message.authorName || "U").slice(0, 2).toUpperCase())),
-          /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, !grouped && /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm font-black text-slate-800 dark:text-slate-100" }, message.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] text-slate-400" }, relativeTime(message.createdAt))), message.text && /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-200" }, renderChatText(message.text)), atts.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap gap-2" }, atts.map((att) => renderAttachment(att))), message.taskRef?.taskId && /* @__PURE__ */ React.createElement(
+          /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, !grouped && /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm font-black text-slate-800 dark:text-slate-100" }, message.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] text-slate-400" }, relativeTime(message.createdAt))), message.deleted ? /* @__PURE__ */ React.createElement("p", { className: "flex items-center gap-1.5 text-sm italic text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 12 }), " Este mensaje fue eliminado") : /* @__PURE__ */ React.createElement(React.Fragment, null, message.text && /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-200" }, renderChatText(message.text)), atts.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap gap-2" }, atts.map((att) => renderAttachment(att))), message.taskRef?.taskId && /* @__PURE__ */ React.createElement(
             "button",
             {
               onClick: () => onOpenTask(message.taskRef),
               className: `mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`
             },
-            /* @__PURE__ */ React.createElement(Icon, { name: "ClipboardList", size: 11, className: "shrink-0" }),
+            /* @__PURE__ */ React.createElement(
+              Icon,
+              {
+                name: "ClipboardList",
+                size: 11,
+                className: "shrink-0"
+              }
+            ),
             /* @__PURE__ */ React.createElement("span", { className: "truncate" }, message.taskRef.taskTitle || "Tarea"),
             /* @__PURE__ */ React.createElement("span", { className: "opacity-70" }, "\xB7 ", CHAT_TASK_LABELS[message.taskRef.taskType] || "")
-          )),
-          (mine || canModerate) && /* @__PURE__ */ React.createElement(
+          ))),
+          mine && !message.deleted && /* @__PURE__ */ React.createElement(
             "button",
             {
-              onClick: () => onDeleteMessage(message),
+              onClick: () => setDeleteTarget(message),
               "aria-label": "Eliminar mensaje",
               className: "self-start text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
             },
@@ -8692,6 +8767,49 @@ var ClientChatView = ({
         }
       )
     ))))))
+  ), deleteTarget && /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: "fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4",
+      onClick: () => setDeleteTarget(null)
+    },
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "w-full max-w-xs rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-800",
+        onClick: (event) => event.stopPropagation()
+      },
+      /* @__PURE__ */ React.createElement("h3", { className: "text-base font-black text-slate-800 dark:text-slate-100" }, "\xBFEliminar mensaje?"),
+      /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-sm text-slate-500 dark:text-slate-400" }, "Elige c\xF3mo eliminarlo. Queda registro de que se elimin\xF3."),
+      /* @__PURE__ */ React.createElement("div", { className: "mt-4 flex flex-col gap-2" }, /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => {
+            if (onDeleteForEveryone) onDeleteForEveryone(deleteTarget);
+            setDeleteTarget(null);
+          },
+          className: "w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-700"
+        },
+        "Eliminar para todos"
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => {
+            if (onDeleteForMe) onDeleteForMe(deleteTarget);
+            setDeleteTarget(null);
+          },
+          className: "w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+        },
+        "Eliminar para m\xED"
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => setDeleteTarget(null),
+          className: "w-full rounded-lg px-4 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 dark:hover:bg-slate-700"
+        },
+        "Cancelar"
+      ))
+    )
   ));
 };
 var CalendarGrid = ({

@@ -94,6 +94,13 @@ const ensureCollectionUpdatePermission = async (req, recordId) => {
 
     const existing = await getRecord({ collectionName, recordId });
     if (!existing) {
+        // setDoc con id específico = upsert (semántica de Firestore): si el
+        // documento no existe, permitir crearlo cuando se tiene permiso de
+        // creación (p. ej. chat_reads / chat_hidden por usuario).
+        const createPermission = getCollectionPermission(collectionName, 'create');
+        if (createPermission && hasPermission(userRecord, createPermission)) {
+            return { userRecord, collectionName, existing: null, selfEdit: false };
+        }
         throw createHttpError(404, 'El documento no existe.', 'document/not-found');
     }
 
