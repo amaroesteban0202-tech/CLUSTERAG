@@ -28,7 +28,10 @@ export const ROLE_DEFINITIONS = {
             'manage_calendar',
             'view_users',
             'manage_users',
-            'view_audit_logs'
+            'view_audit_logs',
+            'view_client_chat',
+            'send_client_chat',
+            'moderate_client_chat'
         ]
     },
     management: {
@@ -47,7 +50,9 @@ export const ROLE_DEFINITIONS = {
             'manage_management_tasks',
             'view_general_calendar',
             'view_calendar',
-            'create_calendar_events'
+            'create_calendar_events',
+            'view_client_chat',
+            'send_client_chat'
         ]
     },
     manager: {
@@ -69,7 +74,9 @@ export const ROLE_DEFINITIONS = {
             'manage_management_tasks',
             'view_general_calendar',
             'view_calendar',
-            'create_calendar_events'
+            'create_calendar_events',
+            'view_client_chat',
+            'send_client_chat'
         ]
     },
     editor: {
@@ -87,7 +94,9 @@ export const ROLE_DEFINITIONS = {
             'create_management_tasks',
             'view_general_calendar',
             'view_calendar',
-            'create_calendar_events'
+            'create_calendar_events',
+            'view_client_chat',
+            'send_client_chat'
         ]
     },
     viewer: {
@@ -100,7 +109,9 @@ export const ROLE_DEFINITIONS = {
             'create_editing_tasks',
             'manage_editing_tasks',
             'view_management_room',
-            'create_management_tasks'
+            'create_management_tasks',
+            'view_client_chat',
+            'send_client_chat'
         ]
     }
 };
@@ -165,5 +176,37 @@ export const COLLECTION_PERMISSIONS = {
         create: 'manage_ranking_settings',
         update: 'manage_ranking_settings',
         delete: 'manage_ranking_settings'
+    },
+    client_chats: {
+        read: 'view_client_chat',
+        create: 'send_client_chat',
+        // Solo moderadores pueden editar/borrar cualquier mensaje; el autor puede
+        // editar/borrar el suyo via la ruta self-edit en routes/collections.js.
+        update: 'moderate_client_chat',
+        delete: 'moderate_client_chat'
+    },
+    chat_reads: {
+        read: 'view_client_chat',
+        create: 'view_client_chat',
+        update: 'view_client_chat',
+        delete: 'view_client_chat'
+    },
+    chat_hidden: {
+        read: 'view_client_chat',
+        create: 'view_client_chat',
+        update: 'view_client_chat',
+        delete: 'view_client_chat'
+    },
+    chat_reactions: {
+        read: 'view_client_chat',
+        create: 'view_client_chat',
+        update: 'view_client_chat',
+        delete: 'view_client_chat'
+    },
+    chat_pins: {
+        read: 'view_client_chat',
+        create: 'view_client_chat',
+        update: 'view_client_chat',
+        delete: 'view_client_chat'
     }
 };

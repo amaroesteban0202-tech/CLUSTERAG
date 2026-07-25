@@ -1,5 +1,5 @@
 // src/app/main.jsx
-import React, { useState, useEffect, useRef, useId } from "react";
+import React, { useState, useEffect, useRef, useId, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { App as CapacitorApp } from "@capacitor/app";
 import {
@@ -71,7 +71,14 @@ import {
   Lightning as Zap,
   PauseCircle,
   DotsThree as MoreHorizontal,
-  DotsSixVertical as GripVertical
+  DotsSixVertical as GripVertical,
+  Paperclip,
+  Microphone,
+  Image as ImageIcon,
+  Stop,
+  FilePlus,
+  PushPin as PinIcon,
+  ArrowBendUpLeft as ReplyIcon
 } from "@phosphor-icons/react";
 import {
   signInAnonymously,
@@ -132,6 +139,37 @@ import {
   normalizeEditingWorkflowStatus,
   rankPendingEditingTasks
 } from "/src/app/utils/kpi.js";
+
+// src/app/lib/backend-api.js
+var LOCAL_HOSTNAMES = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"]);
+var isLocalWebOrigin = () => typeof window !== "undefined" && ["http:", "https:"].includes(window.location.protocol) && LOCAL_HOSTNAMES.has(window.location.hostname);
+var resolveApiBaseUrl = () => {
+  const configuredBaseUrl = String(window.__cluster_api_base_url || "").replace(/\/+$/, "");
+  if (isLocalWebOrigin() && configuredBaseUrl === "https://clusterag.vercel.app") return "";
+  return configuredBaseUrl;
+};
+var buildApiUrl = (path) => `${resolveApiBaseUrl()}${path}`;
+var apiFetch = async (path, options = {}) => {
+  const response = await fetch(buildApiUrl(path), {
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+      ...options.headers || {}
+    },
+    ...options
+  });
+  const hasJson = response.headers.get("content-type")?.includes("application/json");
+  const payload = hasJson ? await response.json() : null;
+  if (!response.ok) {
+    const error = new Error(payload?.error?.message || `Request failed with status ${response.status}`);
+    error.status = response.status;
+    error.code = payload?.error?.code || "";
+    throw error;
+  }
+  return payload;
+};
+
+// src/app/main.jsx
 var IconsMap = {
   LayoutDashboard,
   Users,
@@ -201,7 +239,14 @@ var IconsMap = {
   Zap,
   PauseCircle,
   MoreHorizontal,
-  GripVertical
+  GripVertical,
+  Paperclip,
+  Microphone,
+  Image: ImageIcon,
+  Stop,
+  FilePlus,
+  Pin: PinIcon,
+  Reply: ReplyIcon
 };
 var Icon = ({ name, size = 18, className = "", ...props }) => {
   const PhosphorIcon = IconsMap[name];
@@ -313,6 +358,7 @@ var VIEW_PERMISSIONS = {
   dashboard: "view_dashboard",
   clients: "view_clients",
   "client-detail": "view_clients",
+  chat: "view_client_chat",
   managers: "view_managers",
   "manager-detail": "view_managers",
   editors: "view_editors",
@@ -874,6 +920,12 @@ function App() {
   const [isLoadingTaskHistory, setIsLoadingTaskHistory] = useState(false);
   const [appUsers, setAppUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [clientChats, setClientChats] = useState([]);
+  const [chatReads, setChatReads] = useState([]);
+  const [chatHidden, setChatHidden] = useState([]);
+  const [chatReactions, setChatReactions] = useState([]);
+  const [chatPins, setChatPins] = useState([]);
+  const [chatDirectory, setChatDirectory] = useState([]);
   useEffect(() => {
     window.__cluster_active_view = view;
     window.dispatchEvent(new Event("cluster:viewchange"));
@@ -881,6 +933,7 @@ function App() {
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedManager, setSelectedManager] = useState(null);
   const [selectedEditor, setSelectedEditor] = useState(null);
+  const [selectedChatClient, setSelectedChatClient] = useState(null);
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
     type: null,
@@ -964,6 +1017,53 @@ function App() {
   const profileBlocked = Boolean(
     currentUserProfile && currentUserProfile.isActive === false
   );
+  const chatReadMap = useMemo(() => {
+    const uid = String(currentUserProfile?.id || authEmail || "");
+    const map = {};
+    if (!uid) return map;
+    chatReads.forEach((entry) => {
+      if (String(entry.userId || "") === uid && entry.clientId) {
+        map[entry.clientId] = entry.lastReadAt || "";
+      }
+    });
+    return map;
+  }, [chatReads, currentUserProfile, authEmail]);
+  const chatHiddenIds = useMemo(() => {
+    const uid = String(currentUserProfile?.id || authEmail || "");
+    const set = /* @__PURE__ */ new Set();
+    if (!uid) return set;
+    chatHidden.forEach((entry) => {
+      if (String(entry.userId || "") === uid && entry.messageId) {
+        set.add(String(entry.messageId));
+      }
+    });
+    return set;
+  }, [chatHidden, currentUserProfile, authEmail]);
+  const chatUnread = useMemo(() => {
+    const myId = String(currentUserProfile?.id || "");
+    const openClientId = view === "chat" ? String(selectedChatClient?.id || "") : "";
+    const byClient = {};
+    let total = 0;
+    clientChats.forEach((message) => {
+      if (!message.clientId || !message.createdAt) return;
+      if (myId && String(message.authorId || "") === myId) return;
+      if (message.deleted || chatHiddenIds.has(String(message.id))) return;
+      if (openClientId && String(message.clientId) === openClientId) return;
+      const lastRead = chatReadMap[message.clientId] || "";
+      if (message.createdAt > lastRead) {
+        byClient[message.clientId] = (byClient[message.clientId] || 0) + 1;
+        total += 1;
+      }
+    });
+    return { byClient, total };
+  }, [
+    clientChats,
+    chatReadMap,
+    chatHiddenIds,
+    currentUserProfile,
+    view,
+    selectedChatClient
+  ]);
   const appUserById = new Map(appUsers.map((item) => [item.id, item]));
   const managementMemberCandidates = [
     ...appUsers.filter((item) => item.isActive !== false),
@@ -1405,6 +1505,60 @@ function App() {
           );
           setUsersLoaded(true);
         },
+        errHandler
+      ),
+      onSnapshot(
+        query(
+          dataCollection("client_chats"),
+          orderBy("createdAt", "desc"),
+          limit(500)
+        ),
+        (snapshot) => setClientChats(
+          snapshot.docs.map((docItem) => ({
+            id: docItem.id,
+            ...docItem.data()
+          }))
+        ),
+        errHandler
+      ),
+      onSnapshot(
+        dataCollection("chat_reads"),
+        (snapshot) => setChatReads(
+          snapshot.docs.map((docItem) => ({
+            id: docItem.id,
+            ...docItem.data()
+          }))
+        ),
+        errHandler
+      ),
+      onSnapshot(
+        dataCollection("chat_hidden"),
+        (snapshot) => setChatHidden(
+          snapshot.docs.map((docItem) => ({
+            id: docItem.id,
+            ...docItem.data()
+          }))
+        ),
+        errHandler
+      ),
+      onSnapshot(
+        dataCollection("chat_reactions"),
+        (snapshot) => setChatReactions(
+          snapshot.docs.map((docItem) => ({
+            id: docItem.id,
+            ...docItem.data()
+          }))
+        ),
+        errHandler
+      ),
+      onSnapshot(
+        dataCollection("chat_pins"),
+        (snapshot) => setChatPins(
+          snapshot.docs.map((docItem) => ({
+            id: docItem.id,
+            ...docItem.data()
+          }))
+        ),
         errHandler
       )
     ];
@@ -3240,6 +3394,300 @@ function App() {
       }
     }
   };
+  const addClientChatMessage = async ({
+    clientId,
+    text,
+    mentionedIds = [],
+    taskRef = null,
+    attachments = [],
+    replyTo = null,
+    forwarded = false
+  }) => {
+    const trimmed = (text || "").trim();
+    const safeAttachments = Array.isArray(attachments) ? attachments : [];
+    if (!clientId || !trimmed && safeAttachments.length === 0) return;
+    const senderName = currentUserProfile?.name || (authEmail ? authEmail.split("@")[0] : "Usuario");
+    await addDoc(dataCollection("client_chats"), {
+      clientId,
+      text: trimmed,
+      authorName: senderName,
+      authorId: currentUserProfile?.id || "",
+      authorEmail: authEmail || "",
+      mentionedIds,
+      attachments: safeAttachments,
+      forwarded: Boolean(forwarded),
+      replyTo: replyTo ? {
+        id: replyTo.id || "",
+        authorName: replyTo.authorName || "",
+        text: (replyTo.text || "").slice(0, 140)
+      } : null,
+      taskRef: taskRef ? {
+        taskId: taskRef.taskId || "",
+        taskType: taskRef.taskType || "",
+        taskTitle: taskRef.taskTitle || ""
+      } : null,
+      createdAt: nowIso()
+    });
+    const client = clients.find((item) => item.id === clientId);
+    const clientName = client?.name || "Cliente";
+    for (const uid of mentionedIds) {
+      const person = chatMentionables.find((p) => p.id === uid);
+      const email = person?.email;
+      if (email && uid !== (currentUserProfile?.id || "")) {
+        sendNotification({
+          to: email,
+          type: "chat_mention",
+          senderName,
+          clientName,
+          comment: trimmed
+        });
+      }
+    }
+  };
+  const markClientChatRead = (clientId) => {
+    if (!clientId) return;
+    const uid = currentUserProfile?.id || authEmail;
+    if (!uid) return;
+    setDoc(
+      dataDoc("chat_reads", `${uid}__${clientId}`),
+      { userId: String(uid), clientId, lastReadAt: nowIso() },
+      { merge: true }
+    ).catch((error) => console.warn("[chat:read]", error.message));
+  };
+  const openClientChat = (client) => {
+    setSelectedChatClient(client || null);
+    if (client?.id) markClientChatRead(client.id);
+  };
+  const deleteChatForEveryone = async (message) => {
+    if (!message?.id) return;
+    const myId = String(currentUserProfile?.id || "");
+    const myEmail = normalizeEmail(authEmail);
+    const isAuthor = myId && String(message.authorId || "") === myId || myEmail && normalizeEmail(message.authorEmail) === myEmail;
+    if (!isAuthor) return;
+    try {
+      await updateDoc(dataDoc("client_chats", message.id), {
+        deleted: true,
+        deletedAt: nowIso(),
+        deletedById: myId,
+        deletedByName: currentUserProfile?.name || (authEmail ? authEmail.split("@")[0] : "Usuario"),
+        updatedAt: nowIso()
+      });
+    } catch (error) {
+      console.warn("[chat:delete-all]", error.message);
+    }
+  };
+  const hideChatForMe = async (message) => {
+    if (!message?.id) return;
+    const uid = currentUserProfile?.id || authEmail;
+    if (!uid) return;
+    try {
+      await setDoc(
+        dataDoc("chat_hidden", `${uid}__${message.id}`),
+        {
+          userId: String(uid),
+          messageId: String(message.id),
+          clientId: message.clientId || "",
+          hiddenAt: nowIso()
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.warn("[chat:hide]", error.message);
+    }
+  };
+  const toggleChatReaction = async (message, emoji) => {
+    if (!message?.id || !emoji) return;
+    const uid = currentUserProfile?.id || authEmail;
+    if (!uid) return;
+    const recordId = `${message.id}__${uid}`;
+    const existing = chatReactions.find((item) => item.id === recordId);
+    try {
+      if (existing && existing.emoji === emoji) {
+        await deleteDoc(dataDoc("chat_reactions", recordId));
+      } else {
+        await setDoc(
+          dataDoc("chat_reactions", recordId),
+          {
+            messageId: String(message.id),
+            userId: String(uid),
+            userName: currentUserProfile?.name || (authEmail ? authEmail.split("@")[0] : "Usuario"),
+            clientId: message.clientId || "",
+            emoji
+          },
+          { merge: false }
+        );
+      }
+    } catch (error) {
+      console.warn("[chat:react]", error.message);
+    }
+  };
+  const toggleChatPin = async (message) => {
+    if (!message?.id || !message.clientId) return;
+    const recordId = `${message.clientId}__${message.id}`;
+    const existing = chatPins.find((item) => item.id === recordId);
+    try {
+      if (existing) {
+        await deleteDoc(dataDoc("chat_pins", recordId));
+      } else {
+        await setDoc(
+          dataDoc("chat_pins", recordId),
+          {
+            clientId: message.clientId,
+            messageId: String(message.id),
+            pinnedByName: currentUserProfile?.name || (authEmail ? authEmail.split("@")[0] : "Usuario"),
+            pinnedAt: nowIso()
+          },
+          { merge: true }
+        );
+      }
+    } catch (error) {
+      console.warn("[chat:pin]", error.message);
+    }
+  };
+  const forwardChatMessage = async (message, targetClientId) => {
+    if (!message?.id || !targetClientId) return;
+    let attachments = Array.isArray(message.attachments) ? message.attachments : [];
+    if (attachments.some((a) => a && a.hasData && !a.data)) {
+      const full = await fetchClientChatMessage(message.id);
+      if (full?.attachments) attachments = full.attachments;
+    }
+    await addClientChatMessage({
+      clientId: targetClientId,
+      text: message.text || "",
+      attachments,
+      forwarded: true
+    });
+  };
+  const fetchClientChatMessage = async (messageId) => {
+    if (!messageId) return null;
+    try {
+      const snap = await getDoc(dataDoc("client_chats", messageId));
+      return snap.data();
+    } catch (error) {
+      console.warn("[chat:fetch]", error.message);
+      return null;
+    }
+  };
+  const openTaskFromChat = (taskRef) => {
+    if (!taskRef?.taskId) return;
+    const listByType = {
+      accountTask: accountTasks,
+      editingTask: editingTasks,
+      managementTask: managementTasks
+    };
+    const task = (listByType[taskRef.taskType] || []).find(
+      (item) => item.id === taskRef.taskId
+    );
+    if (task) {
+      setTaskDetailConfig({ isOpen: true, task, type: taskRef.taskType });
+      return;
+    }
+    const viewByType = {
+      accountTask: "account-room",
+      editingTask: "editions",
+      managementTask: "management-room"
+    };
+    handleNavigate(viewByType[taskRef.taskType] || "account-room");
+  };
+  const chatMentionables = (() => {
+    if (chatDirectory.length > 0) return chatDirectory;
+    const seenEmail = /* @__PURE__ */ new Set();
+    const seenId = /* @__PURE__ */ new Set();
+    const result = [];
+    const add = (person) => {
+      const email = normalizeEmail(person?.email);
+      const id = person?.id ? String(person.id) : "";
+      const name = person?.name || email || "";
+      if (!name && !email) return;
+      if (email) {
+        if (seenEmail.has(email)) return;
+        seenEmail.add(email);
+      } else if (id) {
+        if (seenId.has(id)) return;
+        seenId.add(id);
+      } else {
+        return;
+      }
+      result.push({ id: id || email, name, email });
+    };
+    appUsers.filter((item) => item.isActive !== false).forEach(add);
+    managers.forEach(add);
+    editors.forEach(add);
+    return result.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  })();
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    apiFetch("/api/directory").then((payload) => {
+      if (!cancelled && Array.isArray(payload?.people)) {
+        setChatDirectory(payload.people);
+      }
+    }).catch((error) => console.warn("[chat:directory]", error.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+  useEffect(() => {
+    if (view !== "chat" || !selectedChatClient?.id) return;
+    markClientChatRead(selectedChatClient.id);
+  }, [view, selectedChatClient?.id, clientChats]);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof Notification === "undefined")
+      return;
+    const myId = String(currentUserProfile?.id || "");
+    if (!myId) return;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {
+      });
+    }
+    if (Notification.permission !== "granted") return;
+    const STORAGE_KEY = "cluster_chat_notifications_v1";
+    let notified = [];
+    try {
+      notified = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    } catch {
+      notified = [];
+    }
+    const notifiedSet = new Set(notified);
+    let changed = false;
+    clientChats.forEach((message) => {
+      if (!message.id || notifiedSet.has(message.id)) return;
+      if (String(message.authorId || "") === myId) return;
+      const mentionsMe = Array.isArray(message.mentionedIds) && message.mentionedIds.includes(myId);
+      if (!mentionsMe) return;
+      const age = Date.now() - new Date(message.createdAt || 0).getTime();
+      if (age >= 0 && age < 15 * 60 * 1e3) {
+        const client = clients.find((item) => item.id === message.clientId);
+        try {
+          const notif = new Notification(
+            `\u{1F4AC} Chat \xB7 ${client?.name || "Cliente"}`,
+            {
+              body: `${message.authorName || "Alguien"}: ${message.text}`,
+              tag: `chat-${message.id}`
+            }
+          );
+          notif.onclick = () => {
+            window.focus();
+            if (client) openClientChat(client);
+            handleNavigate("chat");
+            notif.close();
+          };
+        } catch {
+        }
+      }
+      notifiedSet.add(message.id);
+      changed = true;
+    });
+    if (changed) {
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify([...notifiedSet].slice(-500))
+        );
+      } catch {
+      }
+    }
+  }, [clientChats, currentUserProfile]);
   const addTaskTimeEntry = async (task, type, durationMs) => {
     const colMap = {
       accountTask: "account_tasks",
@@ -3725,6 +4173,17 @@ function App() {
           color: "slate"
         }
       ),
+      canAccessView(currentUserProfile, "chat") && /* @__PURE__ */ React.createElement(
+        SidebarItem,
+        {
+          active: view === "chat",
+          onClick: () => handleNavigate("chat"),
+          icon: "MessageSquare",
+          label: "Chat",
+          color: "blue",
+          badge: chatUnread.total > 0 ? chatUnread.total : null
+        }
+      ),
       /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2" }, "Salas de trabajo"),
       canAccessView(currentUserProfile, "account-room") && /* @__PURE__ */ React.createElement(
         SidebarItem,
@@ -3888,396 +4347,457 @@ function App() {
         }
       )
     )))
-  ), /* @__PURE__ */ React.createElement("main", { className: "app-main flex-1 overflow-y-auto relative w-full h-full" }, /* @__PURE__ */ React.createElement("div", { className: "p-4 md:p-8 max-w-[1360px] mx-auto min-h-full pb-mobile-nav md:pb-20" }, view === "dashboard" && (isFirstTimeWorkspace ? /* @__PURE__ */ React.createElement(
-    FirstTimeView,
-    {
-      role: currentUserProfile?.role,
-      onNavigate: handleNavigate
-    }
-  ) : /* @__PURE__ */ React.createElement(
-    DashboardView,
-    {
-      clients,
-      managers,
-      users: appUsers,
-      events,
-      tasks: editingTasks,
-      accountTasks,
-      managementTasks,
-      currentUserProfile,
-      onSignIn: handleGoogleSignIn,
-      onNavigate: handleNavigate,
-      onOpenTask: (task, type) => setTaskDetailConfig({
-        isOpen: true,
-        task,
-        type
-      })
-    }
-  )), view === "clients" && /* @__PURE__ */ React.createElement(
-    ClientsView,
-    {
-      clients,
-      managers,
-      legacyColorMap: LEGACY_COLOR_MAP,
-      onReassignManager: reassignClientManager,
-      onAdd: () => setModalConfig({ isOpen: true, type: "client" }),
-      onSelect: (c) => {
-        setSelectedClient(c);
-        handleNavigate("client-detail");
-      }
-    }
-  ), view === "client-detail" && selectedClient && /* @__PURE__ */ React.createElement(
-    ClientDetail,
-    {
-      client: selectedClient,
-      managers,
-      legacyColorMap: LEGACY_COLOR_MAP,
-      onReassignManager: reassignClientManager,
-      onBack: () => handleNavigate("clients"),
-      onUpdate: updateClient,
-      onDelete: () => setDeleteConfirm({
-        isOpen: true,
-        type: "client",
-        id: selectedClient.id,
-        title: selectedClient.name
-      }),
-      onEdit: () => setModalConfig({
-        isOpen: true,
-        type: "client",
-        data: selectedClient,
-        isEdit: true
-      })
-    }
-  ), view === "managers" && /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement(
-    ViewTabs,
-    {
-      active: "managers",
-      onChange: handleNavigate,
-      items: [
-        canAccessView(currentUserProfile, "managers") && {
-          id: "managers",
-          label: "Accounts"
-        },
-        canAccessView(currentUserProfile, "editors") && {
-          id: "editors",
-          label: "Editores"
-        }
-      ].filter(Boolean)
-    }
   ), /* @__PURE__ */ React.createElement(
-    TeamView,
+    "main",
     {
-      title: "Account Managers",
-      team: managers,
-      iconColor: "indigo",
-      onAdd: () => setModalConfig({ isOpen: true, type: "manager" }),
-      onSelect: (m) => {
-        setSelectedManager(m);
-        handleNavigate("manager-detail");
+      className: `app-main flex-1 relative w-full h-full ${view === "chat" ? "overflow-hidden" : "overflow-y-auto"}`
+    },
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: view === "chat" ? "h-full" : "p-4 md:p-8 max-w-[1360px] mx-auto min-h-full pb-mobile-nav md:pb-20"
       },
-      onDelete: (m) => setDeleteConfirm({
-        isOpen: true,
-        type: "manager",
-        id: m.id,
-        title: m.name
-      }),
-      onEdit: (m) => setModalConfig({
-        isOpen: true,
-        type: "manager",
-        data: m,
-        isEdit: true
-      })
-    }
-  )), view === "manager-detail" && selectedManager && /* @__PURE__ */ React.createElement(
-    PersonCalendarDetail,
-    {
-      person: selectedManager,
-      tasks: accountTasks,
-      title: "Planificaci\xF3n de Cuentas",
-      baseColor: LEGACY_COLOR_MAP[selectedManager.color] || selectedManager.color || "indigo",
-      onBack: () => handleNavigate("managers"),
-      onAddEvent: (dateStr) => setModalConfig({
-        isOpen: true,
-        type: "accountTask",
-        data: { date: dateStr, contextId: selectedManager.id }
-      }),
-      onEventClick: (e) => handleEventClick(e, "accountTask")
-    }
-  ), view === "editors" && /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement(
-    ViewTabs,
-    {
-      active: "editors",
-      onChange: handleNavigate,
-      items: [
-        canAccessView(currentUserProfile, "managers") && {
-          id: "managers",
-          label: "Accounts"
-        },
-        canAccessView(currentUserProfile, "editors") && {
-          id: "editors",
-          label: "Editores"
+      view === "dashboard" && (isFirstTimeWorkspace ? /* @__PURE__ */ React.createElement(
+        FirstTimeView,
+        {
+          role: currentUserProfile?.role,
+          onNavigate: handleNavigate
         }
-      ].filter(Boolean)
-    }
-  ), /* @__PURE__ */ React.createElement(
-    TeamView,
-    {
-      title: "Editores",
-      team: editors,
-      iconColor: "rose",
-      onAdd: () => setModalConfig({ isOpen: true, type: "editor" }),
-      onSelect: (e) => {
-        setSelectedEditor(e);
-        handleNavigate("editor-detail");
-      },
-      onDelete: (e) => setDeleteConfirm({
-        isOpen: true,
-        type: "editor",
-        id: e.id,
-        title: e.name
-      }),
-      onEdit: (e) => setModalConfig({
-        isOpen: true,
-        type: "editor",
-        data: e,
-        isEdit: true
-      })
-    }
-  )), view === "editor-detail" && selectedEditor && /* @__PURE__ */ React.createElement(
-    PersonCalendarDetail,
-    {
-      person: selectedEditor,
-      tasks: editingTasks,
-      title: "Planificaci\xF3n de Edici\xF3n",
-      baseColor: selectedEditor.color || "rose",
-      onBack: () => handleNavigate("editors"),
-      onAddEvent: (dateStr) => setModalConfig({
-        isOpen: true,
-        type: "editingTask",
-        data: { date: dateStr, contextId: selectedEditor.id }
-      }),
-      onEventClick: (e) => handleEventClick(e, "editingTask")
-    }
-  ), view === "account-room" && /* @__PURE__ */ React.createElement(
-    AccountRoomView,
-    {
-      tasks: accountTasks,
-      managers,
-      clients,
-      currentUserProfile,
-      onAdd: (dateStr) => setModalConfig({
-        isOpen: true,
-        type: "accountTask",
-        data: { date: dateStr }
-      }),
-      onEdit: (task) => setModalConfig({
-        isOpen: true,
-        type: "accountTask",
-        data: task,
-        isEdit: true
-      }),
-      onChangeStatus: changeAccountTaskStatus,
-      onDelete: (id) => setDeleteConfirm({
-        isOpen: true,
-        type: "accountTask",
-        id,
-        title: "Tarea"
-      }),
-      onTaskClick: (t) => setTaskDetailConfig({
-        isOpen: true,
-        task: t,
-        type: "accountTask"
-      }),
-      onLoadHistory: handleLoadTaskHistory,
-      historyLoaded: taskHistoryLoaded,
-      historyLoading: isLoadingTaskHistory,
-      legacyColorMap: LEGACY_COLOR_MAP
-    }
-  ), view === "editions" && /* @__PURE__ */ React.createElement(
-    EditionsRoomView,
-    {
-      tasks: editingTasks,
-      editors,
-      clients,
-      currentUserProfile,
-      onAdd: (dateStr) => setModalConfig({
-        isOpen: true,
-        type: "editingTask",
-        data: { date: dateStr }
-      }),
-      onEdit: (task) => setModalConfig({
-        isOpen: true,
-        type: "editingTask",
-        data: task,
-        isEdit: true
-      }),
-      onChangeStatus: changeEditingTaskStatus,
-      onDelete: (id) => setDeleteConfirm({
-        isOpen: true,
-        type: "editingTask",
-        id,
-        title: "Tarea"
-      }),
-      onTaskClick: (t) => setTaskDetailConfig({
-        isOpen: true,
-        task: t,
-        type: "editingTask"
-      }),
-      onLoadHistory: handleLoadTaskHistory,
-      historyLoaded: taskHistoryLoaded,
-      historyLoading: isLoadingTaskHistory
-    }
-  ), view === "management-room" && /* @__PURE__ */ React.createElement(
-    ManagementRoomView,
-    {
-      tasks: managementTasks,
-      members: managementUsers,
-      clients,
-      currentUserProfile,
-      onAdd: (dateStr) => setModalConfig({
-        isOpen: true,
-        type: "managementTask",
-        data: {
-          date: dateStr,
-          contextId: defaultManagementAssigneeId
+      ) : /* @__PURE__ */ React.createElement(
+        DashboardView,
+        {
+          clients,
+          managers,
+          users: appUsers,
+          events,
+          tasks: editingTasks,
+          accountTasks,
+          managementTasks,
+          currentUserProfile,
+          onSignIn: handleGoogleSignIn,
+          onNavigate: handleNavigate,
+          onOpenTask: (task, type) => setTaskDetailConfig({
+            isOpen: true,
+            task,
+            type
+          })
         }
-      }),
-      onEdit: (task) => setModalConfig({
-        isOpen: true,
-        type: "managementTask",
-        data: task,
-        isEdit: true
-      }),
-      onChangeStatus: changeManagementTaskStatus,
-      onDelete: (id) => setDeleteConfirm({
-        isOpen: true,
-        type: "managementTask",
-        id,
-        title: "Tarea de gestion"
-      }),
-      onTaskClick: (t) => setTaskDetailConfig({
-        isOpen: true,
-        task: t,
-        type: "managementTask"
-      }),
-      onLoadHistory: handleLoadTaskHistory,
-      historyLoaded: taskHistoryLoaded,
-      historyLoading: isLoadingTaskHistory
-    }
-  ), view === "control-center" && /* @__PURE__ */ React.createElement(
-    UsersAccessView,
-    {
-      users: appUsers,
-      managers,
-      editors,
-      auditLogs,
-      currentUserProfile,
-      onAdd: () => setModalConfig({ isOpen: true, type: "user" }),
-      onEdit: (userRecord) => setModalConfig({
-        isOpen: true,
-        type: "user",
-        data: userRecord,
-        isEdit: true
-      }),
-      onResendVerification: requestUserVerification
-    }
-  ), view === "settings" && /* @__PURE__ */ React.createElement(
-    ProfileSettingsView,
-    {
-      profile: currentUserProfile,
-      roleLabel: ROLE_DEFINITIONS[currentUserProfile?.role]?.label || currentUserProfile?.role || "",
-      onSave: updateMyProfile
-    }
-  ), view === "general-calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-3xl text-[#2f3437] dark:text-[#f1efe9]" }, "Calendario")), /* @__PURE__ */ React.createElement(
-    ViewTabs,
-    {
-      active: "general-calendar",
-      onChange: handleNavigate,
-      items: [
-        canAccessView(currentUserProfile, "general-calendar") && {
-          id: "general-calendar",
-          label: "General"
-        },
-        canAccessView(currentUserProfile, "calendar") && {
-          id: "calendar",
-          label: "Producciones"
+      )),
+      view === "clients" && /* @__PURE__ */ React.createElement(
+        ClientsView,
+        {
+          clients,
+          managers,
+          legacyColorMap: LEGACY_COLOR_MAP,
+          onReassignManager: reassignClientManager,
+          onAdd: () => setModalConfig({ isOpen: true, type: "client" }),
+          onSelect: (c) => {
+            setSelectedClient(c);
+            handleNavigate("client-detail");
+          }
         }
-      ].filter(Boolean)
-    }
-  )), /* @__PURE__ */ React.createElement("div", { className: "surface flex-1 flex flex-col overflow-hidden" }, /* @__PURE__ */ React.createElement(
-    GeneralCalendarGrid,
-    {
-      activities: allActivities,
-      onDayClick: (dateStr) => setDayDetailsModal({ isOpen: true, date: dateStr }),
-      onMoveActivity: async (activity, newDate) => {
-        if (!canEditActivity(activity.collectionType)) return;
-        const colMap = {
-          accountTask: "account_tasks",
-          editingTask: "editing",
-          managementTask: "management_tasks",
-          event: "events"
-        };
-        const colName = colMap[activity.collectionType];
-        if (colName)
-          await updateDoc(dataDoc(colName, activity.id), {
-            date: newDate,
-            updatedAt: nowIso()
-          });
-      }
-    }
-  ))), view === "calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-3xl text-[#2f3437] dark:text-[#f1efe9]" }, "Calendario")), /* @__PURE__ */ React.createElement(
-    ViewTabs,
-    {
-      active: "calendar",
-      onChange: handleNavigate,
-      items: [
-        canAccessView(currentUserProfile, "general-calendar") && {
-          id: "general-calendar",
-          label: "General"
-        },
-        canAccessView(currentUserProfile, "calendar") && {
-          id: "calendar",
-          label: "Producciones"
-        }
-      ].filter(Boolean)
-    }
-  )), /* @__PURE__ */ React.createElement("div", { className: "surface flex-1 flex flex-col overflow-hidden" }, /* @__PURE__ */ React.createElement(
-    CalendarGrid,
-    {
-      events: events.filter((e) => e.type === "production"),
-      baseColor: "emerald",
-      canAdd: userHasPermission(
-        currentUserProfile,
-        "create_calendar_events"
       ),
-      onAdd: (dateStr) => setModalConfig({
-        isOpen: true,
-        type: "event",
-        data: { date: dateStr, type: "production" }
-      }),
-      onEventClick: (e) => handleEventClick(e, "event")
-    }
-  ))), view === "performance" && /* @__PURE__ */ React.createElement(
-    PerformanceView,
-    {
-      accountTasks,
-      editingTasks,
-      editors,
-      managers,
-      users: appUsers
-    }
-  ), view === "reports" && /* @__PURE__ */ React.createElement(
-    ReportsView,
-    {
-      accountTasks,
-      editingTasks,
-      managementTasks,
-      clients,
-      managers,
-      editors,
-      users: managementUsers
-    }
-  ))), /* @__PURE__ */ React.createElement(
+      view === "client-detail" && selectedClient && /* @__PURE__ */ React.createElement(
+        ClientDetail,
+        {
+          client: selectedClient,
+          managers,
+          legacyColorMap: LEGACY_COLOR_MAP,
+          onReassignManager: reassignClientManager,
+          onBack: () => handleNavigate("clients"),
+          onUpdate: updateClient,
+          onDelete: () => setDeleteConfirm({
+            isOpen: true,
+            type: "client",
+            id: selectedClient.id,
+            title: selectedClient.name
+          }),
+          onEdit: () => setModalConfig({
+            isOpen: true,
+            type: "client",
+            data: selectedClient,
+            isEdit: true
+          }),
+          chatUnread: chatUnread.byClient?.[selectedClient.id] || 0,
+          onOpenChat: () => {
+            openClientChat(selectedClient);
+            handleNavigate("chat");
+          }
+        }
+      ),
+      view === "chat" && /* @__PURE__ */ React.createElement(
+        ClientChatView,
+        {
+          clients,
+          clientChats,
+          chatUnread,
+          activeClient: selectedChatClient,
+          onSelectClient: openClientChat,
+          onSendMessage: addClientChatMessage,
+          onOpenTask: openTaskFromChat,
+          onDeleteForEveryone: deleteChatForEveryone,
+          onDeleteForMe: hideChatForMe,
+          hiddenIds: chatHiddenIds,
+          reactions: chatReactions,
+          pins: chatPins,
+          onReact: toggleChatReaction,
+          onPin: toggleChatPin,
+          onForward: forwardChatMessage,
+          currentUserId: currentUserProfile?.id || authEmail || "",
+          currentUserProfile,
+          canModerate: userHasPermission(
+            currentUserProfile,
+            "moderate_client_chat"
+          ),
+          mentionables: chatMentionables,
+          accountTasks,
+          editingTasks,
+          managementTasks,
+          fetchFullMessage: fetchClientChatMessage
+        }
+      ),
+      view === "managers" && /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement(
+        ViewTabs,
+        {
+          active: "managers",
+          onChange: handleNavigate,
+          items: [
+            canAccessView(currentUserProfile, "managers") && {
+              id: "managers",
+              label: "Accounts"
+            },
+            canAccessView(currentUserProfile, "editors") && {
+              id: "editors",
+              label: "Editores"
+            }
+          ].filter(Boolean)
+        }
+      ), /* @__PURE__ */ React.createElement(
+        TeamView,
+        {
+          title: "Account Managers",
+          team: managers,
+          iconColor: "indigo",
+          onAdd: () => setModalConfig({ isOpen: true, type: "manager" }),
+          onSelect: (m) => {
+            setSelectedManager(m);
+            handleNavigate("manager-detail");
+          },
+          onDelete: (m) => setDeleteConfirm({
+            isOpen: true,
+            type: "manager",
+            id: m.id,
+            title: m.name
+          }),
+          onEdit: (m) => setModalConfig({
+            isOpen: true,
+            type: "manager",
+            data: m,
+            isEdit: true
+          })
+        }
+      )),
+      view === "manager-detail" && selectedManager && /* @__PURE__ */ React.createElement(
+        PersonCalendarDetail,
+        {
+          person: selectedManager,
+          tasks: accountTasks,
+          title: "Planificaci\xF3n de Cuentas",
+          baseColor: LEGACY_COLOR_MAP[selectedManager.color] || selectedManager.color || "indigo",
+          onBack: () => handleNavigate("managers"),
+          onAddEvent: (dateStr) => setModalConfig({
+            isOpen: true,
+            type: "accountTask",
+            data: { date: dateStr, contextId: selectedManager.id }
+          }),
+          onEventClick: (e) => handleEventClick(e, "accountTask")
+        }
+      ),
+      view === "editors" && /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement(
+        ViewTabs,
+        {
+          active: "editors",
+          onChange: handleNavigate,
+          items: [
+            canAccessView(currentUserProfile, "managers") && {
+              id: "managers",
+              label: "Accounts"
+            },
+            canAccessView(currentUserProfile, "editors") && {
+              id: "editors",
+              label: "Editores"
+            }
+          ].filter(Boolean)
+        }
+      ), /* @__PURE__ */ React.createElement(
+        TeamView,
+        {
+          title: "Editores",
+          team: editors,
+          iconColor: "rose",
+          onAdd: () => setModalConfig({ isOpen: true, type: "editor" }),
+          onSelect: (e) => {
+            setSelectedEditor(e);
+            handleNavigate("editor-detail");
+          },
+          onDelete: (e) => setDeleteConfirm({
+            isOpen: true,
+            type: "editor",
+            id: e.id,
+            title: e.name
+          }),
+          onEdit: (e) => setModalConfig({
+            isOpen: true,
+            type: "editor",
+            data: e,
+            isEdit: true
+          })
+        }
+      )),
+      view === "editor-detail" && selectedEditor && /* @__PURE__ */ React.createElement(
+        PersonCalendarDetail,
+        {
+          person: selectedEditor,
+          tasks: editingTasks,
+          title: "Planificaci\xF3n de Edici\xF3n",
+          baseColor: selectedEditor.color || "rose",
+          onBack: () => handleNavigate("editors"),
+          onAddEvent: (dateStr) => setModalConfig({
+            isOpen: true,
+            type: "editingTask",
+            data: { date: dateStr, contextId: selectedEditor.id }
+          }),
+          onEventClick: (e) => handleEventClick(e, "editingTask")
+        }
+      ),
+      view === "account-room" && /* @__PURE__ */ React.createElement(
+        AccountRoomView,
+        {
+          tasks: accountTasks,
+          managers,
+          clients,
+          currentUserProfile,
+          onAdd: (dateStr) => setModalConfig({
+            isOpen: true,
+            type: "accountTask",
+            data: { date: dateStr }
+          }),
+          onEdit: (task) => setModalConfig({
+            isOpen: true,
+            type: "accountTask",
+            data: task,
+            isEdit: true
+          }),
+          onChangeStatus: changeAccountTaskStatus,
+          onDelete: (id) => setDeleteConfirm({
+            isOpen: true,
+            type: "accountTask",
+            id,
+            title: "Tarea"
+          }),
+          onTaskClick: (t) => setTaskDetailConfig({
+            isOpen: true,
+            task: t,
+            type: "accountTask"
+          }),
+          onLoadHistory: handleLoadTaskHistory,
+          historyLoaded: taskHistoryLoaded,
+          historyLoading: isLoadingTaskHistory,
+          legacyColorMap: LEGACY_COLOR_MAP
+        }
+      ),
+      view === "editions" && /* @__PURE__ */ React.createElement(
+        EditionsRoomView,
+        {
+          tasks: editingTasks,
+          editors,
+          clients,
+          currentUserProfile,
+          onAdd: (dateStr) => setModalConfig({
+            isOpen: true,
+            type: "editingTask",
+            data: { date: dateStr }
+          }),
+          onEdit: (task) => setModalConfig({
+            isOpen: true,
+            type: "editingTask",
+            data: task,
+            isEdit: true
+          }),
+          onChangeStatus: changeEditingTaskStatus,
+          onDelete: (id) => setDeleteConfirm({
+            isOpen: true,
+            type: "editingTask",
+            id,
+            title: "Tarea"
+          }),
+          onTaskClick: (t) => setTaskDetailConfig({
+            isOpen: true,
+            task: t,
+            type: "editingTask"
+          }),
+          onLoadHistory: handleLoadTaskHistory,
+          historyLoaded: taskHistoryLoaded,
+          historyLoading: isLoadingTaskHistory
+        }
+      ),
+      view === "management-room" && /* @__PURE__ */ React.createElement(
+        ManagementRoomView,
+        {
+          tasks: managementTasks,
+          members: managementUsers,
+          clients,
+          currentUserProfile,
+          onAdd: (dateStr) => setModalConfig({
+            isOpen: true,
+            type: "managementTask",
+            data: {
+              date: dateStr,
+              contextId: defaultManagementAssigneeId
+            }
+          }),
+          onEdit: (task) => setModalConfig({
+            isOpen: true,
+            type: "managementTask",
+            data: task,
+            isEdit: true
+          }),
+          onChangeStatus: changeManagementTaskStatus,
+          onDelete: (id) => setDeleteConfirm({
+            isOpen: true,
+            type: "managementTask",
+            id,
+            title: "Tarea de gestion"
+          }),
+          onTaskClick: (t) => setTaskDetailConfig({
+            isOpen: true,
+            task: t,
+            type: "managementTask"
+          }),
+          onLoadHistory: handleLoadTaskHistory,
+          historyLoaded: taskHistoryLoaded,
+          historyLoading: isLoadingTaskHistory
+        }
+      ),
+      view === "control-center" && /* @__PURE__ */ React.createElement(
+        UsersAccessView,
+        {
+          users: appUsers,
+          managers,
+          editors,
+          auditLogs,
+          currentUserProfile,
+          onAdd: () => setModalConfig({ isOpen: true, type: "user" }),
+          onEdit: (userRecord) => setModalConfig({
+            isOpen: true,
+            type: "user",
+            data: userRecord,
+            isEdit: true
+          }),
+          onResendVerification: requestUserVerification
+        }
+      ),
+      view === "settings" && /* @__PURE__ */ React.createElement(
+        ProfileSettingsView,
+        {
+          profile: currentUserProfile,
+          roleLabel: ROLE_DEFINITIONS[currentUserProfile?.role]?.label || currentUserProfile?.role || "",
+          onSave: updateMyProfile
+        }
+      ),
+      view === "general-calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-3xl text-[#2f3437] dark:text-[#f1efe9]" }, "Calendario")), /* @__PURE__ */ React.createElement(
+        ViewTabs,
+        {
+          active: "general-calendar",
+          onChange: handleNavigate,
+          items: [
+            canAccessView(currentUserProfile, "general-calendar") && {
+              id: "general-calendar",
+              label: "General"
+            },
+            canAccessView(currentUserProfile, "calendar") && {
+              id: "calendar",
+              label: "Producciones"
+            }
+          ].filter(Boolean)
+        }
+      )), /* @__PURE__ */ React.createElement("div", { className: "surface flex-1 flex flex-col overflow-hidden" }, /* @__PURE__ */ React.createElement(
+        GeneralCalendarGrid,
+        {
+          activities: allActivities,
+          onDayClick: (dateStr) => setDayDetailsModal({ isOpen: true, date: dateStr }),
+          onMoveActivity: async (activity, newDate) => {
+            if (!canEditActivity(activity.collectionType)) return;
+            const colMap = {
+              accountTask: "account_tasks",
+              editingTask: "editing",
+              managementTask: "management_tasks",
+              event: "events"
+            };
+            const colName = colMap[activity.collectionType];
+            if (colName)
+              await updateDoc(dataDoc(colName, activity.id), {
+                date: newDate,
+                updatedAt: nowIso()
+              });
+          }
+        }
+      ))),
+      view === "calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-3xl text-[#2f3437] dark:text-[#f1efe9]" }, "Calendario")), /* @__PURE__ */ React.createElement(
+        ViewTabs,
+        {
+          active: "calendar",
+          onChange: handleNavigate,
+          items: [
+            canAccessView(currentUserProfile, "general-calendar") && {
+              id: "general-calendar",
+              label: "General"
+            },
+            canAccessView(currentUserProfile, "calendar") && {
+              id: "calendar",
+              label: "Producciones"
+            }
+          ].filter(Boolean)
+        }
+      )), /* @__PURE__ */ React.createElement("div", { className: "surface flex-1 flex flex-col overflow-hidden" }, /* @__PURE__ */ React.createElement(
+        CalendarGrid,
+        {
+          events: events.filter((e) => e.type === "production"),
+          baseColor: "emerald",
+          canAdd: userHasPermission(
+            currentUserProfile,
+            "create_calendar_events"
+          ),
+          onAdd: (dateStr) => setModalConfig({
+            isOpen: true,
+            type: "event",
+            data: { date: dateStr, type: "production" }
+          }),
+          onEventClick: (e) => handleEventClick(e, "event")
+        }
+      ))),
+      view === "performance" && /* @__PURE__ */ React.createElement(
+        PerformanceView,
+        {
+          editingTasks,
+          editors,
+          users: appUsers
+        }
+      ),
+      view === "reports" && /* @__PURE__ */ React.createElement(
+        ReportsView,
+        {
+          accountTasks,
+          editingTasks,
+          managementTasks,
+          clients,
+          managers,
+          editors,
+          users: managementUsers
+        }
+      )
+    )
+  ), /* @__PURE__ */ React.createElement(
     MobileBottomNav,
     {
       view,
@@ -4412,6 +4932,13 @@ function App() {
       onAddTimeEntry: addTaskTimeEntry,
       onUpdateChecklist: updateTaskChecklist,
       onChangePriority: changeTaskPriority,
+      clientChats,
+      onSendClientChatMessage: addClientChatMessage,
+      onOpenClientChat: (clientId) => {
+        const client = clients.find((item) => item.id === clientId);
+        openClientChat(client || null);
+        handleNavigate("chat");
+      },
       onChangeAssignee: changeTaskAssignee,
       onChangeAssignees: changeTaskAssignees,
       sendNotification,
@@ -7515,7 +8042,9 @@ var ClientDetail = ({
   onBack,
   onUpdate,
   onDelete,
-  onEdit
+  onEdit,
+  onOpenChat,
+  chatUnread = 0
 }) => /* @__PURE__ */ React.createElement("div", { className: "space-y-6 max-w-5xl mx-auto fade-in" }, /* @__PURE__ */ React.createElement(
   Breadcrumb,
   {
@@ -7557,7 +8086,16 @@ var ClientDetail = ({
     placeholder: "Asignar Account Manager...",
     buttonClassName: "flex items-center gap-2 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 text-white font-bold text-xs transition-all max-w-full"
   }
-)))), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-start md:items-end gap-1.5 shrink-0 mt-4 md:mt-0" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-bold uppercase tracking-widest text-white/50" }, "Estado"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-1 bg-white/10 p-1 rounded-xl" }, CLIENT_STATUSES.map((s) => {
+)), onOpenChat && /* @__PURE__ */ React.createElement(
+  "button",
+  {
+    onClick: onOpenChat,
+    className: "mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-blue-700"
+  },
+  /* @__PURE__ */ React.createElement(Icon, { name: "MessageSquare", size: 14 }),
+  " Abrir chat interno",
+  chatUnread > 0 && /* @__PURE__ */ React.createElement("span", { className: "rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-black" }, chatUnread)
+))), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-start md:items-end gap-1.5 shrink-0 mt-4 md:mt-0" }, /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-bold uppercase tracking-widest text-white/50" }, "Estado"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-1 bg-white/10 p-1 rounded-xl" }, CLIENT_STATUSES.map((s) => {
   const active = (client.status || "Activo") === s.id;
   return /* @__PURE__ */ React.createElement(
     "button",
@@ -7597,6 +8135,1070 @@ var ClientDetail = ({
   /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 14 }),
   " ELIMINAR CLIENTE"
 )))));
+var CHAT_TASK_CHIP_STYLES = {
+  accountTask: "text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/30",
+  editingTask: "text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30",
+  managementTask: "text-violet-600 dark:text-violet-300 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30"
+};
+var CHAT_TASK_LABELS = {
+  accountTask: "Account",
+  editingTask: "Edici\xF3n",
+  managementTask: "Gesti\xF3n"
+};
+var renderChatText = (text = "", onColored = false) => String(text).split(/(@[^\s@]+)/g).map(
+  (part, index) => part.startsWith("@") ? /* @__PURE__ */ React.createElement(
+    "span",
+    {
+      key: index,
+      className: onColored ? "font-bold underline" : "font-semibold text-blue-600 dark:text-blue-400"
+    },
+    part
+  ) : /* @__PURE__ */ React.createElement(React.Fragment, { key: index }, part)
+);
+var CHAT_REACTION_EMOJIS = ["\u{1F44D}", "\u2764\uFE0F", "\u{1F602}", "\u{1F62E}", "\u{1F622}", "\u{1F64F}", "\u2705"];
+var CHAT_MAX_FILE = 8 * 1024 * 1024;
+var chatFileToBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
+var formatChatBytes = (bytes = 0) => {
+  if (!bytes) return "";
+  const kb = bytes / 1024;
+  return kb < 1024 ? `${Math.round(kb)} KB` : `${(kb / 1024).toFixed(1)} MB`;
+};
+var isChatImage = (type = "") => String(type).startsWith("image/");
+var isChatVideo = (type = "") => String(type).startsWith("video/");
+var isChatAudio = (type = "") => String(type).startsWith("audio/");
+var chatShortTime = (iso) => {
+  try {
+    return new Date(iso).toLocaleTimeString("es", {
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  } catch {
+    return "";
+  }
+};
+var ClientChatView = ({
+  clients = [],
+  clientChats = [],
+  chatUnread = { byClient: {}, total: 0 },
+  activeClient,
+  onSelectClient,
+  onSendMessage,
+  onOpenTask,
+  onDeleteForEveryone,
+  onDeleteForMe,
+  hiddenIds,
+  reactions = [],
+  pins = [],
+  onReact,
+  onPin,
+  onForward,
+  currentUserId = "",
+  currentUserProfile,
+  canModerate = false,
+  mentionables = [],
+  accountTasks = [],
+  editingTasks = [],
+  managementTasks = [],
+  fetchFullMessage
+}) => {
+  const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [menuFor, setMenuFor] = useState(null);
+  const [reactionPickerFor, setReactionPickerFor] = useState(null);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [forwardTarget, setForwardTarget] = useState(null);
+  const [forwardSearch, setForwardSearch] = useState("");
+  const [text, setText] = useState("");
+  const [mentionedIds, setMentionedIds] = useState([]);
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionStart, setMentionStart] = useState(-1);
+  const [taskRef, setTaskRef] = useState(null);
+  const [taskPickerOpen, setTaskPickerOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [pending, setPending] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [fullMap, setFullMap] = useState({});
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const textareaRef = useRef(null);
+  const scrollRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordTimerRef = useRef(null);
+  const discardRef = useRef(false);
+  const myId = String(currentUserProfile?.id || "");
+  const lastMsgByClient = {};
+  clientChats.forEach((message) => {
+    if (!message.clientId) return;
+    const prev = lastMsgByClient[message.clientId];
+    if (!prev || (message.createdAt || "") > (prev.createdAt || "")) {
+      lastMsgByClient[message.clientId] = message;
+    }
+  });
+  const previewText = (message) => {
+    if (!message) return "Sin mensajes";
+    if (message.text) return message.text;
+    const count = Array.isArray(message.attachments) ? message.attachments.length : 0;
+    return count > 0 ? `\u{1F4CE} ${count} archivo${count === 1 ? "" : "s"}` : "\u2026";
+  };
+  const term = search.trim().toLowerCase();
+  const sortedClients = [...clients].filter((client) => !term || (client.name || "").toLowerCase().includes(term)).sort((a, b) => {
+    const aTime = lastMsgByClient[a.id]?.createdAt || "";
+    const bTime = lastMsgByClient[b.id]?.createdAt || "";
+    if (aTime !== bTime) return aTime > bTime ? -1 : 1;
+    return (a.name || "").localeCompare(b.name || "");
+  });
+  const messages = activeClient ? clientChats.filter(
+    (message) => message.clientId === activeClient.id && !(hiddenIds && hiddenIds.has(String(message.id)))
+  ).sort((a, b) => (a.createdAt || "") > (b.createdAt || "") ? 1 : -1) : [];
+  const reactionsByMessage = {};
+  reactions.forEach((reaction) => {
+    if (!reaction.messageId || !reaction.emoji) return;
+    const byEmoji = reactionsByMessage[reaction.messageId] ||= {};
+    const entry = byEmoji[reaction.emoji] ||= { count: 0, mine: false, names: [] };
+    entry.count += 1;
+    if (reaction.userName) entry.names.push(reaction.userName);
+    if (String(reaction.userId || "") === String(currentUserId)) entry.mine = true;
+  });
+  const pinnedIds = new Set(
+    pins.filter((pin) => activeClient && pin.clientId === activeClient.id).map((pin) => String(pin.messageId))
+  );
+  const pinnedMessages = messages.filter(
+    (message) => pinnedIds.has(String(message.id)) && !message.deleted
+  );
+  const clientTasks = activeClient ? [
+    ...accountTasks.filter((task) => task.clientId === activeClient.id).map((task) => ({ id: task.id, title: task.title, type: "accountTask" })),
+    ...editingTasks.filter((task) => task.clientId === activeClient.id).map((task) => ({ id: task.id, title: task.title, type: "editingTask" })),
+    ...managementTasks.filter((task) => task.clientId === activeClient.id).map((task) => ({ id: task.id, title: task.title, type: "managementTask" }))
+  ] : [];
+  const mentionSuggestions = mentionOpen ? mentionables.filter((person) => {
+    const q = mentionQuery.toLowerCase();
+    if (!q) return true;
+    return (person.name || "").toLowerCase().includes(q) || (person.email || "").toLowerCase().includes(q);
+  }).slice(0, 30) : [];
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [activeClient?.id, messages.length]);
+  useEffect(() => {
+    if (!activeClient || typeof fetchFullMessage !== "function") return;
+    let cancelled = false;
+    const need = messages.filter((message) => {
+      const atts = message.attachments || [];
+      if (atts.length === 0 || fullMap[message.id]) return false;
+      if (atts.some((a) => a.data)) return false;
+      return atts.some((a) => a.hasData);
+    });
+    if (need.length === 0) return;
+    (async () => {
+      const results = await Promise.all(
+        need.map(async (message) => [
+          message.id,
+          (await fetchFullMessage(message.id))?.attachments || []
+        ])
+      );
+      if (cancelled) return;
+      setFullMap((prev) => {
+        const next = { ...prev };
+        results.forEach(([id, atts]) => {
+          next[id] = atts;
+        });
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeClient?.id, messages.length]);
+  const handleTextChange = (event) => {
+    const value = event.target.value;
+    setText(value);
+    const caret = event.target.selectionStart ?? value.length;
+    const before = value.slice(0, caret);
+    const atMatch = before.match(/@([^\s@]*)$/);
+    if (atMatch) {
+      setMentionOpen(true);
+      setMentionQuery(atMatch[1]);
+      setMentionStart(before.lastIndexOf("@"));
+      setTaskPickerOpen(false);
+      setAttachMenuOpen(false);
+    } else {
+      setMentionOpen(false);
+      setMentionQuery("");
+      setMentionStart(-1);
+    }
+  };
+  const insertMention = (person) => {
+    const before = text.slice(0, mentionStart);
+    const after = text.slice(mentionStart + 1 + mentionQuery.length);
+    setText(`${before}@${person.name} ${after}`);
+    setMentionedIds(
+      (prev) => prev.includes(person.id) ? prev : [...prev, person.id]
+    );
+    setMentionOpen(false);
+    setMentionQuery("");
+    setMentionStart(-1);
+    setTimeout(() => textareaRef.current && textareaRef.current.focus(), 0);
+  };
+  const handleFiles = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of files) {
+        if (file.size > CHAT_MAX_FILE) {
+          alert(`"${file.name}" supera el m\xE1ximo de 8 MB.`);
+          continue;
+        }
+        const data = await chatFileToBase64(file);
+        setPending((prev) => [
+          ...prev,
+          {
+            id: Math.random().toString(36).slice(2, 10),
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            data
+          }
+        ]);
+      }
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+  const openFilePicker = (accept) => {
+    setAttachMenuOpen(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.accept = accept || "";
+      fileInputRef.current.click();
+    }
+  };
+  const startRecording = async () => {
+    if (recording) return;
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      alert("Tu navegador no permite grabar audio.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      discardRef.current = false;
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        if (discardRef.current) {
+          discardRef.current = false;
+          return;
+        }
+        const blob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || "audio/webm"
+        });
+        if (blob.size === 0) return;
+        if (blob.size > CHAT_MAX_FILE) {
+          alert("La nota de voz supera el m\xE1ximo de 8 MB.");
+          return;
+        }
+        const data = await chatFileToBase64(blob);
+        setPending((prev) => [
+          ...prev,
+          {
+            id: Math.random().toString(36).slice(2, 10),
+            name: `nota-de-voz-${Date.now()}.webm`,
+            type: blob.type || "audio/webm",
+            size: blob.size,
+            data
+          }
+        ]);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+      setRecordSeconds(0);
+      recordTimerRef.current = setInterval(
+        () => setRecordSeconds((seconds) => seconds + 1),
+        1e3
+      );
+    } catch {
+      alert("No se pudo acceder al micr\xF3fono.");
+    }
+  };
+  const stopRecording = (discard = false) => {
+    if (recordTimerRef.current) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+    discardRef.current = discard;
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    setRecording(false);
+    setRecordSeconds(0);
+  };
+  const handleSubmit = async () => {
+    const trimmed = text.trim();
+    if (!trimmed && pending.length === 0 || submitting || !activeClient) return;
+    setSubmitting(true);
+    try {
+      await onSendMessage({
+        clientId: activeClient.id,
+        text: trimmed,
+        mentionedIds,
+        taskRef,
+        attachments: pending,
+        replyTo: replyingTo ? {
+          id: replyingTo.id,
+          authorName: replyingTo.authorName,
+          text: replyingTo.text
+        } : null
+      });
+      setText("");
+      setMentionedIds([]);
+      setTaskRef(null);
+      setPending([]);
+      setReplyingTo(null);
+      setMentionOpen(false);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  const renderAttachment = (att) => {
+    const key = att.id || att.name;
+    if (att.data && isChatImage(att.type)) {
+      return /* @__PURE__ */ React.createElement(
+        "a",
+        {
+          key,
+          href: att.data,
+          target: "_blank",
+          rel: "noreferrer",
+          className: "block"
+        },
+        /* @__PURE__ */ React.createElement(
+          "img",
+          {
+            src: att.data,
+            alt: att.name,
+            className: "max-h-56 max-w-[260px] rounded-lg border border-slate-200 object-cover dark:border-white/10"
+          }
+        )
+      );
+    }
+    if (att.data && isChatVideo(att.type)) {
+      return /* @__PURE__ */ React.createElement(
+        "video",
+        {
+          key,
+          src: att.data,
+          controls: true,
+          className: "max-h-60 max-w-[300px] rounded-lg border border-slate-200 dark:border-white/10"
+        }
+      );
+    }
+    if (att.data && isChatAudio(att.type)) {
+      return /* @__PURE__ */ React.createElement("audio", { key, src: att.data, controls: true, className: "max-w-[280px]" });
+    }
+    return /* @__PURE__ */ React.createElement(
+      "a",
+      {
+        key,
+        href: att.data || void 0,
+        download: att.name,
+        target: "_blank",
+        rel: "noreferrer",
+        className: `inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-white/10 dark:bg-slate-800 ${att.data ? "hover:bg-slate-50 dark:hover:bg-slate-700" : "opacity-60"}`
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "Paperclip", size: 14, className: "shrink-0 text-slate-500" }),
+      /* @__PURE__ */ React.createElement("span", { className: "max-w-[180px] truncate font-semibold text-slate-700 dark:text-slate-200" }, att.name),
+      /* @__PURE__ */ React.createElement("span", { className: "text-slate-400" }, att.data ? formatChatBytes(att.size) : "cargando\u2026")
+    );
+  };
+  return /* @__PURE__ */ React.createElement("div", { className: "flex h-full min-h-0 overflow-hidden bg-white dark:bg-[#1a1d21] fade-in" }, /* @__PURE__ */ React.createElement(
+    "aside",
+    {
+      className: `${activeClient ? "hidden md:flex" : "flex"} min-h-0 w-full flex-col border-r border-slate-200 dark:border-white/10 md:w-72 lg:w-80 shrink-0`
+    },
+    /* @__PURE__ */ React.createElement("div", { className: "p-3 border-b border-slate-100 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-3" }, /* @__PURE__ */ React.createElement(
+      Icon,
+      {
+        name: "MessageSquare",
+        size: 18,
+        className: "text-slate-500 dark:text-slate-400"
+      }
+    ), /* @__PURE__ */ React.createElement("h2", { className: "text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide" }, "Chat interno")), /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
+      Icon,
+      {
+        name: "Search",
+        size: 14,
+        className: "absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+      }
+    ), /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        value: search,
+        onChange: (event) => setSearch(event.target.value),
+        placeholder: "Buscar cliente...",
+        className: "w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+      }
+    ))),
+    /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-h-0 overflow-y-auto custom-scroll pb-mobile-nav md:pb-0" }, sortedClients.length === 0 && /* @__PURE__ */ React.createElement("p", { className: "p-4 text-center text-sm text-slate-400" }, "No hay clientes."), sortedClients.map((client) => {
+      const unread = chatUnread.byClient?.[client.id] || 0;
+      const last = lastMsgByClient[client.id];
+      const isActive = activeClient?.id === client.id;
+      return /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          key: client.id,
+          onClick: () => onSelectClient(client),
+          className: `flex w-full items-center gap-3 border-b border-slate-50 px-3 py-2.5 text-left transition-colors dark:border-white/5 ${isActive ? "bg-blue-50 dark:bg-blue-500/10" : "hover:bg-slate-50 dark:hover:bg-white/5"}`
+        },
+        client.photo ? /* @__PURE__ */ React.createElement(
+          "img",
+          {
+            src: client.photo,
+            alt: client.name,
+            className: "h-9 w-9 shrink-0 rounded-lg object-cover"
+          }
+        ) : /* @__PURE__ */ React.createElement("div", { className: "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white" }, (client.name || "C").slice(0, 2).toUpperCase()),
+        /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement(
+          "p",
+          {
+            className: `truncate text-sm ${unread > 0 ? "font-black" : "font-bold"} ${isActive ? "text-blue-700 dark:text-blue-300" : "text-slate-700 dark:text-slate-200"}`
+          },
+          client.name || "Cliente"
+        ), /* @__PURE__ */ React.createElement("p", { className: "truncate text-xs text-slate-400" }, last ? `${last.authorName ? `${last.authorName}: ` : ""}${previewText(last)}` : "Sin mensajes")),
+        unread > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-1 shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-black text-white" }, unread)
+      );
+    }))
+  ), /* @__PURE__ */ React.createElement(
+    "section",
+    {
+      className: `${activeClient ? "flex" : "hidden md:flex"} min-h-0 min-w-0 flex-1 flex-col`
+    },
+    !activeClient ? /* @__PURE__ */ React.createElement("div", { className: "flex flex-1 flex-col items-center justify-center p-8 text-center" }, /* @__PURE__ */ React.createElement(Icon, { name: "MessageSquare", size: 40, className: "mb-3 text-slate-300" }), /* @__PURE__ */ React.createElement("p", { className: "text-sm font-semibold text-slate-500 dark:text-slate-400" }, "Elige un cliente para ver la conversaci\xF3n")) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "flex shrink-0 items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => onSelectClient(null),
+        "aria-label": "Volver a la lista",
+        className: "md:hidden text-slate-500 hover:text-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "ChevronLeft", size: 20 })
+    ), activeClient.photo ? /* @__PURE__ */ React.createElement(
+      "img",
+      {
+        src: activeClient.photo,
+        alt: activeClient.name,
+        className: "h-9 w-9 rounded-lg object-cover"
+      }
+    ) : /* @__PURE__ */ React.createElement("div", { className: "flex h-9 w-9 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white" }, (activeClient.name || "C").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-black text-slate-700 dark:text-slate-200" }, activeClient.name || "Cliente"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-400" }, messages.length, " mensaje", messages.length === 1 ? "" : "s"))), pinnedMessages.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "shrink-0 space-y-1 border-b border-slate-100 bg-amber-50/60 px-4 py-2 dark:border-white/10 dark:bg-amber-500/5" }, pinnedMessages.slice(-3).map((pinned) => /* @__PURE__ */ React.createElement("div", { key: pinned.id, className: "flex items-center gap-2 text-xs" }, /* @__PURE__ */ React.createElement(
+      Icon,
+      {
+        name: "Pin",
+        size: 12,
+        className: "shrink-0 text-amber-600 dark:text-amber-400"
+      }
+    ), /* @__PURE__ */ React.createElement("span", { className: "shrink-0 font-bold text-slate-600 dark:text-slate-300" }, pinned.authorName, ":"), /* @__PURE__ */ React.createElement("span", { className: "truncate text-slate-500 dark:text-slate-400" }, pinned.text || (Array.isArray(pinned.attachments) && pinned.attachments.length ? "\u{1F4CE} Adjunto" : "")), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => onPin && onPin(pinned),
+        "aria-label": "Desfijar",
+        className: "ml-auto shrink-0 text-slate-400 hover:text-red-500"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 12 })
+    )))), /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        ref: scrollRef,
+        className: "flex-1 min-h-0 overflow-y-auto py-3 custom-scroll bg-white dark:bg-[#1a1d21]"
+      },
+      messages.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-8 text-center" }, /* @__PURE__ */ React.createElement(
+        Icon,
+        {
+          name: "MessageSquare",
+          size: 22,
+          className: "mx-auto mb-2 text-slate-300"
+        }
+      ), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-400" }, "S\xE9 el primero en escribir sobre este cliente.")),
+      messages.map((message, index) => {
+        const mine = myId && String(message.authorId || "") === myId;
+        const prev = messages[index - 1];
+        const grouped = prev && String(prev.authorId || "") === String(message.authorId || "") && (prev.authorName || "") === (message.authorName || "") && message.createdAt && prev.createdAt && new Date(message.createdAt) - new Date(prev.createdAt) < 5 * 60 * 1e3;
+        const atts = fullMap[message.id] || message.attachments || [];
+        return /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            key: message.id,
+            className: `group flex px-4 ${grouped ? "mt-1" : "mt-4"} ${mine ? "justify-end" : "justify-start"}`
+          },
+          !mine && /* @__PURE__ */ React.createElement("div", { className: "mr-2 w-8 shrink-0 self-end" }, !grouped && /* @__PURE__ */ React.createElement("div", { className: "flex h-8 w-8 items-center justify-center rounded-full bg-[#555552] text-[10px] font-black text-white" }, (message.authorName || "U").slice(0, 2).toUpperCase())),
+          /* @__PURE__ */ React.createElement("div", { className: "relative min-w-0 max-w-[78%]" }, !mine && !grouped && /* @__PURE__ */ React.createElement("p", { className: "mb-0.5 px-1 text-[11px] font-bold text-slate-500 dark:text-slate-400" }, message.authorName || "Usuario"), /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              className: `relative rounded-2xl px-3 py-2 ${mine ? "rounded-br-sm bg-emerald-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`
+            },
+            !message.deleted && /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                onClick: () => setMenuFor(menuFor === message.id ? null : message.id),
+                "aria-label": "Opciones del mensaje",
+                className: `absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100 ${mine ? "text-white/80 hover:bg-black/20" : "text-slate-400 hover:bg-black/5 dark:hover:bg-white/10"}`
+              },
+              /* @__PURE__ */ React.createElement(Icon, { name: "ChevronDown", size: 14 })
+            ),
+            reactionPickerFor === message.id && /* @__PURE__ */ React.createElement(
+              "div",
+              {
+                className: `absolute bottom-full z-40 mb-2 flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-2xl dark:border-slate-600 dark:bg-slate-800 ${mine ? "right-0" : "left-0"}`
+              },
+              CHAT_REACTION_EMOJIS.map((emoji) => /* @__PURE__ */ React.createElement(
+                "button",
+                {
+                  key: emoji,
+                  onMouseDown: (event) => {
+                    event.preventDefault();
+                    if (onReact) onReact(message, emoji);
+                    setReactionPickerFor(null);
+                  },
+                  className: "flex h-9 w-9 items-center justify-center rounded-full text-xl leading-none transition-transform hover:scale-125 hover:bg-slate-100 dark:hover:bg-slate-700"
+                },
+                emoji
+              ))
+            ),
+            menuFor === message.id && /* @__PURE__ */ React.createElement(
+              "div",
+              {
+                className: `absolute top-7 z-40 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-slate-700 shadow-2xl dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 ${mine ? "right-0" : "left-0"}`
+              },
+              /* @__PURE__ */ React.createElement(
+                "button",
+                {
+                  onMouseDown: (event) => {
+                    event.preventDefault();
+                    setMenuFor(null);
+                    setReplyingTo(message);
+                  },
+                  className: "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                },
+                /* @__PURE__ */ React.createElement(Icon, { name: "Reply", size: 14, className: "text-slate-500" }),
+                "Responder"
+              ),
+              /* @__PURE__ */ React.createElement(
+                "button",
+                {
+                  onMouseDown: (event) => {
+                    event.preventDefault();
+                    setMenuFor(null);
+                    setReactionPickerFor(message.id);
+                  },
+                  className: "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                },
+                /* @__PURE__ */ React.createElement(Icon, { name: "Smile", size: 14, className: "text-slate-500" }),
+                "Reaccionar"
+              ),
+              /* @__PURE__ */ React.createElement(
+                "button",
+                {
+                  onMouseDown: (event) => {
+                    event.preventDefault();
+                    setMenuFor(null);
+                    setForwardTarget(message);
+                    setForwardSearch("");
+                  },
+                  className: "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                },
+                /* @__PURE__ */ React.createElement(Icon, { name: "Send", size: 14, className: "text-slate-500" }),
+                "Reenviar"
+              ),
+              message.text && /* @__PURE__ */ React.createElement(
+                "button",
+                {
+                  onMouseDown: (event) => {
+                    event.preventDefault();
+                    if (navigator.clipboard) {
+                      navigator.clipboard.writeText(message.text);
+                    }
+                    setMenuFor(null);
+                  },
+                  className: "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                },
+                /* @__PURE__ */ React.createElement(
+                  Icon,
+                  {
+                    name: "ClipboardList",
+                    size: 14,
+                    className: "text-slate-500"
+                  }
+                ),
+                "Copiar"
+              ),
+              /* @__PURE__ */ React.createElement(
+                "button",
+                {
+                  onMouseDown: (event) => {
+                    event.preventDefault();
+                    setMenuFor(null);
+                    if (onPin) onPin(message);
+                  },
+                  className: "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                },
+                /* @__PURE__ */ React.createElement(Icon, { name: "Pin", size: 14, className: "text-slate-500" }),
+                pinnedIds.has(String(message.id)) ? "Desfijar" : "Fijar"
+              ),
+              mine && /* @__PURE__ */ React.createElement(
+                "button",
+                {
+                  onMouseDown: (event) => {
+                    event.preventDefault();
+                    setMenuFor(null);
+                    setDeleteTarget(message);
+                  },
+                  className: "flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+                },
+                /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 14 }),
+                " Eliminar"
+              )
+            ),
+            message.deleted ? /* @__PURE__ */ React.createElement(
+              "p",
+              {
+                className: `flex items-center gap-1.5 pr-6 text-sm italic ${mine ? "text-white/70" : "text-slate-400"}`
+              },
+              /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 12 }),
+              " Este mensaje fue eliminado"
+            ) : /* @__PURE__ */ React.createElement(React.Fragment, null, message.forwarded && /* @__PURE__ */ React.createElement(
+              "p",
+              {
+                className: `mb-1 flex items-center gap-1 text-[11px] italic ${mine ? "text-white/70" : "text-slate-400"}`
+              },
+              /* @__PURE__ */ React.createElement(Icon, { name: "Send", size: 10 }),
+              " Reenviado"
+            ), message.replyTo && /* @__PURE__ */ React.createElement(
+              "div",
+              {
+                className: `mb-1 rounded-md border-l-2 px-2 py-1 text-xs ${mine ? "border-white/60 bg-black/15" : "border-blue-400 bg-black/5 dark:bg-white/5"}`
+              },
+              /* @__PURE__ */ React.createElement("p", { className: "font-bold opacity-80" }, message.replyTo.authorName || "Mensaje"),
+              /* @__PURE__ */ React.createElement("p", { className: "truncate opacity-70" }, message.replyTo.text)
+            ), message.text && /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words pr-5 text-sm leading-relaxed" }, renderChatText(message.text, mine)), atts.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap gap-2" }, atts.map((att) => renderAttachment(att))), message.taskRef?.taskId && /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                onClick: () => onOpenTask(message.taskRef),
+                className: `mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`
+              },
+              /* @__PURE__ */ React.createElement(
+                Icon,
+                {
+                  name: "ClipboardList",
+                  size: 11,
+                  className: "shrink-0"
+                }
+              ),
+              /* @__PURE__ */ React.createElement("span", { className: "truncate" }, message.taskRef.taskTitle || "Tarea"),
+              /* @__PURE__ */ React.createElement("span", { className: "opacity-70" }, "\xB7", " ", CHAT_TASK_LABELS[message.taskRef.taskType] || "")
+            )),
+            /* @__PURE__ */ React.createElement(
+              "span",
+              {
+                className: `mt-0.5 block text-right text-[10px] ${mine ? "text-white/70" : "text-slate-400"}`
+              },
+              chatShortTime(message.createdAt)
+            )
+          ), reactionsByMessage[message.id] && Object.keys(reactionsByMessage[message.id]).length > 0 && /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              className: `mt-1 flex flex-wrap gap-1 ${mine ? "justify-end" : ""}`
+            },
+            Object.entries(reactionsByMessage[message.id]).map(
+              ([emoji, info]) => /* @__PURE__ */ React.createElement(
+                "button",
+                {
+                  key: emoji,
+                  onClick: () => onReact && onReact(message, emoji),
+                  title: info.names.join(", "),
+                  className: `flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] ${info.mine ? "border-blue-300 bg-blue-50 dark:border-blue-500/40 dark:bg-blue-500/10" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"}`
+                },
+                /* @__PURE__ */ React.createElement("span", null, emoji),
+                /* @__PURE__ */ React.createElement("span", { className: "font-semibold text-slate-600 dark:text-slate-300" }, info.count)
+              )
+            )
+          ))
+        );
+      }),
+      (menuFor || reactionPickerFor) && /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          className: "fixed inset-0 z-30",
+          onClick: () => {
+            setMenuFor(null);
+            setReactionPickerFor(null);
+          }
+        }
+      )
+    ), /* @__PURE__ */ React.createElement("div", { className: "shrink-0 border-t border-slate-200 p-3 pb-mobile-nav md:pb-3 dark:border-white/10" }, replyingTo && /* @__PURE__ */ React.createElement("div", { className: "mb-2 flex items-center gap-2 rounded-lg border-l-4 border-blue-500 bg-slate-50 px-3 py-2 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement(
+      Icon,
+      {
+        name: "Reply",
+        size: 14,
+        className: "shrink-0 text-blue-500"
+      }
+    ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-bold text-blue-600 dark:text-blue-400" }, "Respondiendo a ", replyingTo.authorName || "mensaje"), /* @__PURE__ */ React.createElement("p", { className: "truncate text-xs text-slate-500 dark:text-slate-400" }, replyingTo.text || (Array.isArray(replyingTo.attachments) && replyingTo.attachments.length ? "\u{1F4CE} Adjunto" : ""))), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => setReplyingTo(null),
+        "aria-label": "Cancelar respuesta",
+        className: "shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 14 })
+    )), (taskRef || pending.length > 0) && /* @__PURE__ */ React.createElement("div", { className: "mb-2 flex flex-wrap items-center gap-2" }, taskRef && /* @__PURE__ */ React.createElement(
+      "span",
+      {
+        className: `inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "ClipboardList", size: 11 }),
+      /* @__PURE__ */ React.createElement("span", { className: "max-w-[220px] truncate" }, taskRef.taskTitle),
+      /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => setTaskRef(null),
+          "aria-label": "Quitar tarea",
+          className: "opacity-70 hover:opacity-100"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 11 })
+      )
+    ), pending.map((att) => /* @__PURE__ */ React.createElement("div", { key: att.id, className: "relative" }, isChatImage(att.type) ? /* @__PURE__ */ React.createElement(
+      "img",
+      {
+        src: att.data,
+        alt: att.name,
+        className: "h-16 w-16 rounded-lg border border-slate-200 object-cover dark:border-white/10"
+      }
+    ) : /* @__PURE__ */ React.createElement("div", { className: "flex h-16 w-36 items-center gap-1.5 rounded-lg border border-slate-200 px-2 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
+      Icon,
+      {
+        name: "Paperclip",
+        size: 14,
+        className: "shrink-0 text-slate-500"
+      }
+    ), /* @__PURE__ */ React.createElement("span", { className: "truncate text-[11px] text-slate-600 dark:text-slate-300" }, att.name)), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => setPending(
+          (prev) => prev.filter((item) => item.id !== att.id)
+        ),
+        "aria-label": "Quitar archivo",
+        className: "absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-white"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 11 })
+    )))), /* @__PURE__ */ React.createElement("div", { className: "relative rounded-xl border border-slate-300 bg-white focus-within:border-blue-500 dark:border-white/15 dark:bg-[#222529]" }, mentionOpen && mentionSuggestions.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full left-0 z-40 mb-1 max-h-72 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between px-3 pb-1 pt-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Mencionar"), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onMouseDown: (event) => {
+          event.preventDefault();
+          setMentionOpen(false);
+        },
+        "aria-label": "Cerrar",
+        className: "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 13 })
+    )), mentionSuggestions.map((person) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: person.id,
+        onMouseDown: (event) => {
+          event.preventDefault();
+          insertMention(person);
+        },
+        className: "flex w-full items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white" }, (person.name || person.email || "?").slice(0, 2).toUpperCase()),
+      /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1 text-left" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-semibold text-slate-700 dark:text-slate-200" }, person.name || person.email), person.email && /* @__PURE__ */ React.createElement("p", { className: "truncate text-[11px] text-slate-400" }, person.email))
+    ))), taskPickerOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full left-0 z-30 mb-1 max-h-64 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between px-3 pb-1 pt-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Enlazar tarea del cliente"), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onMouseDown: (event) => {
+          event.preventDefault();
+          setTaskPickerOpen(false);
+        },
+        "aria-label": "Cerrar",
+        className: "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 13 })
+    )), clientTasks.length === 0 && /* @__PURE__ */ React.createElement("p", { className: "px-3 py-2 text-xs text-slate-400" }, "Este cliente no tiene tareas."), clientTasks.map((task) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: `${task.type}-${task.id}`,
+        onMouseDown: (event) => {
+          event.preventDefault();
+          setTaskRef({
+            taskId: task.id,
+            taskType: task.type,
+            taskTitle: task.title || "Tarea"
+          });
+          setTaskPickerOpen(false);
+        },
+        className: "flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(
+        "span",
+        {
+          className: `shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black ${CHAT_TASK_CHIP_STYLES[task.type]}`
+        },
+        CHAT_TASK_LABELS[task.type]
+      ),
+      /* @__PURE__ */ React.createElement("span", { className: "flex-1 truncate text-sm text-slate-700 dark:text-slate-200" }, task.title || "(sin t\xEDtulo)")
+    ))), /* @__PURE__ */ React.createElement(
+      "textarea",
+      {
+        ref: textareaRef,
+        value: text,
+        onChange: handleTextChange,
+        onKeyDown: (event) => {
+          if (event.key === "Escape" && (mentionOpen || taskPickerOpen || attachMenuOpen)) {
+            setMentionOpen(false);
+            setTaskPickerOpen(false);
+            setAttachMenuOpen(false);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            handleSubmit();
+          }
+        },
+        placeholder: `Mensaje para ${activeClient.name || "el cliente"}`,
+        rows: text ? 2 : 1,
+        className: "w-full resize-none bg-transparent px-3.5 pt-2.5 text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200"
+      }
+    ), /* @__PURE__ */ React.createElement("div", { className: "relative flex items-center gap-1 px-2 pb-2" }, /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        ref: fileInputRef,
+        type: "file",
+        multiple: true,
+        className: "hidden",
+        onChange: (event) => handleFiles(event.target.files)
+      }
+    ), recording ? /* @__PURE__ */ React.createElement("div", { className: "flex flex-1 items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-8 items-center gap-2 rounded-md bg-red-50 px-3 text-xs font-bold text-red-600 dark:bg-red-500/10 dark:text-red-400" }, /* @__PURE__ */ React.createElement("span", { className: "h-2 w-2 animate-pulse rounded-full bg-red-500" }), "Grabando\u2026", " ", String(Math.floor(recordSeconds / 60)).padStart(2, "0"), ":", String(recordSeconds % 60).padStart(2, "0")), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => stopRecording(true),
+        className: "flex h-8 items-center rounded-md px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
+      },
+      "Cancelar"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => stopRecording(false),
+        "aria-label": "Detener y adjuntar audio",
+        className: "ml-auto flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "Stop", size: 14 }),
+      " Listo"
+    )) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => {
+          setAttachMenuOpen((open) => !open);
+          setMentionOpen(false);
+          setTaskPickerOpen(false);
+        },
+        "aria-label": "Adjuntar archivo",
+        disabled: uploading,
+        className: `flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:opacity-50 ${attachMenuOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`
+      },
+      /* @__PURE__ */ React.createElement(
+        Icon,
+        {
+          name: uploading ? "Loader2" : "Paperclip",
+          size: 18,
+          className: uploading ? "animate-spin" : ""
+        }
+      )
+    ), attachMenuOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full left-0 z-30 mb-1 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onMouseDown: (event) => {
+          event.preventDefault();
+          openFilePicker("image/*");
+        },
+        className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "Image", size: 16, className: "text-slate-500" }),
+      "Imagen"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onMouseDown: (event) => {
+          event.preventDefault();
+          openFilePicker("video/*");
+        },
+        className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "Video", size: 16, className: "text-slate-500" }),
+      "Video"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onMouseDown: (event) => {
+          event.preventDefault();
+          openFilePicker(
+            "application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+          );
+        },
+        className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "FileText", size: 16, className: "text-slate-500" }),
+      "Documento / PDF"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onMouseDown: (event) => {
+          event.preventDefault();
+          openFilePicker("");
+        },
+        className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "FilePlus", size: 16, className: "text-slate-500" }),
+      "Cualquier archivo"
+    ))), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: startRecording,
+        "aria-label": "Grabar nota de voz",
+        className: "flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "Microphone", size: 18 })
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => {
+          setTaskPickerOpen((open) => !open);
+          setMentionOpen(false);
+          setAttachMenuOpen(false);
+        },
+        "aria-label": "Enlazar tarea",
+        className: `flex h-8 w-8 items-center justify-center rounded-md transition-colors ${taskRef || taskPickerOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "ClipboardList", size: 17 })
+    ), /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-[10px] text-slate-400 hidden sm:block" }, "Enter para enviar \xB7 Shift+Enter salto de l\xEDnea"), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: handleSubmit,
+        disabled: submitting || !text.trim() && pending.length === 0,
+        "aria-label": "Enviar mensaje",
+        className: "ml-2 flex h-8 w-8 items-center justify-center rounded-md bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
+      },
+      /* @__PURE__ */ React.createElement(
+        Icon,
+        {
+          name: submitting ? "Loader2" : "Send",
+          size: 16,
+          className: submitting ? "animate-spin" : ""
+        }
+      )
+    ))))))
+  ), deleteTarget && /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: "fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4",
+      onClick: () => setDeleteTarget(null)
+    },
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "w-full max-w-xs rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-800",
+        onClick: (event) => event.stopPropagation()
+      },
+      /* @__PURE__ */ React.createElement("h3", { className: "text-base font-black text-slate-800 dark:text-slate-100" }, "\xBFEliminar mensaje?"),
+      /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-sm text-slate-500 dark:text-slate-400" }, "Elige c\xF3mo eliminarlo. Queda registro de que se elimin\xF3."),
+      /* @__PURE__ */ React.createElement("div", { className: "mt-4 flex flex-col gap-2" }, /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => {
+            if (onDeleteForEveryone) onDeleteForEveryone(deleteTarget);
+            setDeleteTarget(null);
+          },
+          className: "w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-700"
+        },
+        "Eliminar para todos"
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => {
+            if (onDeleteForMe) onDeleteForMe(deleteTarget);
+            setDeleteTarget(null);
+          },
+          className: "w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+        },
+        "Eliminar para m\xED"
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => setDeleteTarget(null),
+          className: "w-full rounded-lg px-4 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 dark:hover:bg-slate-700"
+        },
+        "Cancelar"
+      ))
+    )
+  ), forwardTarget && /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: "fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4",
+      onClick: () => setForwardTarget(null)
+    },
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "flex max-h-[70vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800",
+        onClick: (event) => event.stopPropagation()
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between border-b border-slate-100 p-4 dark:border-white/10" }, /* @__PURE__ */ React.createElement("h3", { className: "text-base font-black text-slate-800 dark:text-slate-100" }, "Reenviar a\u2026"), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => setForwardTarget(null),
+          "aria-label": "Cerrar",
+          className: "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 18 })
+      )),
+      /* @__PURE__ */ React.createElement("div", { className: "p-3" }, /* @__PURE__ */ React.createElement(
+        "input",
+        {
+          value: forwardSearch,
+          onChange: (event) => setForwardSearch(event.target.value),
+          placeholder: "Buscar cliente...",
+          className: "w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+        }
+      )),
+      /* @__PURE__ */ React.createElement("div", { className: "flex-1 overflow-y-auto px-2 pb-2 custom-scroll" }, clients.filter(
+        (client) => !forwardSearch.trim() || (client.name || "").toLowerCase().includes(forwardSearch.trim().toLowerCase())
+      ).map((client) => /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          key: client.id,
+          onClick: () => {
+            if (onForward) onForward(forwardTarget, client.id);
+            setForwardTarget(null);
+          },
+          className: "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
+        },
+        /* @__PURE__ */ React.createElement("div", { className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#555552] text-[10px] font-black text-white" }, (client.name || "C").slice(0, 2).toUpperCase()),
+        /* @__PURE__ */ React.createElement("span", { className: "truncate text-sm font-semibold text-slate-700 dark:text-slate-200" }, client.name || "Cliente")
+      )))
+    )
+  ));
+};
 var CalendarGrid = ({
   events,
   onAdd,
@@ -8123,7 +9725,10 @@ var TaskDetailModal = ({
   currentUserProfile,
   accountTasks = [],
   editingTasks = [],
-  managementTasks = []
+  managementTasks = [],
+  clientChats = [],
+  onSendClientChatMessage,
+  onOpenClientChat
 }) => {
   const [commentText, setCommentText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -8145,6 +9750,8 @@ var TaskDetailModal = ({
   const dialogRef = useDialogA11y(config.isOpen, onClose);
   const dialogTitleId = useId();
   const [fullAttachments, setFullAttachments] = useState(null);
+  const [clientChatText, setClientChatText] = useState("");
+  const [sendingClientChat, setSendingClientChat] = useState(false);
   useEffect(() => {
     if (!statusOpen && !priorityOpen && !assigneeOpen && !actionsOpen) return;
     const handler = (e) => {
@@ -8213,6 +9820,24 @@ var TaskDetailModal = ({
   };
   const task = (liveArrays[type] || []).find((t) => t.id === config.task.id) || config.task;
   const client = clients.find((c) => c.id === task.clientId);
+  const taskChatMessages = clientChats.filter((message) => message.taskRef?.taskId === task.id).sort((a, b) => (a.createdAt || "") > (b.createdAt || "") ? 1 : -1);
+  const handleSendClientChat = async () => {
+    const trimmed = clientChatText.trim();
+    if (!trimmed || sendingClientChat || !task.clientId || !onSendClientChatMessage)
+      return;
+    setSendingClientChat(true);
+    try {
+      await onSendClientChatMessage({
+        clientId: task.clientId,
+        text: trimmed,
+        mentionedIds: [],
+        taskRef: { taskId: task.id, taskType: type, taskTitle: task.title || "" }
+      });
+      setClientChatText("");
+    } finally {
+      setSendingClientChat(false);
+    }
+  };
   const assignee = type === "accountTask" ? managers.find((m) => m.id === task.contextId) : type === "managementTask" ? users.find((u) => u.id === task.contextId) : editors.find((e) => e.id === task.contextId);
   const currentAssigneeIds = Array.isArray(task.assignees) ? task.assignees : task.contextId ? [task.contextId] : [];
   const tagColor = type === "accountTask" ? "indigo" : type === "managementTask" ? "violet" : "amber";
@@ -8753,7 +10378,61 @@ var TaskDetailModal = ({
             /* @__PURE__ */ React.createElement("span", { className: "text-left" }, /* @__PURE__ */ React.createElement("strong", { className: "block font-semibold text-slate-700 dark:text-slate-200" }, "Selecciona un archivo"), /* @__PURE__ */ React.createElement("span", { className: "mt-0.5 block text-xs text-slate-500" }, "Im\xE1genes, documentos, hojas de c\xE1lculo o video"))
           )
         );
-      })(), /* @__PURE__ */ React.createElement(
+      })(), /* @__PURE__ */ React.createElement("section", { className: "rounded-xl border border-blue-200 bg-blue-50/40 p-5 dark:border-blue-500/20 dark:bg-blue-500/5" }, /* @__PURE__ */ React.createElement("div", { className: "mb-4 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+        Icon,
+        {
+          name: "MessageSquare",
+          size: 13,
+          className: "text-blue-600 dark:text-blue-400"
+        }
+      ), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400" }, "Chat del cliente"), client?.name && /* @__PURE__ */ React.createElement("span", { className: "truncate text-xs font-semibold text-slate-500" }, "\xB7 ", client.name), task.clientId && onOpenClientChat && /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => onOpenClientChat(task.clientId),
+          className: "ml-auto shrink-0 text-[11px] font-bold text-blue-600 hover:underline dark:text-blue-400"
+        },
+        "Abrir chat completo"
+      )), !task.clientId ? /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400" }, "Esta tarea no tiene cliente asignado, as\xED que no tiene chat.") : /* @__PURE__ */ React.createElement(React.Fragment, null, taskChatMessages.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mb-4 space-y-3" }, taskChatMessages.slice(-4).map((message) => /* @__PURE__ */ React.createElement("div", { key: message.id, className: "flex gap-2.5" }, /* @__PURE__ */ React.createElement("div", { className: "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white" }, (message.authorName || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-bold text-slate-700 dark:text-slate-200" }, message.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] text-slate-400" }, relativeTime(message.createdAt))), /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200" }, renderChatText(message.text))))), taskChatMessages.length > 4 && onOpenClientChat && /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => onOpenClientChat(task.clientId),
+          className: "text-[11px] font-bold text-blue-600 hover:underline dark:text-blue-400"
+        },
+        "Ver los ",
+        taskChatMessages.length,
+        " mensajes en el chat"
+      )), /* @__PURE__ */ React.createElement("div", { className: "flex items-end gap-2" }, /* @__PURE__ */ React.createElement(
+        "textarea",
+        {
+          value: clientChatText,
+          onChange: (e) => setClientChatText(e.target.value),
+          onKeyDown: (e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              handleSendClientChat();
+            }
+          },
+          placeholder: "Comenta esta tarea en el chat del cliente\u2026",
+          rows: 1,
+          className: "min-h-[42px] flex-1 resize-none rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+        }
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: handleSendClientChat,
+          disabled: sendingClientChat || !clientChatText.trim(),
+          className: "flex h-[42px] shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+        },
+        /* @__PURE__ */ React.createElement(
+          Icon,
+          {
+            name: sendingClientChat ? "Loader2" : "Send",
+            size: 13,
+            className: sendingClientChat ? "animate-spin" : ""
+          }
+        ),
+        "Enviar"
+      )), /* @__PURE__ */ React.createElement("p", { className: "mt-1.5 text-[11px] text-slate-400" }, "Se publicar\xE1 en el chat de ", client?.name || "el cliente", " con esta tarea enlazada."))), /* @__PURE__ */ React.createElement(
         "section",
         {
           id: "task-activity",
@@ -10972,55 +12651,42 @@ var ReportsView = ({
     }
   ))));
 };
-var PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], managers = [], users = [] }) => {
+var PerformanceView = ({ editingTasks = [], editors = [], users = [] }) => {
   const todayStr = getHondurasTodayStr();
   const now = /* @__PURE__ */ new Date();
   const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   const [fromDate, setFromDate] = useState(firstOfMonth);
   const [toDate, setToDate] = useState(todayStr);
-  const [selectedPersonKey, setSelectedPersonKey] = useState("");
+  const [selectedEditorId, setSelectedEditorId] = useState("");
   const inRange = (dateStr) => {
     if (!dateStr) return false;
     return compareDateOnlyStrings(dateStr, fromDate) >= 0 && compareDateOnlyStrings(dateStr, toDate) <= 0;
   };
-  const matchesSelectedPerson = (task, type) => {
-    if (!selectedPersonKey) return true;
-    const [personType, personId] = selectedPersonKey.split(":");
-    if (personType === "editor") return type === "editing" && task.contextId === personId;
-    if (personType === "manager") return type === "account" && task.contextId === personId;
-    return false;
-  };
   const filteredEditingTasks = editingTasks.filter((task) => {
     if (!inRange(task.date)) return false;
-    return matchesSelectedPerson(task, "editing");
-  });
-  const filteredAccountTasks = accountTasks.filter((task) => {
-    if (!inRange(task.date)) return false;
-    return matchesSelectedPerson(task, "account");
+    if (selectedEditorId && task.contextId !== selectedEditorId) return false;
+    return true;
   });
   const userById = new Map(users.map((item) => [item.id, item]));
   const userByEditorId = new Map(
     users.filter((item) => item.linkedEditorId).map((item) => [item.linkedEditorId, item])
   );
-  const userByManagerId = new Map(
-    users.filter((item) => item.linkedManagerId).map((item) => [item.linkedManagerId, item])
-  );
-  const getPersonLoginRecency = (personType, personId, personUserId = "") => {
-    const personUser = personType === "editor" ? userByEditorId.get(personId) || (personUserId ? userById.get(personUserId) : null) : userByManagerId.get(personId) || (personUserId ? userById.get(personUserId) : null);
-    const lastSeenAt = personUser?.lastSeenAt || "";
+  const getEditorLoginRecency = (editor) => {
+    const editorUser = userByEditorId.get(editor.id) || (editor.userId ? userById.get(editor.userId) : null);
+    const lastSeenAt = editorUser?.lastSeenAt || "";
     const daysSinceLogin = lastSeenAt ? Math.max(0, getDateOnlyDiffDays(todayStr, lastSeenAt)) : null;
+    const loginScore = daysSinceLogin === null ? 0 : Math.max(0, 100 - Math.min(daysSinceLogin, 30) * 2);
     return {
       lastSeenAt,
-      daysSinceLogin
+      daysSinceLogin,
+      loginScore
     };
   };
-  const isEditingDeliveredTask = (task) => isEditingDelivered(task);
-  const isAccountDelivered = (task) => ["aprobado_internamente", "publicado"].includes(task.status);
   const editorStats = editors.map((editor) => {
     const editorTasks = filteredEditingTasks.filter(
       (task) => task.contextId === editor.id
     );
-    const delivered = editorTasks.filter(isEditingDeliveredTask).length;
+    const delivered = editorTasks.filter(isEditingDelivered).length;
     const approved = editorTasks.filter(
       (task) => normalizeEditingWorkflowStatus(task.status) === "aprobado"
     ).length;
@@ -11031,102 +12697,62 @@ var PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], man
       (task) => normalizeEditingWorkflowStatus(task.status) === "revision_interna"
     ).length;
     const inProgress = editorTasks.filter(isEditingActionable).length;
-    const total = editorTasks.length;
-    const deliveryPerformance = total ? Math.round(delivered / total * 100) : 0;
-    const approvalPerformance = total ? Math.round(approved / total * 100) : 0;
-    const publicationPerformance = total ? Math.round(published / total * 100) : 0;
-    const loginRecency = getPersonLoginRecency("editor", editor.id, editor.userId);
-    const loginScore = loginRecency.daysSinceLogin === null ? 0 : Math.max(0, 100 - Math.min(loginRecency.daysSinceLogin, 30) * 2);
-    const overallPerformance = total ? Math.round(
-      publicationPerformance * 0.6 + approvalPerformance * 0.2 + deliveryPerformance * 0.15 + loginScore * 0.05
+    const performance = editorTasks.length ? Math.round(delivered / editorTasks.length * 100) : 0;
+    const loginRecency = getEditorLoginRecency(editor);
+    const weightedPerformance = editorTasks.length ? Math.round(
+      performance * 0.75 + loginRecency.loginScore * 0.25
     ) : 0;
     return {
       ...editor,
-      kind: "editor",
-      kindLabel: "Editor",
-      total,
+      total: editorTasks.length,
       delivered,
       approved,
       published,
       inRevision,
       inProgress,
-      deliveryPerformance,
-      approvalPerformance,
-      publicationPerformance,
-      overallPerformance,
+      performance,
+      weightedPerformance,
       lastSeenAt: loginRecency.lastSeenAt,
       daysSinceLogin: loginRecency.daysSinceLogin
     };
-  }).filter((editor) => editor.total > 0);
-  const managerStats = managers.map((manager) => {
-    const managerTasks = filteredAccountTasks.filter(
-      (task) => task.contextId === manager.id
-    );
-    const delivered = managerTasks.filter(isAccountDelivered).length;
-    const approved = managerTasks.filter((task) => task.status === "aprobado_internamente").length;
-    const published = managerTasks.filter((task) => task.status === "publicado").length;
-    const inProgress = managerTasks.filter(
-      (task) => !["aprobado_internamente", "publicado"].includes(task.status)
-    ).length;
-    const total = managerTasks.length;
-    const deliveryPerformance = total ? Math.round(delivered / total * 100) : 0;
-    const approvalPerformance = total ? Math.round(approved / total * 100) : 0;
-    const publicationPerformance = total ? Math.round(published / total * 100) : 0;
-    const loginRecency = getPersonLoginRecency("manager", manager.id, manager.userId);
-    const loginScore = loginRecency.daysSinceLogin === null ? 0 : Math.max(0, 100 - Math.min(loginRecency.daysSinceLogin, 30) * 2);
-    const overallPerformance = total ? Math.round(
-      publicationPerformance * 0.6 + approvalPerformance * 0.2 + deliveryPerformance * 0.15 + loginScore * 0.05
-    ) : 0;
-    return {
-      ...manager,
-      kind: "manager",
-      kindLabel: "Account Manager",
-      total,
-      delivered,
-      published,
-      inProgress,
-      deliveryPerformance,
-      approvalPerformance,
-      publicationPerformance,
-      overallPerformance,
-      lastSeenAt: loginRecency.lastSeenAt,
-      daysSinceLogin: loginRecency.daysSinceLogin
-    };
-  }).filter((manager) => manager.total > 0);
-  const personStats = [...editorStats, ...managerStats].sort(
-    (left, right) => right.overallPerformance - left.overallPerformance || right.total - left.total || String(left.name || "").localeCompare(String(right.name || ""))
+  }).filter((editor) => editor.total > 0).sort(
+    (left, right) => right.weightedPerformance - left.weightedPerformance || right.performance - left.performance || right.total - left.total || String(left.name || "").localeCompare(String(right.name || ""))
   );
-  const totalTasks = filteredEditingTasks.length + filteredAccountTasks.length;
-  const deliveredTasks = filteredEditingTasks.filter(isEditingDeliveredTask).length + filteredAccountTasks.filter(isAccountDelivered).length;
-  const publishedTasks = filteredEditingTasks.filter((task) => task.status === "publicado").length + filteredAccountTasks.filter((task) => task.status === "publicado").length;
-  const averagePerformance = personStats.length ? Math.round(
-    personStats.reduce((sum, person) => sum + person.overallPerformance, 0) / personStats.length
+  const totalTasks = filteredEditingTasks.length;
+  const deliveredTasks = filteredEditingTasks.filter(isEditingDelivered).length;
+  const publishedTasks = filteredEditingTasks.filter(
+    (task) => task.status === "publicado"
+  ).length;
+  const averagePerformance = editorStats.length ? Math.round(
+    editorStats.reduce((sum, editor) => sum + editor.performance, 0) / editorStats.length
   ) : 0;
-  const peopleOptions = [
-    { value: "", label: "Todos" },
-    ...editors.map((editor) => ({
-      value: `editor:${editor.id}`,
-      label: `Editor - ${editor.name || "Sin nombre"}`
-    })),
-    ...managers.map((manager) => ({
-      value: `manager:${manager.id}`,
-      label: `Account Manager - ${manager.name || "Sin nombre"}`
-    }))
-  ];
+  const editorsWithLogin = editorStats.filter(
+    (editor) => editor.daysSinceLogin !== null
+  );
+  const averageLoginScore = editorsWithLogin.length ? Math.round(
+    editorsWithLogin.reduce((sum, editor) => sum + editor.loginScore, 0) / editorsWithLogin.length
+  ) : 0;
+  const averageDaysSinceLogin = editorsWithLogin.length ? Math.round(
+    editorsWithLogin.reduce(
+      (sum, editor) => sum + editor.daysSinceLogin,
+      0
+    ) / editorsWithLogin.length
+  ) : null;
   const rowStyle = (i) => i % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : "";
-  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between flex-wrap gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Rendimiento"), /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Rendimiento de Editores y Account Managers"), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-2xl" }, "Un resumen del avance de tareas y la capacidad de entrega dentro del rango de fechas seleccionado, tanto para edici\xF3n como para accounts.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 flex-wrap" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between flex-wrap gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Rendimiento"), /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Rendimiento de Editores"), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-2xl" }, "Un resumen de la capacidad de entrega y el avance de edici\xF3n dentro del rango de fechas seleccionado.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 flex-wrap" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
     "select",
     {
-      value: selectedPersonKey,
-      onChange: (e) => setSelectedPersonKey(e.target.value),
+      value: selectedEditorId,
+      onChange: (e) => setSelectedEditorId(e.target.value),
       className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 outline-none"
     },
-    peopleOptions.map((option) => /* @__PURE__ */ React.createElement("option", { key: option.value || "all", value: option.value }, option.label))
-  ), selectedPersonKey && /* @__PURE__ */ React.createElement(
+    /* @__PURE__ */ React.createElement("option", { value: "" }, "Todos los editores"),
+    editors.map((editor) => /* @__PURE__ */ React.createElement("option", { key: editor.id, value: editor.id }, editor.name))
+  ), selectedEditorId && /* @__PURE__ */ React.createElement(
     "button",
     {
       type: "button",
-      onClick: () => setSelectedPersonKey(""),
+      onClick: () => setSelectedEditorId(""),
       className: "text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
     },
     "Limpiar"
@@ -11149,11 +12775,11 @@ var PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], man
   )))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-4" }, /* @__PURE__ */ React.createElement(
     ReportStatCard,
     {
-      label: "Tareas del rango",
+      label: "Tareas de Edici\xF3n",
       value: totalTasks,
       color: "amber",
       icon: "Video",
-      sub: "edici\xF3n + accounts"
+      sub: "en el rango"
     }
   ), /* @__PURE__ */ React.createElement(
     ReportStatCard,
@@ -11162,7 +12788,7 @@ var PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], man
       value: deliveredTasks,
       color: "emerald",
       icon: "CheckCircle2",
-      sub: "aprobadas o publicadas"
+      sub: "revisi\xF3n interna o final"
     }
   ), /* @__PURE__ */ React.createElement(
     ReportStatCard,
@@ -11176,32 +12802,32 @@ var PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], man
   ), /* @__PURE__ */ React.createElement(
     ReportStatCard,
     {
-      label: "Rendimiento promedio",
+      label: "Rendimiento combinado",
       value: `${averagePerformance}%`,
       color: "purple",
       icon: "BarChart3",
-      sub: "promedio por persona"
+      sub: `Incluye frecuencia de login (${averageLoginScore}% promedio)`
     }
-  )), /* @__PURE__ */ React.createElement("p", { className: "rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300" }, "El porcentaje de rendimiento prioriza lo que realmente mueve el negocio: publicaciones, luego entregas y aprobaciones, con un ajuste menor por frecuencia de login."), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden" }, personStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 font-bold" }, "Sin datos de rendimiento para este rango de fechas") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[900px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Persona"), /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Tipo"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Total"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "En Progreso"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Entregadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Publicadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "\xDAltimo login"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Rendimiento"))), /* @__PURE__ */ React.createElement("tbody", null, personStats.map((person, index) => /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("p", { className: "rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300" }, "Se considera entregada cuando la tarea alcanza Revisi\xF3n Interna o cualquier estado posterior. Esto mide la capacidad de los editores para avanzar las piezas dentro del flujo."), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden" }, editorStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 font-bold" }, "Sin datos de rendimiento para este rango de fechas") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[860px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Editor"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Total"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "En Progreso"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "En Revisi\xF3n"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Aprobadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Publicadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "\xDAltimo login"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Rendimiento"))), /* @__PURE__ */ React.createElement("tbody", null, editorStats.map((editor, index) => /* @__PURE__ */ React.createElement(
     "tr",
     {
-      key: `${person.kind}-${person.id}`,
+      key: editor.id,
       className: `border-b border-slate-50 dark:border-slate-800/50 ${rowStyle(index)}`
     },
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 font-bold text-slate-800 dark:text-white" }, person.name),
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm font-semibold text-slate-600 dark:text-slate-300" }, person.kindLabel),
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-black text-slate-800 dark:text-white" }, person.total),
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center text-slate-500 dark:text-slate-400" }, person.inProgress),
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-bold text-emerald-600 dark:text-emerald-400" }, person.delivered),
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-bold text-indigo-600 dark:text-indigo-400" }, person.published),
-    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center text-slate-500 dark:text-slate-400" }, person.lastSeenAt ? /* @__PURE__ */ React.createElement("span", { className: "block text-sm font-bold text-slate-800 dark:text-white" }, normalizeDateOnlyString(person.lastSeenAt)) : /* @__PURE__ */ React.createElement("span", { className: "text-sm text-slate-400" }, "Sin registro"), person.daysSinceLogin !== null && /* @__PURE__ */ React.createElement("span", { className: "block text-xs text-slate-500 dark:text-slate-400" }, person.daysSinceLogin, " d\xEDas")),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 font-bold text-slate-800 dark:text-white" }, editor.name),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-black text-slate-800 dark:text-white" }, editor.total),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center text-slate-500 dark:text-slate-400" }, editor.inProgress),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center text-slate-500 dark:text-slate-400" }, editor.inRevision),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-bold text-emerald-600 dark:text-emerald-400" }, editor.approved),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center font-bold text-indigo-600 dark:text-indigo-400" }, editor.published),
+    /* @__PURE__ */ React.createElement("td", { className: "p-4 text-center text-slate-500 dark:text-slate-400" }, editor.lastSeenAt ? /* @__PURE__ */ React.createElement("span", { className: "block text-sm font-bold text-slate-800 dark:text-white" }, normalizeDateOnlyString(editor.lastSeenAt)) : /* @__PURE__ */ React.createElement("span", { className: "text-sm text-slate-400" }, "Sin registro"), editor.daysSinceLogin !== null && /* @__PURE__ */ React.createElement("span", { className: "block text-xs text-slate-500 dark:text-slate-400" }, editor.daysSinceLogin, " d\xEDas")),
     /* @__PURE__ */ React.createElement("td", { className: "p-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-center gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden" }, /* @__PURE__ */ React.createElement(
       "div",
       {
-        className: `h-full rounded-full ${person.overallPerformance >= 80 ? "bg-emerald-500" : person.overallPerformance >= 50 ? "bg-amber-500" : "bg-red-500"}`,
-        style: { width: `${person.overallPerformance}%` }
+        className: `h-full rounded-full ${editor.weightedPerformance >= 80 ? "bg-emerald-500" : editor.weightedPerformance >= 50 ? "bg-amber-500" : "bg-red-500"}`,
+        style: { width: `${editor.weightedPerformance}%` }
       }
-    )), /* @__PURE__ */ React.createElement("span", { className: "w-10 text-right text-sm font-black text-slate-800 dark:text-white" }, person.overallPerformance, "%")), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-[11px] text-center text-slate-500 dark:text-slate-400" }, person.deliveryPerformance, "% entregadas \xB7 ", person.approvalPerformance, "% aprobadas \xB7 ", person.publicationPerformance, "% publicadas"))
+    )), /* @__PURE__ */ React.createElement("span", { className: "w-10 text-right text-sm font-black text-slate-800 dark:text-white" }, editor.weightedPerformance, "%")))
   )))))));
 };
 var root = createRoot(document.getElementById("root"));

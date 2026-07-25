@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useId } from "react";
+import React, { useState, useEffect, useRef, useId, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { App as CapacitorApp } from "@capacitor/app";
 import {
@@ -71,6 +71,13 @@ import {
   PauseCircle,
   DotsThree as MoreHorizontal,
   DotsSixVertical as GripVertical,
+  Paperclip,
+  Microphone,
+  Image as ImageIcon,
+  Stop,
+  FilePlus,
+  PushPin as PinIcon,
+  ArrowBendUpLeft as ReplyIcon,
 } from "@phosphor-icons/react";
 import {
   signInAnonymously,
@@ -131,6 +138,7 @@ import {
   normalizeEditingWorkflowStatus,
   rankPendingEditingTasks,
 } from "/src/app/utils/kpi.js";
+import { apiFetch } from "./lib/backend-api.js";
 
 void TAILWIND_SAFELIST;
 
@@ -204,6 +212,13 @@ const IconsMap = {
   PauseCircle,
   MoreHorizontal,
   GripVertical,
+  Paperclip,
+  Microphone,
+  Image: ImageIcon,
+  Stop,
+  FilePlus,
+  Pin: PinIcon,
+  Reply: ReplyIcon,
 };
 
 const Icon = ({ name, size = 18, className = "", ...props }) => {
@@ -332,6 +347,7 @@ const VIEW_PERMISSIONS = {
   dashboard: "view_dashboard",
   clients: "view_clients",
   "client-detail": "view_clients",
+  chat: "view_client_chat",
   managers: "view_managers",
   "manager-detail": "view_managers",
   editors: "view_editors",
@@ -1547,6 +1563,12 @@ function App() {
   const [isLoadingTaskHistory, setIsLoadingTaskHistory] = useState(false);
   const [appUsers, setAppUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [clientChats, setClientChats] = useState([]);
+  const [chatReads, setChatReads] = useState([]);
+  const [chatHidden, setChatHidden] = useState([]);
+  const [chatReactions, setChatReactions] = useState([]);
+  const [chatPins, setChatPins] = useState([]);
+  const [chatDirectory, setChatDirectory] = useState([]);
 
   useEffect(() => {
     window.__cluster_active_view = view;
@@ -1556,6 +1578,7 @@ function App() {
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedManager, setSelectedManager] = useState(null);
   const [selectedEditor, setSelectedEditor] = useState(null);
+  const [selectedChatClient, setSelectedChatClient] = useState(null);
 
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
@@ -1692,6 +1715,62 @@ function App() {
   const profileBlocked = Boolean(
     currentUserProfile && currentUserProfile.isActive === false,
   );
+
+  // Estado de lectura del chat por cliente para el usuario actual.
+  const chatReadMap = useMemo(() => {
+    const uid = String(currentUserProfile?.id || authEmail || "");
+    const map = {};
+    if (!uid) return map;
+    chatReads.forEach((entry) => {
+      if (String(entry.userId || "") === uid && entry.clientId) {
+        map[entry.clientId] = entry.lastReadAt || "";
+      }
+    });
+    return map;
+  }, [chatReads, currentUserProfile, authEmail]);
+
+  // Mensajes que el usuario actual ocultó ("eliminar para mí").
+  const chatHiddenIds = useMemo(() => {
+    const uid = String(currentUserProfile?.id || authEmail || "");
+    const set = new Set();
+    if (!uid) return set;
+    chatHidden.forEach((entry) => {
+      if (String(entry.userId || "") === uid && entry.messageId) {
+        set.add(String(entry.messageId));
+      }
+    });
+    return set;
+  }, [chatHidden, currentUserProfile, authEmail]);
+
+  // No leídos por cliente + total (excluye los mensajes propios y el hilo que
+  // está abierto en este momento, que se considera leído al instante).
+  const chatUnread = useMemo(() => {
+    const myId = String(currentUserProfile?.id || "");
+    const openClientId =
+      view === "chat" ? String(selectedChatClient?.id || "") : "";
+    const byClient = {};
+    let total = 0;
+    clientChats.forEach((message) => {
+      if (!message.clientId || !message.createdAt) return;
+      if (myId && String(message.authorId || "") === myId) return;
+      if (message.deleted || chatHiddenIds.has(String(message.id))) return;
+      if (openClientId && String(message.clientId) === openClientId) return;
+      const lastRead = chatReadMap[message.clientId] || "";
+      if (message.createdAt > lastRead) {
+        byClient[message.clientId] = (byClient[message.clientId] || 0) + 1;
+        total += 1;
+      }
+    });
+    return { byClient, total };
+  }, [
+    clientChats,
+    chatReadMap,
+    chatHiddenIds,
+    currentUserProfile,
+    view,
+    selectedChatClient,
+  ]);
+
   const appUserById = new Map(appUsers.map((item) => [item.id, item]));
   const managementMemberCandidates = [
     ...appUsers.filter((item) => item.isActive !== false),
@@ -2227,6 +2306,65 @@ function App() {
           );
           setUsersLoaded(true);
         },
+        errHandler,
+      ),
+      onSnapshot(
+        query(
+          dataCollection("client_chats"),
+          orderBy("createdAt", "desc"),
+          limit(500),
+        ),
+        (snapshot) =>
+          setClientChats(
+            snapshot.docs.map((docItem) => ({
+              id: docItem.id,
+              ...docItem.data(),
+            })),
+          ),
+        errHandler,
+      ),
+      onSnapshot(
+        dataCollection("chat_reads"),
+        (snapshot) =>
+          setChatReads(
+            snapshot.docs.map((docItem) => ({
+              id: docItem.id,
+              ...docItem.data(),
+            })),
+          ),
+        errHandler,
+      ),
+      onSnapshot(
+        dataCollection("chat_hidden"),
+        (snapshot) =>
+          setChatHidden(
+            snapshot.docs.map((docItem) => ({
+              id: docItem.id,
+              ...docItem.data(),
+            })),
+          ),
+        errHandler,
+      ),
+      onSnapshot(
+        dataCollection("chat_reactions"),
+        (snapshot) =>
+          setChatReactions(
+            snapshot.docs.map((docItem) => ({
+              id: docItem.id,
+              ...docItem.data(),
+            })),
+          ),
+        errHandler,
+      ),
+      onSnapshot(
+        dataCollection("chat_pins"),
+        (snapshot) =>
+          setChatPins(
+            snapshot.docs.map((docItem) => ({
+              id: docItem.id,
+              ...docItem.data(),
+            })),
+          ),
         errHandler,
       ),
     ];
@@ -4476,6 +4614,361 @@ function App() {
     }
   };
 
+  // Publica un mensaje en el chat interno de un cliente (opcionalmente ligado a
+  // una tarea) y notifica por email a los mencionados con @.
+  const addClientChatMessage = async ({
+    clientId,
+    text,
+    mentionedIds = [],
+    taskRef = null,
+    attachments = [],
+    replyTo = null,
+    forwarded = false,
+  }) => {
+    const trimmed = (text || "").trim();
+    const safeAttachments = Array.isArray(attachments) ? attachments : [];
+    if (!clientId || (!trimmed && safeAttachments.length === 0)) return;
+    const senderName =
+      currentUserProfile?.name ||
+      (authEmail ? authEmail.split("@")[0] : "Usuario");
+    await addDoc(dataCollection("client_chats"), {
+      clientId,
+      text: trimmed,
+      authorName: senderName,
+      authorId: currentUserProfile?.id || "",
+      authorEmail: authEmail || "",
+      mentionedIds,
+      attachments: safeAttachments,
+      forwarded: Boolean(forwarded),
+      replyTo: replyTo
+        ? {
+            id: replyTo.id || "",
+            authorName: replyTo.authorName || "",
+            text: (replyTo.text || "").slice(0, 140),
+          }
+        : null,
+      taskRef: taskRef
+        ? {
+            taskId: taskRef.taskId || "",
+            taskType: taskRef.taskType || "",
+            taskTitle: taskRef.taskTitle || "",
+          }
+        : null,
+      createdAt: nowIso(),
+    });
+    const client = clients.find((item) => item.id === clientId);
+    const clientName = client?.name || "Cliente";
+    for (const uid of mentionedIds) {
+      const person = chatMentionables.find((p) => p.id === uid);
+      const email = person?.email;
+      if (email && uid !== (currentUserProfile?.id || "")) {
+        sendNotification({
+          to: email,
+          type: "chat_mention",
+          senderName,
+          clientName,
+          comment: trimmed,
+        });
+      }
+    }
+  };
+
+  // Marca como leído el hilo de un cliente para el usuario actual.
+  const markClientChatRead = (clientId) => {
+    if (!clientId) return;
+    const uid = currentUserProfile?.id || authEmail;
+    if (!uid) return;
+    setDoc(
+      dataDoc("chat_reads", `${uid}__${clientId}`),
+      { userId: String(uid), clientId, lastReadAt: nowIso() },
+      { merge: true },
+    ).catch((error) => console.warn("[chat:read]", error.message));
+  };
+
+  // Abre el chat de un cliente y lo marca como leído.
+  const openClientChat = (client) => {
+    setSelectedChatClient(client || null);
+    if (client?.id) markClientChatRead(client.id);
+  };
+
+  // "Eliminar para todos": borrado suave (deja registro de quién y cuándo lo
+  // borró). Solo el autor puede hacerlo (validado también en el backend).
+  const deleteChatForEveryone = async (message) => {
+    if (!message?.id) return;
+    const myId = String(currentUserProfile?.id || "");
+    const myEmail = normalizeEmail(authEmail);
+    const isAuthor =
+      (myId && String(message.authorId || "") === myId) ||
+      (myEmail && normalizeEmail(message.authorEmail) === myEmail);
+    if (!isAuthor) return;
+    try {
+      await updateDoc(dataDoc("client_chats", message.id), {
+        deleted: true,
+        deletedAt: nowIso(),
+        deletedById: myId,
+        deletedByName:
+          currentUserProfile?.name ||
+          (authEmail ? authEmail.split("@")[0] : "Usuario"),
+        updatedAt: nowIso(),
+      });
+    } catch (error) {
+      console.warn("[chat:delete-all]", error.message);
+    }
+  };
+
+  // "Eliminar para mí": oculta el mensaje solo para el usuario actual.
+  const hideChatForMe = async (message) => {
+    if (!message?.id) return;
+    const uid = currentUserProfile?.id || authEmail;
+    if (!uid) return;
+    try {
+      await setDoc(
+        dataDoc("chat_hidden", `${uid}__${message.id}`),
+        {
+          userId: String(uid),
+          messageId: String(message.id),
+          clientId: message.clientId || "",
+          hiddenAt: nowIso(),
+        },
+        { merge: true },
+      );
+    } catch (error) {
+      console.warn("[chat:hide]", error.message);
+    }
+  };
+
+  // Reaccionar (1 emoji por usuario y mensaje). Volver a tocar el mismo lo quita.
+  const toggleChatReaction = async (message, emoji) => {
+    if (!message?.id || !emoji) return;
+    const uid = currentUserProfile?.id || authEmail;
+    if (!uid) return;
+    const recordId = `${message.id}__${uid}`;
+    const existing = chatReactions.find((item) => item.id === recordId);
+    try {
+      if (existing && existing.emoji === emoji) {
+        await deleteDoc(dataDoc("chat_reactions", recordId));
+      } else {
+        await setDoc(
+          dataDoc("chat_reactions", recordId),
+          {
+            messageId: String(message.id),
+            userId: String(uid),
+            userName:
+              currentUserProfile?.name ||
+              (authEmail ? authEmail.split("@")[0] : "Usuario"),
+            clientId: message.clientId || "",
+            emoji,
+          },
+          { merge: false },
+        );
+      }
+    } catch (error) {
+      console.warn("[chat:react]", error.message);
+    }
+  };
+
+  // Fijar / desfijar un mensaje en el hilo (visible para todos).
+  const toggleChatPin = async (message) => {
+    if (!message?.id || !message.clientId) return;
+    const recordId = `${message.clientId}__${message.id}`;
+    const existing = chatPins.find((item) => item.id === recordId);
+    try {
+      if (existing) {
+        await deleteDoc(dataDoc("chat_pins", recordId));
+      } else {
+        await setDoc(
+          dataDoc("chat_pins", recordId),
+          {
+            clientId: message.clientId,
+            messageId: String(message.id),
+            pinnedByName:
+              currentUserProfile?.name ||
+              (authEmail ? authEmail.split("@")[0] : "Usuario"),
+            pinnedAt: nowIso(),
+          },
+          { merge: true },
+        );
+      }
+    } catch (error) {
+      console.warn("[chat:pin]", error.message);
+    }
+  };
+
+  // Reenviar un mensaje a otro cliente (copia texto y adjuntos).
+  const forwardChatMessage = async (message, targetClientId) => {
+    if (!message?.id || !targetClientId) return;
+    let attachments = Array.isArray(message.attachments) ? message.attachments : [];
+    if (attachments.some((a) => a && a.hasData && !a.data)) {
+      const full = await fetchClientChatMessage(message.id);
+      if (full?.attachments) attachments = full.attachments;
+    }
+    await addClientChatMessage({
+      clientId: targetClientId,
+      text: message.text || "",
+      attachments,
+      forwarded: true,
+    });
+  };
+
+  // Los listados llegan sin el base64 de los adjuntos; se pide el mensaje
+  // completo bajo demanda para previsualizar/descargar archivos.
+  const fetchClientChatMessage = async (messageId) => {
+    if (!messageId) return null;
+    try {
+      const snap = await getDoc(dataDoc("client_chats", messageId));
+      return snap.data();
+    } catch (error) {
+      console.warn("[chat:fetch]", error.message);
+      return null;
+    }
+  };
+
+  // Abre la tarea referenciada por un mensaje del chat (o su sala si ya no está
+  // cargada en memoria).
+  const openTaskFromChat = (taskRef) => {
+    if (!taskRef?.taskId) return;
+    const listByType = {
+      accountTask: accountTasks,
+      editingTask: editingTasks,
+      managementTask: managementTasks,
+    };
+    const task = (listByType[taskRef.taskType] || []).find(
+      (item) => item.id === taskRef.taskId,
+    );
+    if (task) {
+      setTaskDetailConfig({ isOpen: true, task, type: taskRef.taskType });
+      return;
+    }
+    const viewByType = {
+      accountTask: "account-room",
+      editingTask: "editions",
+      managementTask: "management-room",
+    };
+    handleNavigate(viewByType[taskRef.taskType] || "account-room");
+  };
+
+  // Personas mencionables en el chat: TODOS los usuarios de la plataforma. El
+  // chat es para comunicarse con todo el equipo, no solo con los asignados al
+  // cliente. Se usa el directorio del servidor (accesible a cualquier rol,
+  // incluidos editores/viewers); si aún no cargó, se arma un fallback local con
+  // lo que haya en memoria (usuarios + managers + editores).
+  const chatMentionables = (() => {
+    if (chatDirectory.length > 0) return chatDirectory;
+    const seenEmail = new Set();
+    const seenId = new Set();
+    const result = [];
+    const add = (person) => {
+      const email = normalizeEmail(person?.email);
+      const id = person?.id ? String(person.id) : "";
+      const name = person?.name || email || "";
+      if (!name && !email) return;
+      if (email) {
+        if (seenEmail.has(email)) return;
+        seenEmail.add(email);
+      } else if (id) {
+        if (seenId.has(id)) return;
+        seenId.add(id);
+      } else {
+        return;
+      }
+      result.push({ id: id || email, name, email });
+    };
+    appUsers.filter((item) => item.isActive !== false).forEach(add);
+    managers.forEach(add);
+    editors.forEach(add);
+    return result.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  })();
+
+  // Carga el directorio de personas para @menciones (accesible a todos los roles).
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    apiFetch("/api/directory")
+      .then((payload) => {
+        if (!cancelled && Array.isArray(payload?.people)) {
+          setChatDirectory(payload.people);
+        }
+      })
+      .catch((error) => console.warn("[chat:directory]", error.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  // Mientras el chat de un cliente está abierto, mantenerlo marcado como leído.
+  useEffect(() => {
+    if (view !== "chat" || !selectedChatClient?.id) return;
+    markClientChatRead(selectedChatClient.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedChatClient?.id, clientChats]);
+
+  // Notificación del navegador cuando te mencionan en el chat.
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof Notification === "undefined")
+      return;
+    const myId = String(currentUserProfile?.id || "");
+    if (!myId) return;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+    if (Notification.permission !== "granted") return;
+
+    const STORAGE_KEY = "cluster_chat_notifications_v1";
+    let notified = [];
+    try {
+      notified = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    } catch {
+      notified = [];
+    }
+    const notifiedSet = new Set(notified);
+    let changed = false;
+
+    clientChats.forEach((message) => {
+      if (!message.id || notifiedSet.has(message.id)) return;
+      if (String(message.authorId || "") === myId) return;
+      const mentionsMe =
+        Array.isArray(message.mentionedIds) &&
+        message.mentionedIds.includes(myId);
+      if (!mentionsMe) return;
+      // Solo mensajes recientes (evita ráfaga la primera vez que se cargan).
+      const age = Date.now() - new Date(message.createdAt || 0).getTime();
+      if (age >= 0 && age < 15 * 60 * 1000) {
+        const client = clients.find((item) => item.id === message.clientId);
+        try {
+          const notif = new Notification(
+            `💬 Chat · ${client?.name || "Cliente"}`,
+            {
+              body: `${message.authorName || "Alguien"}: ${message.text}`,
+              tag: `chat-${message.id}`,
+            },
+          );
+          notif.onclick = () => {
+            window.focus();
+            if (client) openClientChat(client);
+            handleNavigate("chat");
+            notif.close();
+          };
+        } catch {
+          /* noop */
+        }
+      }
+      notifiedSet.add(message.id);
+      changed = true;
+    });
+
+    if (changed) {
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify([...notifiedSet].slice(-500)),
+        );
+      } catch {
+        /* noop */
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientChats, currentUserProfile]);
+
   const addTaskTimeEntry = async (task, type, durationMs) => {
     const colMap = {
       accountTask: "account_tasks",
@@ -5043,6 +5536,16 @@ function App() {
               color="slate"
             />
           )}
+          {canAccessView(currentUserProfile, "chat") && (
+            <SidebarItem
+              active={view === "chat"}
+              onClick={() => handleNavigate("chat")}
+              icon="MessageSquare"
+              label="Chat"
+              color="blue"
+              badge={chatUnread.total > 0 ? chatUnread.total : null}
+            />
+          )}
 
           <div className="pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2">
             Salas de trabajo
@@ -5263,8 +5766,16 @@ function App() {
       </aside>
 
       {/* Vistas Principales */}
-      <main className="app-main flex-1 overflow-y-auto relative w-full h-full">
-        <div className="p-4 md:p-8 max-w-[1360px] mx-auto min-h-full pb-mobile-nav md:pb-20">
+      <main
+        className={`app-main flex-1 relative w-full h-full ${view === "chat" ? "overflow-hidden" : "overflow-y-auto"}`}
+      >
+        <div
+          className={
+            view === "chat"
+              ? "h-full"
+              : "p-4 md:p-8 max-w-[1360px] mx-auto min-h-full pb-mobile-nav md:pb-20"
+          }
+        >
           {view === "dashboard" &&
             (isFirstTimeWorkspace ? (
               <FirstTimeView
@@ -5329,6 +5840,41 @@ function App() {
                   isEdit: true,
                 })
               }
+              chatUnread={chatUnread.byClient?.[selectedClient.id] || 0}
+              onOpenChat={() => {
+                openClientChat(selectedClient);
+                handleNavigate("chat");
+              }}
+            />
+          )}
+          {view === "chat" && (
+            <ClientChatView
+              clients={clients}
+              clientChats={clientChats}
+              chatUnread={chatUnread}
+              activeClient={selectedChatClient}
+              onSelectClient={openClientChat}
+              onSendMessage={addClientChatMessage}
+              onOpenTask={openTaskFromChat}
+              onDeleteForEveryone={deleteChatForEveryone}
+              onDeleteForMe={hideChatForMe}
+              hiddenIds={chatHiddenIds}
+              reactions={chatReactions}
+              pins={chatPins}
+              onReact={toggleChatReaction}
+              onPin={toggleChatPin}
+              onForward={forwardChatMessage}
+              currentUserId={currentUserProfile?.id || authEmail || ""}
+              currentUserProfile={currentUserProfile}
+              canModerate={userHasPermission(
+                currentUserProfile,
+                "moderate_client_chat",
+              )}
+              mentionables={chatMentionables}
+              accountTasks={accountTasks}
+              editingTasks={editingTasks}
+              managementTasks={managementTasks}
+              fetchFullMessage={fetchClientChatMessage}
             />
           )}
           {view === "managers" && (
@@ -5874,6 +6420,13 @@ function App() {
         onAddTimeEntry={addTaskTimeEntry}
         onUpdateChecklist={updateTaskChecklist}
         onChangePriority={changeTaskPriority}
+        clientChats={clientChats}
+        onSendClientChatMessage={addClientChatMessage}
+        onOpenClientChat={(clientId) => {
+          const client = clients.find((item) => item.id === clientId);
+          openClientChat(client || null);
+          handleNavigate("chat");
+        }}
         onChangeAssignee={changeTaskAssignee}
         onChangeAssignees={changeTaskAssignees}
         sendNotification={sendNotification}
@@ -10636,6 +11189,8 @@ const ClientDetail = ({
   onUpdate,
   onDelete,
   onEdit,
+  onOpenChat,
+  chatUnread = 0,
 }) => (
   <div className="space-y-6 max-w-5xl mx-auto fade-in">
     <Breadcrumb
@@ -10685,6 +11240,19 @@ const ClientDetail = ({
                 buttonClassName="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 text-white font-bold text-xs transition-all max-w-full"
               />
             </div>
+            {onOpenChat && (
+              <button
+                onClick={onOpenChat}
+                className="mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-blue-700"
+              >
+                <Icon name="MessageSquare" size={14} /> Abrir chat interno
+                {chatUnread > 0 && (
+                  <span className="rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-black">
+                    {chatUnread}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
@@ -10746,6 +11314,1342 @@ const ClientDetail = ({
     </div>
   </div>
 );
+
+const CHAT_TASK_CHIP_STYLES = {
+  accountTask:
+    "text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/30",
+  editingTask:
+    "text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30",
+  managementTask:
+    "text-violet-600 dark:text-violet-300 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30",
+};
+const CHAT_TASK_LABELS = {
+  accountTask: "Account",
+  editingTask: "Edición",
+  managementTask: "Gestión",
+};
+
+const renderChatText = (text = "", onColored = false) =>
+  String(text)
+    .split(/(@[^\s@]+)/g)
+    .map((part, index) =>
+      part.startsWith("@") ? (
+        <span
+          key={index}
+          className={
+            onColored
+              ? "font-bold underline"
+              : "font-semibold text-blue-600 dark:text-blue-400"
+          }
+        >
+          {part}
+        </span>
+      ) : (
+        <React.Fragment key={index}>{part}</React.Fragment>
+      ),
+    );
+
+const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "✅"];
+const CHAT_MAX_FILE = 8 * 1024 * 1024; // 8 MB por archivo
+const chatFileToBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+const formatChatBytes = (bytes = 0) => {
+  if (!bytes) return "";
+  const kb = bytes / 1024;
+  return kb < 1024 ? `${Math.round(kb)} KB` : `${(kb / 1024).toFixed(1)} MB`;
+};
+const isChatImage = (type = "") => String(type).startsWith("image/");
+const isChatVideo = (type = "") => String(type).startsWith("video/");
+const isChatAudio = (type = "") => String(type).startsWith("audio/");
+const chatShortTime = (iso) => {
+  try {
+    return new Date(iso).toLocaleTimeString("es", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+};
+
+// Chat interno por cliente (estilo Slack): lista de clientes + hilo + composer
+// con @menciones, enlace opcional a una tarea y adjuntos (imágenes/video/PDF).
+const ClientChatView = ({
+  clients = [],
+  clientChats = [],
+  chatUnread = { byClient: {}, total: 0 },
+  activeClient,
+  onSelectClient,
+  onSendMessage,
+  onOpenTask,
+  onDeleteForEveryone,
+  onDeleteForMe,
+  hiddenIds,
+  reactions = [],
+  pins = [],
+  onReact,
+  onPin,
+  onForward,
+  currentUserId = "",
+  currentUserProfile,
+  canModerate = false,
+  mentionables = [],
+  accountTasks = [],
+  editingTasks = [],
+  managementTasks = [],
+  fetchFullMessage,
+}) => {
+  const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [menuFor, setMenuFor] = useState(null);
+  const [reactionPickerFor, setReactionPickerFor] = useState(null);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [forwardTarget, setForwardTarget] = useState(null);
+  const [forwardSearch, setForwardSearch] = useState("");
+  const [text, setText] = useState("");
+  const [mentionedIds, setMentionedIds] = useState([]);
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionStart, setMentionStart] = useState(-1);
+  const [taskRef, setTaskRef] = useState(null);
+  const [taskPickerOpen, setTaskPickerOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [pending, setPending] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [fullMap, setFullMap] = useState({});
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const textareaRef = useRef(null);
+  const scrollRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordTimerRef = useRef(null);
+  const discardRef = useRef(false);
+
+  const myId = String(currentUserProfile?.id || "");
+
+  const lastMsgByClient = {};
+  clientChats.forEach((message) => {
+    if (!message.clientId) return;
+    const prev = lastMsgByClient[message.clientId];
+    if (!prev || (message.createdAt || "") > (prev.createdAt || "")) {
+      lastMsgByClient[message.clientId] = message;
+    }
+  });
+
+  const previewText = (message) => {
+    if (!message) return "Sin mensajes";
+    if (message.text) return message.text;
+    const count = Array.isArray(message.attachments)
+      ? message.attachments.length
+      : 0;
+    return count > 0 ? `📎 ${count} archivo${count === 1 ? "" : "s"}` : "…";
+  };
+
+  const term = search.trim().toLowerCase();
+  const sortedClients = [...clients]
+    .filter((client) => !term || (client.name || "").toLowerCase().includes(term))
+    .sort((a, b) => {
+      const aTime = lastMsgByClient[a.id]?.createdAt || "";
+      const bTime = lastMsgByClient[b.id]?.createdAt || "";
+      if (aTime !== bTime) return aTime > bTime ? -1 : 1;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+
+  const messages = activeClient
+    ? clientChats
+        .filter(
+          (message) =>
+            message.clientId === activeClient.id &&
+            !(hiddenIds && hiddenIds.has(String(message.id))),
+        )
+        .sort((a, b) => ((a.createdAt || "") > (b.createdAt || "") ? 1 : -1))
+    : [];
+
+  // Reacciones agrupadas por mensaje: { messageId: { emoji: {count, mine, names} } }
+  const reactionsByMessage = {};
+  reactions.forEach((reaction) => {
+    if (!reaction.messageId || !reaction.emoji) return;
+    const byEmoji = (reactionsByMessage[reaction.messageId] ||= {});
+    const entry = (byEmoji[reaction.emoji] ||= { count: 0, mine: false, names: [] });
+    entry.count += 1;
+    if (reaction.userName) entry.names.push(reaction.userName);
+    if (String(reaction.userId || "") === String(currentUserId)) entry.mine = true;
+  });
+
+  const pinnedIds = new Set(
+    pins
+      .filter((pin) => activeClient && pin.clientId === activeClient.id)
+      .map((pin) => String(pin.messageId)),
+  );
+  const pinnedMessages = messages.filter(
+    (message) => pinnedIds.has(String(message.id)) && !message.deleted,
+  );
+
+  const clientTasks = activeClient
+    ? [
+        ...accountTasks
+          .filter((task) => task.clientId === activeClient.id)
+          .map((task) => ({ id: task.id, title: task.title, type: "accountTask" })),
+        ...editingTasks
+          .filter((task) => task.clientId === activeClient.id)
+          .map((task) => ({ id: task.id, title: task.title, type: "editingTask" })),
+        ...managementTasks
+          .filter((task) => task.clientId === activeClient.id)
+          .map((task) => ({ id: task.id, title: task.title, type: "managementTask" })),
+      ]
+    : [];
+
+  const mentionSuggestions = mentionOpen
+    ? mentionables
+        .filter((person) => {
+          const q = mentionQuery.toLowerCase();
+          if (!q) return true;
+          return (
+            (person.name || "").toLowerCase().includes(q) ||
+            (person.email || "").toLowerCase().includes(q)
+          );
+        })
+        .slice(0, 30)
+    : [];
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [activeClient?.id, messages.length]);
+
+  // Trae el base64 de los adjuntos (los listados llegan solo con metadata).
+  useEffect(() => {
+    if (!activeClient || typeof fetchFullMessage !== "function") return;
+    let cancelled = false;
+    const need = messages.filter((message) => {
+      const atts = message.attachments || [];
+      if (atts.length === 0 || fullMap[message.id]) return false;
+      if (atts.some((a) => a.data)) return false;
+      return atts.some((a) => a.hasData);
+    });
+    if (need.length === 0) return;
+    (async () => {
+      const results = await Promise.all(
+        need.map(async (message) => [
+          message.id,
+          (await fetchFullMessage(message.id))?.attachments || [],
+        ]),
+      );
+      if (cancelled) return;
+      setFullMap((prev) => {
+        const next = { ...prev };
+        results.forEach(([id, atts]) => {
+          next[id] = atts;
+        });
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClient?.id, messages.length]);
+
+  const handleTextChange = (event) => {
+    const value = event.target.value;
+    setText(value);
+    const caret = event.target.selectionStart ?? value.length;
+    const before = value.slice(0, caret);
+    const atMatch = before.match(/@([^\s@]*)$/);
+    if (atMatch) {
+      setMentionOpen(true);
+      setMentionQuery(atMatch[1]);
+      setMentionStart(before.lastIndexOf("@"));
+      // Evita que se superpongan los desplegables.
+      setTaskPickerOpen(false);
+      setAttachMenuOpen(false);
+    } else {
+      setMentionOpen(false);
+      setMentionQuery("");
+      setMentionStart(-1);
+    }
+  };
+
+  const insertMention = (person) => {
+    const before = text.slice(0, mentionStart);
+    const after = text.slice(mentionStart + 1 + mentionQuery.length);
+    setText(`${before}@${person.name} ${after}`);
+    setMentionedIds((prev) =>
+      prev.includes(person.id) ? prev : [...prev, person.id],
+    );
+    setMentionOpen(false);
+    setMentionQuery("");
+    setMentionStart(-1);
+    setTimeout(() => textareaRef.current && textareaRef.current.focus(), 0);
+  };
+
+  const handleFiles = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of files) {
+        if (file.size > CHAT_MAX_FILE) {
+          alert(`"${file.name}" supera el máximo de 8 MB.`);
+          continue;
+        }
+        const data = await chatFileToBase64(file);
+        setPending((prev) => [
+          ...prev,
+          {
+            id: Math.random().toString(36).slice(2, 10),
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            data,
+          },
+        ]);
+      }
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const openFilePicker = (accept) => {
+    setAttachMenuOpen(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.accept = accept || "";
+      fileInputRef.current.click();
+    }
+  };
+
+  const startRecording = async () => {
+    if (recording) return;
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      alert("Tu navegador no permite grabar audio.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      discardRef.current = false;
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        if (discardRef.current) {
+          discardRef.current = false;
+          return;
+        }
+        const blob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        if (blob.size === 0) return;
+        if (blob.size > CHAT_MAX_FILE) {
+          alert("La nota de voz supera el máximo de 8 MB.");
+          return;
+        }
+        const data = await chatFileToBase64(blob);
+        setPending((prev) => [
+          ...prev,
+          {
+            id: Math.random().toString(36).slice(2, 10),
+            name: `nota-de-voz-${Date.now()}.webm`,
+            type: blob.type || "audio/webm",
+            size: blob.size,
+            data,
+          },
+        ]);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+      setRecordSeconds(0);
+      recordTimerRef.current = setInterval(
+        () => setRecordSeconds((seconds) => seconds + 1),
+        1000,
+      );
+    } catch {
+      alert("No se pudo acceder al micrófono.");
+    }
+  };
+
+  const stopRecording = (discard = false) => {
+    if (recordTimerRef.current) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+    discardRef.current = discard;
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    setRecording(false);
+    setRecordSeconds(0);
+  };
+
+  const handleSubmit = async () => {
+    const trimmed = text.trim();
+    if ((!trimmed && pending.length === 0) || submitting || !activeClient) return;
+    setSubmitting(true);
+    try {
+      await onSendMessage({
+        clientId: activeClient.id,
+        text: trimmed,
+        mentionedIds,
+        taskRef,
+        attachments: pending,
+        replyTo: replyingTo
+          ? {
+              id: replyingTo.id,
+              authorName: replyingTo.authorName,
+              text: replyingTo.text,
+            }
+          : null,
+      });
+      setText("");
+      setMentionedIds([]);
+      setTaskRef(null);
+      setPending([]);
+      setReplyingTo(null);
+      setMentionOpen(false);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const renderAttachment = (att) => {
+    const key = att.id || att.name;
+    if (att.data && isChatImage(att.type)) {
+      return (
+        <a
+          key={key}
+          href={att.data}
+          target="_blank"
+          rel="noreferrer"
+          className="block"
+        >
+          <img
+            src={att.data}
+            alt={att.name}
+            className="max-h-56 max-w-[260px] rounded-lg border border-slate-200 object-cover dark:border-white/10"
+          />
+        </a>
+      );
+    }
+    if (att.data && isChatVideo(att.type)) {
+      return (
+        <video
+          key={key}
+          src={att.data}
+          controls
+          className="max-h-60 max-w-[300px] rounded-lg border border-slate-200 dark:border-white/10"
+        />
+      );
+    }
+    if (att.data && isChatAudio(att.type)) {
+      return (
+        <audio key={key} src={att.data} controls className="max-w-[280px]" />
+      );
+    }
+    return (
+      <a
+        key={key}
+        href={att.data || undefined}
+        download={att.name}
+        target="_blank"
+        rel="noreferrer"
+        className={`inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-white/10 dark:bg-slate-800 ${att.data ? "hover:bg-slate-50 dark:hover:bg-slate-700" : "opacity-60"}`}
+      >
+        <Icon name="Paperclip" size={14} className="shrink-0 text-slate-500" />
+        <span className="max-w-[180px] truncate font-semibold text-slate-700 dark:text-slate-200">
+          {att.name}
+        </span>
+        <span className="text-slate-400">
+          {att.data ? formatChatBytes(att.size) : "cargando…"}
+        </span>
+      </a>
+    );
+  };
+
+  return (
+    <div className="flex h-full min-h-0 overflow-hidden bg-white dark:bg-[#1a1d21] fade-in">
+      {/* Lista de clientes (canales) */}
+      <aside
+        className={`${activeClient ? "hidden md:flex" : "flex"} min-h-0 w-full flex-col border-r border-slate-200 dark:border-white/10 md:w-72 lg:w-80 shrink-0`}
+      >
+        <div className="p-3 border-b border-slate-100 dark:border-white/10">
+          <div className="flex items-center gap-2 mb-3">
+            <Icon
+              name="MessageSquare"
+              size={18}
+              className="text-slate-500 dark:text-slate-400"
+            />
+            <h2 className="text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">
+              Chat interno
+            </h2>
+          </div>
+          <div className="relative">
+            <Icon
+              name="Search"
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar cliente..."
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            />
+          </div>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scroll pb-mobile-nav md:pb-0">
+          {sortedClients.length === 0 && (
+            <p className="p-4 text-center text-sm text-slate-400">
+              No hay clientes.
+            </p>
+          )}
+          {sortedClients.map((client) => {
+            const unread = chatUnread.byClient?.[client.id] || 0;
+            const last = lastMsgByClient[client.id];
+            const isActive = activeClient?.id === client.id;
+            return (
+              <button
+                key={client.id}
+                onClick={() => onSelectClient(client)}
+                className={`flex w-full items-center gap-3 border-b border-slate-50 px-3 py-2.5 text-left transition-colors dark:border-white/5 ${isActive ? "bg-blue-50 dark:bg-blue-500/10" : "hover:bg-slate-50 dark:hover:bg-white/5"}`}
+              >
+                {client.photo ? (
+                  <img
+                    src={client.photo}
+                    alt={client.name}
+                    className="h-9 w-9 shrink-0 rounded-lg object-cover"
+                  />
+                ) : (
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white">
+                    {(client.name || "C").slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`truncate text-sm ${unread > 0 ? "font-black" : "font-bold"} ${isActive ? "text-blue-700 dark:text-blue-300" : "text-slate-700 dark:text-slate-200"}`}
+                  >
+                    {client.name || "Cliente"}
+                  </p>
+                  <p className="truncate text-xs text-slate-400">
+                    {last
+                      ? `${last.authorName ? `${last.authorName}: ` : ""}${previewText(last)}`
+                      : "Sin mensajes"}
+                  </p>
+                </div>
+                {unread > 0 && (
+                  <span className="ml-1 shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-black text-white">
+                    {unread}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+
+      {/* Hilo del cliente */}
+      <section
+        className={`${activeClient ? "flex" : "hidden md:flex"} min-h-0 min-w-0 flex-1 flex-col`}
+      >
+        {!activeClient ? (
+          <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
+            <Icon name="MessageSquare" size={40} className="mb-3 text-slate-300" />
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+              Elige un cliente para ver la conversación
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex shrink-0 items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-white/10">
+              <button
+                onClick={() => onSelectClient(null)}
+                aria-label="Volver a la lista"
+                className="md:hidden text-slate-500 hover:text-slate-700"
+              >
+                <Icon name="ChevronLeft" size={20} />
+              </button>
+              {activeClient.photo ? (
+                <img
+                  src={activeClient.photo}
+                  alt={activeClient.name}
+                  className="h-9 w-9 rounded-lg object-cover"
+                />
+              ) : (
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white">
+                  {(activeClient.name || "C").slice(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-slate-700 dark:text-slate-200">
+                  {activeClient.name || "Cliente"}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {messages.length} mensaje{messages.length === 1 ? "" : "s"}
+                </p>
+              </div>
+            </div>
+
+            {pinnedMessages.length > 0 && (
+              <div className="shrink-0 space-y-1 border-b border-slate-100 bg-amber-50/60 px-4 py-2 dark:border-white/10 dark:bg-amber-500/5">
+                {pinnedMessages.slice(-3).map((pinned) => (
+                  <div key={pinned.id} className="flex items-center gap-2 text-xs">
+                    <Icon
+                      name="Pin"
+                      size={12}
+                      className="shrink-0 text-amber-600 dark:text-amber-400"
+                    />
+                    <span className="shrink-0 font-bold text-slate-600 dark:text-slate-300">
+                      {pinned.authorName}:
+                    </span>
+                    <span className="truncate text-slate-500 dark:text-slate-400">
+                      {pinned.text ||
+                        (Array.isArray(pinned.attachments) &&
+                        pinned.attachments.length
+                          ? "📎 Adjunto"
+                          : "")}
+                    </span>
+                    <button
+                      onClick={() => onPin && onPin(pinned)}
+                      aria-label="Desfijar"
+                      className="ml-auto shrink-0 text-slate-400 hover:text-red-500"
+                    >
+                      <Icon name="X" size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div
+              ref={scrollRef}
+              className="flex-1 min-h-0 overflow-y-auto py-3 custom-scroll bg-white dark:bg-[#1a1d21]"
+            >
+              {messages.length === 0 && (
+                <div className="mt-8 text-center">
+                  <Icon
+                    name="MessageSquare"
+                    size={22}
+                    className="mx-auto mb-2 text-slate-300"
+                  />
+                  <p className="text-sm text-slate-400">
+                    Sé el primero en escribir sobre este cliente.
+                  </p>
+                </div>
+              )}
+              {messages.map((message, index) => {
+                const mine = myId && String(message.authorId || "") === myId;
+                const prev = messages[index - 1];
+                const grouped =
+                  prev &&
+                  String(prev.authorId || "") === String(message.authorId || "") &&
+                  (prev.authorName || "") === (message.authorName || "") &&
+                  message.createdAt &&
+                  prev.createdAt &&
+                  new Date(message.createdAt) - new Date(prev.createdAt) <
+                    5 * 60 * 1000;
+                const atts = fullMap[message.id] || message.attachments || [];
+                return (
+                  <div
+                    key={message.id}
+                    className={`group flex px-4 ${grouped ? "mt-1" : "mt-4"} ${mine ? "justify-end" : "justify-start"}`}
+                  >
+                    {!mine && (
+                      <div className="mr-2 w-8 shrink-0 self-end">
+                        {!grouped && (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#555552] text-[10px] font-black text-white">
+                            {(message.authorName || "U").slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="relative min-w-0 max-w-[78%]">
+                      {!mine && !grouped && (
+                        <p className="mb-0.5 px-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                          {message.authorName || "Usuario"}
+                        </p>
+                      )}
+                      <div
+                        className={`relative rounded-2xl px-3 py-2 ${mine ? "rounded-br-sm bg-emerald-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}
+                      >
+                        {!message.deleted && (
+                          <button
+                            onClick={() =>
+                              setMenuFor(menuFor === message.id ? null : message.id)
+                            }
+                            aria-label="Opciones del mensaje"
+                            className={`absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100 ${mine ? "text-white/80 hover:bg-black/20" : "text-slate-400 hover:bg-black/5 dark:hover:bg-white/10"}`}
+                          >
+                            <Icon name="ChevronDown" size={14} />
+                          </button>
+                        )}
+                        {reactionPickerFor === message.id && (
+                          <div
+                            className={`absolute bottom-full z-40 mb-2 flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-2xl dark:border-slate-600 dark:bg-slate-800 ${mine ? "right-0" : "left-0"}`}
+                          >
+                            {CHAT_REACTION_EMOJIS.map((emoji) => (
+                              <button
+                                key={emoji}
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  if (onReact) onReact(message, emoji);
+                                  setReactionPickerFor(null);
+                                }}
+                                className="flex h-9 w-9 items-center justify-center rounded-full text-xl leading-none transition-transform hover:scale-125 hover:bg-slate-100 dark:hover:bg-slate-700"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {menuFor === message.id && (
+                          <div
+                            className={`absolute top-7 z-40 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-slate-700 shadow-2xl dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 ${mine ? "right-0" : "left-0"}`}
+                          >
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                setMenuFor(null);
+                                setReplyingTo(message);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="Reply" size={14} className="text-slate-500" />
+                              Responder
+                            </button>
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                setMenuFor(null);
+                                setReactionPickerFor(message.id);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="Smile" size={14} className="text-slate-500" />
+                              Reaccionar
+                            </button>
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                setMenuFor(null);
+                                setForwardTarget(message);
+                                setForwardSearch("");
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="Send" size={14} className="text-slate-500" />
+                              Reenviar
+                            </button>
+                            {message.text && (
+                              <button
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  if (navigator.clipboard) {
+                                    navigator.clipboard.writeText(message.text);
+                                  }
+                                  setMenuFor(null);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                              >
+                                <Icon
+                                  name="ClipboardList"
+                                  size={14}
+                                  className="text-slate-500"
+                                />
+                                Copiar
+                              </button>
+                            )}
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                setMenuFor(null);
+                                if (onPin) onPin(message);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="Pin" size={14} className="text-slate-500" />
+                              {pinnedIds.has(String(message.id)) ? "Desfijar" : "Fijar"}
+                            </button>
+                            {mine && (
+                              <button
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  setMenuFor(null);
+                                  setDeleteTarget(message);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+                              >
+                                <Icon name="Trash2" size={14} /> Eliminar
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {message.deleted ? (
+                          <p
+                            className={`flex items-center gap-1.5 pr-6 text-sm italic ${mine ? "text-white/70" : "text-slate-400"}`}
+                          >
+                            <Icon name="Trash2" size={12} /> Este mensaje fue
+                            eliminado
+                          </p>
+                        ) : (
+                          <>
+                            {message.forwarded && (
+                              <p
+                                className={`mb-1 flex items-center gap-1 text-[11px] italic ${mine ? "text-white/70" : "text-slate-400"}`}
+                              >
+                                <Icon name="Send" size={10} /> Reenviado
+                              </p>
+                            )}
+                            {message.replyTo && (
+                              <div
+                                className={`mb-1 rounded-md border-l-2 px-2 py-1 text-xs ${mine ? "border-white/60 bg-black/15" : "border-blue-400 bg-black/5 dark:bg-white/5"}`}
+                              >
+                                <p className="font-bold opacity-80">
+                                  {message.replyTo.authorName || "Mensaje"}
+                                </p>
+                                <p className="truncate opacity-70">
+                                  {message.replyTo.text}
+                                </p>
+                              </div>
+                            )}
+                            {message.text && (
+                              <p className="whitespace-pre-wrap break-words pr-5 text-sm leading-relaxed">
+                                {renderChatText(message.text, mine)}
+                              </p>
+                            )}
+                            {atts.length > 0 && (
+                              <div className="mt-1.5 flex flex-wrap gap-2">
+                                {atts.map((att) => renderAttachment(att))}
+                              </div>
+                            )}
+                            {message.taskRef?.taskId && (
+                              <button
+                                onClick={() => onOpenTask(message.taskRef)}
+                                className={`mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
+                              >
+                                <Icon
+                                  name="ClipboardList"
+                                  size={11}
+                                  className="shrink-0"
+                                />
+                                <span className="truncate">
+                                  {message.taskRef.taskTitle || "Tarea"}
+                                </span>
+                                <span className="opacity-70">
+                                  ·{" "}
+                                  {CHAT_TASK_LABELS[message.taskRef.taskType] || ""}
+                                </span>
+                              </button>
+                            )}
+                          </>
+                        )}
+                        <span
+                          className={`mt-0.5 block text-right text-[10px] ${mine ? "text-white/70" : "text-slate-400"}`}
+                        >
+                          {chatShortTime(message.createdAt)}
+                        </span>
+                      </div>
+                      {reactionsByMessage[message.id] &&
+                        Object.keys(reactionsByMessage[message.id]).length > 0 && (
+                          <div
+                            className={`mt-1 flex flex-wrap gap-1 ${mine ? "justify-end" : ""}`}
+                          >
+                            {Object.entries(reactionsByMessage[message.id]).map(
+                              ([emoji, info]) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => onReact && onReact(message, emoji)}
+                                  title={info.names.join(", ")}
+                                  className={`flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] ${info.mine ? "border-blue-300 bg-blue-50 dark:border-blue-500/40 dark:bg-blue-500/10" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"}`}
+                                >
+                                  <span>{emoji}</span>
+                                  <span className="font-semibold text-slate-600 dark:text-slate-300">
+                                    {info.count}
+                                  </span>
+                                </button>
+                              ),
+                            )}
+                          </div>
+                        )}
+                    </div>
+                  </div>
+                );
+              })}
+              {(menuFor || reactionPickerFor) && (
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => {
+                    setMenuFor(null);
+                    setReactionPickerFor(null);
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Composer estilo Slack */}
+            <div className="shrink-0 border-t border-slate-200 p-3 pb-mobile-nav md:pb-3 dark:border-white/10">
+              {replyingTo && (
+                <div className="mb-2 flex items-center gap-2 rounded-lg border-l-4 border-blue-500 bg-slate-50 px-3 py-2 dark:bg-slate-800">
+                  <Icon
+                    name="Reply"
+                    size={14}
+                    className="shrink-0 text-blue-500"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                      Respondiendo a {replyingTo.authorName || "mensaje"}
+                    </p>
+                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                      {replyingTo.text ||
+                        (Array.isArray(replyingTo.attachments) &&
+                        replyingTo.attachments.length
+                          ? "📎 Adjunto"
+                          : "")}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setReplyingTo(null)}
+                    aria-label="Cancelar respuesta"
+                    className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <Icon name="X" size={14} />
+                  </button>
+                </div>
+              )}
+              {(taskRef || pending.length > 0) && (
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  {taskRef && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
+                    >
+                      <Icon name="ClipboardList" size={11} />
+                      <span className="max-w-[220px] truncate">
+                        {taskRef.taskTitle}
+                      </span>
+                      <button
+                        onClick={() => setTaskRef(null)}
+                        aria-label="Quitar tarea"
+                        className="opacity-70 hover:opacity-100"
+                      >
+                        <Icon name="X" size={11} />
+                      </button>
+                    </span>
+                  )}
+                  {pending.map((att) => (
+                    <div key={att.id} className="relative">
+                      {isChatImage(att.type) ? (
+                        <img
+                          src={att.data}
+                          alt={att.name}
+                          className="h-16 w-16 rounded-lg border border-slate-200 object-cover dark:border-white/10"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-36 items-center gap-1.5 rounded-lg border border-slate-200 px-2 dark:border-white/10">
+                          <Icon
+                            name="Paperclip"
+                            size={14}
+                            className="shrink-0 text-slate-500"
+                          />
+                          <span className="truncate text-[11px] text-slate-600 dark:text-slate-300">
+                            {att.name}
+                          </span>
+                        </div>
+                      )}
+                      <button
+                        onClick={() =>
+                          setPending((prev) =>
+                            prev.filter((item) => item.id !== att.id),
+                          )
+                        }
+                        aria-label="Quitar archivo"
+                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-white"
+                      >
+                        <Icon name="X" size={11} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="relative rounded-xl border border-slate-300 bg-white focus-within:border-blue-500 dark:border-white/15 dark:bg-[#222529]">
+                {mentionOpen && mentionSuggestions.length > 0 && (
+                  <div className="absolute bottom-full left-0 z-40 mb-1 max-h-72 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800">
+                    <div className="flex items-center justify-between px-3 pb-1 pt-1.5">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Mencionar
+                      </p>
+                      <button
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setMentionOpen(false);
+                        }}
+                        aria-label="Cerrar"
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      >
+                        <Icon name="X" size={13} />
+                      </button>
+                    </div>
+                    {mentionSuggestions.map((person) => (
+                      <button
+                        key={person.id}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          insertMention(person);
+                        }}
+                        className="flex w-full items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
+                      >
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white">
+                          {(person.name || person.email || "?")
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1 text-left">
+                          <p className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
+                            {person.name || person.email}
+                          </p>
+                          {person.email && (
+                            <p className="truncate text-[11px] text-slate-400">
+                              {person.email}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {taskPickerOpen && (
+                  <div className="absolute bottom-full left-0 z-30 mb-1 max-h-64 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800">
+                    <div className="flex items-center justify-between px-3 pb-1 pt-1.5">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Enlazar tarea del cliente
+                      </p>
+                      <button
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setTaskPickerOpen(false);
+                        }}
+                        aria-label="Cerrar"
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      >
+                        <Icon name="X" size={13} />
+                      </button>
+                    </div>
+                    {clientTasks.length === 0 && (
+                      <p className="px-3 py-2 text-xs text-slate-400">
+                        Este cliente no tiene tareas.
+                      </p>
+                    )}
+                    {clientTasks.map((task) => (
+                      <button
+                        key={`${task.type}-${task.id}`}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setTaskRef({
+                            taskId: task.id,
+                            taskType: task.type,
+                            taskTitle: task.title || "Tarea",
+                          });
+                          setTaskPickerOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
+                      >
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black ${CHAT_TASK_CHIP_STYLES[task.type]}`}
+                        >
+                          {CHAT_TASK_LABELS[task.type]}
+                        </span>
+                        <span className="flex-1 truncate text-sm text-slate-700 dark:text-slate-200">
+                          {task.title || "(sin título)"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <textarea
+                  ref={textareaRef}
+                  value={text}
+                  onChange={handleTextChange}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "Escape" &&
+                      (mentionOpen || taskPickerOpen || attachMenuOpen)
+                    ) {
+                      setMentionOpen(false);
+                      setTaskPickerOpen(false);
+                      setAttachMenuOpen(false);
+                      event.preventDefault();
+                      return;
+                    }
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      handleSubmit();
+                    }
+                  }}
+                  placeholder={`Mensaje para ${activeClient.name || "el cliente"}`}
+                  rows={text ? 2 : 1}
+                  className="w-full resize-none bg-transparent px-3.5 pt-2.5 text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200"
+                />
+                <div className="relative flex items-center gap-1 px-2 pb-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(event) => handleFiles(event.target.files)}
+                  />
+                  {recording ? (
+                    <div className="flex flex-1 items-center gap-2">
+                      <span className="flex h-8 items-center gap-2 rounded-md bg-red-50 px-3 text-xs font-bold text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                        <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+                        Grabando…{" "}
+                        {String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:
+                        {String(recordSeconds % 60).padStart(2, "0")}
+                      </span>
+                      <button
+                        onClick={() => stopRecording(true)}
+                        className="flex h-8 items-center rounded-md px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => stopRecording(false)}
+                        aria-label="Detener y adjuntar audio"
+                        className="ml-auto flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700"
+                      >
+                        <Icon name="Stop" size={14} /> Listo
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Adjuntar archivo (elegir tipo) */}
+                      <div className="relative">
+                        <button
+                          onClick={() => {
+                            setAttachMenuOpen((open) => !open);
+                            setMentionOpen(false);
+                            setTaskPickerOpen(false);
+                          }}
+                          aria-label="Adjuntar archivo"
+                          disabled={uploading}
+                          className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:opacity-50 ${attachMenuOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`}
+                        >
+                          <Icon
+                            name={uploading ? "Loader2" : "Paperclip"}
+                            size={18}
+                            className={uploading ? "animate-spin" : ""}
+                          />
+                        </button>
+                        {attachMenuOpen && (
+                          <div className="absolute bottom-full left-0 z-30 mb-1 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                openFilePicker("image/*");
+                              }}
+                              className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="Image" size={16} className="text-slate-500" />
+                              Imagen
+                            </button>
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                openFilePicker("video/*");
+                              }}
+                              className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="Video" size={16} className="text-slate-500" />
+                              Video
+                            </button>
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                openFilePicker(
+                                  "application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip",
+                                );
+                              }}
+                              className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="FileText" size={16} className="text-slate-500" />
+                              Documento / PDF
+                            </button>
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                openFilePicker("");
+                              }}
+                              className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="FilePlus" size={16} className="text-slate-500" />
+                              Cualquier archivo
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {/* Nota de voz */}
+                      <button
+                        onClick={startRecording}
+                        aria-label="Grabar nota de voz"
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
+                      >
+                        <Icon name="Microphone" size={18} />
+                      </button>
+                      {/* Enlazar tarea */}
+                      <button
+                        onClick={() => {
+                          setTaskPickerOpen((open) => !open);
+                          setMentionOpen(false);
+                          setAttachMenuOpen(false);
+                        }}
+                        aria-label="Enlazar tarea"
+                        className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${taskRef || taskPickerOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`}
+                      >
+                        <Icon name="ClipboardList" size={17} />
+                      </button>
+                      <span className="ml-auto text-[10px] text-slate-400 hidden sm:block">
+                        Enter para enviar · Shift+Enter salto de línea
+                      </span>
+                      <button
+                        onClick={handleSubmit}
+                        disabled={
+                          submitting || (!text.trim() && pending.length === 0)
+                        }
+                        aria-label="Enviar mensaje"
+                        className="ml-2 flex h-8 w-8 items-center justify-center rounded-md bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
+                      >
+                        <Icon
+                          name={submitting ? "Loader2" : "Send"}
+                          size={16}
+                          className={submitting ? "animate-spin" : ""}
+                        />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* Popup de confirmación de borrado (estilo WhatsApp) */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-800"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-base font-black text-slate-800 dark:text-slate-100">
+              ¿Eliminar mensaje?
+            </h3>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Elige cómo eliminarlo. Queda registro de que se eliminó.
+            </p>
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  if (onDeleteForEveryone) onDeleteForEveryone(deleteTarget);
+                  setDeleteTarget(null);
+                }}
+                className="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-700"
+              >
+                Eliminar para todos
+              </button>
+              <button
+                onClick={() => {
+                  if (onDeleteForMe) onDeleteForMe(deleteTarget);
+                  setDeleteTarget(null);
+                }}
+                className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                Eliminar para mí
+              </button>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="w-full rounded-lg px-4 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reenviar a otro cliente */}
+      {forwardTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setForwardTarget(null)}
+        >
+          <div
+            className="flex max-h-[70vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-white/10">
+              <h3 className="text-base font-black text-slate-800 dark:text-slate-100">
+                Reenviar a…
+              </h3>
+              <button
+                onClick={() => setForwardTarget(null)}
+                aria-label="Cerrar"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <Icon name="X" size={18} />
+              </button>
+            </div>
+            <div className="p-3">
+              <input
+                value={forwardSearch}
+                onChange={(event) => setForwardSearch(event.target.value)}
+                placeholder="Buscar cliente..."
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scroll">
+              {clients
+                .filter(
+                  (client) =>
+                    !forwardSearch.trim() ||
+                    (client.name || "")
+                      .toLowerCase()
+                      .includes(forwardSearch.trim().toLowerCase()),
+                )
+                .map((client) => (
+                  <button
+                    key={client.id}
+                    onClick={() => {
+                      if (onForward) onForward(forwardTarget, client.id);
+                      setForwardTarget(null);
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#555552] text-[10px] font-black text-white">
+                      {(client.name || "C").slice(0, 2).toUpperCase()}
+                    </div>
+                    <span className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      {client.name || "Cliente"}
+                    </span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const CalendarGrid = ({
   events,
@@ -11387,6 +13291,9 @@ const TaskDetailModal = ({
   accountTasks = [],
   editingTasks = [],
   managementTasks = [],
+  clientChats = [],
+  onSendClientChatMessage,
+  onOpenClientChat,
 }) => {
   const [commentText, setCommentText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -11408,6 +13315,8 @@ const TaskDetailModal = ({
   const dialogRef = useDialogA11y(config.isOpen, onClose);
   const dialogTitleId = useId();
   const [fullAttachments, setFullAttachments] = useState(null);
+  const [clientChatText, setClientChatText] = useState("");
+  const [sendingClientChat, setSendingClientChat] = useState(false);
 
   // Cerrar dropdowns al click fuera
   useEffect(() => {
@@ -11502,6 +13411,32 @@ const TaskDetailModal = ({
     config.task;
 
   const client = clients.find((c) => c.id === task.clientId);
+  // Mensajes del chat del cliente que referencian esta tarea.
+  const taskChatMessages = clientChats
+    .filter((message) => message.taskRef?.taskId === task.id)
+    .sort((a, b) => ((a.createdAt || "") > (b.createdAt || "") ? 1 : -1));
+  const handleSendClientChat = async () => {
+    const trimmed = clientChatText.trim();
+    if (
+      !trimmed ||
+      sendingClientChat ||
+      !task.clientId ||
+      !onSendClientChatMessage
+    )
+      return;
+    setSendingClientChat(true);
+    try {
+      await onSendClientChatMessage({
+        clientId: task.clientId,
+        text: trimmed,
+        mentionedIds: [],
+        taskRef: { taskId: task.id, taskType: type, taskTitle: task.title || "" },
+      });
+      setClientChatText("");
+    } finally {
+      setSendingClientChat(false);
+    }
+  };
   const assignee =
     type === "accountTask"
       ? managers.find((m) => m.id === task.contextId)
@@ -12239,6 +14174,107 @@ const TaskDetailModal = ({
                   </section>
                 );
               })()}
+
+              {/* Chat del cliente — referencia esta tarea */}
+              <section className="rounded-xl border border-blue-200 bg-blue-50/40 p-5 dark:border-blue-500/20 dark:bg-blue-500/5">
+                <div className="mb-4 flex items-center gap-2">
+                  <Icon
+                    name="MessageSquare"
+                    size={13}
+                    className="text-blue-600 dark:text-blue-400"
+                  />
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">
+                    Chat del cliente
+                  </p>
+                  {client?.name && (
+                    <span className="truncate text-xs font-semibold text-slate-500">
+                      · {client.name}
+                    </span>
+                  )}
+                  {task.clientId && onOpenClientChat && (
+                    <button
+                      onClick={() => onOpenClientChat(task.clientId)}
+                      className="ml-auto shrink-0 text-[11px] font-bold text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Abrir chat completo
+                    </button>
+                  )}
+                </div>
+
+                {!task.clientId ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Esta tarea no tiene cliente asignado, así que no tiene chat.
+                  </p>
+                ) : (
+                  <>
+                    {taskChatMessages.length > 0 && (
+                      <div className="mb-4 space-y-3">
+                        {taskChatMessages.slice(-4).map((message) => (
+                          <div key={message.id} className="flex gap-2.5">
+                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white">
+                              {(message.authorName || "U")
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-baseline gap-2">
+                                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                                  {message.authorName || "Usuario"}
+                                </span>
+                                <span className="text-[11px] text-slate-400">
+                                  {relativeTime(message.createdAt)}
+                                </span>
+                              </div>
+                              <p className="whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200">
+                                {renderChatText(message.text)}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                        {taskChatMessages.length > 4 && onOpenClientChat && (
+                          <button
+                            onClick={() => onOpenClientChat(task.clientId)}
+                            className="text-[11px] font-bold text-blue-600 hover:underline dark:text-blue-400"
+                          >
+                            Ver los {taskChatMessages.length} mensajes en el chat
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex items-end gap-2">
+                      <textarea
+                        value={clientChatText}
+                        onChange={(e) => setClientChatText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                            e.preventDefault();
+                            handleSendClientChat();
+                          }
+                        }}
+                        placeholder="Comenta esta tarea en el chat del cliente…"
+                        rows={1}
+                        className="min-h-[42px] flex-1 resize-none rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                      />
+                      <button
+                        onClick={handleSendClientChat}
+                        disabled={sendingClientChat || !clientChatText.trim()}
+                        className="flex h-[42px] shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        <Icon
+                          name={sendingClientChat ? "Loader2" : "Send"}
+                          size={13}
+                          className={sendingClientChat ? "animate-spin" : ""}
+                        />
+                        Enviar
+                      </button>
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-slate-400">
+                      Se publicará en el chat de {client?.name || "el cliente"} con
+                      esta tarea enlazada.
+                    </p>
+                  </>
+                )}
+              </section>
 
               {/* Actividad — en el contenido principal, estilo Jira */}
               <section

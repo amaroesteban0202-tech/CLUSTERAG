@@ -83,7 +83,10 @@ export const ROLE_DEFINITIONS = {
             'manage_calendar',
             'view_users',
             'manage_users',
-            'view_audit_logs'
+            'view_audit_logs',
+            'view_client_chat',
+            'send_client_chat',
+            'moderate_client_chat'
         ]
     },
     management: {
@@ -103,7 +106,9 @@ export const ROLE_DEFINITIONS = {
             'manage_management_tasks',
             'view_general_calendar',
             'view_calendar',
-            'create_calendar_events'
+            'create_calendar_events',
+            'view_client_chat',
+            'send_client_chat'
         ]
     },
     manager: {
@@ -126,7 +131,9 @@ export const ROLE_DEFINITIONS = {
             'manage_management_tasks',
             'view_general_calendar',
             'view_calendar',
-            'create_calendar_events'
+            'create_calendar_events',
+            'view_client_chat',
+            'send_client_chat'
         ]
     },
     editor: {
@@ -145,7 +152,9 @@ export const ROLE_DEFINITIONS = {
             'create_management_tasks',
             'view_general_calendar',
             'view_calendar',
-            'create_calendar_events'
+            'create_calendar_events',
+            'view_client_chat',
+            'send_client_chat'
         ]
     },
     viewer: {
@@ -159,7 +168,9 @@ export const ROLE_DEFINITIONS = {
             'create_editing_tasks',
             'manage_editing_tasks',
             'view_management_room',
-            'create_management_tasks'
+            'create_management_tasks',
+            'view_client_chat',
+            'send_client_chat'
         ]
     }
 };

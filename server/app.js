@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.js';
 import collectionRoutes from './routes/collections.js';
 import cronRoutes from './routes/cron.js';
 import notificationRoutes from './routes/notifications.js';
+import directoryRoutes from './routes/directory.js';
 import { getRequestOrigin, isLocalOrigin } from './lib/request-origin.js';
 import reportsRouter from './routes/reports.js';
 
@@ -84,6 +85,7 @@ export const createApp = async () => {
     app.use('/api/collections', collectionRoutes);
     app.use('/api/cron', cronRoutes);
     app.use('/api/notifications', notificationRoutes);
+    app.use('/api/directory', directoryRoutes);
     app.use('/api/reports', reportsRouter);
 
     const blockedStaticPrefixes = [
