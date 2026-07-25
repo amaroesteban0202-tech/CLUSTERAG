@@ -11812,7 +11812,7 @@ const ClientChatView = ({
   };
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden bg-white dark:bg-[#1a1d21] fade-in">
+    <div className="flex h-full min-h-0 overflow-hidden bg-white dark:bg-[#1a1d21]">
       {/* Lista de clientes (canales) */}
       <aside
         className={`${activeClient ? "hidden md:flex" : "flex"} min-h-0 w-full flex-col border-r border-slate-200 dark:border-white/10 md:w-72 lg:w-80 shrink-0`}
