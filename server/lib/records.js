@@ -4,6 +4,9 @@ import { nowIso } from './time.js';
 import { normalizeEmail } from './text.js';
 
 const TASK_COLLECTIONS = new Set(['account_tasks', 'editing', 'management_tasks']);
+// Colecciones cuyos adjuntos (base64) se recortan en los listados para no
+// transferir MB en cada polling; el detalle completo se pide via getRecord.
+const ATTACHMENT_COLLECTIONS = new Set([...TASK_COLLECTIONS, 'client_chats']);
 const CLOSED_STATUS_BY_COLLECTION = {
     account_tasks: new Set(['publicado']),
     editing: new Set(['aprobado', 'publicado']),
@@ -109,7 +112,7 @@ export const listRecords = async ({
     const query = getClient(trx)('app_records').where({ collection_name: collectionName });
     applyTaskWindow(query, { collectionName, dateFrom, dateTo, includeOpenBefore });
 
-    const stripHeavyFields = TASK_COLLECTIONS.has(collectionName)
+    const stripHeavyFields = ATTACHMENT_COLLECTIONS.has(collectionName)
         ? (record) => stripAttachmentData(record)
         : (record) => record;
 
@@ -223,7 +226,7 @@ export const listRecordChanges = async ({ afterId = 0, collections = [], limitCo
             .whereIn('record_id', recordIds);
         recordRows.forEach((row) => {
             const record = buildRecord(row);
-            recordsByKey.set(`${collectionName}:${row.record_id}`, TASK_COLLECTIONS.has(collectionName)
+            recordsByKey.set(`${collectionName}:${row.record_id}`, ATTACHMENT_COLLECTIONS.has(collectionName)
                 ? stripAttachmentData(record)
                 : record);
         });
