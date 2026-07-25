@@ -71,7 +71,12 @@ import {
   Lightning as Zap,
   PauseCircle,
   DotsThree as MoreHorizontal,
-  DotsSixVertical as GripVertical
+  DotsSixVertical as GripVertical,
+  Paperclip,
+  Microphone,
+  Image as ImageIcon,
+  Stop,
+  FilePlus
 } from "@phosphor-icons/react";
 import {
   signInAnonymously,
@@ -201,7 +206,12 @@ var IconsMap = {
   Zap,
   PauseCircle,
   MoreHorizontal,
-  GripVertical
+  GripVertical,
+  Paperclip,
+  Microphone,
+  Image: ImageIcon,
+  Stop,
+  FilePlus
 };
 var Icon = ({ name, size = 18, className = "", ...props }) => {
   const PhosphorIcon = IconsMap[name];
@@ -981,11 +991,13 @@ function App() {
   }, [chatReads, currentUserProfile, authEmail]);
   const chatUnread = useMemo(() => {
     const myId = String(currentUserProfile?.id || "");
+    const openClientId = view === "chat" ? String(selectedChatClient?.id || "") : "";
     const byClient = {};
     let total = 0;
     clientChats.forEach((message) => {
       if (!message.clientId || !message.createdAt) return;
       if (myId && String(message.authorId || "") === myId) return;
+      if (openClientId && String(message.clientId) === openClientId) return;
       const lastRead = chatReadMap[message.clientId] || "";
       if (message.createdAt > lastRead) {
         byClient[message.clientId] = (byClient[message.clientId] || 0) + 1;
@@ -993,7 +1005,7 @@ function App() {
       }
     });
     return { byClient, total };
-  }, [clientChats, chatReadMap, currentUserProfile]);
+  }, [clientChats, chatReadMap, currentUserProfile, view, selectedChatClient]);
   const appUserById = new Map(appUsers.map((item) => [item.id, item]));
   const managementMemberCandidates = [
     ...appUsers.filter((item) => item.isActive !== false),
@@ -7938,6 +7950,7 @@ var formatChatBytes = (bytes = 0) => {
 };
 var isChatImage = (type = "") => String(type).startsWith("image/");
 var isChatVideo = (type = "") => String(type).startsWith("video/");
+var isChatAudio = (type = "") => String(type).startsWith("audio/");
 var chatShortTime = (iso) => {
   try {
     return new Date(iso).toLocaleTimeString("es", {
@@ -7977,9 +7990,16 @@ var ClientChatView = ({
   const [pending, setPending] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [fullMap, setFullMap] = useState({});
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
   const textareaRef = useRef(null);
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordTimerRef = useRef(null);
+  const discardRef = useRef(false);
   const myId = String(currentUserProfile?.id || "");
   const lastMsgByClient = {};
   clientChats.forEach((message) => {
@@ -8101,6 +8121,76 @@ var ClientChatView = ({
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
+  const openFilePicker = (accept) => {
+    setAttachMenuOpen(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.accept = accept || "";
+      fileInputRef.current.click();
+    }
+  };
+  const startRecording = async () => {
+    if (recording) return;
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      alert("Tu navegador no permite grabar audio.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      discardRef.current = false;
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        if (discardRef.current) {
+          discardRef.current = false;
+          return;
+        }
+        const blob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || "audio/webm"
+        });
+        if (blob.size === 0) return;
+        if (blob.size > CHAT_MAX_FILE) {
+          alert("La nota de voz supera el m\xE1ximo de 8 MB.");
+          return;
+        }
+        const data = await chatFileToBase64(blob);
+        setPending((prev) => [
+          ...prev,
+          {
+            id: Math.random().toString(36).slice(2, 10),
+            name: `nota-de-voz-${Date.now()}.webm`,
+            type: blob.type || "audio/webm",
+            size: blob.size,
+            data
+          }
+        ]);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+      setRecordSeconds(0);
+      recordTimerRef.current = setInterval(
+        () => setRecordSeconds((seconds) => seconds + 1),
+        1e3
+      );
+    } catch {
+      alert("No se pudo acceder al micr\xF3fono.");
+    }
+  };
+  const stopRecording = (discard = false) => {
+    if (recordTimerRef.current) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+    discardRef.current = discard;
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    setRecording(false);
+    setRecordSeconds(0);
+  };
   const handleSubmit = async () => {
     const trimmed = text.trim();
     if (!trimmed && pending.length === 0 || submitting || !activeClient) return;
@@ -8154,6 +8244,9 @@ var ClientChatView = ({
           className: "max-h-60 max-w-[300px] rounded-lg border border-slate-200 dark:border-white/10"
         }
       );
+    }
+    if (att.data && isChatAudio(att.type)) {
+      return /* @__PURE__ */ React.createElement("audio", { key, src: att.data, controls: true, className: "max-w-[280px]" });
     }
     return /* @__PURE__ */ React.createElement(
       "a",
@@ -8279,7 +8372,7 @@ var ClientChatView = ({
               onClick: () => onOpenTask(message.taskRef),
               className: `mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`
             },
-            /* @__PURE__ */ React.createElement(Icon, { name: "Paperclip", size: 11, className: "shrink-0" }),
+            /* @__PURE__ */ React.createElement(Icon, { name: "ClipboardList", size: 11, className: "shrink-0" }),
             /* @__PURE__ */ React.createElement("span", { className: "truncate" }, message.taskRef.taskTitle || "Tarea"),
             /* @__PURE__ */ React.createElement("span", { className: "opacity-70" }, "\xB7 ", CHAT_TASK_LABELS[message.taskRef.taskType] || "")
           )),
@@ -8299,7 +8392,7 @@ var ClientChatView = ({
       {
         className: `inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`
       },
-      /* @__PURE__ */ React.createElement(Icon, { name: "Paperclip", size: 11 }),
+      /* @__PURE__ */ React.createElement(Icon, { name: "ClipboardList", size: 11 }),
       /* @__PURE__ */ React.createElement("span", { className: "max-w-[220px] truncate" }, taskRef.taskTitle),
       /* @__PURE__ */ React.createElement(
         "button",
@@ -8390,43 +8483,117 @@ var ClientChatView = ({
         rows: text ? 2 : 1,
         className: "w-full resize-none bg-transparent px-3.5 pt-2.5 text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200"
       }
-    ), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1 px-2 pb-2" }, /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { className: "relative flex items-center gap-1 px-2 pb-2" }, /* @__PURE__ */ React.createElement(
       "input",
       {
         ref: fileInputRef,
         type: "file",
         multiple: true,
-        accept: "image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip",
         className: "hidden",
         onChange: (event) => handleFiles(event.target.files)
       }
+    ), recording ? /* @__PURE__ */ React.createElement("div", { className: "flex flex-1 items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-8 items-center gap-2 rounded-md bg-red-50 px-3 text-xs font-bold text-red-600 dark:bg-red-500/10 dark:text-red-400" }, /* @__PURE__ */ React.createElement("span", { className: "h-2 w-2 animate-pulse rounded-full bg-red-500" }), "Grabando\u2026", " ", String(Math.floor(recordSeconds / 60)).padStart(2, "0"), ":", String(recordSeconds % 60).padStart(2, "0")), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => stopRecording(true),
+        className: "flex h-8 items-center rounded-md px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
+      },
+      "Cancelar"
     ), /* @__PURE__ */ React.createElement(
       "button",
       {
-        onClick: () => fileInputRef.current && fileInputRef.current.click(),
+        onClick: () => stopRecording(false),
+        "aria-label": "Detener y adjuntar audio",
+        className: "ml-auto flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "Stop", size: 14 }),
+      " Listo"
+    )) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => {
+          setAttachMenuOpen((open) => !open);
+          setMentionOpen(false);
+          setTaskPickerOpen(false);
+        },
         "aria-label": "Adjuntar archivo",
         disabled: uploading,
-        className: "flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-white/10"
+        className: `flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:opacity-50 ${attachMenuOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`
       },
       /* @__PURE__ */ React.createElement(
         Icon,
         {
-          name: uploading ? "Loader2" : "Plus",
+          name: uploading ? "Loader2" : "Paperclip",
           size: 18,
           className: uploading ? "animate-spin" : ""
         }
       )
+    ), attachMenuOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full left-0 z-30 mb-1 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onMouseDown: (event) => {
+          event.preventDefault();
+          openFilePicker("image/*");
+        },
+        className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "Image", size: 16, className: "text-slate-500" }),
+      "Imagen"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onMouseDown: (event) => {
+          event.preventDefault();
+          openFilePicker("video/*");
+        },
+        className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "Video", size: 16, className: "text-slate-500" }),
+      "Video"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onMouseDown: (event) => {
+          event.preventDefault();
+          openFilePicker(
+            "application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+          );
+        },
+        className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "FileText", size: 16, className: "text-slate-500" }),
+      "Documento / PDF"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onMouseDown: (event) => {
+          event.preventDefault();
+          openFilePicker("");
+        },
+        className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "FilePlus", size: 16, className: "text-slate-500" }),
+      "Cualquier archivo"
+    ))), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: startRecording,
+        "aria-label": "Grabar nota de voz",
+        className: "flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "Microphone", size: 18 })
     ), /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => {
           setTaskPickerOpen((open) => !open);
           setMentionOpen(false);
+          setAttachMenuOpen(false);
         },
         "aria-label": "Enlazar tarea",
         className: `flex h-8 w-8 items-center justify-center rounded-md transition-colors ${taskRef || taskPickerOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`
       },
-      /* @__PURE__ */ React.createElement(Icon, { name: "Paperclip", size: 17 })
+      /* @__PURE__ */ React.createElement(Icon, { name: "ClipboardList", size: 17 })
     ), /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-[10px] text-slate-400 hidden sm:block" }, "Enter para enviar \xB7 Shift+Enter salto de l\xEDnea"), /* @__PURE__ */ React.createElement(
       "button",
       {
@@ -8443,7 +8610,7 @@ var ClientChatView = ({
           className: submitting ? "animate-spin" : ""
         }
       )
-    )))))
+    ))))))
   ));
 };
 var CalendarGrid = ({

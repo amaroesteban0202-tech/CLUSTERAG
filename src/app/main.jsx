@@ -71,6 +71,11 @@ import {
   PauseCircle,
   DotsThree as MoreHorizontal,
   DotsSixVertical as GripVertical,
+  Paperclip,
+  Microphone,
+  Image as ImageIcon,
+  Stop,
+  FilePlus,
 } from "@phosphor-icons/react";
 import {
   signInAnonymously,
@@ -204,6 +209,11 @@ const IconsMap = {
   PauseCircle,
   MoreHorizontal,
   GripVertical,
+  Paperclip,
+  Microphone,
+  Image: ImageIcon,
+  Stop,
+  FilePlus,
 };
 
 const Icon = ({ name, size = 18, className = "", ...props }) => {
@@ -1710,14 +1720,18 @@ function App() {
     return map;
   }, [chatReads, currentUserProfile, authEmail]);
 
-  // No leídos por cliente + total (excluye los mensajes propios).
+  // No leídos por cliente + total (excluye los mensajes propios y el hilo que
+  // está abierto en este momento, que se considera leído al instante).
   const chatUnread = useMemo(() => {
     const myId = String(currentUserProfile?.id || "");
+    const openClientId =
+      view === "chat" ? String(selectedChatClient?.id || "") : "";
     const byClient = {};
     let total = 0;
     clientChats.forEach((message) => {
       if (!message.clientId || !message.createdAt) return;
       if (myId && String(message.authorId || "") === myId) return;
+      if (openClientId && String(message.clientId) === openClientId) return;
       const lastRead = chatReadMap[message.clientId] || "";
       if (message.createdAt > lastRead) {
         byClient[message.clientId] = (byClient[message.clientId] || 0) + 1;
@@ -1725,7 +1739,7 @@ function App() {
       }
     });
     return { byClient, total };
-  }, [clientChats, chatReadMap, currentUserProfile]);
+  }, [clientChats, chatReadMap, currentUserProfile, view, selectedChatClient]);
 
   const appUserById = new Map(appUsers.map((item) => [item.id, item]));
   const managementMemberCandidates = [
@@ -11122,6 +11136,7 @@ const formatChatBytes = (bytes = 0) => {
 };
 const isChatImage = (type = "") => String(type).startsWith("image/");
 const isChatVideo = (type = "") => String(type).startsWith("video/");
+const isChatAudio = (type = "") => String(type).startsWith("audio/");
 const chatShortTime = (iso) => {
   try {
     return new Date(iso).toLocaleTimeString("es", {
@@ -11164,9 +11179,16 @@ const ClientChatView = ({
   const [pending, setPending] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [fullMap, setFullMap] = useState({});
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
   const textareaRef = useRef(null);
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordTimerRef = useRef(null);
+  const discardRef = useRef(false);
 
   const myId = String(currentUserProfile?.id || "");
 
@@ -11325,6 +11347,79 @@ const ClientChatView = ({
     }
   };
 
+  const openFilePicker = (accept) => {
+    setAttachMenuOpen(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.accept = accept || "";
+      fileInputRef.current.click();
+    }
+  };
+
+  const startRecording = async () => {
+    if (recording) return;
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      alert("Tu navegador no permite grabar audio.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      discardRef.current = false;
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        if (discardRef.current) {
+          discardRef.current = false;
+          return;
+        }
+        const blob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        if (blob.size === 0) return;
+        if (blob.size > CHAT_MAX_FILE) {
+          alert("La nota de voz supera el máximo de 8 MB.");
+          return;
+        }
+        const data = await chatFileToBase64(blob);
+        setPending((prev) => [
+          ...prev,
+          {
+            id: Math.random().toString(36).slice(2, 10),
+            name: `nota-de-voz-${Date.now()}.webm`,
+            type: blob.type || "audio/webm",
+            size: blob.size,
+            data,
+          },
+        ]);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+      setRecordSeconds(0);
+      recordTimerRef.current = setInterval(
+        () => setRecordSeconds((seconds) => seconds + 1),
+        1000,
+      );
+    } catch {
+      alert("No se pudo acceder al micrófono.");
+    }
+  };
+
+  const stopRecording = (discard = false) => {
+    if (recordTimerRef.current) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+    discardRef.current = discard;
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    setRecording(false);
+    setRecordSeconds(0);
+  };
+
   const handleSubmit = async () => {
     const trimmed = text.trim();
     if ((!trimmed && pending.length === 0) || submitting || !activeClient) return;
@@ -11374,6 +11469,11 @@ const ClientChatView = ({
           controls
           className="max-h-60 max-w-[300px] rounded-lg border border-slate-200 dark:border-white/10"
         />
+      );
+    }
+    if (att.data && isChatAudio(att.type)) {
+      return (
+        <audio key={key} src={att.data} controls className="max-w-[280px]" />
       );
     }
     return (
@@ -11589,7 +11689,7 @@ const ClientChatView = ({
                           onClick={() => onOpenTask(message.taskRef)}
                           className={`mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[message.taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
                         >
-                          <Icon name="Paperclip" size={11} className="shrink-0" />
+                          <Icon name="ClipboardList" size={11} className="shrink-0" />
                           <span className="truncate">
                             {message.taskRef.taskTitle || "Tarea"}
                           </span>
@@ -11621,7 +11721,7 @@ const ClientChatView = ({
                     <span
                       className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${CHAT_TASK_CHIP_STYLES[taskRef.taskType] || CHAT_TASK_CHIP_STYLES.accountTask}`}
                     >
-                      <Icon name="Paperclip" size={11} />
+                      <Icon name="ClipboardList" size={11} />
                       <span className="max-w-[220px] truncate">
                         {taskRef.taskTitle}
                       </span>
@@ -11749,52 +11849,142 @@ const ClientChatView = ({
                   rows={text ? 2 : 1}
                   className="w-full resize-none bg-transparent px-3.5 pt-2.5 text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200"
                 />
-                <div className="flex items-center gap-1 px-2 pb-2">
+                <div className="relative flex items-center gap-1 px-2 pb-2">
                   <input
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
                     className="hidden"
                     onChange={(event) => handleFiles(event.target.files)}
                   />
-                  <button
-                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                    aria-label="Adjuntar archivo"
-                    disabled={uploading}
-                    className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-white/10"
-                  >
-                    <Icon
-                      name={uploading ? "Loader2" : "Plus"}
-                      size={18}
-                      className={uploading ? "animate-spin" : ""}
-                    />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setTaskPickerOpen((open) => !open);
-                      setMentionOpen(false);
-                    }}
-                    aria-label="Enlazar tarea"
-                    className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${taskRef || taskPickerOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`}
-                  >
-                    <Icon name="Paperclip" size={17} />
-                  </button>
-                  <span className="ml-auto text-[10px] text-slate-400 hidden sm:block">
-                    Enter para enviar · Shift+Enter salto de línea
-                  </span>
-                  <button
-                    onClick={handleSubmit}
-                    disabled={submitting || (!text.trim() && pending.length === 0)}
-                    aria-label="Enviar mensaje"
-                    className="ml-2 flex h-8 w-8 items-center justify-center rounded-md bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
-                  >
-                    <Icon
-                      name={submitting ? "Loader2" : "Send"}
-                      size={16}
-                      className={submitting ? "animate-spin" : ""}
-                    />
-                  </button>
+                  {recording ? (
+                    <div className="flex flex-1 items-center gap-2">
+                      <span className="flex h-8 items-center gap-2 rounded-md bg-red-50 px-3 text-xs font-bold text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                        <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+                        Grabando…{" "}
+                        {String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:
+                        {String(recordSeconds % 60).padStart(2, "0")}
+                      </span>
+                      <button
+                        onClick={() => stopRecording(true)}
+                        className="flex h-8 items-center rounded-md px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => stopRecording(false)}
+                        aria-label="Detener y adjuntar audio"
+                        className="ml-auto flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700"
+                      >
+                        <Icon name="Stop" size={14} /> Listo
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Adjuntar archivo (elegir tipo) */}
+                      <div className="relative">
+                        <button
+                          onClick={() => {
+                            setAttachMenuOpen((open) => !open);
+                            setMentionOpen(false);
+                            setTaskPickerOpen(false);
+                          }}
+                          aria-label="Adjuntar archivo"
+                          disabled={uploading}
+                          className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:opacity-50 ${attachMenuOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`}
+                        >
+                          <Icon
+                            name={uploading ? "Loader2" : "Paperclip"}
+                            size={18}
+                            className={uploading ? "animate-spin" : ""}
+                          />
+                        </button>
+                        {attachMenuOpen && (
+                          <div className="absolute bottom-full left-0 z-30 mb-1 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                openFilePicker("image/*");
+                              }}
+                              className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="Image" size={16} className="text-slate-500" />
+                              Imagen
+                            </button>
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                openFilePicker("video/*");
+                              }}
+                              className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="Video" size={16} className="text-slate-500" />
+                              Video
+                            </button>
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                openFilePicker(
+                                  "application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip",
+                                );
+                              }}
+                              className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="FileText" size={16} className="text-slate-500" />
+                              Documento / PDF
+                            </button>
+                            <button
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                openFilePicker("");
+                              }}
+                              className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+                            >
+                              <Icon name="FilePlus" size={16} className="text-slate-500" />
+                              Cualquier archivo
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {/* Nota de voz */}
+                      <button
+                        onClick={startRecording}
+                        aria-label="Grabar nota de voz"
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
+                      >
+                        <Icon name="Microphone" size={18} />
+                      </button>
+                      {/* Enlazar tarea */}
+                      <button
+                        onClick={() => {
+                          setTaskPickerOpen((open) => !open);
+                          setMentionOpen(false);
+                          setAttachMenuOpen(false);
+                        }}
+                        aria-label="Enlazar tarea"
+                        className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${taskRef || taskPickerOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`}
+                      >
+                        <Icon name="ClipboardList" size={17} />
+                      </button>
+                      <span className="ml-auto text-[10px] text-slate-400 hidden sm:block">
+                        Enter para enviar · Shift+Enter salto de línea
+                      </span>
+                      <button
+                        onClick={handleSubmit}
+                        disabled={
+                          submitting || (!text.trim() && pending.length === 0)
+                        }
+                        aria-label="Enviar mensaje"
+                        className="ml-2 flex h-8 w-8 items-center justify-center rounded-md bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
+                      >
+                        <Icon
+                          name={submitting ? "Loader2" : "Send"}
+                          size={16}
+                          className={submitting ? "animate-spin" : ""}
+                        />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
