@@ -78,7 +78,9 @@ import {
   Stop,
   FilePlus,
   PushPin as PinIcon,
-  ArrowBendUpLeft as ReplyIcon
+  ArrowBendUpLeft as ReplyIcon,
+  Phone,
+  VideoCamera
 } from "@phosphor-icons/react";
 import {
   signInAnonymously,
@@ -246,7 +248,9 @@ var IconsMap = {
   Stop,
   FilePlus,
   Pin: PinIcon,
-  Reply: ReplyIcon
+  Reply: ReplyIcon,
+  Phone,
+  VideoCamera
 };
 var Icon = ({ name, size = 18, className = "", ...props }) => {
   const PhosphorIcon = IconsMap[name];
@@ -3401,11 +3405,12 @@ function App() {
     taskRef = null,
     attachments = [],
     replyTo = null,
-    forwarded = false
+    forwarded = false,
+    call = null
   }) => {
     const trimmed = (text || "").trim();
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
-    if (!clientId || !trimmed && safeAttachments.length === 0) return;
+    if (!clientId || !trimmed && safeAttachments.length === 0 && !call) return;
     const senderName = currentUserProfile?.name || (authEmail ? authEmail.split("@")[0] : "Usuario");
     await addDoc(dataCollection("client_chats"), {
       clientId,
@@ -3426,21 +3431,31 @@ function App() {
         taskType: taskRef.taskType || "",
         taskTitle: taskRef.taskTitle || ""
       } : null,
+      call: call ? { roomId: call.roomId || "", provider: call.provider || "jitsi" } : null,
       createdAt: nowIso()
     });
     const client = clients.find((item) => item.id === clientId);
     const clientName = client?.name || "Cliente";
+    const roomUrl = call?.roomId ? `https://meet.jit.si/${call.roomId}` : "";
     for (const uid of mentionedIds) {
       const person = chatMentionables.find((p) => p.id === uid);
       const email = person?.email;
       if (email && uid !== (currentUserProfile?.id || "")) {
-        sendNotification({
-          to: email,
-          type: "chat_mention",
-          senderName,
-          clientName,
-          comment: trimmed
-        });
+        sendNotification(
+          call ? {
+            to: email,
+            type: "call_invite",
+            senderName,
+            clientName,
+            roomUrl
+          } : {
+            to: email,
+            type: "chat_mention",
+            senderName,
+            clientName,
+            comment: trimmed
+          }
+        );
       }
     }
   };
@@ -8156,6 +8171,10 @@ var renderChatText = (text = "", onColored = false) => String(text).split(/(@[^\
   ) : /* @__PURE__ */ React.createElement(React.Fragment, { key: index }, part)
 );
 var CHAT_REACTION_EMOJIS = ["\u{1F44D}", "\u2764\uFE0F", "\u{1F602}", "\u{1F62E}", "\u{1F622}", "\u{1F64F}", "\u2705"];
+var buildChatRoomId = (clientName = "") => {
+  const slug = String(clientName).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24) || "sala";
+  return `cluster-${slug}-${Math.random().toString(36).slice(2, 8)}`;
+};
 var CHAT_MAX_FILE = 8 * 1024 * 1024;
 var chatFileToBase64 = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
@@ -8213,6 +8232,10 @@ var ClientChatView = ({
   const [replyingTo, setReplyingTo] = useState(null);
   const [forwardTarget, setForwardTarget] = useState(null);
   const [forwardSearch, setForwardSearch] = useState("");
+  const [callPicker, setCallPicker] = useState(null);
+  const [callSelected, setCallSelected] = useState([]);
+  const [callSearch, setCallSearch] = useState("");
+  const [activeCallRoom, setActiveCallRoom] = useState(null);
   const [text, setText] = useState("");
   const [mentionedIds, setMentionedIds] = useState([]);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -8601,7 +8624,19 @@ var ClientChatView = ({
         alt: activeClient.name,
         className: "h-9 w-9 rounded-lg object-cover"
       }
-    ) : /* @__PURE__ */ React.createElement("div", { className: "flex h-9 w-9 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white" }, (activeClient.name || "C").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-black text-slate-700 dark:text-slate-200" }, activeClient.name || "Cliente"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-400" }, messages.length, " mensaje", messages.length === 1 ? "" : "s"))), pinnedMessages.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "shrink-0 space-y-1 border-b border-slate-100 bg-amber-50/60 px-4 py-2 dark:border-white/10 dark:bg-amber-500/5" }, pinnedMessages.slice(-3).map((pinned) => /* @__PURE__ */ React.createElement("div", { key: pinned.id, className: "flex items-center gap-2 text-xs" }, /* @__PURE__ */ React.createElement(
+    ) : /* @__PURE__ */ React.createElement("div", { className: "flex h-9 w-9 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white" }, (activeClient.name || "C").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-black text-slate-700 dark:text-slate-200" }, activeClient.name || "Cliente"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-400" }, messages.length, " mensaje", messages.length === 1 ? "" : "s")), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => {
+          setCallSelected([]);
+          setCallSearch("");
+          setCallPicker({ mode: "start" });
+        },
+        className: "ml-auto flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-emerald-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "VideoCamera", size: 15 }),
+      " Llamar"
+    )), pinnedMessages.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "shrink-0 space-y-1 border-b border-slate-100 bg-amber-50/60 px-4 py-2 dark:border-white/10 dark:bg-amber-500/5" }, pinnedMessages.slice(-3).map((pinned) => /* @__PURE__ */ React.createElement("div", { key: pinned.id, className: "flex items-center gap-2 text-xs" }, /* @__PURE__ */ React.createElement(
       Icon,
       {
         name: "Pin",
@@ -8806,6 +8841,32 @@ var ClientChatView = ({
               ),
               /* @__PURE__ */ React.createElement("span", { className: "truncate" }, message.taskRef.taskTitle || "Tarea"),
               /* @__PURE__ */ React.createElement("span", { className: "opacity-70" }, "\xB7", " ", CHAT_TASK_LABELS[message.taskRef.taskType] || "")
+            ), message.call?.roomId && /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                onClick: () => setActiveCallRoom(message.call.roomId),
+                className: `mt-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left ${mine ? "border-white/30 bg-black/10" : "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10"}`
+              },
+              /* @__PURE__ */ React.createElement(
+                "span",
+                {
+                  className: `flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${mine ? "bg-white/20 text-white" : "bg-emerald-600 text-white"}`
+                },
+                /* @__PURE__ */ React.createElement(Icon, { name: "VideoCamera", size: 16 })
+              ),
+              /* @__PURE__ */ React.createElement("span", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement(
+                "span",
+                {
+                  className: `block text-xs font-bold ${mine ? "" : "text-emerald-700 dark:text-emerald-300"}`
+                },
+                "Videollamada"
+              ), /* @__PURE__ */ React.createElement(
+                "span",
+                {
+                  className: `block text-[11px] ${mine ? "text-white/70" : "text-slate-500 dark:text-slate-400"}`
+                },
+                "Toca para unirte"
+              ))
             )),
             /* @__PURE__ */ React.createElement(
               "span",
@@ -9197,7 +9258,120 @@ var ClientChatView = ({
         /* @__PURE__ */ React.createElement("span", { className: "truncate text-sm font-semibold text-slate-700 dark:text-slate-200" }, client.name || "Cliente")
       )))
     )
-  ));
+  ), callPicker && /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: "fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4",
+      onClick: () => setCallPicker(null)
+    },
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "flex max-h-[75vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800",
+        onClick: (event) => event.stopPropagation()
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between border-b border-slate-100 p-4 dark:border-white/10" }, /* @__PURE__ */ React.createElement("h3", { className: "text-base font-black text-slate-800 dark:text-slate-100" }, callPicker.mode === "add" ? "Agregar a la llamada" : "Iniciar llamada"), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => setCallPicker(null),
+          "aria-label": "Cerrar",
+          className: "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 18 })
+      )),
+      /* @__PURE__ */ React.createElement("div", { className: "p-3" }, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-xs text-slate-500 dark:text-slate-400" }, "Elige a qui\xE9n invitar", callPicker.mode === "add" ? " (adem\xE1s de quienes ya est\xE1n)." : " primero. Podr\xE1s agregar m\xE1s durante la llamada."), /* @__PURE__ */ React.createElement(
+        "input",
+        {
+          value: callSearch,
+          onChange: (event) => setCallSearch(event.target.value),
+          placeholder: "Buscar persona...",
+          className: "w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+        }
+      )),
+      /* @__PURE__ */ React.createElement("div", { className: "flex-1 overflow-y-auto px-2 pb-2 custom-scroll" }, mentionables.filter(
+        (person) => String(person.id) !== String(currentUserId) && (!callSearch.trim() || (person.name || "").toLowerCase().includes(callSearch.trim().toLowerCase()) || (person.email || "").toLowerCase().includes(callSearch.trim().toLowerCase()))
+      ).map((person) => {
+        const checked = callSelected.includes(person.id);
+        return /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            key: person.id,
+            onClick: () => setCallSelected(
+              (prev) => checked ? prev.filter((id) => id !== person.id) : [...prev, person.id]
+            ),
+            className: "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
+          },
+          /* @__PURE__ */ React.createElement(
+            "span",
+            {
+              className: `flex h-5 w-5 shrink-0 items-center justify-center rounded border ${checked ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 dark:border-slate-600"}`
+            },
+            checked && /* @__PURE__ */ React.createElement(Icon, { name: "Check", size: 12 })
+          ),
+          /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-semibold text-slate-700 dark:text-slate-200" }, person.name || person.email), person.email && /* @__PURE__ */ React.createElement("p", { className: "truncate text-[11px] text-slate-400" }, person.email))
+        );
+      })),
+      /* @__PURE__ */ React.createElement("div", { className: "border-t border-slate-100 p-3 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => {
+            const room = callPicker.mode === "add" ? callPicker.roomId : buildChatRoomId(activeClient?.name);
+            if (onSendMessage) {
+              onSendMessage({
+                clientId: activeClient.id,
+                text: callPicker.mode === "add" ? "\u{1F4DE} Invit\xF3 a la llamada" : "\u{1F4DE} Inici\xF3 una llamada",
+                mentionedIds: callSelected,
+                call: { roomId: room, provider: "jitsi" }
+              });
+            }
+            if (callPicker.mode !== "add") setActiveCallRoom(room);
+            setCallPicker(null);
+            setCallSelected([]);
+          },
+          className: "flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-700"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "VideoCamera", size: 16 }),
+        callPicker.mode === "add" ? "Invitar" : "Iniciar llamada"
+      ))
+    )
+  ), activeCallRoom && /* @__PURE__ */ React.createElement("div", { className: "fixed inset-0 z-40 flex flex-col bg-slate-900" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2.5" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2 text-white" }, /* @__PURE__ */ React.createElement(
+    Icon,
+    {
+      name: "VideoCamera",
+      size: 16,
+      className: "shrink-0 text-emerald-400"
+    }
+  ), /* @__PURE__ */ React.createElement("span", { className: "truncate text-sm font-bold" }, "Llamada \xB7 ", activeClient?.name || "Cliente")), /* @__PURE__ */ React.createElement("div", { className: "flex shrink-0 items-center gap-2" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => {
+        setCallSelected([]);
+        setCallSearch("");
+        setCallPicker({ mode: "add", roomId: activeCallRoom });
+      },
+      className: "flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20"
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "UserPlus", size: 14 }),
+    " Agregar personas"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setActiveCallRoom(null),
+      className: "flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700"
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 14 }),
+    " Salir"
+  ))), /* @__PURE__ */ React.createElement(
+    "iframe",
+    {
+      title: "Videollamada",
+      src: `https://meet.jit.si/${activeCallRoom}#config.prejoinPageEnabled=false&userInfo.displayName=${encodeURIComponent(
+        `"${currentUserProfile?.name || "Usuario"}"`
+      )}`,
+      allow: "camera; microphone; fullscreen; display-capture; autoplay; clipboard-write",
+      className: "min-h-0 w-full flex-1 border-0"
+    }
+  )));
 };
 var CalendarGrid = ({
   events,

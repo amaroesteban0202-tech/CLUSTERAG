@@ -18,20 +18,26 @@ const escHtml = (s = '') => String(s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-const buildEmail = ({ type, senderName, taskTitle, taskType, comment, appUrl, clientName }) => {
+const buildEmail = ({ type, senderName, taskTitle, taskType, comment, appUrl, clientName, roomUrl }) => {
     const isChat = type === 'chat_mention';
-    const accent = isChat ? '#0ea5e9'
+    const isCall = type === 'call_invite';
+    const accent = isCall ? '#16a34a'
+                 : isChat ? '#0ea5e9'
                  : taskType === 'accountTask' ? '#4f46e5'
                  : taskType === 'editingTask' ? '#d97706'
                  : '#7c3aed';
-    const typeLabel = isChat ? 'Chat'
+    const typeLabel = isCall ? 'Llamada'
+                    : isChat ? 'Chat'
                     : taskType === 'accountTask' ? 'Account'
                     : taskType === 'editingTask' ? 'Edición'
                     : 'Gestión';
 
-    const linkLabel = isChat ? 'Abrir chat en Cluster OS' : 'Abrir tarea en Cluster OS';
-    const link = appUrl
-        ? `<p style="margin:20px 0 0;"><a href="${escHtml(appUrl)}" style="background:${accent};color:#fff;padding:11px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;">${linkLabel}</a></p>`
+    const linkHref = isCall ? roomUrl : appUrl;
+    const linkLabel = isCall ? 'Unirse a la llamada'
+                    : isChat ? 'Abrir chat en Cluster OS'
+                    : 'Abrir tarea en Cluster OS';
+    const link = linkHref
+        ? `<p style="margin:20px 0 0;"><a href="${escHtml(linkHref)}" style="background:${accent};color:#fff;padding:11px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;">${linkLabel}</a></p>`
         : '';
 
     let subject, heading, body;
@@ -54,6 +60,10 @@ const buildEmail = ({ type, senderName, taskTitle, taskType, comment, appUrl, cl
             <blockquote style="margin:12px 0;padding:12px 16px;background:#f8fafc;border-left:3px solid ${accent};border-radius:0 8px 8px 0;color:#475569;font-style:italic;">
                 "${escHtml(comment)}"
             </blockquote>`;
+    } else if (type === 'call_invite') {
+        subject = `📞 ${senderName} te invitó a una llamada de ${clientName}`;
+        heading = 'Te invitaron a una llamada';
+        body = `<strong>${escHtml(senderName)}</strong> te invitó a una videollamada del cliente <strong>"${escHtml(clientName)}"</strong>. Haz clic para unirte.`;
     }
 
     const html = `
@@ -77,10 +87,10 @@ const buildEmail = ({ type, senderName, taskTitle, taskType, comment, appUrl, cl
 // POST /api/notifications/send
 router.post('/send', async (req, res) => {
     try {
-        const { to, type, senderName, taskTitle, taskType, comment, appUrl, clientName } = req.body;
+        const { to, type, senderName, taskTitle, taskType, comment, appUrl, clientName, roomUrl } = req.body;
         if (!to || !type) return res.status(400).json({ error: { message: 'Missing to or type' } });
 
-        const { subject, html } = buildEmail({ type, senderName, taskTitle, taskType, comment, appUrl, clientName });
+        const { subject, html } = buildEmail({ type, senderName, taskTitle, taskType, comment, appUrl, clientName, roomUrl });
         const mailer = getTransporter();
 
         if (!mailer) {

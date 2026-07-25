@@ -78,6 +78,8 @@ import {
   FilePlus,
   PushPin as PinIcon,
   ArrowBendUpLeft as ReplyIcon,
+  Phone,
+  VideoCamera,
 } from "@phosphor-icons/react";
 import {
   signInAnonymously,
@@ -219,6 +221,8 @@ const IconsMap = {
   FilePlus,
   Pin: PinIcon,
   Reply: ReplyIcon,
+  Phone,
+  VideoCamera,
 };
 
 const Icon = ({ name, size = 18, className = "", ...props }) => {
@@ -4624,10 +4628,11 @@ function App() {
     attachments = [],
     replyTo = null,
     forwarded = false,
+    call = null,
   }) => {
     const trimmed = (text || "").trim();
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
-    if (!clientId || (!trimmed && safeAttachments.length === 0)) return;
+    if (!clientId || (!trimmed && safeAttachments.length === 0 && !call)) return;
     const senderName =
       currentUserProfile?.name ||
       (authEmail ? authEmail.split("@")[0] : "Usuario");
@@ -4654,21 +4659,35 @@ function App() {
             taskTitle: taskRef.taskTitle || "",
           }
         : null,
+      call: call
+        ? { roomId: call.roomId || "", provider: call.provider || "jitsi" }
+        : null,
       createdAt: nowIso(),
     });
     const client = clients.find((item) => item.id === clientId);
     const clientName = client?.name || "Cliente";
+    const roomUrl = call?.roomId ? `https://meet.jit.si/${call.roomId}` : "";
     for (const uid of mentionedIds) {
       const person = chatMentionables.find((p) => p.id === uid);
       const email = person?.email;
       if (email && uid !== (currentUserProfile?.id || "")) {
-        sendNotification({
-          to: email,
-          type: "chat_mention",
-          senderName,
-          clientName,
-          comment: trimmed,
-        });
+        sendNotification(
+          call
+            ? {
+                to: email,
+                type: "call_invite",
+                senderName,
+                clientName,
+                roomUrl,
+              }
+            : {
+                to: email,
+                type: "chat_mention",
+                senderName,
+                clientName,
+                comment: trimmed,
+              },
+        );
       }
     }
   };
@@ -11350,6 +11369,17 @@ const renderChatText = (text = "", onColored = false) =>
     );
 
 const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "✅"];
+const buildChatRoomId = (clientName = "") => {
+  const slug =
+    String(clientName)
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 24) || "sala";
+  return `cluster-${slug}-${Math.random().toString(36).slice(2, 8)}`;
+};
 const CHAT_MAX_FILE = 8 * 1024 * 1024; // 8 MB por archivo
 const chatFileToBase64 = (file) =>
   new Promise((resolve, reject) => {
@@ -11411,6 +11441,10 @@ const ClientChatView = ({
   const [replyingTo, setReplyingTo] = useState(null);
   const [forwardTarget, setForwardTarget] = useState(null);
   const [forwardSearch, setForwardSearch] = useState("");
+  const [callPicker, setCallPicker] = useState(null);
+  const [callSelected, setCallSelected] = useState([]);
+  const [callSearch, setCallSearch] = useState("");
+  const [activeCallRoom, setActiveCallRoom] = useState(null);
   const [text, setText] = useState("");
   const [mentionedIds, setMentionedIds] = useState([]);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -11898,6 +11932,16 @@ const ClientChatView = ({
                   {messages.length} mensaje{messages.length === 1 ? "" : "s"}
                 </p>
               </div>
+              <button
+                onClick={() => {
+                  setCallSelected([]);
+                  setCallSearch("");
+                  setCallPicker({ mode: "start" });
+                }}
+                className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-emerald-700"
+              >
+                <Icon name="VideoCamera" size={15} /> Llamar
+              </button>
             </div>
 
             {pinnedMessages.length > 0 && (
@@ -12148,6 +12192,32 @@ const ClientChatView = ({
                                 <span className="opacity-70">
                                   ·{" "}
                                   {CHAT_TASK_LABELS[message.taskRef.taskType] || ""}
+                                </span>
+                              </button>
+                            )}
+                            {message.call?.roomId && (
+                              <button
+                                onClick={() =>
+                                  setActiveCallRoom(message.call.roomId)
+                                }
+                                className={`mt-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left ${mine ? "border-white/30 bg-black/10" : "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10"}`}
+                              >
+                                <span
+                                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${mine ? "bg-white/20 text-white" : "bg-emerald-600 text-white"}`}
+                                >
+                                  <Icon name="VideoCamera" size={16} />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span
+                                    className={`block text-xs font-bold ${mine ? "" : "text-emerald-700 dark:text-emerald-300"}`}
+                                  >
+                                    Videollamada
+                                  </span>
+                                  <span
+                                    className={`block text-[11px] ${mine ? "text-white/70" : "text-slate-500 dark:text-slate-400"}`}
+                                  >
+                                    Toca para unirte
+                                  </span>
                                 </span>
                               </button>
                             )}
@@ -12645,6 +12715,166 @@ const ClientChatView = ({
                 ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Selector de participantes para la llamada */}
+      {callPicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setCallPicker(null)}
+        >
+          <div
+            className="flex max-h-[75vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-white/10">
+              <h3 className="text-base font-black text-slate-800 dark:text-slate-100">
+                {callPicker.mode === "add"
+                  ? "Agregar a la llamada"
+                  : "Iniciar llamada"}
+              </h3>
+              <button
+                onClick={() => setCallPicker(null)}
+                aria-label="Cerrar"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <Icon name="X" size={18} />
+              </button>
+            </div>
+            <div className="p-3">
+              <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                Elige a quién invitar
+                {callPicker.mode === "add"
+                  ? " (además de quienes ya están)."
+                  : " primero. Podrás agregar más durante la llamada."}
+              </p>
+              <input
+                value={callSearch}
+                onChange={(event) => setCallSearch(event.target.value)}
+                placeholder="Buscar persona..."
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scroll">
+              {mentionables
+                .filter(
+                  (person) =>
+                    String(person.id) !== String(currentUserId) &&
+                    (!callSearch.trim() ||
+                      (person.name || "")
+                        .toLowerCase()
+                        .includes(callSearch.trim().toLowerCase()) ||
+                      (person.email || "")
+                        .toLowerCase()
+                        .includes(callSearch.trim().toLowerCase())),
+                )
+                .map((person) => {
+                  const checked = callSelected.includes(person.id);
+                  return (
+                    <button
+                      key={person.id}
+                      onClick={() =>
+                        setCallSelected((prev) =>
+                          checked
+                            ? prev.filter((id) => id !== person.id)
+                            : [...prev, person.id],
+                        )
+                      }
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
+                    >
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${checked ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 dark:border-slate-600"}`}
+                      >
+                        {checked && <Icon name="Check" size={12} />}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
+                          {person.name || person.email}
+                        </p>
+                        {person.email && (
+                          <p className="truncate text-[11px] text-slate-400">
+                            {person.email}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+            <div className="border-t border-slate-100 p-3 dark:border-white/10">
+              <button
+                onClick={() => {
+                  const room =
+                    callPicker.mode === "add"
+                      ? callPicker.roomId
+                      : buildChatRoomId(activeClient?.name);
+                  if (onSendMessage) {
+                    onSendMessage({
+                      clientId: activeClient.id,
+                      text:
+                        callPicker.mode === "add"
+                          ? "📞 Invitó a la llamada"
+                          : "📞 Inició una llamada",
+                      mentionedIds: callSelected,
+                      call: { roomId: room, provider: "jitsi" },
+                    });
+                  }
+                  if (callPicker.mode !== "add") setActiveCallRoom(room);
+                  setCallPicker(null);
+                  setCallSelected([]);
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-700"
+              >
+                <Icon name="VideoCamera" size={16} />
+                {callPicker.mode === "add" ? "Invitar" : "Iniciar llamada"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Llamada embebida (Jitsi) */}
+      {activeCallRoom && (
+        <div className="fixed inset-0 z-40 flex flex-col bg-slate-900">
+          <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2.5">
+            <div className="flex min-w-0 items-center gap-2 text-white">
+              <Icon
+                name="VideoCamera"
+                size={16}
+                className="shrink-0 text-emerald-400"
+              />
+              <span className="truncate text-sm font-bold">
+                Llamada · {activeClient?.name || "Cliente"}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                onClick={() => {
+                  setCallSelected([]);
+                  setCallSearch("");
+                  setCallPicker({ mode: "add", roomId: activeCallRoom });
+                }}
+                className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20"
+              >
+                <Icon name="UserPlus" size={14} /> Agregar personas
+              </button>
+              <button
+                onClick={() => setActiveCallRoom(null)}
+                className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700"
+              >
+                <Icon name="X" size={14} /> Salir
+              </button>
+            </div>
+          </div>
+          <iframe
+            title="Videollamada"
+            src={`https://meet.jit.si/${activeCallRoom}#config.prejoinPageEnabled=false&userInfo.displayName=${encodeURIComponent(
+              `"${currentUserProfile?.name || "Usuario"}"`,
+            )}`}
+            allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write"
+            className="min-h-0 w-full flex-1 border-0"
+          />
         </div>
       )}
     </div>
