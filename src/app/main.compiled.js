@@ -8191,6 +8191,28 @@ var renderChatText = (text = "", onColored = false) => String(text).split(/(@[^\
   ) : /* @__PURE__ */ React.createElement(React.Fragment, { key: index }, part)
 );
 var CHAT_REACTION_EMOJIS = ["\u{1F44D}", "\u2764\uFE0F", "\u{1F602}", "\u{1F62E}", "\u{1F622}", "\u{1F64F}", "\u2705"];
+var CHAT_AVATAR_COLORS = [
+  "#6366f1",
+  "#8b5cf6",
+  "#ec4899",
+  "#f59e0b",
+  "#10b981",
+  "#0ea5e9",
+  "#ef4444",
+  "#14b8a6",
+  "#a855f7",
+  "#f97316",
+  "#3b82f6",
+  "#d946ef"
+];
+var chatAvatarColor = (seed = "") => {
+  const value = String(seed);
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = hash * 31 + value.charCodeAt(i) >>> 0;
+  }
+  return CHAT_AVATAR_COLORS[hash % CHAT_AVATAR_COLORS.length];
+};
 var jaasScriptPromise = null;
 var loadJaasExternalApi = (appId2) => {
   if (typeof window !== "undefined" && window.JitsiMeetExternalAPI) {
@@ -8311,6 +8333,8 @@ var ClientChatView = ({
   });
   const previewText = (message) => {
     if (!message) return "Sin mensajes";
+    if (message.call) return message.call.ended ? "Llamada finalizada" : "Llamada";
+    if (message.deleted) return "Mensaje eliminado";
     if (message.text) return message.text;
     const count = Array.isArray(message.attachments) ? message.attachments.length : 0;
     return count > 0 ? `${count} archivo${count === 1 ? "" : "s"}` : "\u2026";
@@ -8688,7 +8712,14 @@ var ClientChatView = ({
             alt: client.name,
             className: "h-9 w-9 shrink-0 rounded-lg object-cover"
           }
-        ) : /* @__PURE__ */ React.createElement("div", { className: "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white" }, (client.name || "C").slice(0, 2).toUpperCase()),
+        ) : /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            className: "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-black text-white",
+            style: { backgroundColor: chatAvatarColor(client.name || client.id) }
+          },
+          (client.name || "C").slice(0, 2).toUpperCase()
+        ),
         /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement(
           "p",
           {
@@ -8719,7 +8750,14 @@ var ClientChatView = ({
         alt: activeClient.name,
         className: "h-9 w-9 rounded-lg object-cover"
       }
-    ) : /* @__PURE__ */ React.createElement("div", { className: "flex h-9 w-9 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white" }, (activeClient.name || "C").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-black text-slate-700 dark:text-slate-200" }, activeClient.name || "Cliente"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-400" }, messages.length, " mensaje", messages.length === 1 ? "" : "s")), /* @__PURE__ */ React.createElement(
+    ) : /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "flex h-9 w-9 items-center justify-center rounded-lg text-xs font-black text-white",
+        style: { backgroundColor: chatAvatarColor(activeClient.name || activeClient.id) }
+      },
+      (activeClient.name || "C").slice(0, 2).toUpperCase()
+    ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-black text-slate-700 dark:text-slate-200" }, activeClient.name || "Cliente"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-400" }, messages.length, " mensaje", messages.length === 1 ? "" : "s")), /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => {
@@ -8771,7 +8809,14 @@ var ClientChatView = ({
             key: message.id,
             className: `group flex px-4 ${grouped ? "mt-1" : "mt-4"} ${mine ? "justify-end" : "justify-start"}`
           },
-          !mine && /* @__PURE__ */ React.createElement("div", { className: "mr-2 w-8 shrink-0 self-end" }, !grouped && /* @__PURE__ */ React.createElement("div", { className: "flex h-8 w-8 items-center justify-center rounded-full bg-[#555552] text-[10px] font-black text-white" }, (message.authorName || "U").slice(0, 2).toUpperCase())),
+          !mine && /* @__PURE__ */ React.createElement("div", { className: "mr-2 w-8 shrink-0 self-end" }, !grouped && /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              className: "flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-black text-white",
+              style: { backgroundColor: chatAvatarColor(message.authorId || message.authorName) }
+            },
+            (message.authorName || "U").slice(0, 2).toUpperCase()
+          )),
           /* @__PURE__ */ React.createElement("div", { className: "relative min-w-0 max-w-[78%]" }, !mine && !grouped && /* @__PURE__ */ React.createElement("p", { className: "mb-0.5 px-1 text-[11px] font-bold text-slate-500 dark:text-slate-400" }, message.authorName || "Usuario"), /* @__PURE__ */ React.createElement(
             "div",
             {
@@ -8920,7 +8965,7 @@ var ClientChatView = ({
               },
               /* @__PURE__ */ React.createElement("p", { className: "font-bold opacity-80" }, message.replyTo.authorName || "Mensaje"),
               /* @__PURE__ */ React.createElement("p", { className: "truncate opacity-70" }, message.replyTo.text)
-            ), message.text && /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words pr-5 text-sm leading-relaxed" }, renderChatText(message.text, mine)), atts.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap gap-2" }, atts.map((att) => renderAttachment(att))), message.taskRef?.taskId && /* @__PURE__ */ React.createElement(
+            ), message.text && !message.call && /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words pr-5 text-sm leading-relaxed" }, renderChatText(message.text, mine)), atts.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap gap-2" }, atts.map((att) => renderAttachment(att))), message.taskRef?.taskId && /* @__PURE__ */ React.createElement(
               "button",
               {
                 onClick: () => onOpenTask(message.taskRef),

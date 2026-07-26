@@ -11401,6 +11401,19 @@ const renderChatText = (text = "", onColored = false) =>
     );
 
 const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "✅"];
+const CHAT_AVATAR_COLORS = [
+  "#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981",
+  "#0ea5e9", "#ef4444", "#14b8a6", "#a855f7", "#f97316",
+  "#3b82f6", "#d946ef",
+];
+const chatAvatarColor = (seed = "") => {
+  const value = String(seed);
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return CHAT_AVATAR_COLORS[hash % CHAT_AVATAR_COLORS.length];
+};
 let jaasScriptPromise = null;
 const loadJaasExternalApi = (appId) => {
   if (typeof window !== "undefined" && window.JitsiMeetExternalAPI) {
@@ -11536,6 +11549,8 @@ const ClientChatView = ({
 
   const previewText = (message) => {
     if (!message) return "Sin mensajes";
+    if (message.call) return message.call.ended ? "Llamada finalizada" : "Llamada";
+    if (message.deleted) return "Mensaje eliminado";
     if (message.text) return message.text;
     const count = Array.isArray(message.attachments)
       ? message.attachments.length
@@ -11981,7 +11996,10 @@ const ClientChatView = ({
                     className="h-9 w-9 shrink-0 rounded-lg object-cover"
                   />
                 ) : (
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white">
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-black text-white"
+                    style={{ backgroundColor: chatAvatarColor(client.name || client.id) }}
+                  >
                     {(client.name || "C").slice(0, 2).toUpperCase()}
                   </div>
                 )}
@@ -12036,7 +12054,10 @@ const ClientChatView = ({
                   className="h-9 w-9 rounded-lg object-cover"
                 />
               ) : (
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#555552] text-xs font-black text-white">
+                <div
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-xs font-black text-white"
+                  style={{ backgroundColor: chatAvatarColor(activeClient.name || activeClient.id) }}
+                >
                   {(activeClient.name || "C").slice(0, 2).toUpperCase()}
                 </div>
               )}
@@ -12127,7 +12148,10 @@ const ClientChatView = ({
                     {!mine && (
                       <div className="mr-2 w-8 shrink-0 self-end">
                         {!grouped && (
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#555552] text-[10px] font-black text-white">
+                          <div
+                            className="flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-black text-white"
+                            style={{ backgroundColor: chatAvatarColor(message.authorId || message.authorName) }}
+                          >
                             {(message.authorName || "U").slice(0, 2).toUpperCase()}
                           </div>
                         )}
@@ -12282,7 +12306,7 @@ const ClientChatView = ({
                                 </p>
                               </div>
                             )}
-                            {message.text && (
+                            {message.text && !message.call && (
                               <p className="whitespace-pre-wrap break-words pr-5 text-sm leading-relaxed">
                                 {renderChatText(message.text, mine)}
                               </p>
