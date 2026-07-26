@@ -9593,7 +9593,7 @@ var ClientChatView = ({
         className: "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 13 })
-    ))), /* @__PURE__ */ React.createElement("div", { className: "max-h-64 overflow-y-auto custom-scroll" }, customStickers.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("p", { className: "px-1.5 pb-1 pt-0.5 text-[9px] font-black uppercase tracking-widest text-slate-400" }, "Del equipo"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-4 gap-1 pb-2" }, customStickers.map((sticker) => /* @__PURE__ */ React.createElement(
+    ))), /* @__PURE__ */ React.createElement("div", { className: "max-h-64 overflow-y-auto custom-scroll" }, customStickers.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-4 gap-1 pb-1" }, customStickers.map((sticker) => /* @__PURE__ */ React.createElement(
       "div",
       {
         key: sticker.id,
@@ -9627,20 +9627,20 @@ var ClientChatView = ({
         },
         /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 9 })
       )
-    )))), /* @__PURE__ */ React.createElement("p", { className: "px-1.5 pb-1 pt-0.5 text-[9px] font-black uppercase tracking-widest text-slate-400" }, "Base"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-4 gap-1" }, CHAT_STICKERS.map((sticker) => /* @__PURE__ */ React.createElement(
+    ))) : /* @__PURE__ */ React.createElement(
       "button",
       {
-        key: sticker.id,
         onMouseDown: (event) => {
           event.preventDefault();
-          handleSendSticker(sticker.id);
+          if (stickerInputRef.current)
+            stickerInputRef.current.click();
         },
-        title: sticker.label,
-        disabled: submitting,
-        className: "flex items-center justify-center rounded-xl p-1.5 transition-transform hover:scale-110 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-white/5"
+        className: "flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-slate-400 transition-colors hover:border-blue-400 hover:text-blue-500 dark:border-white/15"
       },
-      /* @__PURE__ */ React.createElement(StickerImage, { id: sticker.id, size: 56 })
-    )))))), /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-[10px] text-slate-400 hidden sm:block" }, "Enter para enviar \xB7 Shift+Enter salto de l\xEDnea"), /* @__PURE__ */ React.createElement(
+      /* @__PURE__ */ React.createElement(Icon, { name: "Sticker", size: 28 }),
+      /* @__PURE__ */ React.createElement("span", { className: "text-xs font-semibold" }, "A\xFAn no hay stickers"),
+      /* @__PURE__ */ React.createElement("span", { className: "text-[11px]" }, "Pulsa para subir el primero (webp, gif o png)")
+    )))), /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-[10px] text-slate-400 hidden sm:block" }, "Enter para enviar \xB7 Shift+Enter salto de l\xEDnea"), /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: handleSubmit,

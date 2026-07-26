@@ -13072,72 +13072,65 @@ const ClientChatView = ({
                               </div>
                             </div>
                             <div className="max-h-64 overflow-y-auto custom-scroll">
-                              {customStickers.length > 0 && (
-                                <>
-                                  <p className="px-1.5 pb-1 pt-0.5 text-[9px] font-black uppercase tracking-widest text-slate-400">
-                                    Del equipo
-                                  </p>
-                                  <div className="grid grid-cols-4 gap-1 pb-2">
-                                    {customStickers.map((sticker) => (
-                                      <div
-                                        key={sticker.id}
-                                        className="group/st relative"
+                              {customStickers.length > 0 ? (
+                                <div className="grid grid-cols-4 gap-1 pb-1">
+                                  {customStickers.map((sticker) => (
+                                    <div
+                                      key={sticker.id}
+                                      className="group/st relative"
+                                    >
+                                      <button
+                                        onMouseDown={(event) => {
+                                          event.preventDefault();
+                                          handleSendSticker(sticker.id);
+                                        }}
+                                        title={sticker.name}
+                                        disabled={submitting}
+                                        className="flex w-full items-center justify-center rounded-xl p-1.5 transition-transform hover:scale-110 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-white/5"
                                       >
+                                        {renderSticker(sticker.id, 56)}
+                                      </button>
+                                      {(canModerate ||
+                                        String(sticker.authorId || "") ===
+                                          myId) && (
                                         <button
                                           onMouseDown={(event) => {
                                             event.preventDefault();
-                                            handleSendSticker(sticker.id);
-                                          }}
-                                          title={sticker.name}
-                                          disabled={submitting}
-                                          className="flex w-full items-center justify-center rounded-xl p-1.5 transition-transform hover:scale-110 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-white/5"
-                                        >
-                                          {renderSticker(sticker.id, 56)}
-                                        </button>
-                                        {(canModerate ||
-                                          String(sticker.authorId || "") ===
-                                            myId) && (
-                                          <button
-                                            onMouseDown={(event) => {
-                                              event.preventDefault();
-                                              if (
-                                                onDeleteSticker &&
-                                                confirm(
-                                                  "¿Eliminar este sticker de la biblioteca?",
-                                                )
+                                            if (
+                                              onDeleteSticker &&
+                                              confirm(
+                                                "¿Eliminar este sticker de la biblioteca?",
                                               )
-                                                onDeleteSticker(sticker.id);
-                                            }}
-                                            aria-label="Eliminar sticker"
-                                            className="absolute -right-0.5 -top-0.5 hidden h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white group-hover/st:flex"
-                                          >
-                                            <Icon name="X" size={9} />
-                                          </button>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </>
+                                            )
+                                              onDeleteSticker(sticker.id);
+                                          }}
+                                          aria-label="Eliminar sticker"
+                                          className="absolute -right-0.5 -top-0.5 hidden h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white group-hover/st:flex"
+                                        >
+                                          <Icon name="X" size={9} />
+                                        </button>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <button
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    if (stickerInputRef.current)
+                                      stickerInputRef.current.click();
+                                  }}
+                                  className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-slate-400 transition-colors hover:border-blue-400 hover:text-blue-500 dark:border-white/15"
+                                >
+                                  <Icon name="Sticker" size={28} />
+                                  <span className="text-xs font-semibold">
+                                    Aún no hay stickers
+                                  </span>
+                                  <span className="text-[11px]">
+                                    Pulsa para subir el primero (webp, gif o png)
+                                  </span>
+                                </button>
                               )}
-                              <p className="px-1.5 pb-1 pt-0.5 text-[9px] font-black uppercase tracking-widest text-slate-400">
-                                Base
-                              </p>
-                              <div className="grid grid-cols-4 gap-1">
-                                {CHAT_STICKERS.map((sticker) => (
-                                  <button
-                                    key={sticker.id}
-                                    onMouseDown={(event) => {
-                                      event.preventDefault();
-                                      handleSendSticker(sticker.id);
-                                    }}
-                                    title={sticker.label}
-                                    disabled={submitting}
-                                    className="flex items-center justify-center rounded-xl p-1.5 transition-transform hover:scale-110 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-white/5"
-                                  >
-                                    <StickerImage id={sticker.id} size={56} />
-                                  </button>
-                                ))}
-                              </div>
                             </div>
                           </div>
                         )}
