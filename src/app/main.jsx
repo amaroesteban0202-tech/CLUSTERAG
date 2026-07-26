@@ -5541,7 +5541,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell flex h-screen overflow-hidden flex-col md:flex-row transition-colors duration-300">
+    <div className="app-shell flex min-h-0 overflow-hidden flex-col md:flex-row transition-colors duration-300">
       {/* Header Móvil */}
       <div className="app-sidebar md:hidden border-b p-4 flex justify-between items-center z-30 shrink-0">
         <div className="flex items-center gap-2">
@@ -5866,7 +5866,7 @@ function App() {
 
       {/* Vistas Principales */}
       <main
-        className={`app-main flex-1 relative w-full h-full ${view === "chat" ? "overflow-hidden" : "overflow-y-auto"}`}
+        className={`app-main min-h-0 flex-1 relative w-full ${view === "chat" ? "overflow-hidden" : "overflow-y-auto"}`}
       >
         <div
           className={
@@ -6382,11 +6382,13 @@ function App() {
         </div>
       </main>
 
-      <MobileBottomNav
-        view={view}
-        onNavigate={handleNavigate}
-        currentUserProfile={currentUserProfile}
-      />
+      {view !== "chat" && (
+        <MobileBottomNav
+          view={view}
+          onNavigate={handleNavigate}
+          currentUserProfile={currentUserProfile}
+        />
+      )}
 
       <div
         aria-live="polite"
@@ -12509,7 +12511,7 @@ const ClientChatView = ({
             />
           </div>
         </div>
-        <div className="chat-list-scroll custom-scroll flex-1 min-h-0 overflow-y-auto pb-mobile-nav md:pb-0">
+        <div className="chat-list-scroll custom-scroll flex-1 min-h-0 overflow-y-auto">
           {sortedClients.length === 0 && (
             <div className="chat-empty-state">
               <span className="chat-empty-icon">
@@ -13051,7 +13053,7 @@ const ClientChatView = ({
             </div>
 
             {/* Composer de mensajería */}
-            <div className="chat-composer-shell shrink-0 pb-mobile-nav md:pb-3">
+            <div className="chat-composer-shell shrink-0">
               {replyingTo && (
                 <div className="chat-reply-bar mb-2 flex items-center gap-2">
                   <Icon

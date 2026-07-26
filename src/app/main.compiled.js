@@ -4182,7 +4182,7 @@ function App() {
       toast && /* @__PURE__ */ React.createElement(Toast, { message: toast.message, type: toast.type })
     ));
   }
-  return /* @__PURE__ */ React.createElement("div", { className: "app-shell flex h-screen overflow-hidden flex-col md:flex-row transition-colors duration-300" }, /* @__PURE__ */ React.createElement("div", { className: "app-sidebar md:hidden border-b p-4 flex justify-between items-center z-30 shrink-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "w-8 h-8 text-sm" }), /* @__PURE__ */ React.createElement("span", { className: "brand-name text-lg font-bold text-slate-800 dark:text-white" }, "CLUSTER")), /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "app-shell flex min-h-0 overflow-hidden flex-col md:flex-row transition-colors duration-300" }, /* @__PURE__ */ React.createElement("div", { className: "app-sidebar md:hidden border-b p-4 flex justify-between items-center z-30 shrink-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "w-8 h-8 text-sm" }), /* @__PURE__ */ React.createElement("span", { className: "brand-name text-lg font-bold text-slate-800 dark:text-white" }, "CLUSTER")), /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setIsMobileMenuOpen(!isMobileMenuOpen),
@@ -4425,7 +4425,7 @@ function App() {
   ), /* @__PURE__ */ React.createElement(
     "main",
     {
-      className: `app-main flex-1 relative w-full h-full ${view === "chat" ? "overflow-hidden" : "overflow-y-auto"}`
+      className: `app-main min-h-0 flex-1 relative w-full ${view === "chat" ? "overflow-hidden" : "overflow-y-auto"}`
     },
     /* @__PURE__ */ React.createElement(
       "div",
@@ -4878,7 +4878,7 @@ function App() {
         }
       )
     )
-  ), /* @__PURE__ */ React.createElement(
+  ), view !== "chat" && /* @__PURE__ */ React.createElement(
     MobileBottomNav,
     {
       view,
@@ -9203,7 +9203,7 @@ var ClientChatView = ({
         className: "chat-search-input w-full pl-10 pr-4"
       }
     ))),
-    /* @__PURE__ */ React.createElement("div", { className: "chat-list-scroll custom-scroll flex-1 min-h-0 overflow-y-auto pb-mobile-nav md:pb-0" }, sortedClients.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "chat-empty-state" }, /* @__PURE__ */ React.createElement("span", { className: "chat-empty-icon" }, /* @__PURE__ */ React.createElement(Icon, { name: "Search", size: 21 })), /* @__PURE__ */ React.createElement("p", null, "No encontramos conversaciones"), /* @__PURE__ */ React.createElement("span", null, "Prueba con otro nombre de cliente.")), sortedClients.map((client) => {
+    /* @__PURE__ */ React.createElement("div", { className: "chat-list-scroll custom-scroll flex-1 min-h-0 overflow-y-auto" }, sortedClients.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "chat-empty-state" }, /* @__PURE__ */ React.createElement("span", { className: "chat-empty-icon" }, /* @__PURE__ */ React.createElement(Icon, { name: "Search", size: 21 })), /* @__PURE__ */ React.createElement("p", null, "No encontramos conversaciones"), /* @__PURE__ */ React.createElement("span", null, "Prueba con otro nombre de cliente.")), sortedClients.map((client) => {
       const unread = chatUnread.byClient?.[client.id] || 0;
       const last = lastMsgByClient[client.id];
       const isActive = activeClient?.id === client.id;
@@ -9601,7 +9601,7 @@ var ClientChatView = ({
           }
         }
       )
-    ), /* @__PURE__ */ React.createElement("div", { className: "chat-composer-shell shrink-0 pb-mobile-nav md:pb-3" }, replyingTo && /* @__PURE__ */ React.createElement("div", { className: "chat-reply-bar mb-2 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { className: "chat-composer-shell shrink-0" }, replyingTo && /* @__PURE__ */ React.createElement("div", { className: "chat-reply-bar mb-2 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
       Icon,
       {
         name: "Reply",
