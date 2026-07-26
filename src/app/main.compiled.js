@@ -8853,84 +8853,88 @@ var ClientChatView = ({
             menuFor === message.id && /* @__PURE__ */ React.createElement(
               "div",
               {
-                className: `absolute top-7 z-40 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-slate-700 shadow-2xl dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 ${mine ? "right-0" : "left-0"}`
+                className: `chat-action-menu absolute top-7 z-40 w-52 rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 text-slate-700 shadow-2xl backdrop-blur dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-100 ${mine ? "right-0" : "left-0"}`
               },
-              /* @__PURE__ */ React.createElement(
-                "button",
+              [
                 {
-                  onMouseDown: (event) => {
-                    event.preventDefault();
+                  key: "reply",
+                  label: "Responder",
+                  icon: "Reply",
+                  color: "#3b82f6",
+                  show: true,
+                  on: () => {
                     setMenuFor(null);
                     setReplyingTo(message);
-                  },
-                  className: "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                  }
                 },
-                /* @__PURE__ */ React.createElement(Icon, { name: "Reply", size: 14, className: "text-slate-500" }),
-                "Responder"
-              ),
-              /* @__PURE__ */ React.createElement(
-                "button",
                 {
-                  onMouseDown: (event) => {
-                    event.preventDefault();
+                  key: "react",
+                  label: "Reaccionar",
+                  icon: "Smile",
+                  color: "#f59e0b",
+                  show: true,
+                  on: () => {
                     setMenuFor(null);
                     setReactionPickerFor(message.id);
-                  },
-                  className: "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                  }
                 },
-                /* @__PURE__ */ React.createElement(Icon, { name: "Smile", size: 14, className: "text-slate-500" }),
-                "Reaccionar"
-              ),
-              /* @__PURE__ */ React.createElement(
-                "button",
                 {
-                  onMouseDown: (event) => {
-                    event.preventDefault();
+                  key: "forward",
+                  label: "Reenviar",
+                  icon: "Send",
+                  color: "#6366f1",
+                  show: true,
+                  on: () => {
                     setMenuFor(null);
                     setForwardTarget(message);
                     setForwardSearch("");
-                  },
-                  className: "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                  }
                 },
-                /* @__PURE__ */ React.createElement(Icon, { name: "Send", size: 14, className: "text-slate-500" }),
-                "Reenviar"
-              ),
-              message.text && /* @__PURE__ */ React.createElement(
-                "button",
                 {
-                  onMouseDown: (event) => {
-                    event.preventDefault();
+                  key: "copy",
+                  label: "Copiar",
+                  icon: "ClipboardList",
+                  color: "#0ea5e9",
+                  show: Boolean(message.text),
+                  on: () => {
                     if (navigator.clipboard) {
                       navigator.clipboard.writeText(message.text);
                     }
                     setMenuFor(null);
-                  },
-                  className: "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
-                },
-                /* @__PURE__ */ React.createElement(
-                  Icon,
-                  {
-                    name: "ClipboardList",
-                    size: 14,
-                    className: "text-slate-500"
                   }
-                ),
-                "Copiar"
-              ),
-              /* @__PURE__ */ React.createElement(
-                "button",
+                },
                 {
-                  onMouseDown: (event) => {
-                    event.preventDefault();
+                  key: "pin",
+                  label: pinnedIds.has(String(message.id)) ? "Desfijar" : "Fijar",
+                  icon: "Pin",
+                  color: "#10b981",
+                  show: true,
+                  on: () => {
                     setMenuFor(null);
                     if (onPin) onPin(message);
+                  }
+                }
+              ].filter((item) => item.show).map((item) => /* @__PURE__ */ React.createElement(
+                "button",
+                {
+                  key: item.key,
+                  onMouseDown: (event) => {
+                    event.preventDefault();
+                    item.on();
                   },
-                  className: "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+                  className: "flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 dark:hover:bg-white/5"
                 },
-                /* @__PURE__ */ React.createElement(Icon, { name: "Pin", size: 14, className: "text-slate-500" }),
-                pinnedIds.has(String(message.id)) ? "Desfijar" : "Fijar"
-              ),
-              mine && /* @__PURE__ */ React.createElement(
+                /* @__PURE__ */ React.createElement(
+                  "span",
+                  {
+                    className: "flex h-7 w-7 items-center justify-center rounded-lg",
+                    style: { backgroundColor: `${item.color}1f`, color: item.color }
+                  },
+                  /* @__PURE__ */ React.createElement(Icon, { name: item.icon, size: 15 })
+                ),
+                item.label
+              )),
+              mine && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "my-1 h-px bg-slate-100 dark:bg-white/10" }), /* @__PURE__ */ React.createElement(
                 "button",
                 {
                   onMouseDown: (event) => {
@@ -8938,11 +8942,18 @@ var ClientChatView = ({
                     setMenuFor(null);
                     setDeleteTarget(message);
                   },
-                  className: "flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+                  className: "flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
                 },
-                /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 14 }),
-                " Eliminar"
-              )
+                /* @__PURE__ */ React.createElement(
+                  "span",
+                  {
+                    className: "flex h-7 w-7 items-center justify-center rounded-lg",
+                    style: { backgroundColor: "#ef44441f", color: "#ef4444" }
+                  },
+                  /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 15 })
+                ),
+                "Eliminar"
+              ))
             ),
             message.deleted ? /* @__PURE__ */ React.createElement(
               "p",

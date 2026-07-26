@@ -12198,83 +12198,107 @@ const ClientChatView = ({
                         )}
                         {menuFor === message.id && (
                           <div
-                            className={`absolute top-7 z-40 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-slate-700 shadow-2xl dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 ${mine ? "right-0" : "left-0"}`}
+                            className={`chat-action-menu absolute top-7 z-40 w-52 rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 text-slate-700 shadow-2xl backdrop-blur dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-100 ${mine ? "right-0" : "left-0"}`}
                           >
-                            <button
-                              onMouseDown={(event) => {
-                                event.preventDefault();
-                                setMenuFor(null);
-                                setReplyingTo(message);
-                              }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
-                            >
-                              <Icon name="Reply" size={14} className="text-slate-500" />
-                              Responder
-                            </button>
-                            <button
-                              onMouseDown={(event) => {
-                                event.preventDefault();
-                                setMenuFor(null);
-                                setReactionPickerFor(message.id);
-                              }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
-                            >
-                              <Icon name="Smile" size={14} className="text-slate-500" />
-                              Reaccionar
-                            </button>
-                            <button
-                              onMouseDown={(event) => {
-                                event.preventDefault();
-                                setMenuFor(null);
-                                setForwardTarget(message);
-                                setForwardSearch("");
-                              }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
-                            >
-                              <Icon name="Send" size={14} className="text-slate-500" />
-                              Reenviar
-                            </button>
-                            {message.text && (
-                              <button
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
+                            {[
+                              {
+                                key: "reply",
+                                label: "Responder",
+                                icon: "Reply",
+                                color: "#3b82f6",
+                                show: true,
+                                on: () => {
+                                  setMenuFor(null);
+                                  setReplyingTo(message);
+                                },
+                              },
+                              {
+                                key: "react",
+                                label: "Reaccionar",
+                                icon: "Smile",
+                                color: "#f59e0b",
+                                show: true,
+                                on: () => {
+                                  setMenuFor(null);
+                                  setReactionPickerFor(message.id);
+                                },
+                              },
+                              {
+                                key: "forward",
+                                label: "Reenviar",
+                                icon: "Send",
+                                color: "#6366f1",
+                                show: true,
+                                on: () => {
+                                  setMenuFor(null);
+                                  setForwardTarget(message);
+                                  setForwardSearch("");
+                                },
+                              },
+                              {
+                                key: "copy",
+                                label: "Copiar",
+                                icon: "ClipboardList",
+                                color: "#0ea5e9",
+                                show: Boolean(message.text),
+                                on: () => {
                                   if (navigator.clipboard) {
                                     navigator.clipboard.writeText(message.text);
                                   }
                                   setMenuFor(null);
-                                }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
-                              >
-                                <Icon
-                                  name="ClipboardList"
-                                  size={14}
-                                  className="text-slate-500"
-                                />
-                                Copiar
-                              </button>
-                            )}
-                            <button
-                              onMouseDown={(event) => {
-                                event.preventDefault();
-                                setMenuFor(null);
-                                if (onPin) onPin(message);
-                              }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
-                            >
-                              <Icon name="Pin" size={14} className="text-slate-500" />
-                              {pinnedIds.has(String(message.id)) ? "Desfijar" : "Fijar"}
-                            </button>
-                            {mine && (
-                              <button
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
+                                },
+                              },
+                              {
+                                key: "pin",
+                                label: pinnedIds.has(String(message.id)) ? "Desfijar" : "Fijar",
+                                icon: "Pin",
+                                color: "#10b981",
+                                show: true,
+                                on: () => {
                                   setMenuFor(null);
-                                  setDeleteTarget(message);
-                                }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
-                              >
-                                <Icon name="Trash2" size={14} /> Eliminar
-                              </button>
+                                  if (onPin) onPin(message);
+                                },
+                              },
+                            ]
+                              .filter((item) => item.show)
+                              .map((item) => (
+                                <button
+                                  key={item.key}
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    item.on();
+                                  }}
+                                  className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 dark:hover:bg-white/5"
+                                >
+                                  <span
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg"
+                                    style={{ backgroundColor: `${item.color}1f`, color: item.color }}
+                                  >
+                                    <Icon name={item.icon} size={15} />
+                                  </span>
+                                  {item.label}
+                                </button>
+                              ))}
+                            {mine && (
+                              <>
+                                <div className="my-1 h-px bg-slate-100 dark:bg-white/10" />
+                                <button
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    setMenuFor(null);
+                                    setDeleteTarget(message);
+                                  }}
+                                  className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                                >
+                                  <span
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg"
+                                    style={{ backgroundColor: "#ef44441f", color: "#ef4444" }}
+                                  >
+                                    <Icon name="Trash2" size={15} />
+                                  </span>
+                                  Eliminar
+                                </button>
+                              </>
                             )}
                           </div>
                         )}

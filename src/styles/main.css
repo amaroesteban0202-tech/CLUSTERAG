@@ -293,6 +293,9 @@ textarea:focus-visible,
 .fade-in { animation: fadeIn 0.3s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
+@keyframes chatActionMenuIn { from { opacity: 0; transform: translateY(-4px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.chat-action-menu { animation: chatActionMenuIn 0.12s ease-out; transform-origin: top; }
+
 @keyframes taskDetailBackdropIn {
     from { opacity: 0; }
     to { opacity: 1; }
