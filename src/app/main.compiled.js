@@ -81,7 +81,10 @@ import {
   PushPin as PinIcon,
   ArrowBendUpLeft as ReplyIcon,
   Phone,
-  VideoCamera
+  VideoCamera,
+  ThumbsUp,
+  Heart,
+  Eye
 } from "@phosphor-icons/react";
 import {
   signInAnonymously,
@@ -253,7 +256,10 @@ var IconsMap = {
   Pin: PinIcon,
   Reply: ReplyIcon,
   Phone,
-  VideoCamera
+  VideoCamera,
+  ThumbsUp,
+  Heart,
+  Eye
 };
 var Icon = ({ name, size = 18, className = "", ...props }) => {
   const PhosphorIcon = IconsMap[name];
@@ -3442,7 +3448,8 @@ function App() {
       replyTo: replyTo ? {
         id: replyTo.id || "",
         authorName: replyTo.authorName || "",
-        text: (replyTo.text || "").slice(0, 140)
+        text: (replyTo.text || "").slice(0, 140),
+        sticker: replyTo.sticker ? String(replyTo.sticker) : null
       } : null,
       taskRef: taskRef ? {
         taskId: taskRef.taskId || "",
@@ -3728,7 +3735,7 @@ function App() {
         const client = clients.find((item) => item.id === message.clientId);
         try {
           const notif = new Notification(
-            `\u{1F4AC} Chat \xB7 ${client?.name || "Cliente"}`,
+            `Chat \xB7 ${client?.name || "Cliente"}`,
             {
               body: `${message.authorName || "Alguien"}: ${message.text}`,
               tag: `chat-${message.id}`
@@ -7694,7 +7701,7 @@ var ManagementRoomView = ({
       },
       (m.name || "?").slice(0, 2).toUpperCase()
     )), members.length > 4 && /* @__PURE__ */ React.createElement("div", { className: "w-7 h-7 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center text-[9px] font-black bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300" }, "+", members.length - 4)),
-    /* @__PURE__ */ React.createElement("div", { className: "text-left" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black text-slate-700 dark:text-slate-200" }, "Equipo"), membersWithAlert.length > 0 ? /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-amber-500" }, membersWithAlert.length, " sin email \u2014 ver detalles") : /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-emerald-500" }, "Todos con email \u2713")),
+    /* @__PURE__ */ React.createElement("div", { className: "text-left" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black text-slate-700 dark:text-slate-200" }, "Equipo"), membersWithAlert.length > 0 ? /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-amber-500" }, membersWithAlert.length, " sin email \u2014 ver detalles") : /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-emerald-500" }, "Todos con email")),
     /* @__PURE__ */ React.createElement(
       Icon,
       {
@@ -8231,7 +8238,17 @@ var renderChatText = (text = "", onColored = false) => String(text).split(/(@[^\
     part
   ) : /* @__PURE__ */ React.createElement(React.Fragment, { key: index }, part)
 );
-var CHAT_REACTION_EMOJIS = ["\u{1F44D}", "\u2764\uFE0F", "\u{1F602}", "\u{1F62E}", "\u{1F622}", "\u{1F64F}", "\u2705"];
+var CHAT_REACTIONS = [
+  { key: "like", label: "Me gusta", icon: "ThumbsUp" },
+  { key: "important", label: "Importante", icon: "Heart" },
+  { key: "seen", label: "Visto", icon: "Eye" },
+  { key: "approved", label: "Aprobado", icon: "CheckCircle2" }
+];
+var getChatReactionDefinition = (key) => CHAT_REACTIONS.find((reaction) => reaction.key === key) || {
+  key,
+  label: "Reacci\xF3n",
+  icon: "Sparkles"
+};
 var CHAT_STICKERS = [
   {
     id: "muerto",
@@ -8380,6 +8397,30 @@ var chatShortTime = (iso) => {
     return "";
   }
 };
+var chatDayKey = (iso) => {
+  try {
+    return new Date(iso).toDateString();
+  } catch {
+    return "";
+  }
+};
+var chatDayLabel = (iso) => {
+  try {
+    const date = new Date(iso);
+    const today = /* @__PURE__ */ new Date();
+    const yesterday = /* @__PURE__ */ new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (date.toDateString() === today.toDateString()) return "Hoy";
+    if (date.toDateString() === yesterday.toDateString()) return "Ayer";
+    return date.toLocaleDateString("es", {
+      day: "numeric",
+      month: "long",
+      year: date.getFullYear() === today.getFullYear() ? void 0 : "numeric"
+    });
+  } catch {
+    return "";
+  }
+};
 var ClientChatView = ({
   clients = [],
   clientChats = [],
@@ -8455,10 +8496,6 @@ var ClientChatView = ({
   const customStickers = [...stickers || []].sort(
     (a, b) => (b.createdAt || "") > (a.createdAt || "") ? 1 : -1
   );
-  const stickerLabel = (id) => {
-    if (customStickerMap[id]) return customStickerMap[id].name || "Sticker";
-    return CHAT_STICKER_MAP[id]?.label || "";
-  };
   const renderSticker = (id, size, className = "") => {
     const custom = customStickerMap[id];
     if (custom?.data) {
@@ -8488,10 +8525,7 @@ var ClientChatView = ({
     if (message.call) return message.call.ended ? "Llamada finalizada" : "Llamada";
     if (message.deleted) return "Mensaje eliminado";
     if (message.text) return message.text;
-    if (message.sticker) {
-      const label = stickerLabel(message.sticker);
-      return label ? `Sticker \xB7 ${label}` : "Sticker";
-    }
+    if (message.sticker) return "Sticker";
     const count = Array.isArray(message.attachments) ? message.attachments.length : 0;
     return count > 0 ? `${count} archivo${count === 1 ? "" : "s"}` : "\u2026";
   };
@@ -8758,7 +8792,8 @@ var ClientChatView = ({
         replyTo: replyingTo ? {
           id: replyingTo.id,
           authorName: replyingTo.authorName,
-          text: replyingTo.text
+          text: replyingTo.text,
+          sticker: replyingTo.sticker || null
         } : null
       });
       setText("");
@@ -8782,7 +8817,8 @@ var ClientChatView = ({
         replyTo: replyingTo ? {
           id: replyingTo.id,
           authorName: replyingTo.authorName,
-          text: replyingTo.text
+          text: replyingTo.text,
+          sticker: replyingTo.sticker || null
         } : null
       });
       setReplyingTo(null);
@@ -8875,35 +8911,36 @@ var ClientChatView = ({
       /* @__PURE__ */ React.createElement("span", { className: "text-slate-400" }, att.data ? formatChatBytes(att.size) : "cargando\u2026")
     );
   };
-  return /* @__PURE__ */ React.createElement("div", { className: "flex h-full min-h-0 overflow-hidden bg-white dark:bg-[#1a1d21]" }, /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "chat-shell flex h-full min-h-0 overflow-hidden" }, /* @__PURE__ */ React.createElement(
     "aside",
     {
-      className: `${activeClient ? "hidden md:flex" : "flex"} min-h-0 w-full flex-col border-r border-slate-200 dark:border-white/10 md:w-72 lg:w-80 shrink-0`
+      className: `chat-list-pane ${activeClient ? "hidden md:flex" : "flex"} min-h-0 w-full shrink-0 flex-col md:w-[21rem] lg:w-[23rem]`
     },
-    /* @__PURE__ */ React.createElement("div", { className: "p-3 border-b border-slate-100 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-3" }, /* @__PURE__ */ React.createElement(
-      Icon,
+    /* @__PURE__ */ React.createElement("div", { className: "chat-list-header" }, /* @__PURE__ */ React.createElement("div", { className: "mb-4 flex items-center gap-3" }, /* @__PURE__ */ React.createElement("span", { className: "chat-section-icon" }, /* @__PURE__ */ React.createElement(Icon, { name: "MessageSquare", size: 19 })), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("h2", { className: "chat-list-title" }, "Conversaciones"), /* @__PURE__ */ React.createElement("p", { className: "chat-list-subtitle" }, "Chat interno del equipo")), chatUnread.total > 0 && /* @__PURE__ */ React.createElement(
+      "span",
       {
-        name: "MessageSquare",
-        size: 18,
-        className: "text-slate-500 dark:text-slate-400"
-      }
-    ), /* @__PURE__ */ React.createElement("h2", { className: "text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide" }, "Chat interno")), /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
+        className: "chat-total-unread",
+        "aria-label": `${chatUnread.total} mensajes sin leer`
+      },
+      chatUnread.total
+    )), /* @__PURE__ */ React.createElement("div", { className: "chat-search relative" }, /* @__PURE__ */ React.createElement(
       Icon,
       {
         name: "Search",
-        size: 14,
-        className: "absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+        size: 16,
+        className: "chat-search-icon absolute left-3.5 top-1/2 -translate-y-1/2"
       }
     ), /* @__PURE__ */ React.createElement(
       "input",
       {
         value: search,
         onChange: (event) => setSearch(event.target.value),
-        placeholder: "Buscar cliente...",
-        className: "w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+        "aria-label": "Buscar conversaci\xF3n",
+        placeholder: "Buscar conversaci\xF3n",
+        className: "chat-search-input w-full pl-10 pr-4"
       }
     ))),
-    /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-h-0 overflow-y-auto custom-scroll pb-mobile-nav md:pb-0" }, sortedClients.length === 0 && /* @__PURE__ */ React.createElement("p", { className: "p-4 text-center text-sm text-slate-400" }, "No hay clientes."), sortedClients.map((client) => {
+    /* @__PURE__ */ React.createElement("div", { className: "chat-list-scroll custom-scroll flex-1 min-h-0 overflow-y-auto pb-mobile-nav md:pb-0" }, sortedClients.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "chat-empty-state" }, /* @__PURE__ */ React.createElement("span", { className: "chat-empty-icon" }, /* @__PURE__ */ React.createElement(Icon, { name: "Search", size: 21 })), /* @__PURE__ */ React.createElement("p", null, "No encontramos conversaciones"), /* @__PURE__ */ React.createElement("span", null, "Prueba con otro nombre de cliente.")), sortedClients.map((client) => {
       const unread = chatUnread.byClient?.[client.id] || 0;
       const last = lastMsgByClient[client.id];
       const isActive = activeClient?.id === client.id;
@@ -8912,44 +8949,57 @@ var ClientChatView = ({
         {
           key: client.id,
           onClick: () => onSelectClient(client),
-          className: `flex w-full items-center gap-3 border-b border-slate-50 px-3 py-2.5 text-left transition-colors dark:border-white/5 ${isActive ? "bg-blue-50 dark:bg-blue-500/10" : "hover:bg-slate-50 dark:hover:bg-white/5"}`
+          "aria-current": isActive ? "page" : void 0,
+          className: `chat-list-item flex w-full items-center gap-3 text-left ${isActive ? "is-active" : ""}`
         },
         client.photo ? /* @__PURE__ */ React.createElement(
           "img",
           {
             src: client.photo,
             alt: client.name,
-            className: "h-9 w-9 shrink-0 rounded-lg object-cover"
+            className: "chat-list-avatar shrink-0 object-cover"
           }
         ) : /* @__PURE__ */ React.createElement(
           "div",
           {
-            className: "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-black text-white",
+            className: "chat-list-avatar flex shrink-0 items-center justify-center text-xs font-black text-white",
             style: { backgroundColor: chatAvatarColor(client.name || client.id) }
           },
           (client.name || "C").slice(0, 2).toUpperCase()
         ),
-        /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement(
+        /* @__PURE__ */ React.createElement("div", { className: "chat-list-copy min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
           "p",
           {
-            className: `truncate text-sm ${unread > 0 ? "font-black" : "font-bold"} ${isActive ? "text-blue-700 dark:text-blue-300" : "text-slate-700 dark:text-slate-200"}`
+            className: `chat-contact-name truncate ${unread > 0 ? "is-unread" : ""}`
           },
           client.name || "Cliente"
-        ), /* @__PURE__ */ React.createElement("p", { className: "truncate text-xs text-slate-400" }, last ? `${last.authorName ? `${last.authorName}: ` : ""}${previewText(last)}` : "Sin mensajes")),
-        unread > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-1 shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-black text-white" }, unread)
+        ), last?.createdAt && /* @__PURE__ */ React.createElement(
+          "span",
+          {
+            className: `chat-list-time ${unread > 0 ? "is-unread" : ""}`
+          },
+          chatShortTime(last.createdAt)
+        )), /* @__PURE__ */ React.createElement("div", { className: "mt-0.5 flex items-center gap-2" }, last?.sticker && /* @__PURE__ */ React.createElement(Icon, { name: "Sticker", size: 14, className: "shrink-0" }), /* @__PURE__ */ React.createElement(
+          "p",
+          {
+            className: `chat-contact-preview truncate ${unread > 0 ? "is-unread" : ""}`
+          },
+          last ? last.sticker ? "Sticker" : `${last.authorName ? `${last.authorName}: ` : ""}${previewText(last)}` : "Sin mensajes todav\xEDa"
+        ))),
+        unread > 0 && /* @__PURE__ */ React.createElement("span", { className: "chat-unread-badge ml-1 shrink-0" }, unread)
       );
     }))
   ), /* @__PURE__ */ React.createElement(
     "section",
     {
-      className: `${activeClient ? "flex" : "hidden md:flex"} min-h-0 min-w-0 flex-1 flex-col`
+      className: `chat-conversation-pane ${activeClient ? "flex" : "hidden md:flex"} min-h-0 min-w-0 flex-1 flex-col`
     },
-    !activeClient ? /* @__PURE__ */ React.createElement("div", { className: "flex flex-1 flex-col items-center justify-center p-8 text-center" }, /* @__PURE__ */ React.createElement(Icon, { name: "MessageSquare", size: 40, className: "mb-3 text-slate-300" }), /* @__PURE__ */ React.createElement("p", { className: "text-sm font-semibold text-slate-500 dark:text-slate-400" }, "Elige un cliente para ver la conversaci\xF3n")) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "flex shrink-0 items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
+    !activeClient ? /* @__PURE__ */ React.createElement("div", { className: "chat-welcome flex flex-1 flex-col items-center justify-center p-8 text-center" }, /* @__PURE__ */ React.createElement("span", { className: "chat-welcome-icon" }, /* @__PURE__ */ React.createElement(Icon, { name: "MessageSquare", size: 32 })), /* @__PURE__ */ React.createElement("h3", null, "Tu centro de conversaciones"), /* @__PURE__ */ React.createElement("p", null, "Selecciona un cliente para revisar mensajes, archivos, llamadas y tareas enlazadas.")) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "chat-conversation-header flex shrink-0 items-center gap-3" }, /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => onSelectClient(null),
         "aria-label": "Volver a la lista",
-        className: "md:hidden text-slate-500 hover:text-slate-700"
+        className: "chat-header-button md:hidden"
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "ChevronLeft", size: 20 })
     ), activeClient.photo ? /* @__PURE__ */ React.createElement(
@@ -8957,16 +9007,16 @@ var ClientChatView = ({
       {
         src: activeClient.photo,
         alt: activeClient.name,
-        className: "h-9 w-9 rounded-lg object-cover"
+        className: "chat-header-avatar object-cover"
       }
     ) : /* @__PURE__ */ React.createElement(
       "div",
       {
-        className: "flex h-9 w-9 items-center justify-center rounded-lg text-xs font-black text-white",
+        className: "chat-header-avatar flex items-center justify-center text-xs font-black text-white",
         style: { backgroundColor: chatAvatarColor(activeClient.name || activeClient.id) }
       },
       (activeClient.name || "C").slice(0, 2).toUpperCase()
-    ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-black text-slate-700 dark:text-slate-200" }, activeClient.name || "Cliente"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-400" }, messages.length, " mensaje", messages.length === 1 ? "" : "s")), /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "chat-header-name truncate" }, activeClient.name || "Cliente"), /* @__PURE__ */ React.createElement("p", { className: "chat-header-status" }, messages.length, " mensaje", messages.length === 1 ? "" : "s", " en el historial")), /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => {
@@ -8974,11 +9024,11 @@ var ClientChatView = ({
           setCallSearch("");
           setCallPicker({ mode: "start" });
         },
-        className: "ml-auto flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-emerald-700"
+        className: "chat-call-button flex shrink-0 items-center gap-2"
       },
-      /* @__PURE__ */ React.createElement(Icon, { name: "VideoCamera", size: 15 }),
-      " Llamar"
-    )), pinnedMessages.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "shrink-0 space-y-1 border-b border-slate-100 bg-amber-50/60 px-4 py-2 dark:border-white/10 dark:bg-amber-500/5" }, pinnedMessages.slice(-3).map((pinned) => /* @__PURE__ */ React.createElement("div", { key: pinned.id, className: "flex items-center gap-2 text-xs" }, /* @__PURE__ */ React.createElement(
+      /* @__PURE__ */ React.createElement(Icon, { name: "VideoCamera", size: 18 }),
+      /* @__PURE__ */ React.createElement("span", { className: "hidden sm:inline" }, "Nueva llamada")
+    )), pinnedMessages.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "chat-pinned-bar shrink-0 space-y-1" }, pinnedMessages.slice(-3).map((pinned) => /* @__PURE__ */ React.createElement("div", { key: pinned.id, className: "flex items-center gap-2 text-xs" }, /* @__PURE__ */ React.createElement(
       Icon,
       {
         name: "Pin",
@@ -8997,80 +9047,75 @@ var ClientChatView = ({
       "div",
       {
         ref: scrollRef,
-        className: "flex-1 min-h-0 overflow-y-auto py-3 custom-scroll bg-white dark:bg-[#1a1d21]"
+        className: "chat-thread custom-scroll flex-1 min-h-0 overflow-y-auto py-4"
       },
-      messages.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-8 text-center" }, /* @__PURE__ */ React.createElement(
-        Icon,
-        {
-          name: "MessageSquare",
-          size: 22,
-          className: "mx-auto mb-2 text-slate-300"
-        }
-      ), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-400" }, "S\xE9 el primero en escribir sobre este cliente.")),
+      messages.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "chat-thread-empty" }, /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement(Icon, { name: "MessageSquare", size: 24 })), /* @__PURE__ */ React.createElement("h3", null, "Comienza la conversaci\xF3n"), /* @__PURE__ */ React.createElement("p", null, "Los mensajes y archivos de este cliente aparecer\xE1n aqu\xED.")),
       messages.map((message, index) => {
         const mine = myId && String(message.authorId || "") === myId;
         const prev = messages[index - 1];
         const grouped = prev && String(prev.authorId || "") === String(message.authorId || "") && (prev.authorName || "") === (message.authorName || "") && message.createdAt && prev.createdAt && new Date(message.createdAt) - new Date(prev.createdAt) < 5 * 60 * 1e3;
         const atts = fullMap[message.id] || message.attachments || [];
         const stickerOnly = message.sticker && !message.deleted && !message.text && atts.length === 0 && !message.call?.roomId;
-        return /* @__PURE__ */ React.createElement(
+        const showDaySeparator = chatDayKey(message.createdAt) !== chatDayKey(prev?.createdAt);
+        return /* @__PURE__ */ React.createElement(React.Fragment, { key: message.id }, showDaySeparator && /* @__PURE__ */ React.createElement("div", { className: "chat-day-separator" }, /* @__PURE__ */ React.createElement("span", null, chatDayLabel(message.createdAt))), /* @__PURE__ */ React.createElement(
           "div",
           {
-            key: message.id,
-            className: `group flex px-4 ${grouped ? "mt-1" : "mt-4"} ${mine ? "justify-end" : "justify-start"}`
+            className: `chat-message-row group flex px-4 ${grouped ? "is-grouped" : ""} ${mine ? "is-mine justify-end" : "justify-start"}`
           },
-          !mine && /* @__PURE__ */ React.createElement("div", { className: "mr-2 w-8 shrink-0 self-end" }, !grouped && /* @__PURE__ */ React.createElement(
+          !mine && /* @__PURE__ */ React.createElement("div", { className: "chat-message-avatar-slot mr-2 w-8 shrink-0 self-end" }, !grouped && /* @__PURE__ */ React.createElement(
             "div",
             {
-              className: "flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-black text-white",
+              className: "chat-message-avatar flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-black text-white",
               style: { backgroundColor: chatAvatarColor(message.authorId || message.authorName) }
             },
             (message.authorName || "U").slice(0, 2).toUpperCase()
           )),
-          /* @__PURE__ */ React.createElement("div", { className: "relative min-w-0 max-w-[78%]" }, !mine && !grouped && /* @__PURE__ */ React.createElement("p", { className: "mb-0.5 px-1 text-[11px] font-bold text-slate-500 dark:text-slate-400" }, message.authorName || "Usuario"), /* @__PURE__ */ React.createElement(
+          /* @__PURE__ */ React.createElement("div", { className: "chat-message-stack relative min-w-0 max-w-[78%]" }, !mine && !grouped && /* @__PURE__ */ React.createElement("p", { className: "chat-message-author mb-1 px-1" }, message.authorName || "Usuario"), /* @__PURE__ */ React.createElement(
             "div",
             {
-              className: `relative ${stickerOnly ? "px-0 py-0" : `rounded-2xl px-3 py-2 ${mine ? "rounded-br-sm bg-emerald-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}`
+              className: `chat-bubble relative ${mine ? "is-mine" : "is-incoming"} ${stickerOnly ? "is-sticker" : ""}`
             },
             !message.deleted && /* @__PURE__ */ React.createElement(
               "button",
               {
                 onClick: () => setMenuFor(menuFor === message.id ? null : message.id),
                 "aria-label": "Opciones del mensaje",
-                className: `absolute right-1 top-1 z-30 flex h-6 w-6 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100 ${mine ? "text-white/80 hover:bg-black/20" : "text-slate-400 hover:bg-black/5 dark:hover:bg-white/10"}`
+                "aria-expanded": menuFor === message.id,
+                className: "chat-message-options absolute right-0 top-0 z-30 flex items-center justify-center"
               },
               /* @__PURE__ */ React.createElement(Icon, { name: "ChevronDown", size: 14 })
             ),
             reactionPickerFor === message.id && /* @__PURE__ */ React.createElement(
               "div",
               {
-                className: `absolute bottom-full z-40 mb-2 flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-2xl dark:border-slate-600 dark:bg-slate-800 ${mine ? "right-0" : "left-0"}`
+                className: `chat-reaction-picker absolute bottom-full z-40 mb-2 flex items-center gap-1 ${mine ? "right-0" : "left-0"}`
               },
-              CHAT_REACTION_EMOJIS.map((emoji) => /* @__PURE__ */ React.createElement(
+              CHAT_REACTIONS.map((reaction) => /* @__PURE__ */ React.createElement(
                 "button",
                 {
-                  key: emoji,
+                  key: reaction.key,
                   onMouseDown: (event) => {
                     event.preventDefault();
-                    if (onReact) onReact(message, emoji);
+                    if (onReact) onReact(message, reaction.key);
                     setReactionPickerFor(null);
                   },
-                  className: "flex h-9 w-9 items-center justify-center rounded-full text-xl leading-none transition-transform hover:scale-125 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  "aria-label": reaction.label,
+                  title: reaction.label,
+                  className: "chat-reaction-option flex items-center justify-center"
                 },
-                emoji
+                /* @__PURE__ */ React.createElement(Icon, { name: reaction.icon, size: 18 })
               ))
             ),
             menuFor === message.id && /* @__PURE__ */ React.createElement(
               "div",
               {
-                className: `chat-action-menu absolute bottom-full z-50 mb-2 w-52 rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 text-slate-700 shadow-2xl backdrop-blur dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-100 ${mine ? "right-0" : "left-0"}`
+                className: `chat-action-menu absolute bottom-full z-50 mb-2 w-52 p-1.5 ${mine ? "right-0" : "left-0"}`
               },
               [
                 {
                   key: "reply",
                   label: "Responder",
                   icon: "Reply",
-                  color: "#3b82f6",
                   show: true,
                   on: () => {
                     setMenuFor(null);
@@ -9081,7 +9126,6 @@ var ClientChatView = ({
                   key: "react",
                   label: "Reaccionar",
                   icon: "Smile",
-                  color: "#f59e0b",
                   show: true,
                   on: () => {
                     setMenuFor(null);
@@ -9092,7 +9136,6 @@ var ClientChatView = ({
                   key: "forward",
                   label: "Reenviar",
                   icon: "Send",
-                  color: "#6366f1",
                   show: true,
                   on: () => {
                     setMenuFor(null);
@@ -9104,7 +9147,6 @@ var ClientChatView = ({
                   key: "copy",
                   label: "Copiar",
                   icon: "ClipboardList",
-                  color: "#0ea5e9",
                   show: Boolean(message.text),
                   on: () => {
                     if (navigator.clipboard) {
@@ -9117,7 +9159,6 @@ var ClientChatView = ({
                   key: "pin",
                   label: pinnedIds.has(String(message.id)) ? "Desfijar" : "Fijar",
                   icon: "Pin",
-                  color: "#10b981",
                   show: true,
                   on: () => {
                     setMenuFor(null);
@@ -9132,13 +9173,12 @@ var ClientChatView = ({
                     event.preventDefault();
                     item.on();
                   },
-                  className: "flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 dark:hover:bg-white/5"
+                  className: "chat-action-item flex w-full items-center gap-2.5 px-2 text-sm font-medium"
                 },
                 /* @__PURE__ */ React.createElement(
                   "span",
                   {
-                    className: "flex h-7 w-7 items-center justify-center rounded-lg",
-                    style: { backgroundColor: `${item.color}1f`, color: item.color }
+                    className: `chat-action-icon is-${item.key} flex h-8 w-8 items-center justify-center`
                   },
                   /* @__PURE__ */ React.createElement(Icon, { name: item.icon, size: 15 })
                 ),
@@ -9152,16 +9192,9 @@ var ClientChatView = ({
                     setMenuFor(null);
                     setDeleteTarget(message);
                   },
-                  className: "flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                  className: "chat-action-item is-danger flex w-full items-center gap-2.5 px-2 text-sm font-medium"
                 },
-                /* @__PURE__ */ React.createElement(
-                  "span",
-                  {
-                    className: "flex h-7 w-7 items-center justify-center rounded-lg",
-                    style: { backgroundColor: "#ef44441f", color: "#ef4444" }
-                  },
-                  /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 15 })
-                ),
+                /* @__PURE__ */ React.createElement("span", { className: "chat-action-icon is-delete flex h-8 w-8 items-center justify-center" }, /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 15 })),
                 "Eliminar"
               ))
             ),
@@ -9185,12 +9218,12 @@ var ClientChatView = ({
                 className: `mb-1 rounded-md border-l-2 px-2 py-1 text-xs ${mine ? "border-white/60 bg-black/15" : "border-blue-400 bg-black/5 dark:bg-white/5"}`
               },
               /* @__PURE__ */ React.createElement("p", { className: "font-bold opacity-80" }, message.replyTo.authorName || "Mensaje"),
-              /* @__PURE__ */ React.createElement("p", { className: "truncate opacity-70" }, message.replyTo.text)
+              /* @__PURE__ */ React.createElement("p", { className: "truncate opacity-70" }, message.replyTo.sticker ? "Sticker" : message.replyTo.text)
             ), message.sticker && renderSticker(
               message.sticker,
-              stickerOnly ? 128 : 96,
-              "drop-shadow-sm"
-            ), message.text && !message.call && /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words pr-5 text-sm leading-relaxed" }, renderChatText(message.text, mine)), atts.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap gap-2" }, atts.map((att) => renderAttachment(att))), message.taskRef?.taskId && /* @__PURE__ */ React.createElement(
+              stickerOnly ? 144 : 104,
+              "chat-sticker-asset"
+            ), message.text && !message.call && /* @__PURE__ */ React.createElement("p", { className: "chat-message-text whitespace-pre-wrap break-words pr-6" }, renderChatText(message.text, mine)), atts.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap gap-2" }, atts.map((att) => renderAttachment(att))), message.taskRef?.taskId && /* @__PURE__ */ React.createElement(
               "button",
               {
                 onClick: () => onOpenTask(message.taskRef),
@@ -9209,7 +9242,7 @@ var ClientChatView = ({
             ), message.call?.roomId && (message.call.ended ? /* @__PURE__ */ React.createElement(
               "div",
               {
-                className: `mt-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2 ${mine ? "border-white/20 bg-black/10" : "border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-slate-700/40"}`
+                className: "chat-call-card is-ended mt-1.5 flex w-full items-center gap-2"
               },
               /* @__PURE__ */ React.createElement(
                 "span",
@@ -9233,7 +9266,7 @@ var ClientChatView = ({
                   messageId: message.id,
                   isHost: !!myId && String(message.authorId || "") === myId
                 }),
-                className: `mt-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left ${mine ? "border-white/30 bg-black/10" : "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10"}`
+                className: "chat-call-card is-live mt-1.5 flex w-full items-center gap-2 text-left"
               },
               /* @__PURE__ */ React.createElement(
                 "span",
@@ -9259,30 +9292,35 @@ var ClientChatView = ({
             /* @__PURE__ */ React.createElement(
               "span",
               {
-                className: `mt-0.5 block text-right text-[10px] ${stickerOnly ? "text-slate-400" : mine ? "text-white/70" : "text-slate-400"}`
+                className: `chat-message-time ${stickerOnly ? "is-sticker" : ""}`
               },
-              chatShortTime(message.createdAt)
+              chatShortTime(message.createdAt),
+              mine && /* @__PURE__ */ React.createElement(Icon, { name: "Check", size: 11, "aria-label": "Enviado" })
             )
           ), reactionsByMessage[message.id] && Object.keys(reactionsByMessage[message.id]).length > 0 && /* @__PURE__ */ React.createElement(
             "div",
             {
-              className: `mt-1 flex flex-wrap gap-1 ${mine ? "justify-end" : ""}`
+              className: `chat-reaction-list mt-1 flex flex-wrap gap-1 ${mine ? "justify-end" : ""}`
             },
             Object.entries(reactionsByMessage[message.id]).map(
-              ([emoji, info]) => /* @__PURE__ */ React.createElement(
-                "button",
-                {
-                  key: emoji,
-                  onClick: () => onReact && onReact(message, emoji),
-                  title: info.names.join(", "),
-                  className: `flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] ${info.mine ? "border-blue-300 bg-blue-50 dark:border-blue-500/40 dark:bg-blue-500/10" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"}`
-                },
-                /* @__PURE__ */ React.createElement("span", null, emoji),
-                /* @__PURE__ */ React.createElement("span", { className: "font-semibold text-slate-600 dark:text-slate-300" }, info.count)
-              )
+              ([reactionKey, info]) => {
+                const reaction = getChatReactionDefinition(reactionKey);
+                return /* @__PURE__ */ React.createElement(
+                  "button",
+                  {
+                    key: reactionKey,
+                    onClick: () => onReact && onReact(message, reactionKey),
+                    "aria-label": `${reaction.label}: ${info.count}`,
+                    title: info.names.join(", "),
+                    className: `chat-reaction-chip flex items-center gap-1 ${info.mine ? "is-mine" : ""}`
+                  },
+                  /* @__PURE__ */ React.createElement(Icon, { name: reaction.icon, size: 13 }),
+                  /* @__PURE__ */ React.createElement("span", null, info.count)
+                );
+              }
             )
           ))
-        );
+        ));
       }),
       (menuFor || reactionPickerFor) && /* @__PURE__ */ React.createElement(
         "div",
@@ -9294,19 +9332,19 @@ var ClientChatView = ({
           }
         }
       )
-    ), /* @__PURE__ */ React.createElement("div", { className: "shrink-0 border-t border-slate-200 p-3 pb-mobile-nav md:pb-3 dark:border-white/10" }, replyingTo && /* @__PURE__ */ React.createElement("div", { className: "mb-2 flex items-center gap-2 rounded-lg border-l-4 border-blue-500 bg-slate-50 px-3 py-2 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { className: "chat-composer-shell shrink-0 pb-mobile-nav md:pb-3" }, replyingTo && /* @__PURE__ */ React.createElement("div", { className: "chat-reply-bar mb-2 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
       Icon,
       {
         name: "Reply",
         size: 14,
-        className: "shrink-0 text-blue-500"
+        className: "shrink-0"
       }
-    ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-bold text-blue-600 dark:text-blue-400" }, "Respondiendo a ", replyingTo.authorName || "mensaje"), /* @__PURE__ */ React.createElement("p", { className: "truncate text-xs text-slate-500 dark:text-slate-400" }, replyingTo.text || (Array.isArray(replyingTo.attachments) && replyingTo.attachments.length ? "Adjunto" : ""))), /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "chat-reply-title" }, "Respondiendo a ", replyingTo.authorName || "mensaje"), /* @__PURE__ */ React.createElement("p", { className: "chat-reply-preview truncate" }, replyingTo.text || (replyingTo.sticker ? "Sticker" : "") || (Array.isArray(replyingTo.attachments) && replyingTo.attachments.length ? "Adjunto" : ""))), /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => setReplyingTo(null),
         "aria-label": "Cancelar respuesta",
-        className: "shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+        className: "chat-composer-button shrink-0"
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 14 })
     )), (taskRef || pending.length > 0) && /* @__PURE__ */ React.createElement("div", { className: "mb-2 flex flex-wrap items-center gap-2" }, taskRef && /* @__PURE__ */ React.createElement(
@@ -9349,7 +9387,7 @@ var ClientChatView = ({
         className: "absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-white"
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 11 })
-    )))), /* @__PURE__ */ React.createElement("div", { className: "relative rounded-xl border border-slate-300 bg-white focus-within:border-blue-500 dark:border-white/15 dark:bg-[#222529]" }, mentionOpen && mentionSuggestions.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full left-0 z-40 mb-1 max-h-72 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between px-3 pb-1 pt-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Mencionar"), /* @__PURE__ */ React.createElement(
+    )))), /* @__PURE__ */ React.createElement("div", { className: "chat-compose-box relative" }, mentionOpen && mentionSuggestions.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "chat-picker absolute bottom-full left-0 z-40 mb-2 max-h-72 w-72 overflow-y-auto py-1 custom-scroll" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between px-3 pb-1 pt-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Mencionar"), /* @__PURE__ */ React.createElement(
       "button",
       {
         onMouseDown: (event) => {
@@ -9372,7 +9410,7 @@ var ClientChatView = ({
       },
       /* @__PURE__ */ React.createElement("div", { className: "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white" }, (person.name || person.email || "?").slice(0, 2).toUpperCase()),
       /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1 text-left" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-semibold text-slate-700 dark:text-slate-200" }, person.name || person.email), person.email && /* @__PURE__ */ React.createElement("p", { className: "truncate text-[11px] text-slate-400" }, person.email))
-    ))), taskPickerOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full left-0 z-30 mb-1 max-h-64 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between px-3 pb-1 pt-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Enlazar tarea del cliente"), /* @__PURE__ */ React.createElement(
+    ))), taskPickerOpen && /* @__PURE__ */ React.createElement("div", { className: "chat-picker absolute bottom-full left-0 z-30 mb-2 max-h-64 w-72 overflow-y-auto py-1 custom-scroll" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between px-3 pb-1 pt-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Enlazar tarea del cliente"), /* @__PURE__ */ React.createElement(
       "button",
       {
         onMouseDown: (event) => {
@@ -9427,9 +9465,10 @@ var ClientChatView = ({
         },
         placeholder: `Mensaje para ${activeClient.name || "el cliente"}`,
         rows: text ? 2 : 1,
-        className: "w-full resize-none bg-transparent px-3.5 pt-2.5 text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200"
+        "aria-label": `Mensaje para ${activeClient.name || "el cliente"}`,
+        className: "chat-compose-input w-full resize-none bg-transparent"
       }
-    ), /* @__PURE__ */ React.createElement("div", { className: "relative flex items-center gap-1 px-2 pb-2" }, /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { className: "chat-compose-actions relative flex items-center gap-2 px-2 pb-2" }, /* @__PURE__ */ React.createElement(
       "input",
       {
         ref: fileInputRef,
@@ -9464,7 +9503,7 @@ var ClientChatView = ({
         },
         "aria-label": "Adjuntar archivo",
         disabled: uploading,
-        className: `flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:opacity-50 ${attachMenuOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`
+        className: `chat-composer-button flex items-center justify-center disabled:opacity-50 ${attachMenuOpen ? "is-active" : ""}`
       },
       /* @__PURE__ */ React.createElement(
         Icon,
@@ -9474,7 +9513,7 @@ var ClientChatView = ({
           className: uploading ? "animate-spin" : ""
         }
       )
-    ), attachMenuOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full left-0 z-30 mb-1 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800" }, /* @__PURE__ */ React.createElement(
+    ), attachMenuOpen && /* @__PURE__ */ React.createElement("div", { className: "chat-picker absolute bottom-full left-0 z-30 mb-2 w-52 py-1" }, /* @__PURE__ */ React.createElement(
       "button",
       {
         onMouseDown: (event) => {
@@ -9525,7 +9564,7 @@ var ClientChatView = ({
       {
         onClick: startRecording,
         "aria-label": "Grabar nota de voz",
-        className: "flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
+        className: "chat-composer-button flex items-center justify-center"
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "Microphone", size: 18 })
     ), /* @__PURE__ */ React.createElement(
@@ -9537,7 +9576,7 @@ var ClientChatView = ({
           setAttachMenuOpen(false);
         },
         "aria-label": "Enlazar tarea",
-        className: `flex h-8 w-8 items-center justify-center rounded-md transition-colors ${taskRef || taskPickerOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`
+        className: `chat-composer-button flex items-center justify-center ${taskRef || taskPickerOpen ? "is-active" : ""}`
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "ClipboardList", size: 17 })
     ), /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
@@ -9550,10 +9589,10 @@ var ClientChatView = ({
           setAttachMenuOpen(false);
         },
         "aria-label": "Stickers",
-        className: `flex h-8 w-8 items-center justify-center rounded-md transition-colors ${stickerOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`
+        className: `chat-composer-button flex items-center justify-center ${stickerOpen ? "is-active" : ""}`
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "Sticker", size: 18 })
-    ), stickerOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full right-0 z-40 mb-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-slate-700 dark:bg-slate-800 sm:left-0 sm:right-auto" }, /* @__PURE__ */ React.createElement(
+    ), stickerOpen && /* @__PURE__ */ React.createElement("div", { className: "chat-picker chat-sticker-picker absolute bottom-full right-0 z-40 mb-2 w-80 p-3 sm:left-0 sm:right-auto" }, /* @__PURE__ */ React.createElement(
       "input",
       {
         ref: stickerInputRef,
@@ -9562,7 +9601,7 @@ var ClientChatView = ({
         className: "hidden",
         onChange: (event) => handleStickerUpload(event.target.files)
       }
-    ), /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between px-1.5 pb-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Stickers"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between border-b border-slate-200/70 px-1 pb-2 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-800 dark:text-slate-100" }, "Stickers del equipo"), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] text-slate-500 dark:text-slate-400" }, "Selecciona uno para enviarlo")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement(
       "button",
       {
         onMouseDown: (event) => {
@@ -9571,7 +9610,7 @@ var ClientChatView = ({
             stickerInputRef.current.click();
         },
         disabled: uploadingSticker,
-        className: "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold text-blue-600 hover:bg-blue-50 disabled:opacity-50 dark:text-blue-400 dark:hover:bg-blue-500/10"
+        className: "chat-picker-action flex items-center gap-1.5 px-2 text-xs font-bold disabled:opacity-50"
       },
       /* @__PURE__ */ React.createElement(
         Icon,
@@ -9590,10 +9629,10 @@ var ClientChatView = ({
           setStickerOpen(false);
         },
         "aria-label": "Cerrar",
-        className: "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+        className: "chat-composer-button"
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 13 })
-    ))), /* @__PURE__ */ React.createElement("div", { className: "max-h-64 overflow-y-auto custom-scroll" }, customStickers.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-4 gap-1 pb-1" }, customStickers.map((sticker) => /* @__PURE__ */ React.createElement(
+    ))), /* @__PURE__ */ React.createElement("div", { className: "mt-2 max-h-72 overflow-y-auto custom-scroll" }, customStickers.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-4 gap-2 pb-1" }, customStickers.map((sticker) => /* @__PURE__ */ React.createElement(
       "div",
       {
         key: sticker.id,
@@ -9608,9 +9647,9 @@ var ClientChatView = ({
           },
           title: sticker.name,
           disabled: submitting,
-          className: "flex w-full items-center justify-center rounded-xl p-1.5 transition-transform hover:scale-110 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-white/5"
+          className: "chat-sticker-tile flex w-full items-center justify-center disabled:opacity-50"
         },
-        renderSticker(sticker.id, 56)
+        renderSticker(sticker.id, 60)
       ),
       (canModerate || String(sticker.authorId || "") === myId) && /* @__PURE__ */ React.createElement(
         "button",
@@ -9623,7 +9662,7 @@ var ClientChatView = ({
               onDeleteSticker(sticker.id);
           },
           "aria-label": "Eliminar sticker",
-          className: "absolute -right-0.5 -top-0.5 hidden h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white group-hover/st:flex"
+          className: "chat-sticker-delete absolute -right-1 -top-1 items-center justify-center"
         },
         /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 9 })
       )
@@ -9640,13 +9679,13 @@ var ClientChatView = ({
       /* @__PURE__ */ React.createElement(Icon, { name: "Sticker", size: 28 }),
       /* @__PURE__ */ React.createElement("span", { className: "text-xs font-semibold" }, "A\xFAn no hay stickers"),
       /* @__PURE__ */ React.createElement("span", { className: "text-[11px]" }, "Pulsa para subir el primero (webp, gif o png)")
-    )))), /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-[10px] text-slate-400 hidden sm:block" }, "Enter para enviar \xB7 Shift+Enter salto de l\xEDnea"), /* @__PURE__ */ React.createElement(
+    )))), /* @__PURE__ */ React.createElement("span", { className: "chat-compose-hint ml-auto hidden sm:block" }, "Enter para enviar \xB7 Shift+Enter salto de l\xEDnea"), /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: handleSubmit,
         disabled: submitting || !text.trim() && pending.length === 0,
         "aria-label": "Enviar mensaje",
-        className: "ml-2 flex h-8 w-8 items-center justify-center rounded-md bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
+        className: "chat-send-button ml-auto flex items-center justify-center disabled:opacity-40"
       },
       /* @__PURE__ */ React.createElement(
         Icon,

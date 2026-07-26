@@ -81,6 +81,9 @@ import {
   ArrowBendUpLeft as ReplyIcon,
   Phone,
   VideoCamera,
+  ThumbsUp,
+  Heart,
+  Eye,
 } from "@phosphor-icons/react";
 import {
   signInAnonymously,
@@ -226,6 +229,9 @@ const IconsMap = {
   Reply: ReplyIcon,
   Phone,
   VideoCamera,
+  ThumbsUp,
+  Heart,
+  Eye,
 };
 
 const Icon = ({ name, size = 18, className = "", ...props }) => {
@@ -4678,6 +4684,7 @@ function App() {
             id: replyTo.id || "",
             authorName: replyTo.authorName || "",
             text: (replyTo.text || "").slice(0, 140),
+            sticker: replyTo.sticker ? String(replyTo.sticker) : null,
           }
         : null,
       taskRef: taskRef
@@ -5028,7 +5035,7 @@ function App() {
         const client = clients.find((item) => item.id === message.clientId);
         try {
           const notif = new Notification(
-            `💬 Chat · ${client?.name || "Cliente"}`,
+            `Chat · ${client?.name || "Cliente"}`,
             {
               body: `${message.authorName || "Alguien"}: ${message.text}`,
               tag: `chat-${message.id}`,
@@ -10271,7 +10278,7 @@ const ManagementRoomView = ({
               </p>
             ) : (
               <p className="text-[10px] font-bold text-emerald-500">
-                Todos con email ✓
+                Todos con email
               </p>
             )}
           </div>
@@ -10915,8 +10922,8 @@ const UsersAccessView = ({
                       >
                         <Icon name="Edit" size={18} />
                       </button>
+                      </div>
                     </div>
-                  </div>
                 );
               })
             )}
@@ -11449,7 +11456,18 @@ const renderChatText = (text = "", onColored = false) =>
       ),
     );
 
-const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "✅"];
+const CHAT_REACTIONS = [
+  { key: "like", label: "Me gusta", icon: "ThumbsUp" },
+  { key: "important", label: "Importante", icon: "Heart" },
+  { key: "seen", label: "Visto", icon: "Eye" },
+  { key: "approved", label: "Aprobado", icon: "CheckCircle2" },
+];
+const getChatReactionDefinition = (key) =>
+  CHAT_REACTIONS.find((reaction) => reaction.key === key) || {
+    key,
+    label: "Reacción",
+    icon: "Sparkles",
+  };
 // Stickers estilo meme, dibujados como SVG propios (sin imágenes con copyright,
 // sin dependencias externas, funcionan offline). Se guarda solo el `id` en el
 // mensaje y se renderiza desde este set.
@@ -11600,8 +11618,32 @@ const chatShortTime = (iso) => {
     return "";
   }
 };
+const chatDayKey = (iso) => {
+  try {
+    return new Date(iso).toDateString();
+  } catch {
+    return "";
+  }
+};
+const chatDayLabel = (iso) => {
+  try {
+    const date = new Date(iso);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (date.toDateString() === today.toDateString()) return "Hoy";
+    if (date.toDateString() === yesterday.toDateString()) return "Ayer";
+    return date.toLocaleDateString("es", {
+      day: "numeric",
+      month: "long",
+      year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
+    });
+  } catch {
+    return "";
+  }
+};
 
-// Chat interno por cliente (estilo Slack): lista de clientes + hilo + composer
+// Chat interno por cliente: lista de conversaciones + hilo + composer
 // con @menciones, enlace opcional a una tarea y adjuntos (imágenes/video/PDF).
 const ClientChatView = ({
   clients = [],
@@ -11681,10 +11723,6 @@ const ClientChatView = ({
   const customStickers = [...(stickers || [])].sort((a, b) =>
     (b.createdAt || "") > (a.createdAt || "") ? 1 : -1,
   );
-  const stickerLabel = (id) => {
-    if (customStickerMap[id]) return customStickerMap[id].name || "Sticker";
-    return CHAT_STICKER_MAP[id]?.label || "";
-  };
   const renderSticker = (id, size, className = "") => {
     const custom = customStickerMap[id];
     if (custom?.data) {
@@ -11715,10 +11753,7 @@ const ClientChatView = ({
     if (message.call) return message.call.ended ? "Llamada finalizada" : "Llamada";
     if (message.deleted) return "Mensaje eliminado";
     if (message.text) return message.text;
-    if (message.sticker) {
-      const label = stickerLabel(message.sticker);
-      return label ? `Sticker · ${label}` : "Sticker";
-    }
+    if (message.sticker) return "Sticker";
     const count = Array.isArray(message.attachments)
       ? message.attachments.length
       : 0;
@@ -12041,6 +12076,7 @@ const ClientChatView = ({
               id: replyingTo.id,
               authorName: replyingTo.authorName,
               text: replyingTo.text,
+              sticker: replyingTo.sticker || null,
             }
           : null,
       });
@@ -12068,6 +12104,7 @@ const ClientChatView = ({
               id: replyingTo.id,
               authorName: replyingTo.authorName,
               text: replyingTo.text,
+              sticker: replyingTo.sticker || null,
             }
           : null,
       });
@@ -12167,41 +12204,53 @@ const ClientChatView = ({
   };
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden bg-white dark:bg-[#1a1d21]">
+    <div className="chat-shell flex h-full min-h-0 overflow-hidden">
       {/* Lista de clientes (canales) */}
       <aside
-        className={`${activeClient ? "hidden md:flex" : "flex"} min-h-0 w-full flex-col border-r border-slate-200 dark:border-white/10 md:w-72 lg:w-80 shrink-0`}
+        className={`chat-list-pane ${activeClient ? "hidden md:flex" : "flex"} min-h-0 w-full shrink-0 flex-col md:w-[21rem] lg:w-[23rem]`}
       >
-        <div className="p-3 border-b border-slate-100 dark:border-white/10">
-          <div className="flex items-center gap-2 mb-3">
-            <Icon
-              name="MessageSquare"
-              size={18}
-              className="text-slate-500 dark:text-slate-400"
-            />
-            <h2 className="text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">
-              Chat interno
-            </h2>
+        <div className="chat-list-header">
+          <div className="mb-4 flex items-center gap-3">
+            <span className="chat-section-icon">
+              <Icon name="MessageSquare" size={19} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="chat-list-title">Conversaciones</h2>
+              <p className="chat-list-subtitle">Chat interno del equipo</p>
+            </div>
+            {chatUnread.total > 0 && (
+              <span
+                className="chat-total-unread"
+                aria-label={`${chatUnread.total} mensajes sin leer`}
+              >
+                {chatUnread.total}
+              </span>
+            )}
           </div>
-          <div className="relative">
+          <div className="chat-search relative">
             <Icon
               name="Search"
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              size={16}
+              className="chat-search-icon absolute left-3.5 top-1/2 -translate-y-1/2"
             />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar cliente..."
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              aria-label="Buscar conversación"
+              placeholder="Buscar conversación"
+              className="chat-search-input w-full pl-10 pr-4"
             />
           </div>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scroll pb-mobile-nav md:pb-0">
+        <div className="chat-list-scroll custom-scroll flex-1 min-h-0 overflow-y-auto pb-mobile-nav md:pb-0">
           {sortedClients.length === 0 && (
-            <p className="p-4 text-center text-sm text-slate-400">
-              No hay clientes.
-            </p>
+            <div className="chat-empty-state">
+              <span className="chat-empty-icon">
+                <Icon name="Search" size={21} />
+              </span>
+              <p>No encontramos conversaciones</p>
+              <span>Prueba con otro nombre de cliente.</span>
+            </div>
           )}
           {sortedClients.map((client) => {
             const unread = chatUnread.byClient?.[client.id] || 0;
@@ -12211,36 +12260,55 @@ const ClientChatView = ({
               <button
                 key={client.id}
                 onClick={() => onSelectClient(client)}
-                className={`flex w-full items-center gap-3 border-b border-slate-50 px-3 py-2.5 text-left transition-colors dark:border-white/5 ${isActive ? "bg-blue-50 dark:bg-blue-500/10" : "hover:bg-slate-50 dark:hover:bg-white/5"}`}
+                aria-current={isActive ? "page" : undefined}
+                className={`chat-list-item flex w-full items-center gap-3 text-left ${isActive ? "is-active" : ""}`}
               >
                 {client.photo ? (
                   <img
                     src={client.photo}
                     alt={client.name}
-                    className="h-9 w-9 shrink-0 rounded-lg object-cover"
+                    className="chat-list-avatar shrink-0 object-cover"
                   />
                 ) : (
                   <div
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-black text-white"
+                    className="chat-list-avatar flex shrink-0 items-center justify-center text-xs font-black text-white"
                     style={{ backgroundColor: chatAvatarColor(client.name || client.id) }}
                   >
                     {(client.name || "C").slice(0, 2).toUpperCase()}
                   </div>
                 )}
-                <div className="min-w-0 flex-1">
-                  <p
-                    className={`truncate text-sm ${unread > 0 ? "font-black" : "font-bold"} ${isActive ? "text-blue-700 dark:text-blue-300" : "text-slate-700 dark:text-slate-200"}`}
-                  >
-                    {client.name || "Cliente"}
-                  </p>
-                  <p className="truncate text-xs text-slate-400">
-                    {last
-                      ? `${last.authorName ? `${last.authorName}: ` : ""}${previewText(last)}`
-                      : "Sin mensajes"}
-                  </p>
+                <div className="chat-list-copy min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p
+                      className={`chat-contact-name truncate ${unread > 0 ? "is-unread" : ""}`}
+                    >
+                      {client.name || "Cliente"}
+                    </p>
+                    {last?.createdAt && (
+                      <span
+                        className={`chat-list-time ${unread > 0 ? "is-unread" : ""}`}
+                      >
+                        {chatShortTime(last.createdAt)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    {last?.sticker && (
+                      <Icon name="Sticker" size={14} className="shrink-0" />
+                    )}
+                    <p
+                      className={`chat-contact-preview truncate ${unread > 0 ? "is-unread" : ""}`}
+                    >
+                      {last
+                        ? last.sticker
+                          ? "Sticker"
+                          : `${last.authorName ? `${last.authorName}: ` : ""}${previewText(last)}`
+                        : "Sin mensajes todavía"}
+                    </p>
+                  </div>
                 </div>
                 {unread > 0 && (
-                  <span className="ml-1 shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-black text-white">
+                  <span className="chat-unread-badge ml-1 shrink-0">
                     {unread}
                   </span>
                 )}
@@ -12252,22 +12320,26 @@ const ClientChatView = ({
 
       {/* Hilo del cliente */}
       <section
-        className={`${activeClient ? "flex" : "hidden md:flex"} min-h-0 min-w-0 flex-1 flex-col`}
+        className={`chat-conversation-pane ${activeClient ? "flex" : "hidden md:flex"} min-h-0 min-w-0 flex-1 flex-col`}
       >
         {!activeClient ? (
-          <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
-            <Icon name="MessageSquare" size={40} className="mb-3 text-slate-300" />
-            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
-              Elige un cliente para ver la conversación
+          <div className="chat-welcome flex flex-1 flex-col items-center justify-center p-8 text-center">
+            <span className="chat-welcome-icon">
+              <Icon name="MessageSquare" size={32} />
+            </span>
+            <h3>Tu centro de conversaciones</h3>
+            <p>
+              Selecciona un cliente para revisar mensajes, archivos, llamadas y
+              tareas enlazadas.
             </p>
           </div>
         ) : (
           <>
-            <div className="flex shrink-0 items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-white/10">
+            <div className="chat-conversation-header flex shrink-0 items-center gap-3">
               <button
                 onClick={() => onSelectClient(null)}
                 aria-label="Volver a la lista"
-                className="md:hidden text-slate-500 hover:text-slate-700"
+                className="chat-header-button md:hidden"
               >
                 <Icon name="ChevronLeft" size={20} />
               </button>
@@ -12275,22 +12347,23 @@ const ClientChatView = ({
                 <img
                   src={activeClient.photo}
                   alt={activeClient.name}
-                  className="h-9 w-9 rounded-lg object-cover"
+                  className="chat-header-avatar object-cover"
                 />
               ) : (
                 <div
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-xs font-black text-white"
+                  className="chat-header-avatar flex items-center justify-center text-xs font-black text-white"
                   style={{ backgroundColor: chatAvatarColor(activeClient.name || activeClient.id) }}
                 >
                   {(activeClient.name || "C").slice(0, 2).toUpperCase()}
                 </div>
               )}
-              <div className="min-w-0">
-                <p className="truncate text-sm font-black text-slate-700 dark:text-slate-200">
+              <div className="min-w-0 flex-1">
+                <p className="chat-header-name truncate">
                   {activeClient.name || "Cliente"}
                 </p>
-                <p className="text-xs text-slate-400">
-                  {messages.length} mensaje{messages.length === 1 ? "" : "s"}
+                <p className="chat-header-status">
+                  {messages.length} mensaje{messages.length === 1 ? "" : "s"} en
+                  el historial
                 </p>
               </div>
               <button
@@ -12299,14 +12372,15 @@ const ClientChatView = ({
                   setCallSearch("");
                   setCallPicker({ mode: "start" });
                 }}
-                className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-emerald-700"
+                className="chat-call-button flex shrink-0 items-center gap-2"
               >
-                <Icon name="VideoCamera" size={15} /> Llamar
+                <Icon name="VideoCamera" size={18} />
+                <span className="hidden sm:inline">Nueva llamada</span>
               </button>
             </div>
 
             {pinnedMessages.length > 0 && (
-              <div className="shrink-0 space-y-1 border-b border-slate-100 bg-amber-50/60 px-4 py-2 dark:border-white/10 dark:bg-amber-500/5">
+              <div className="chat-pinned-bar shrink-0 space-y-1">
                 {pinnedMessages.slice(-3).map((pinned) => (
                   <div key={pinned.id} className="flex items-center gap-2 text-xs">
                     <Icon
@@ -12338,17 +12412,16 @@ const ClientChatView = ({
 
             <div
               ref={scrollRef}
-              className="flex-1 min-h-0 overflow-y-auto py-3 custom-scroll bg-white dark:bg-[#1a1d21]"
+              className="chat-thread custom-scroll flex-1 min-h-0 overflow-y-auto py-4"
             >
               {messages.length === 0 && (
-                <div className="mt-8 text-center">
-                  <Icon
-                    name="MessageSquare"
-                    size={22}
-                    className="mx-auto mb-2 text-slate-300"
-                  />
-                  <p className="text-sm text-slate-400">
-                    Sé el primero en escribir sobre este cliente.
+                <div className="chat-thread-empty">
+                  <span>
+                    <Icon name="MessageSquare" size={24} />
+                  </span>
+                  <h3>Comienza la conversación</h3>
+                  <p>
+                    Los mensajes y archivos de este cliente aparecerán aquí.
                   </p>
                 </div>
               )}
@@ -12370,16 +12443,23 @@ const ClientChatView = ({
                   !message.text &&
                   atts.length === 0 &&
                   !message.call?.roomId;
+                const showDaySeparator =
+                  chatDayKey(message.createdAt) !== chatDayKey(prev?.createdAt);
                 return (
-                  <div
-                    key={message.id}
-                    className={`group flex px-4 ${grouped ? "mt-1" : "mt-4"} ${mine ? "justify-end" : "justify-start"}`}
-                  >
+                  <React.Fragment key={message.id}>
+                    {showDaySeparator && (
+                      <div className="chat-day-separator">
+                        <span>{chatDayLabel(message.createdAt)}</span>
+                      </div>
+                    )}
+                    <div
+                      className={`chat-message-row group flex px-4 ${grouped ? "is-grouped" : ""} ${mine ? "is-mine justify-end" : "justify-start"}`}
+                    >
                     {!mine && (
-                      <div className="mr-2 w-8 shrink-0 self-end">
+                      <div className="chat-message-avatar-slot mr-2 w-8 shrink-0 self-end">
                         {!grouped && (
                           <div
-                            className="flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-black text-white"
+                            className="chat-message-avatar flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-black text-white"
                             style={{ backgroundColor: chatAvatarColor(message.authorId || message.authorName) }}
                           >
                             {(message.authorName || "U").slice(0, 2).toUpperCase()}
@@ -12387,18 +12467,14 @@ const ClientChatView = ({
                         )}
                       </div>
                     )}
-                    <div className="relative min-w-0 max-w-[78%]">
+                    <div className="chat-message-stack relative min-w-0 max-w-[78%]">
                       {!mine && !grouped && (
-                        <p className="mb-0.5 px-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                        <p className="chat-message-author mb-1 px-1">
                           {message.authorName || "Usuario"}
                         </p>
                       )}
                       <div
-                        className={`relative ${
-                          stickerOnly
-                            ? "px-0 py-0"
-                            : `rounded-2xl px-3 py-2 ${mine ? "rounded-br-sm bg-emerald-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`
-                        }`}
+                        className={`chat-bubble relative ${mine ? "is-mine" : "is-incoming"} ${stickerOnly ? "is-sticker" : ""}`}
                       >
                         {!message.deleted && (
                           <button
@@ -12406,40 +12482,42 @@ const ClientChatView = ({
                               setMenuFor(menuFor === message.id ? null : message.id)
                             }
                             aria-label="Opciones del mensaje"
-                            className={`absolute right-1 top-1 z-30 flex h-6 w-6 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100 ${mine ? "text-white/80 hover:bg-black/20" : "text-slate-400 hover:bg-black/5 dark:hover:bg-white/10"}`}
+                            aria-expanded={menuFor === message.id}
+                            className="chat-message-options absolute right-0 top-0 z-30 flex items-center justify-center"
                           >
                             <Icon name="ChevronDown" size={14} />
                           </button>
                         )}
                         {reactionPickerFor === message.id && (
                           <div
-                            className={`absolute bottom-full z-40 mb-2 flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-2xl dark:border-slate-600 dark:bg-slate-800 ${mine ? "right-0" : "left-0"}`}
+                            className={`chat-reaction-picker absolute bottom-full z-40 mb-2 flex items-center gap-1 ${mine ? "right-0" : "left-0"}`}
                           >
-                            {CHAT_REACTION_EMOJIS.map((emoji) => (
+                            {CHAT_REACTIONS.map((reaction) => (
                               <button
-                                key={emoji}
+                                key={reaction.key}
                                 onMouseDown={(event) => {
                                   event.preventDefault();
-                                  if (onReact) onReact(message, emoji);
+                                  if (onReact) onReact(message, reaction.key);
                                   setReactionPickerFor(null);
                                 }}
-                                className="flex h-9 w-9 items-center justify-center rounded-full text-xl leading-none transition-transform hover:scale-125 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                aria-label={reaction.label}
+                                title={reaction.label}
+                                className="chat-reaction-option flex items-center justify-center"
                               >
-                                {emoji}
+                                <Icon name={reaction.icon} size={18} />
                               </button>
                             ))}
                           </div>
                         )}
                         {menuFor === message.id && (
                           <div
-                            className={`chat-action-menu absolute bottom-full z-50 mb-2 w-52 rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 text-slate-700 shadow-2xl backdrop-blur dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-100 ${mine ? "right-0" : "left-0"}`}
+                            className={`chat-action-menu absolute bottom-full z-50 mb-2 w-52 p-1.5 ${mine ? "right-0" : "left-0"}`}
                           >
                             {[
                               {
                                 key: "reply",
                                 label: "Responder",
                                 icon: "Reply",
-                                color: "#3b82f6",
                                 show: true,
                                 on: () => {
                                   setMenuFor(null);
@@ -12450,7 +12528,6 @@ const ClientChatView = ({
                                 key: "react",
                                 label: "Reaccionar",
                                 icon: "Smile",
-                                color: "#f59e0b",
                                 show: true,
                                 on: () => {
                                   setMenuFor(null);
@@ -12461,7 +12538,6 @@ const ClientChatView = ({
                                 key: "forward",
                                 label: "Reenviar",
                                 icon: "Send",
-                                color: "#6366f1",
                                 show: true,
                                 on: () => {
                                   setMenuFor(null);
@@ -12473,7 +12549,6 @@ const ClientChatView = ({
                                 key: "copy",
                                 label: "Copiar",
                                 icon: "ClipboardList",
-                                color: "#0ea5e9",
                                 show: Boolean(message.text),
                                 on: () => {
                                   if (navigator.clipboard) {
@@ -12486,7 +12561,6 @@ const ClientChatView = ({
                                 key: "pin",
                                 label: pinnedIds.has(String(message.id)) ? "Desfijar" : "Fijar",
                                 icon: "Pin",
-                                color: "#10b981",
                                 show: true,
                                 on: () => {
                                   setMenuFor(null);
@@ -12502,11 +12576,10 @@ const ClientChatView = ({
                                     event.preventDefault();
                                     item.on();
                                   }}
-                                  className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 dark:hover:bg-white/5"
+                                  className="chat-action-item flex w-full items-center gap-2.5 px-2 text-sm font-medium"
                                 >
                                   <span
-                                    className="flex h-7 w-7 items-center justify-center rounded-lg"
-                                    style={{ backgroundColor: `${item.color}1f`, color: item.color }}
+                                    className={`chat-action-icon is-${item.key} flex h-8 w-8 items-center justify-center`}
                                   >
                                     <Icon name={item.icon} size={15} />
                                   </span>
@@ -12522,12 +12595,9 @@ const ClientChatView = ({
                                     setMenuFor(null);
                                     setDeleteTarget(message);
                                   }}
-                                  className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                                  className="chat-action-item is-danger flex w-full items-center gap-2.5 px-2 text-sm font-medium"
                                 >
-                                  <span
-                                    className="flex h-7 w-7 items-center justify-center rounded-lg"
-                                    style={{ backgroundColor: "#ef44441f", color: "#ef4444" }}
-                                  >
+                                  <span className="chat-action-icon is-delete flex h-8 w-8 items-center justify-center">
                                     <Icon name="Trash2" size={15} />
                                   </span>
                                   Eliminar
@@ -12560,18 +12630,20 @@ const ClientChatView = ({
                                   {message.replyTo.authorName || "Mensaje"}
                                 </p>
                                 <p className="truncate opacity-70">
-                                  {message.replyTo.text}
+                                  {message.replyTo.sticker
+                                    ? "Sticker"
+                                    : message.replyTo.text}
                                 </p>
                               </div>
                             )}
                             {message.sticker &&
                               renderSticker(
                                 message.sticker,
-                                stickerOnly ? 128 : 96,
-                                "drop-shadow-sm",
+                                stickerOnly ? 144 : 104,
+                                "chat-sticker-asset",
                               )}
                             {message.text && !message.call && (
-                              <p className="whitespace-pre-wrap break-words pr-5 text-sm leading-relaxed">
+                              <p className="chat-message-text whitespace-pre-wrap break-words pr-6">
                                 {renderChatText(message.text, mine)}
                               </p>
                             )}
@@ -12602,7 +12674,7 @@ const ClientChatView = ({
                             {message.call?.roomId &&
                               (message.call.ended ? (
                                 <div
-                                  className={`mt-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2 ${mine ? "border-white/20 bg-black/10" : "border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-slate-700/40"}`}
+                                  className="chat-call-card is-ended mt-1.5 flex w-full items-center gap-2"
                                 >
                                   <span
                                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${mine ? "bg-white/15 text-white/70" : "bg-slate-300 text-slate-600 dark:bg-slate-600 dark:text-slate-300"}`}
@@ -12628,7 +12700,7 @@ const ClientChatView = ({
                                         String(message.authorId || "") === myId,
                                     })
                                   }
-                                  className={`mt-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left ${mine ? "border-white/30 bg-black/10" : "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10"}`}
+                                  className="chat-call-card is-live mt-1.5 flex w-full items-center gap-2 text-left"
                                 >
                                   <span
                                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${mine ? "bg-white/20 text-white" : "bg-emerald-600 text-white"}`}
@@ -12652,35 +12724,42 @@ const ClientChatView = ({
                           </>
                         )}
                         <span
-                          className={`mt-0.5 block text-right text-[10px] ${stickerOnly ? "text-slate-400" : mine ? "text-white/70" : "text-slate-400"}`}
+                          className={`chat-message-time ${stickerOnly ? "is-sticker" : ""}`}
                         >
                           {chatShortTime(message.createdAt)}
+                          {mine && <Icon name="Check" size={11} aria-label="Enviado" />}
                         </span>
                       </div>
                       {reactionsByMessage[message.id] &&
                         Object.keys(reactionsByMessage[message.id]).length > 0 && (
                           <div
-                            className={`mt-1 flex flex-wrap gap-1 ${mine ? "justify-end" : ""}`}
+                            className={`chat-reaction-list mt-1 flex flex-wrap gap-1 ${mine ? "justify-end" : ""}`}
                           >
                             {Object.entries(reactionsByMessage[message.id]).map(
-                              ([emoji, info]) => (
-                                <button
-                                  key={emoji}
-                                  onClick={() => onReact && onReact(message, emoji)}
-                                  title={info.names.join(", ")}
-                                  className={`flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] ${info.mine ? "border-blue-300 bg-blue-50 dark:border-blue-500/40 dark:bg-blue-500/10" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"}`}
-                                >
-                                  <span>{emoji}</span>
-                                  <span className="font-semibold text-slate-600 dark:text-slate-300">
-                                    {info.count}
-                                  </span>
-                                </button>
-                              ),
+                              ([reactionKey, info]) => {
+                                const reaction =
+                                  getChatReactionDefinition(reactionKey);
+                                return (
+                                  <button
+                                    key={reactionKey}
+                                    onClick={() =>
+                                      onReact && onReact(message, reactionKey)
+                                    }
+                                    aria-label={`${reaction.label}: ${info.count}`}
+                                    title={info.names.join(", ")}
+                                    className={`chat-reaction-chip flex items-center gap-1 ${info.mine ? "is-mine" : ""}`}
+                                  >
+                                    <Icon name={reaction.icon} size={13} />
+                                    <span>{info.count}</span>
+                                  </button>
+                                );
+                              },
                             )}
                           </div>
                         )}
                     </div>
                   </div>
+                  </React.Fragment>
                 );
               })}
               {(menuFor || reactionPickerFor) && (
@@ -12694,21 +12773,22 @@ const ClientChatView = ({
               )}
             </div>
 
-            {/* Composer estilo Slack */}
-            <div className="shrink-0 border-t border-slate-200 p-3 pb-mobile-nav md:pb-3 dark:border-white/10">
+            {/* Composer de mensajería */}
+            <div className="chat-composer-shell shrink-0 pb-mobile-nav md:pb-3">
               {replyingTo && (
-                <div className="mb-2 flex items-center gap-2 rounded-lg border-l-4 border-blue-500 bg-slate-50 px-3 py-2 dark:bg-slate-800">
+                <div className="chat-reply-bar mb-2 flex items-center gap-2">
                   <Icon
                     name="Reply"
                     size={14}
-                    className="shrink-0 text-blue-500"
+                    className="shrink-0"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                    <p className="chat-reply-title">
                       Respondiendo a {replyingTo.authorName || "mensaje"}
                     </p>
-                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                    <p className="chat-reply-preview truncate">
                       {replyingTo.text ||
+                        (replyingTo.sticker ? "Sticker" : "") ||
                         (Array.isArray(replyingTo.attachments) &&
                         replyingTo.attachments.length
                           ? "Adjunto"
@@ -12718,7 +12798,7 @@ const ClientChatView = ({
                   <button
                     onClick={() => setReplyingTo(null)}
                     aria-label="Cancelar respuesta"
-                    className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    className="chat-composer-button shrink-0"
                   >
                     <Icon name="X" size={14} />
                   </button>
@@ -12778,9 +12858,9 @@ const ClientChatView = ({
                   ))}
                 </div>
               )}
-              <div className="relative rounded-xl border border-slate-300 bg-white focus-within:border-blue-500 dark:border-white/15 dark:bg-[#222529]">
+              <div className="chat-compose-box relative">
                 {mentionOpen && mentionSuggestions.length > 0 && (
-                  <div className="absolute bottom-full left-0 z-40 mb-1 max-h-72 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800">
+                  <div className="chat-picker absolute bottom-full left-0 z-40 mb-2 max-h-72 w-72 overflow-y-auto py-1 custom-scroll">
                     <div className="flex items-center justify-between px-3 pb-1 pt-1.5">
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                         Mencionar
@@ -12825,7 +12905,7 @@ const ClientChatView = ({
                   </div>
                 )}
                 {taskPickerOpen && (
-                  <div className="absolute bottom-full left-0 z-30 mb-1 max-h-64 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl custom-scroll dark:border-slate-700 dark:bg-slate-800">
+                  <div className="chat-picker absolute bottom-full left-0 z-30 mb-2 max-h-64 w-72 overflow-y-auto py-1 custom-scroll">
                     <div className="flex items-center justify-between px-3 pb-1 pt-1.5">
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                         Enlazar tarea del cliente
@@ -12894,9 +12974,10 @@ const ClientChatView = ({
                   }}
                   placeholder={`Mensaje para ${activeClient.name || "el cliente"}`}
                   rows={text ? 2 : 1}
-                  className="w-full resize-none bg-transparent px-3.5 pt-2.5 text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200"
+                  aria-label={`Mensaje para ${activeClient.name || "el cliente"}`}
+                  className="chat-compose-input w-full resize-none bg-transparent"
                 />
-                <div className="relative flex items-center gap-1 px-2 pb-2">
+                <div className="chat-compose-actions relative flex items-center gap-2 px-2 pb-2">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -12938,7 +13019,7 @@ const ClientChatView = ({
                           }}
                           aria-label="Adjuntar archivo"
                           disabled={uploading}
-                          className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:opacity-50 ${attachMenuOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`}
+                          className={`chat-composer-button flex items-center justify-center disabled:opacity-50 ${attachMenuOpen ? "is-active" : ""}`}
                         >
                           <Icon
                             name={uploading ? "Loader2" : "Paperclip"}
@@ -12947,7 +13028,7 @@ const ClientChatView = ({
                           />
                         </button>
                         {attachMenuOpen && (
-                          <div className="absolute bottom-full left-0 z-30 mb-1 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                          <div className="chat-picker absolute bottom-full left-0 z-30 mb-2 w-52 py-1">
                             <button
                               onMouseDown={(event) => {
                                 event.preventDefault();
@@ -12997,7 +13078,7 @@ const ClientChatView = ({
                       <button
                         onClick={startRecording}
                         aria-label="Grabar nota de voz"
-                        className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
+                        className="chat-composer-button flex items-center justify-center"
                       >
                         <Icon name="Microphone" size={18} />
                       </button>
@@ -13009,7 +13090,7 @@ const ClientChatView = ({
                           setAttachMenuOpen(false);
                         }}
                         aria-label="Enlazar tarea"
-                        className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${taskRef || taskPickerOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`}
+                        className={`chat-composer-button flex items-center justify-center ${taskRef || taskPickerOpen ? "is-active" : ""}`}
                       >
                         <Icon name="ClipboardList" size={17} />
                       </button>
@@ -13023,12 +13104,12 @@ const ClientChatView = ({
                             setAttachMenuOpen(false);
                           }}
                           aria-label="Stickers"
-                          className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${stickerOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`}
+                          className={`chat-composer-button flex items-center justify-center ${stickerOpen ? "is-active" : ""}`}
                         >
                           <Icon name="Sticker" size={18} />
                         </button>
                         {stickerOpen && (
-                          <div className="absolute bottom-full right-0 z-40 mb-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-slate-700 dark:bg-slate-800 sm:left-0 sm:right-auto">
+                          <div className="chat-picker chat-sticker-picker absolute bottom-full right-0 z-40 mb-2 w-80 p-3 sm:left-0 sm:right-auto">
                             <input
                               ref={stickerInputRef}
                               type="file"
@@ -13038,10 +13119,15 @@ const ClientChatView = ({
                                 handleStickerUpload(event.target.files)
                               }
                             />
-                            <div className="flex items-center justify-between px-1.5 pb-1.5">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                Stickers
-                              </p>
+                            <div className="flex items-center justify-between border-b border-slate-200/70 px-1 pb-2 dark:border-white/10">
+                              <div>
+                                <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                                  Stickers del equipo
+                                </p>
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                  Selecciona uno para enviarlo
+                                </p>
+                              </div>
                               <div className="flex items-center gap-1">
                                 <button
                                   onMouseDown={(event) => {
@@ -13050,7 +13136,7 @@ const ClientChatView = ({
                                       stickerInputRef.current.click();
                                   }}
                                   disabled={uploadingSticker}
-                                  className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold text-blue-600 hover:bg-blue-50 disabled:opacity-50 dark:text-blue-400 dark:hover:bg-blue-500/10"
+                                  className="chat-picker-action flex items-center gap-1.5 px-2 text-xs font-bold disabled:opacity-50"
                                 >
                                   <Icon
                                     name={uploadingSticker ? "Loader2" : "Plus"}
@@ -13065,15 +13151,15 @@ const ClientChatView = ({
                                     setStickerOpen(false);
                                   }}
                                   aria-label="Cerrar"
-                                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                  className="chat-composer-button"
                                 >
                                   <Icon name="X" size={13} />
                                 </button>
                               </div>
                             </div>
-                            <div className="max-h-64 overflow-y-auto custom-scroll">
+                            <div className="mt-2 max-h-72 overflow-y-auto custom-scroll">
                               {customStickers.length > 0 ? (
-                                <div className="grid grid-cols-4 gap-1 pb-1">
+                                <div className="grid grid-cols-4 gap-2 pb-1">
                                   {customStickers.map((sticker) => (
                                     <div
                                       key={sticker.id}
@@ -13086,9 +13172,9 @@ const ClientChatView = ({
                                         }}
                                         title={sticker.name}
                                         disabled={submitting}
-                                        className="flex w-full items-center justify-center rounded-xl p-1.5 transition-transform hover:scale-110 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-white/5"
+                                        className="chat-sticker-tile flex w-full items-center justify-center disabled:opacity-50"
                                       >
-                                        {renderSticker(sticker.id, 56)}
+                                        {renderSticker(sticker.id, 60)}
                                       </button>
                                       {(canModerate ||
                                         String(sticker.authorId || "") ===
@@ -13105,7 +13191,7 @@ const ClientChatView = ({
                                               onDeleteSticker(sticker.id);
                                           }}
                                           aria-label="Eliminar sticker"
-                                          className="absolute -right-0.5 -top-0.5 hidden h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white group-hover/st:flex"
+                                          className="chat-sticker-delete absolute -right-1 -top-1 items-center justify-center"
                                         >
                                           <Icon name="X" size={9} />
                                         </button>
@@ -13135,7 +13221,7 @@ const ClientChatView = ({
                           </div>
                         )}
                       </div>
-                      <span className="ml-auto text-[10px] text-slate-400 hidden sm:block">
+                      <span className="chat-compose-hint ml-auto hidden sm:block">
                         Enter para enviar · Shift+Enter salto de línea
                       </span>
                       <button
@@ -13144,7 +13230,7 @@ const ClientChatView = ({
                           submitting || (!text.trim() && pending.length === 0)
                         }
                         aria-label="Enviar mensaje"
-                        className="ml-2 flex h-8 w-8 items-center justify-center rounded-md bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
+                        className="chat-send-button ml-auto flex items-center justify-center disabled:opacity-40"
                       >
                         <Icon
                           name={submitting ? "Loader2" : "Send"}
