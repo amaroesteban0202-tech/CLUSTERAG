@@ -208,5 +208,14 @@ export const COLLECTION_PERMISSIONS = {
         create: 'view_client_chat',
         update: 'view_client_chat',
         delete: 'view_client_chat'
+    },
+    // Biblioteca compartida de stickers (webp/gif/png). Cualquiera del equipo
+    // puede verlos y subir; borrar queda para moderadores (o el autor via la
+    // ruta self-edit en routes/collections.js).
+    chat_stickers: {
+        read: 'view_client_chat',
+        create: 'send_client_chat',
+        update: 'moderate_client_chat',
+        delete: 'moderate_client_chat'
     }
 };

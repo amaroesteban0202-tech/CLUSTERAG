@@ -338,11 +338,13 @@ router.delete('/:collectionName/:recordId', asyncHandler(async (req, res) => {
         throw createHttpError(404, 'La coleccion no existe.', 'collection/not-found');
     }
     if (!hasPermission(userRecord, permission)) {
-        // El autor puede borrar su propio mensaje de chat sin ser moderador.
-        const existing = collectionName === 'client_chats'
+        // El autor puede borrar su propio mensaje de chat o su propio sticker
+        // subido sin ser moderador.
+        const selfDeletable = collectionName === 'client_chats' || collectionName === 'chat_stickers';
+        const existing = selfDeletable
             ? await getRecord({ collectionName, recordId: req.params.recordId })
             : null;
-        if (!(collectionName === 'client_chats' && canUpdateOwnChatMessage(userRecord, existing))) {
+        if (!(selfDeletable && canUpdateOwnChatMessage(userRecord, existing))) {
             throw createHttpError(403, 'No tienes permisos para esta accion.', 'auth/insufficient-permission');
         }
     }

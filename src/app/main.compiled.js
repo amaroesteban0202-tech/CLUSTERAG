@@ -932,6 +932,7 @@ function App() {
   const [chatHidden, setChatHidden] = useState([]);
   const [chatReactions, setChatReactions] = useState([]);
   const [chatPins, setChatPins] = useState([]);
+  const [chatStickers, setChatStickers] = useState([]);
   const [chatDirectory, setChatDirectory] = useState([]);
   useEffect(() => {
     window.__cluster_active_view = view;
@@ -1562,6 +1563,16 @@ function App() {
       onSnapshot(
         dataCollection("chat_pins"),
         (snapshot) => setChatPins(
+          snapshot.docs.map((docItem) => ({
+            id: docItem.id,
+            ...docItem.data()
+          }))
+        ),
+        errHandler
+      ),
+      onSnapshot(
+        dataCollection("chat_stickers"),
+        (snapshot) => setChatStickers(
           snapshot.docs.map((docItem) => ({
             id: docItem.id,
             ...docItem.data()
@@ -3595,6 +3606,26 @@ function App() {
       forwarded: true
     });
   };
+  const addChatSticker = async ({ name, type, data }) => {
+    if (!data) return null;
+    return addDoc(dataCollection("chat_stickers"), {
+      name: name || "sticker",
+      type: type || "image/webp",
+      data,
+      authorId: currentUserProfile?.id || "",
+      authorName: currentUserProfile?.name || "",
+      authorEmail: authEmail || "",
+      createdAt: nowIso()
+    });
+  };
+  const deleteChatSticker = async (stickerId) => {
+    if (!stickerId) return;
+    try {
+      await deleteDoc(dataDoc("chat_stickers", stickerId));
+    } catch (error) {
+      console.warn("[chat:sticker-del]", error.message);
+    }
+  };
   const fetchClientChatMessage = async (messageId) => {
     if (!messageId) return null;
     try {
@@ -4477,6 +4508,9 @@ function App() {
           hiddenIds: chatHiddenIds,
           reactions: chatReactions,
           pins: chatPins,
+          stickers: chatStickers,
+          onAddSticker: addChatSticker,
+          onDeleteSticker: deleteChatSticker,
           onReact: toggleChatReaction,
           onPin: toggleChatPin,
           onForward: forwardChatMessage,
@@ -8359,6 +8393,9 @@ var ClientChatView = ({
   hiddenIds,
   reactions = [],
   pins = [],
+  stickers = [],
+  onAddSticker,
+  onDeleteSticker,
   onReact,
   onPin,
   onForward,
@@ -8399,16 +8436,45 @@ var ClientChatView = ({
   const [fullMap, setFullMap] = useState({});
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
+  const [uploadingSticker, setUploadingSticker] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const textareaRef = useRef(null);
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
+  const stickerInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordTimerRef = useRef(null);
   const discardRef = useRef(false);
   const myId = String(currentUserProfile?.id || "");
+  const customStickerMap = {};
+  (stickers || []).forEach((item) => {
+    if (item?.id) customStickerMap[item.id] = item;
+  });
+  const customStickers = [...stickers || []].sort(
+    (a, b) => (b.createdAt || "") > (a.createdAt || "") ? 1 : -1
+  );
+  const stickerLabel = (id) => {
+    if (customStickerMap[id]) return customStickerMap[id].name || "Sticker";
+    return CHAT_STICKER_MAP[id]?.label || "";
+  };
+  const renderSticker = (id, size, className = "") => {
+    const custom = customStickerMap[id];
+    if (custom?.data) {
+      return /* @__PURE__ */ React.createElement(
+        "img",
+        {
+          src: custom.data,
+          alt: custom.name || "sticker",
+          draggable: false,
+          className: `inline-block select-none object-contain ${className}`,
+          style: { width: size, height: size }
+        }
+      );
+    }
+    return /* @__PURE__ */ React.createElement(StickerImage, { id, size, className });
+  };
   const lastMsgByClient = {};
   clientChats.forEach((message) => {
     if (!message.clientId) return;
@@ -8423,8 +8489,8 @@ var ClientChatView = ({
     if (message.deleted) return "Mensaje eliminado";
     if (message.text) return message.text;
     if (message.sticker) {
-      const s = CHAT_STICKER_MAP[message.sticker];
-      return s ? `Sticker \xB7 ${s.label}` : "Sticker";
+      const label = stickerLabel(message.sticker);
+      return label ? `Sticker \xB7 ${label}` : "Sticker";
     }
     const count = Array.isArray(message.attachments) ? message.attachments.length : 0;
     return count > 0 ? `${count} archivo${count === 1 ? "" : "s"}` : "\u2026";
@@ -8722,6 +8788,40 @@ var ClientChatView = ({
       setReplyingTo(null);
     } finally {
       setSubmitting(false);
+    }
+  };
+  const STICKER_MAX = 2 * 1024 * 1024;
+  const handleStickerUpload = async (fileList) => {
+    const file = (fileList || [])[0];
+    if (!file) return;
+    const okTypes = [
+      "image/webp",
+      "image/gif",
+      "image/png",
+      "image/jpeg",
+      "image/svg+xml"
+    ];
+    if (!okTypes.includes(file.type)) {
+      alert("Usa una imagen webp, gif, png o jpg.");
+      return;
+    }
+    if (file.size > STICKER_MAX) {
+      alert("El sticker supera el m\xE1ximo de 2 MB.");
+      return;
+    }
+    setUploadingSticker(true);
+    try {
+      const data = await chatFileToBase64(file);
+      if (onAddSticker) {
+        await onAddSticker({
+          name: file.name.replace(/\.[^.]+$/, ""),
+          type: file.type,
+          data
+        });
+      }
+    } finally {
+      setUploadingSticker(false);
+      if (stickerInputRef.current) stickerInputRef.current.value = "";
     }
   };
   const renderAttachment = (att) => {
@@ -9086,13 +9186,10 @@ var ClientChatView = ({
               },
               /* @__PURE__ */ React.createElement("p", { className: "font-bold opacity-80" }, message.replyTo.authorName || "Mensaje"),
               /* @__PURE__ */ React.createElement("p", { className: "truncate opacity-70" }, message.replyTo.text)
-            ), message.sticker && /* @__PURE__ */ React.createElement(
-              StickerImage,
-              {
-                id: message.sticker,
-                size: stickerOnly ? 128 : 96,
-                className: "drop-shadow-sm"
-              }
+            ), message.sticker && renderSticker(
+              message.sticker,
+              stickerOnly ? 128 : 96,
+              "drop-shadow-sm"
             ), message.text && !message.call && /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words pr-5 text-sm leading-relaxed" }, renderChatText(message.text, mine)), atts.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap gap-2" }, atts.map((att) => renderAttachment(att))), message.taskRef?.taskId && /* @__PURE__ */ React.createElement(
               "button",
               {
@@ -9456,7 +9553,36 @@ var ClientChatView = ({
         className: `flex h-8 w-8 items-center justify-center rounded-md transition-colors ${stickerOpen ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"}`
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "Sticker", size: 18 })
-    ), stickerOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full right-0 z-40 mb-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-slate-700 dark:bg-slate-800 sm:left-0 sm:right-auto" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between px-1.5 pb-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Stickers"), /* @__PURE__ */ React.createElement(
+    ), stickerOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute bottom-full right-0 z-40 mb-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-slate-700 dark:bg-slate-800 sm:left-0 sm:right-auto" }, /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        ref: stickerInputRef,
+        type: "file",
+        accept: "image/webp,image/gif,image/png,image/jpeg,image/svg+xml",
+        className: "hidden",
+        onChange: (event) => handleStickerUpload(event.target.files)
+      }
+    ), /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between px-1.5 pb-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Stickers"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onMouseDown: (event) => {
+          event.preventDefault();
+          if (stickerInputRef.current)
+            stickerInputRef.current.click();
+        },
+        disabled: uploadingSticker,
+        className: "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold text-blue-600 hover:bg-blue-50 disabled:opacity-50 dark:text-blue-400 dark:hover:bg-blue-500/10"
+      },
+      /* @__PURE__ */ React.createElement(
+        Icon,
+        {
+          name: uploadingSticker ? "Loader2" : "Plus",
+          size: 12,
+          className: uploadingSticker ? "animate-spin" : ""
+        }
+      ),
+      "Subir"
+    ), /* @__PURE__ */ React.createElement(
       "button",
       {
         onMouseDown: (event) => {
@@ -9467,7 +9593,41 @@ var ClientChatView = ({
         className: "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 13 })
-    )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-4 gap-1" }, CHAT_STICKERS.map((sticker) => /* @__PURE__ */ React.createElement(
+    ))), /* @__PURE__ */ React.createElement("div", { className: "max-h-64 overflow-y-auto custom-scroll" }, customStickers.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("p", { className: "px-1.5 pb-1 pt-0.5 text-[9px] font-black uppercase tracking-widest text-slate-400" }, "Del equipo"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-4 gap-1 pb-2" }, customStickers.map((sticker) => /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        key: sticker.id,
+        className: "group/st relative"
+      },
+      /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onMouseDown: (event) => {
+            event.preventDefault();
+            handleSendSticker(sticker.id);
+          },
+          title: sticker.name,
+          disabled: submitting,
+          className: "flex w-full items-center justify-center rounded-xl p-1.5 transition-transform hover:scale-110 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-white/5"
+        },
+        renderSticker(sticker.id, 56)
+      ),
+      (canModerate || String(sticker.authorId || "") === myId) && /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onMouseDown: (event) => {
+            event.preventDefault();
+            if (onDeleteSticker && confirm(
+              "\xBFEliminar este sticker de la biblioteca?"
+            ))
+              onDeleteSticker(sticker.id);
+          },
+          "aria-label": "Eliminar sticker",
+          className: "absolute -right-0.5 -top-0.5 hidden h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white group-hover/st:flex"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 9 })
+      )
+    )))), /* @__PURE__ */ React.createElement("p", { className: "px-1.5 pb-1 pt-0.5 text-[9px] font-black uppercase tracking-widest text-slate-400" }, "Base"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-4 gap-1" }, CHAT_STICKERS.map((sticker) => /* @__PURE__ */ React.createElement(
       "button",
       {
         key: sticker.id,
@@ -9480,7 +9640,7 @@ var ClientChatView = ({
         className: "flex items-center justify-center rounded-xl p-1.5 transition-transform hover:scale-110 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-white/5"
       },
       /* @__PURE__ */ React.createElement(StickerImage, { id: sticker.id, size: 56 })
-    ))))), /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-[10px] text-slate-400 hidden sm:block" }, "Enter para enviar \xB7 Shift+Enter salto de l\xEDnea"), /* @__PURE__ */ React.createElement(
+    )))))), /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-[10px] text-slate-400 hidden sm:block" }, "Enter para enviar \xB7 Shift+Enter salto de l\xEDnea"), /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: handleSubmit,
