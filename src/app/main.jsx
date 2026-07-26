@@ -11608,6 +11608,16 @@ const formatChatBytes = (bytes = 0) => {
 const isChatImage = (type = "") => String(type).startsWith("image/");
 const isChatVideo = (type = "") => String(type).startsWith("video/");
 const isChatAudio = (type = "") => String(type).startsWith("audio/");
+const CHAT_VOICE_WAVEFORM = [
+  8, 14, 20, 11, 24, 18, 28, 16, 22, 31, 18, 26, 13, 21, 29, 17, 25, 12,
+  19, 27, 15, 23, 30, 18, 25, 14, 22, 28, 16, 24, 12, 20,
+];
+const formatVoiceDuration = (seconds = 0) => {
+  const safeSeconds = Number.isFinite(Number(seconds))
+    ? Math.max(0, Math.floor(Number(seconds)))
+    : 0;
+  return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, "0")}`;
+};
 const chatShortTime = (iso) => {
   try {
     return new Date(iso).toLocaleTimeString("es", {
@@ -11617,6 +11627,158 @@ const chatShortTime = (iso) => {
   } catch {
     return "";
   }
+};
+
+const ChatVoiceNote = ({
+  attachment,
+  mine = false,
+  authorName = "Usuario",
+  avatarUrl = "",
+  compact = false,
+}) => {
+  const audioRef = useRef(null);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(
+    Number(attachment?.duration) || 0,
+  );
+  const source = attachment?.data || "";
+  const loading = !source;
+  const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
+  const progress = safeDuration
+    ? Math.min(100, (currentTime / safeDuration) * 100)
+    : 0;
+  const playedBars = Math.round(
+    (progress / 100) * CHAT_VOICE_WAVEFORM.length,
+  );
+
+  useEffect(() => {
+    setPlaying(false);
+    setCurrentTime(0);
+    setDuration(Number(attachment?.duration) || 0);
+  }, [source, attachment?.duration]);
+
+  useEffect(
+    () => () => {
+      if (audioRef.current) audioRef.current.pause();
+    },
+    [],
+  );
+
+  const togglePlayback = async () => {
+    const audio = audioRef.current;
+    if (!audio || loading) return;
+    if (audio.paused) {
+      try {
+        await audio.play();
+      } catch {
+        setPlaying(false);
+      }
+    } else {
+      audio.pause();
+    }
+  };
+
+  const handleSeek = (event) => {
+    const audio = audioRef.current;
+    if (!audio || !safeDuration) return;
+    const nextTime = Number(event.target.value);
+    audio.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  };
+
+  return (
+    <div
+      className={`chat-voice-note ${mine ? "is-mine" : "is-incoming"} ${loading ? "is-loading" : ""} ${compact ? "is-compact" : ""}`}
+      aria-label={loading ? "Cargando nota de voz" : "Nota de voz"}
+    >
+      <div
+        className="chat-voice-avatar"
+        style={
+          avatarUrl
+            ? undefined
+            : { backgroundColor: chatAvatarColor(authorName || "Usuario") }
+        }
+      >
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" />
+        ) : (
+          <span>{(authorName || "U").slice(0, 2).toUpperCase()}</span>
+        )}
+        <span className="chat-voice-avatar-mic" aria-hidden="true">
+          <Icon name="Microphone" size={10} />
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={togglePlayback}
+        disabled={loading}
+        aria-label={
+          loading
+            ? "Cargando nota de voz"
+            : playing
+              ? "Pausar nota de voz"
+              : "Reproducir nota de voz"
+        }
+        className="chat-voice-play"
+      >
+        <Icon
+          name={loading ? "Loader2" : playing ? "PauseCircle" : "Play"}
+          size={compact ? 25 : 28}
+          className={loading ? "animate-spin" : ""}
+        />
+      </button>
+      <div className="chat-voice-content">
+        <div className="chat-voice-wave">
+          <div className="chat-voice-wave-bars" aria-hidden="true">
+            {CHAT_VOICE_WAVEFORM.map((height, index) => (
+              <span
+                key={`${height}-${index}`}
+                className={index < playedBars ? "is-played" : ""}
+                style={{ height: `${height}px` }}
+              />
+            ))}
+          </div>
+          <input
+            type="range"
+            min="0"
+            max={safeDuration || 1}
+            step="0.1"
+            value={Math.min(currentTime, safeDuration || 1)}
+            onChange={handleSeek}
+            disabled={loading || !safeDuration}
+            aria-label="Posición de la nota de voz"
+          />
+        </div>
+        <div className="chat-voice-meta" aria-live="polite">
+          <span>
+            {loading
+              ? "Cargando audio"
+              : formatVoiceDuration(playing ? currentTime : safeDuration)}
+          </span>
+          {!loading && <span className="chat-voice-kind">Nota de voz</span>}
+        </div>
+      </div>
+      {source && (
+        <audio
+          ref={audioRef}
+          src={source}
+          preload="metadata"
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onEnded={() => {
+            setPlaying(false);
+            setCurrentTime(0);
+          }}
+          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onLoadedMetadata={(event) => {
+            const nextDuration = event.currentTarget.duration;
+            if (Number.isFinite(nextDuration)) setDuration(nextDuration);
+          }}
+        />
+      )}
+    </div>
+  );
 };
 const chatDayKey = (iso) => {
   try {
@@ -11703,6 +11865,7 @@ const ClientChatView = ({
   const [stickerOpen, setStickerOpen] = useState(false);
   const [uploadingSticker, setUploadingSticker] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [recordingPaused, setRecordingPaused] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const textareaRef = useRef(null);
   const scrollRef = useRef(null);
@@ -11711,7 +11874,21 @@ const ClientChatView = ({
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordTimerRef = useRef(null);
+  const recordSecondsRef = useRef(0);
   const discardRef = useRef(false);
+  const sendRecordingRef = useRef(false);
+  const recordContextRef = useRef(null);
+
+  useEffect(
+    () => () => {
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+      discardRef.current = true;
+      const recorder = mediaRecorderRef.current;
+      if (recorder?.state && recorder.state !== "inactive") recorder.stop();
+      recorder?.stream?.getTracks().forEach((track) => track.stop());
+    },
+    [],
+  );
 
   const myId = String(currentUserProfile?.id || "");
 
@@ -11757,6 +11934,9 @@ const ClientChatView = ({
     const count = Array.isArray(message.attachments)
       ? message.attachments.length
       : 0;
+    if (count === 1 && isChatAudio(message.attachments[0]?.type)) {
+      return "Nota de voz";
+    }
     return count > 0 ? `${count} archivo${count === 1 ? "" : "s"}` : "…";
   };
 
@@ -11995,6 +12175,14 @@ const ClientChatView = ({
     }
   };
 
+  const startRecordTimer = () => {
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    recordTimerRef.current = setInterval(() => {
+      recordSecondsRef.current += 1;
+      setRecordSeconds(recordSecondsRef.current);
+    }, 1000);
+  };
+
   const startRecording = async () => {
     if (recording) return;
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
@@ -12002,61 +12190,130 @@ const ClientChatView = ({
       return;
     }
     try {
+      setMentionOpen(false);
+      setTaskPickerOpen(false);
+      setAttachMenuOpen(false);
+      setStickerOpen(false);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       audioChunksRef.current = [];
       discardRef.current = false;
+      sendRecordingRef.current = false;
+      recordSecondsRef.current = 0;
+      recordContextRef.current = {
+        clientId: activeClient?.id || "",
+        replyTo: replyingTo
+          ? {
+              id: replyingTo.id,
+              authorName: replyingTo.authorName,
+              text: replyingTo.text,
+              sticker: replyingTo.sticker || null,
+            }
+          : null,
+      };
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) audioChunksRef.current.push(event.data);
       };
       recorder.onstop = async () => {
+        mediaRecorderRef.current = null;
         stream.getTracks().forEach((track) => track.stop());
         if (discardRef.current) {
           discardRef.current = false;
+          sendRecordingRef.current = false;
+          recordSecondsRef.current = 0;
+          recordContextRef.current = null;
           return;
         }
         const blob = new Blob(audioChunksRef.current, {
           type: recorder.mimeType || "audio/webm",
         });
-        if (blob.size === 0) return;
+        if (blob.size === 0) {
+          sendRecordingRef.current = false;
+          recordSecondsRef.current = 0;
+          recordContextRef.current = null;
+          return;
+        }
         if (blob.size > CHAT_MAX_FILE) {
           alert("La nota de voz supera el máximo de 8 MB.");
+          sendRecordingRef.current = false;
+          recordSecondsRef.current = 0;
+          recordContextRef.current = null;
           return;
         }
         const data = await chatFileToBase64(blob);
-        setPending((prev) => [
-          ...prev,
-          {
-            id: Math.random().toString(36).slice(2, 10),
-            name: `nota-de-voz-${Date.now()}.webm`,
-            type: blob.type || "audio/webm",
-            size: blob.size,
-            data,
-          },
-        ]);
+        const voiceAttachment = {
+          id: Math.random().toString(36).slice(2, 10),
+          name: `nota-de-voz-${Date.now()}.webm`,
+          type: blob.type || "audio/webm",
+          size: blob.size,
+          duration: recordSecondsRef.current,
+          data,
+        };
+        if (sendRecordingRef.current && recordContextRef.current?.clientId) {
+          setSubmitting(true);
+          try {
+            await onSendMessage({
+              clientId: recordContextRef.current.clientId,
+              attachments: [voiceAttachment],
+              replyTo: recordContextRef.current.replyTo,
+            });
+            setReplyingTo(null);
+          } catch {
+            setPending((prev) => [...prev, voiceAttachment]);
+            alert(
+              "No se pudo enviar la nota de voz. Quedó adjunta para que puedas reintentar.",
+            );
+          } finally {
+            setSubmitting(false);
+          }
+        } else {
+          setPending((prev) => [...prev, voiceAttachment]);
+        }
+        sendRecordingRef.current = false;
+        recordSecondsRef.current = 0;
+        recordContextRef.current = null;
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
       setRecording(true);
+      setRecordingPaused(false);
       setRecordSeconds(0);
-      recordTimerRef.current = setInterval(
-        () => setRecordSeconds((seconds) => seconds + 1),
-        1000,
-      );
+      startRecordTimer();
     } catch {
       alert("No se pudo acceder al micrófono.");
     }
   };
 
-  const stopRecording = (discard = false) => {
+  const toggleRecordingPause = () => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+    if (recorder.state === "recording") {
+      recorder.pause();
+      if (recordTimerRef.current) {
+        clearInterval(recordTimerRef.current);
+        recordTimerRef.current = null;
+      }
+      setRecordingPaused(true);
+      return;
+    }
+    if (recorder.state === "paused") {
+      recorder.resume();
+      setRecordingPaused(false);
+      startRecordTimer();
+    }
+  };
+
+  const stopRecording = (discard = false, sendImmediately = false) => {
     if (recordTimerRef.current) {
       clearInterval(recordTimerRef.current);
       recordTimerRef.current = null;
     }
     discardRef.current = discard;
+    sendRecordingRef.current = sendImmediately && !discard;
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state !== "inactive") recorder.stop();
     setRecording(false);
+    setRecordingPaused(false);
     setRecordSeconds(0);
   };
 
@@ -12149,8 +12406,23 @@ const ClientChatView = ({
     }
   };
 
-  const renderAttachment = (att) => {
+  const renderAttachment = (
+    att,
+    { mine = false, authorName = "Usuario", avatarUrl = "", compact = false } = {},
+  ) => {
     const key = att.id || att.name;
+    if (isChatAudio(att.type)) {
+      return (
+        <ChatVoiceNote
+          key={key}
+          attachment={att}
+          mine={mine}
+          authorName={authorName}
+          avatarUrl={avatarUrl}
+          compact={compact}
+        />
+      );
+    }
     if (att.data && isChatImage(att.type)) {
       return (
         <a
@@ -12176,11 +12448,6 @@ const ClientChatView = ({
           controls
           className="max-h-60 max-w-[300px] rounded-lg border border-slate-200 dark:border-white/10"
         />
-      );
-    }
-    if (att.data && isChatAudio(att.type)) {
-      return (
-        <audio key={key} src={att.data} controls className="max-w-[280px]" />
       );
     }
     return (
@@ -12649,7 +12916,17 @@ const ClientChatView = ({
                             )}
                             {atts.length > 0 && (
                               <div className="mt-1.5 flex flex-wrap gap-2">
-                                {atts.map((att) => renderAttachment(att))}
+                                {atts.map((att) =>
+                                  renderAttachment(att, {
+                                    mine,
+                                    authorName: mine
+                                      ? currentUserProfile?.name || "Usuario"
+                                      : message.authorName || "Usuario",
+                                    avatarUrl: mine
+                                      ? currentUserProfile?.photo || ""
+                                      : "",
+                                  }),
+                                )}
                               </div>
                             )}
                             {message.taskRef?.taskId && (
@@ -12831,6 +13108,15 @@ const ClientChatView = ({
                           alt={att.name}
                           className="h-16 w-16 rounded-lg border border-slate-200 object-cover dark:border-white/10"
                         />
+                      ) : isChatAudio(att.type) ? (
+                        <div className="chat-voice-pending">
+                          {renderAttachment(att, {
+                            mine: true,
+                            authorName: currentUserProfile?.name || "Usuario",
+                            avatarUrl: currentUserProfile?.photo || "",
+                            compact: true,
+                          })}
+                        </div>
                       ) : (
                         <div className="flex h-16 w-36 items-center gap-1.5 rounded-lg border border-slate-200 px-2 dark:border-white/10">
                           <Icon
@@ -12952,32 +13238,36 @@ const ClientChatView = ({
                     ))}
                   </div>
                 )}
-                <textarea
-                  ref={textareaRef}
-                  value={text}
-                  onChange={handleTextChange}
-                  onKeyDown={(event) => {
-                    if (
-                      event.key === "Escape" &&
-                      (mentionOpen || taskPickerOpen || attachMenuOpen)
-                    ) {
-                      setMentionOpen(false);
-                      setTaskPickerOpen(false);
-                      setAttachMenuOpen(false);
-                      event.preventDefault();
-                      return;
-                    }
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      event.preventDefault();
-                      handleSubmit();
-                    }
-                  }}
-                  placeholder={`Mensaje para ${activeClient.name || "el cliente"}`}
-                  rows={text ? 2 : 1}
-                  aria-label={`Mensaje para ${activeClient.name || "el cliente"}`}
-                  className="chat-compose-input w-full resize-none bg-transparent"
-                />
-                <div className="chat-compose-actions relative flex items-center gap-2 px-2 pb-2">
+                {!recording && (
+                  <textarea
+                    ref={textareaRef}
+                    value={text}
+                    onChange={handleTextChange}
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Escape" &&
+                        (mentionOpen || taskPickerOpen || attachMenuOpen)
+                      ) {
+                        setMentionOpen(false);
+                        setTaskPickerOpen(false);
+                        setAttachMenuOpen(false);
+                        event.preventDefault();
+                        return;
+                      }
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        handleSubmit();
+                      }
+                    }}
+                    placeholder={`Mensaje para ${activeClient.name || "el cliente"}`}
+                    rows={text ? 2 : 1}
+                    aria-label={`Mensaje para ${activeClient.name || "el cliente"}`}
+                    className="chat-compose-input w-full resize-none bg-transparent"
+                  />
+                )}
+                <div
+                  className={`chat-compose-actions relative flex items-center gap-2 px-2 pb-2 ${recording ? "is-recording" : ""}`}
+                >
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -12986,25 +13276,65 @@ const ClientChatView = ({
                     onChange={(event) => handleFiles(event.target.files)}
                   />
                   {recording ? (
-                    <div className="flex flex-1 items-center gap-2">
-                      <span className="flex h-8 items-center gap-2 rounded-md bg-red-50 px-3 text-xs font-bold text-red-600 dark:bg-red-500/10 dark:text-red-400">
-                        <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-                        Grabando…{" "}
-                        {String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:
-                        {String(recordSeconds % 60).padStart(2, "0")}
-                      </span>
+                    <div
+                      className={`chat-recording-bar ${recordingPaused ? "is-paused" : ""}`}
+                    >
                       <button
+                        type="button"
                         onClick={() => stopRecording(true)}
-                        className="flex h-8 items-center rounded-md px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
+                        aria-label="Eliminar grabación"
+                        className="chat-recording-control is-delete"
                       >
-                        Cancelar
+                        <Icon name="Trash2" size={21} />
+                      </button>
+                      <div className="chat-recording-timer" aria-live="polite">
+                        <span className="chat-recording-dot" aria-hidden="true" />
+                        <span>{formatVoiceDuration(recordSeconds)}</span>
+                      </div>
+                      <div
+                        className="chat-recording-wave"
+                        role="img"
+                        aria-label={
+                          recordingPaused ? "Grabación pausada" : "Grabando audio"
+                        }
+                      >
+                        {CHAT_VOICE_WAVEFORM.slice(0, 24).map((height, index) => (
+                          <span
+                            key={`${height}-${index}`}
+                            style={{
+                              height: `${Math.max(5, Math.round(height * 0.72))}px`,
+                              animationDelay: `${(index % 8) * -70}ms`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={toggleRecordingPause}
+                        aria-label={
+                          recordingPaused
+                            ? "Continuar grabación"
+                            : "Pausar grabación"
+                        }
+                        className="chat-recording-control"
+                      >
+                        <Icon
+                          name={recordingPaused ? "Play" : "PauseCircle"}
+                          size={24}
+                        />
                       </button>
                       <button
-                        onClick={() => stopRecording(false)}
-                        aria-label="Detener y adjuntar audio"
-                        className="ml-auto flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700"
+                        type="button"
+                        onClick={() => stopRecording(false, true)}
+                        disabled={submitting}
+                        aria-label="Enviar nota de voz"
+                        className="chat-recording-send"
                       >
-                        <Icon name="Stop" size={14} /> Listo
+                        <Icon
+                          name={submitting ? "Loader2" : "Send"}
+                          size={20}
+                          className={submitting ? "animate-spin" : ""}
+                        />
                       </button>
                     </div>
                   ) : (

@@ -8387,6 +8387,44 @@ var formatChatBytes = (bytes = 0) => {
 var isChatImage = (type = "") => String(type).startsWith("image/");
 var isChatVideo = (type = "") => String(type).startsWith("video/");
 var isChatAudio = (type = "") => String(type).startsWith("audio/");
+var CHAT_VOICE_WAVEFORM = [
+  8,
+  14,
+  20,
+  11,
+  24,
+  18,
+  28,
+  16,
+  22,
+  31,
+  18,
+  26,
+  13,
+  21,
+  29,
+  17,
+  25,
+  12,
+  19,
+  27,
+  15,
+  23,
+  30,
+  18,
+  25,
+  14,
+  22,
+  28,
+  16,
+  24,
+  12,
+  20
+];
+var formatVoiceDuration = (seconds = 0) => {
+  const safeSeconds = Number.isFinite(Number(seconds)) ? Math.max(0, Math.floor(Number(seconds))) : 0;
+  return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, "0")}`;
+};
 var chatShortTime = (iso) => {
   try {
     return new Date(iso).toLocaleTimeString("es", {
@@ -8396,6 +8434,131 @@ var chatShortTime = (iso) => {
   } catch {
     return "";
   }
+};
+var ChatVoiceNote = ({
+  attachment,
+  mine = false,
+  authorName = "Usuario",
+  avatarUrl = "",
+  compact = false
+}) => {
+  const audioRef = useRef(null);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(
+    Number(attachment?.duration) || 0
+  );
+  const source = attachment?.data || "";
+  const loading = !source;
+  const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
+  const progress = safeDuration ? Math.min(100, currentTime / safeDuration * 100) : 0;
+  const playedBars = Math.round(
+    progress / 100 * CHAT_VOICE_WAVEFORM.length
+  );
+  useEffect(() => {
+    setPlaying(false);
+    setCurrentTime(0);
+    setDuration(Number(attachment?.duration) || 0);
+  }, [source, attachment?.duration]);
+  useEffect(
+    () => () => {
+      if (audioRef.current) audioRef.current.pause();
+    },
+    []
+  );
+  const togglePlayback = async () => {
+    const audio = audioRef.current;
+    if (!audio || loading) return;
+    if (audio.paused) {
+      try {
+        await audio.play();
+      } catch {
+        setPlaying(false);
+      }
+    } else {
+      audio.pause();
+    }
+  };
+  const handleSeek = (event) => {
+    const audio = audioRef.current;
+    if (!audio || !safeDuration) return;
+    const nextTime = Number(event.target.value);
+    audio.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  };
+  return /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: `chat-voice-note ${mine ? "is-mine" : "is-incoming"} ${loading ? "is-loading" : ""} ${compact ? "is-compact" : ""}`,
+      "aria-label": loading ? "Cargando nota de voz" : "Nota de voz"
+    },
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "chat-voice-avatar",
+        style: avatarUrl ? void 0 : { backgroundColor: chatAvatarColor(authorName || "Usuario") }
+      },
+      avatarUrl ? /* @__PURE__ */ React.createElement("img", { src: avatarUrl, alt: "" }) : /* @__PURE__ */ React.createElement("span", null, (authorName || "U").slice(0, 2).toUpperCase()),
+      /* @__PURE__ */ React.createElement("span", { className: "chat-voice-avatar-mic", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement(Icon, { name: "Microphone", size: 10 }))
+    ),
+    /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        onClick: togglePlayback,
+        disabled: loading,
+        "aria-label": loading ? "Cargando nota de voz" : playing ? "Pausar nota de voz" : "Reproducir nota de voz",
+        className: "chat-voice-play"
+      },
+      /* @__PURE__ */ React.createElement(
+        Icon,
+        {
+          name: loading ? "Loader2" : playing ? "PauseCircle" : "Play",
+          size: compact ? 25 : 28,
+          className: loading ? "animate-spin" : ""
+        }
+      )
+    ),
+    /* @__PURE__ */ React.createElement("div", { className: "chat-voice-content" }, /* @__PURE__ */ React.createElement("div", { className: "chat-voice-wave" }, /* @__PURE__ */ React.createElement("div", { className: "chat-voice-wave-bars", "aria-hidden": "true" }, CHAT_VOICE_WAVEFORM.map((height, index) => /* @__PURE__ */ React.createElement(
+      "span",
+      {
+        key: `${height}-${index}`,
+        className: index < playedBars ? "is-played" : "",
+        style: { height: `${height}px` }
+      }
+    ))), /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        type: "range",
+        min: "0",
+        max: safeDuration || 1,
+        step: "0.1",
+        value: Math.min(currentTime, safeDuration || 1),
+        onChange: handleSeek,
+        disabled: loading || !safeDuration,
+        "aria-label": "Posici\xF3n de la nota de voz"
+      }
+    )), /* @__PURE__ */ React.createElement("div", { className: "chat-voice-meta", "aria-live": "polite" }, /* @__PURE__ */ React.createElement("span", null, loading ? "Cargando audio" : formatVoiceDuration(playing ? currentTime : safeDuration)), !loading && /* @__PURE__ */ React.createElement("span", { className: "chat-voice-kind" }, "Nota de voz"))),
+    source && /* @__PURE__ */ React.createElement(
+      "audio",
+      {
+        ref: audioRef,
+        src: source,
+        preload: "metadata",
+        onPlay: () => setPlaying(true),
+        onPause: () => setPlaying(false),
+        onEnded: () => {
+          setPlaying(false);
+          setCurrentTime(0);
+        },
+        onTimeUpdate: (event) => setCurrentTime(event.currentTarget.currentTime),
+        onLoadedMetadata: (event) => {
+          const nextDuration = event.currentTarget.duration;
+          if (Number.isFinite(nextDuration)) setDuration(nextDuration);
+        }
+      }
+    )
+  );
 };
 var chatDayKey = (iso) => {
   try {
@@ -8479,6 +8642,7 @@ var ClientChatView = ({
   const [stickerOpen, setStickerOpen] = useState(false);
   const [uploadingSticker, setUploadingSticker] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [recordingPaused, setRecordingPaused] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const textareaRef = useRef(null);
   const scrollRef = useRef(null);
@@ -8487,7 +8651,20 @@ var ClientChatView = ({
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordTimerRef = useRef(null);
+  const recordSecondsRef = useRef(0);
   const discardRef = useRef(false);
+  const sendRecordingRef = useRef(false);
+  const recordContextRef = useRef(null);
+  useEffect(
+    () => () => {
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+      discardRef.current = true;
+      const recorder = mediaRecorderRef.current;
+      if (recorder?.state && recorder.state !== "inactive") recorder.stop();
+      recorder?.stream?.getTracks().forEach((track) => track.stop());
+    },
+    []
+  );
   const myId = String(currentUserProfile?.id || "");
   const customStickerMap = {};
   (stickers || []).forEach((item) => {
@@ -8527,6 +8704,9 @@ var ClientChatView = ({
     if (message.text) return message.text;
     if (message.sticker) return "Sticker";
     const count = Array.isArray(message.attachments) ? message.attachments.length : 0;
+    if (count === 1 && isChatAudio(message.attachments[0]?.type)) {
+      return "Nota de voz";
+    }
     return count > 0 ? `${count} archivo${count === 1 ? "" : "s"}` : "\u2026";
   };
   const term = search.trim().toLowerCase();
@@ -8715,6 +8895,13 @@ var ClientChatView = ({
       fileInputRef.current.click();
     }
   };
+  const startRecordTimer = () => {
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    recordTimerRef.current = setInterval(() => {
+      recordSecondsRef.current += 1;
+      setRecordSeconds(recordSecondsRef.current);
+    }, 1e3);
+  };
   const startRecording = async () => {
     if (recording) return;
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
@@ -8722,60 +8909,126 @@ var ClientChatView = ({
       return;
     }
     try {
+      setMentionOpen(false);
+      setTaskPickerOpen(false);
+      setAttachMenuOpen(false);
+      setStickerOpen(false);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       audioChunksRef.current = [];
       discardRef.current = false;
+      sendRecordingRef.current = false;
+      recordSecondsRef.current = 0;
+      recordContextRef.current = {
+        clientId: activeClient?.id || "",
+        replyTo: replyingTo ? {
+          id: replyingTo.id,
+          authorName: replyingTo.authorName,
+          text: replyingTo.text,
+          sticker: replyingTo.sticker || null
+        } : null
+      };
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) audioChunksRef.current.push(event.data);
       };
       recorder.onstop = async () => {
+        mediaRecorderRef.current = null;
         stream.getTracks().forEach((track) => track.stop());
         if (discardRef.current) {
           discardRef.current = false;
+          sendRecordingRef.current = false;
+          recordSecondsRef.current = 0;
+          recordContextRef.current = null;
           return;
         }
         const blob = new Blob(audioChunksRef.current, {
           type: recorder.mimeType || "audio/webm"
         });
-        if (blob.size === 0) return;
+        if (blob.size === 0) {
+          sendRecordingRef.current = false;
+          recordSecondsRef.current = 0;
+          recordContextRef.current = null;
+          return;
+        }
         if (blob.size > CHAT_MAX_FILE) {
           alert("La nota de voz supera el m\xE1ximo de 8 MB.");
+          sendRecordingRef.current = false;
+          recordSecondsRef.current = 0;
+          recordContextRef.current = null;
           return;
         }
         const data = await chatFileToBase64(blob);
-        setPending((prev) => [
-          ...prev,
-          {
-            id: Math.random().toString(36).slice(2, 10),
-            name: `nota-de-voz-${Date.now()}.webm`,
-            type: blob.type || "audio/webm",
-            size: blob.size,
-            data
+        const voiceAttachment = {
+          id: Math.random().toString(36).slice(2, 10),
+          name: `nota-de-voz-${Date.now()}.webm`,
+          type: blob.type || "audio/webm",
+          size: blob.size,
+          duration: recordSecondsRef.current,
+          data
+        };
+        if (sendRecordingRef.current && recordContextRef.current?.clientId) {
+          setSubmitting(true);
+          try {
+            await onSendMessage({
+              clientId: recordContextRef.current.clientId,
+              attachments: [voiceAttachment],
+              replyTo: recordContextRef.current.replyTo
+            });
+            setReplyingTo(null);
+          } catch {
+            setPending((prev) => [...prev, voiceAttachment]);
+            alert(
+              "No se pudo enviar la nota de voz. Qued\xF3 adjunta para que puedas reintentar."
+            );
+          } finally {
+            setSubmitting(false);
           }
-        ]);
+        } else {
+          setPending((prev) => [...prev, voiceAttachment]);
+        }
+        sendRecordingRef.current = false;
+        recordSecondsRef.current = 0;
+        recordContextRef.current = null;
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
       setRecording(true);
+      setRecordingPaused(false);
       setRecordSeconds(0);
-      recordTimerRef.current = setInterval(
-        () => setRecordSeconds((seconds) => seconds + 1),
-        1e3
-      );
+      startRecordTimer();
     } catch {
       alert("No se pudo acceder al micr\xF3fono.");
     }
   };
-  const stopRecording = (discard = false) => {
+  const toggleRecordingPause = () => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+    if (recorder.state === "recording") {
+      recorder.pause();
+      if (recordTimerRef.current) {
+        clearInterval(recordTimerRef.current);
+        recordTimerRef.current = null;
+      }
+      setRecordingPaused(true);
+      return;
+    }
+    if (recorder.state === "paused") {
+      recorder.resume();
+      setRecordingPaused(false);
+      startRecordTimer();
+    }
+  };
+  const stopRecording = (discard = false, sendImmediately = false) => {
     if (recordTimerRef.current) {
       clearInterval(recordTimerRef.current);
       recordTimerRef.current = null;
     }
     discardRef.current = discard;
+    sendRecordingRef.current = sendImmediately && !discard;
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state !== "inactive") recorder.stop();
     setRecording(false);
+    setRecordingPaused(false);
     setRecordSeconds(0);
   };
   const handleSubmit = async () => {
@@ -8860,8 +9113,21 @@ var ClientChatView = ({
       if (stickerInputRef.current) stickerInputRef.current.value = "";
     }
   };
-  const renderAttachment = (att) => {
+  const renderAttachment = (att, { mine = false, authorName = "Usuario", avatarUrl = "", compact = false } = {}) => {
     const key = att.id || att.name;
+    if (isChatAudio(att.type)) {
+      return /* @__PURE__ */ React.createElement(
+        ChatVoiceNote,
+        {
+          key,
+          attachment: att,
+          mine,
+          authorName,
+          avatarUrl,
+          compact
+        }
+      );
+    }
     if (att.data && isChatImage(att.type)) {
       return /* @__PURE__ */ React.createElement(
         "a",
@@ -8892,9 +9158,6 @@ var ClientChatView = ({
           className: "max-h-60 max-w-[300px] rounded-lg border border-slate-200 dark:border-white/10"
         }
       );
-    }
-    if (att.data && isChatAudio(att.type)) {
-      return /* @__PURE__ */ React.createElement("audio", { key, src: att.data, controls: true, className: "max-w-[280px]" });
     }
     return /* @__PURE__ */ React.createElement(
       "a",
@@ -9223,7 +9486,13 @@ var ClientChatView = ({
               message.sticker,
               stickerOnly ? 144 : 104,
               "chat-sticker-asset"
-            ), message.text && !message.call && /* @__PURE__ */ React.createElement("p", { className: "chat-message-text whitespace-pre-wrap break-words pr-6" }, renderChatText(message.text, mine)), atts.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap gap-2" }, atts.map((att) => renderAttachment(att))), message.taskRef?.taskId && /* @__PURE__ */ React.createElement(
+            ), message.text && !message.call && /* @__PURE__ */ React.createElement("p", { className: "chat-message-text whitespace-pre-wrap break-words pr-6" }, renderChatText(message.text, mine)), atts.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mt-1.5 flex flex-wrap gap-2" }, atts.map(
+              (att) => renderAttachment(att, {
+                mine,
+                authorName: mine ? currentUserProfile?.name || "Usuario" : message.authorName || "Usuario",
+                avatarUrl: mine ? currentUserProfile?.photo || "" : ""
+              })
+            )), message.taskRef?.taskId && /* @__PURE__ */ React.createElement(
               "button",
               {
                 onClick: () => onOpenTask(message.taskRef),
@@ -9370,7 +9639,12 @@ var ClientChatView = ({
         alt: att.name,
         className: "h-16 w-16 rounded-lg border border-slate-200 object-cover dark:border-white/10"
       }
-    ) : /* @__PURE__ */ React.createElement("div", { className: "flex h-16 w-36 items-center gap-1.5 rounded-lg border border-slate-200 px-2 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
+    ) : isChatAudio(att.type) ? /* @__PURE__ */ React.createElement("div", { className: "chat-voice-pending" }, renderAttachment(att, {
+      mine: true,
+      authorName: currentUserProfile?.name || "Usuario",
+      avatarUrl: currentUserProfile?.photo || "",
+      compact: true
+    })) : /* @__PURE__ */ React.createElement("div", { className: "flex h-16 w-36 items-center gap-1.5 rounded-lg border border-slate-200 px-2 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
       Icon,
       {
         name: "Paperclip",
@@ -9444,7 +9718,7 @@ var ClientChatView = ({
         CHAT_TASK_LABELS[task.type]
       ),
       /* @__PURE__ */ React.createElement("span", { className: "flex-1 truncate text-sm text-slate-700 dark:text-slate-200" }, task.title || "(sin t\xEDtulo)")
-    ))), /* @__PURE__ */ React.createElement(
+    ))), !recording && /* @__PURE__ */ React.createElement(
       "textarea",
       {
         ref: textareaRef,
@@ -9468,234 +9742,293 @@ var ClientChatView = ({
         "aria-label": `Mensaje para ${activeClient.name || "el cliente"}`,
         className: "chat-compose-input w-full resize-none bg-transparent"
       }
-    ), /* @__PURE__ */ React.createElement("div", { className: "chat-compose-actions relative flex items-center gap-2 px-2 pb-2" }, /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        ref: fileInputRef,
-        type: "file",
-        multiple: true,
-        className: "hidden",
-        onChange: (event) => handleFiles(event.target.files)
-      }
-    ), recording ? /* @__PURE__ */ React.createElement("div", { className: "flex flex-1 items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-8 items-center gap-2 rounded-md bg-red-50 px-3 text-xs font-bold text-red-600 dark:bg-red-500/10 dark:text-red-400" }, /* @__PURE__ */ React.createElement("span", { className: "h-2 w-2 animate-pulse rounded-full bg-red-500" }), "Grabando\u2026", " ", String(Math.floor(recordSeconds / 60)).padStart(2, "0"), ":", String(recordSeconds % 60).padStart(2, "0")), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => stopRecording(true),
-        className: "flex h-8 items-center rounded-md px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
-      },
-      "Cancelar"
     ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => stopRecording(false),
-        "aria-label": "Detener y adjuntar audio",
-        className: "ml-auto flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700"
-      },
-      /* @__PURE__ */ React.createElement(Icon, { name: "Stop", size: 14 }),
-      " Listo"
-    )) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => {
-          setAttachMenuOpen((open) => !open);
-          setMentionOpen(false);
-          setTaskPickerOpen(false);
-        },
-        "aria-label": "Adjuntar archivo",
-        disabled: uploading,
-        className: `chat-composer-button flex items-center justify-center disabled:opacity-50 ${attachMenuOpen ? "is-active" : ""}`
-      },
-      /* @__PURE__ */ React.createElement(
-        Icon,
-        {
-          name: uploading ? "Loader2" : "Paperclip",
-          size: 18,
-          className: uploading ? "animate-spin" : ""
-        }
-      )
-    ), attachMenuOpen && /* @__PURE__ */ React.createElement("div", { className: "chat-picker absolute bottom-full left-0 z-30 mb-2 w-52 py-1" }, /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onMouseDown: (event) => {
-          event.preventDefault();
-          openFilePicker("image/*");
-        },
-        className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
-      },
-      /* @__PURE__ */ React.createElement(Icon, { name: "Image", size: 16, className: "text-slate-500" }),
-      "Imagen"
-    ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onMouseDown: (event) => {
-          event.preventDefault();
-          openFilePicker("video/*");
-        },
-        className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
-      },
-      /* @__PURE__ */ React.createElement(Icon, { name: "Video", size: 16, className: "text-slate-500" }),
-      "Video"
-    ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onMouseDown: (event) => {
-          event.preventDefault();
-          openFilePicker(
-            "application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
-          );
-        },
-        className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
-      },
-      /* @__PURE__ */ React.createElement(Icon, { name: "FileText", size: 16, className: "text-slate-500" }),
-      "Documento / PDF"
-    ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onMouseDown: (event) => {
-          event.preventDefault();
-          openFilePicker("");
-        },
-        className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
-      },
-      /* @__PURE__ */ React.createElement(Icon, { name: "FilePlus", size: 16, className: "text-slate-500" }),
-      "Cualquier archivo"
-    ))), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: startRecording,
-        "aria-label": "Grabar nota de voz",
-        className: "chat-composer-button flex items-center justify-center"
-      },
-      /* @__PURE__ */ React.createElement(Icon, { name: "Microphone", size: 18 })
-    ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => {
-          setTaskPickerOpen((open) => !open);
-          setMentionOpen(false);
-          setAttachMenuOpen(false);
-        },
-        "aria-label": "Enlazar tarea",
-        className: `chat-composer-button flex items-center justify-center ${taskRef || taskPickerOpen ? "is-active" : ""}`
-      },
-      /* @__PURE__ */ React.createElement(Icon, { name: "ClipboardList", size: 17 })
-    ), /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => {
-          setStickerOpen((open) => !open);
-          setMentionOpen(false);
-          setTaskPickerOpen(false);
-          setAttachMenuOpen(false);
-        },
-        "aria-label": "Stickers",
-        className: `chat-composer-button flex items-center justify-center ${stickerOpen ? "is-active" : ""}`
-      },
-      /* @__PURE__ */ React.createElement(Icon, { name: "Sticker", size: 18 })
-    ), stickerOpen && /* @__PURE__ */ React.createElement("div", { className: "chat-picker chat-sticker-picker absolute bottom-full right-0 z-40 mb-2 w-80 p-3 sm:left-0 sm:right-auto" }, /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        ref: stickerInputRef,
-        type: "file",
-        accept: "image/webp,image/gif,image/png,image/jpeg,image/svg+xml",
-        className: "hidden",
-        onChange: (event) => handleStickerUpload(event.target.files)
-      }
-    ), /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between border-b border-slate-200/70 px-1 pb-2 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-800 dark:text-slate-100" }, "Stickers del equipo"), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] text-slate-500 dark:text-slate-400" }, "Selecciona uno para enviarlo")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onMouseDown: (event) => {
-          event.preventDefault();
-          if (stickerInputRef.current)
-            stickerInputRef.current.click();
-        },
-        disabled: uploadingSticker,
-        className: "chat-picker-action flex items-center gap-1.5 px-2 text-xs font-bold disabled:opacity-50"
-      },
-      /* @__PURE__ */ React.createElement(
-        Icon,
-        {
-          name: uploadingSticker ? "Loader2" : "Plus",
-          size: 12,
-          className: uploadingSticker ? "animate-spin" : ""
-        }
-      ),
-      "Subir"
-    ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onMouseDown: (event) => {
-          event.preventDefault();
-          setStickerOpen(false);
-        },
-        "aria-label": "Cerrar",
-        className: "chat-composer-button"
-      },
-      /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 13 })
-    ))), /* @__PURE__ */ React.createElement("div", { className: "mt-2 max-h-72 overflow-y-auto custom-scroll" }, customStickers.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-4 gap-2 pb-1" }, customStickers.map((sticker) => /* @__PURE__ */ React.createElement(
       "div",
       {
-        key: sticker.id,
-        className: "group/st relative"
+        className: `chat-compose-actions relative flex items-center gap-2 px-2 pb-2 ${recording ? "is-recording" : ""}`
       },
       /* @__PURE__ */ React.createElement(
-        "button",
+        "input",
         {
-          onMouseDown: (event) => {
-            event.preventDefault();
-            handleSendSticker(sticker.id);
-          },
-          title: sticker.name,
-          disabled: submitting,
-          className: "chat-sticker-tile flex w-full items-center justify-center disabled:opacity-50"
-        },
-        renderSticker(sticker.id, 60)
-      ),
-      (canModerate || String(sticker.authorId || "") === myId) && /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          onMouseDown: (event) => {
-            event.preventDefault();
-            if (onDeleteSticker && confirm(
-              "\xBFEliminar este sticker de la biblioteca?"
-            ))
-              onDeleteSticker(sticker.id);
-          },
-          "aria-label": "Eliminar sticker",
-          className: "chat-sticker-delete absolute -right-1 -top-1 items-center justify-center"
-        },
-        /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 9 })
-      )
-    ))) : /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onMouseDown: (event) => {
-          event.preventDefault();
-          if (stickerInputRef.current)
-            stickerInputRef.current.click();
-        },
-        className: "flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-slate-400 transition-colors hover:border-blue-400 hover:text-blue-500 dark:border-white/15"
-      },
-      /* @__PURE__ */ React.createElement(Icon, { name: "Sticker", size: 28 }),
-      /* @__PURE__ */ React.createElement("span", { className: "text-xs font-semibold" }, "A\xFAn no hay stickers"),
-      /* @__PURE__ */ React.createElement("span", { className: "text-[11px]" }, "Pulsa para subir el primero (webp, gif o png)")
-    )))), /* @__PURE__ */ React.createElement("span", { className: "chat-compose-hint ml-auto hidden sm:block" }, "Enter para enviar \xB7 Shift+Enter salto de l\xEDnea"), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: handleSubmit,
-        disabled: submitting || !text.trim() && pending.length === 0,
-        "aria-label": "Enviar mensaje",
-        className: "chat-send-button ml-auto flex items-center justify-center disabled:opacity-40"
-      },
-      /* @__PURE__ */ React.createElement(
-        Icon,
-        {
-          name: submitting ? "Loader2" : "Send",
-          size: 16,
-          className: submitting ? "animate-spin" : ""
+          ref: fileInputRef,
+          type: "file",
+          multiple: true,
+          className: "hidden",
+          onChange: (event) => handleFiles(event.target.files)
         }
-      )
-    ))))))
+      ),
+      recording ? /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          className: `chat-recording-bar ${recordingPaused ? "is-paused" : ""}`
+        },
+        /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: () => stopRecording(true),
+            "aria-label": "Eliminar grabaci\xF3n",
+            className: "chat-recording-control is-delete"
+          },
+          /* @__PURE__ */ React.createElement(Icon, { name: "Trash2", size: 21 })
+        ),
+        /* @__PURE__ */ React.createElement("div", { className: "chat-recording-timer", "aria-live": "polite" }, /* @__PURE__ */ React.createElement("span", { className: "chat-recording-dot", "aria-hidden": "true" }), /* @__PURE__ */ React.createElement("span", null, formatVoiceDuration(recordSeconds))),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            className: "chat-recording-wave",
+            role: "img",
+            "aria-label": recordingPaused ? "Grabaci\xF3n pausada" : "Grabando audio"
+          },
+          CHAT_VOICE_WAVEFORM.slice(0, 24).map((height, index) => /* @__PURE__ */ React.createElement(
+            "span",
+            {
+              key: `${height}-${index}`,
+              style: {
+                height: `${Math.max(5, Math.round(height * 0.72))}px`,
+                animationDelay: `${index % 8 * -70}ms`
+              }
+            }
+          ))
+        ),
+        /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: toggleRecordingPause,
+            "aria-label": recordingPaused ? "Continuar grabaci\xF3n" : "Pausar grabaci\xF3n",
+            className: "chat-recording-control"
+          },
+          /* @__PURE__ */ React.createElement(
+            Icon,
+            {
+              name: recordingPaused ? "Play" : "PauseCircle",
+              size: 24
+            }
+          )
+        ),
+        /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: () => stopRecording(false, true),
+            disabled: submitting,
+            "aria-label": "Enviar nota de voz",
+            className: "chat-recording-send"
+          },
+          /* @__PURE__ */ React.createElement(
+            Icon,
+            {
+              name: submitting ? "Loader2" : "Send",
+              size: 20,
+              className: submitting ? "animate-spin" : ""
+            }
+          )
+        )
+      ) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => {
+            setAttachMenuOpen((open) => !open);
+            setMentionOpen(false);
+            setTaskPickerOpen(false);
+          },
+          "aria-label": "Adjuntar archivo",
+          disabled: uploading,
+          className: `chat-composer-button flex items-center justify-center disabled:opacity-50 ${attachMenuOpen ? "is-active" : ""}`
+        },
+        /* @__PURE__ */ React.createElement(
+          Icon,
+          {
+            name: uploading ? "Loader2" : "Paperclip",
+            size: 18,
+            className: uploading ? "animate-spin" : ""
+          }
+        )
+      ), attachMenuOpen && /* @__PURE__ */ React.createElement("div", { className: "chat-picker absolute bottom-full left-0 z-30 mb-2 w-52 py-1" }, /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onMouseDown: (event) => {
+            event.preventDefault();
+            openFilePicker("image/*");
+          },
+          className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "Image", size: 16, className: "text-slate-500" }),
+        "Imagen"
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onMouseDown: (event) => {
+            event.preventDefault();
+            openFilePicker("video/*");
+          },
+          className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "Video", size: 16, className: "text-slate-500" }),
+        "Video"
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onMouseDown: (event) => {
+            event.preventDefault();
+            openFilePicker(
+              "application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+            );
+          },
+          className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "FileText", size: 16, className: "text-slate-500" }),
+        "Documento / PDF"
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onMouseDown: (event) => {
+            event.preventDefault();
+            openFilePicker("");
+          },
+          className: "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "FilePlus", size: 16, className: "text-slate-500" }),
+        "Cualquier archivo"
+      ))), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: startRecording,
+          "aria-label": "Grabar nota de voz",
+          className: "chat-composer-button flex items-center justify-center"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "Microphone", size: 18 })
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => {
+            setTaskPickerOpen((open) => !open);
+            setMentionOpen(false);
+            setAttachMenuOpen(false);
+          },
+          "aria-label": "Enlazar tarea",
+          className: `chat-composer-button flex items-center justify-center ${taskRef || taskPickerOpen ? "is-active" : ""}`
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "ClipboardList", size: 17 })
+      ), /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => {
+            setStickerOpen((open) => !open);
+            setMentionOpen(false);
+            setTaskPickerOpen(false);
+            setAttachMenuOpen(false);
+          },
+          "aria-label": "Stickers",
+          className: `chat-composer-button flex items-center justify-center ${stickerOpen ? "is-active" : ""}`
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "Sticker", size: 18 })
+      ), stickerOpen && /* @__PURE__ */ React.createElement("div", { className: "chat-picker chat-sticker-picker absolute bottom-full right-0 z-40 mb-2 w-80 p-3 sm:left-0 sm:right-auto" }, /* @__PURE__ */ React.createElement(
+        "input",
+        {
+          ref: stickerInputRef,
+          type: "file",
+          accept: "image/webp,image/gif,image/png,image/jpeg,image/svg+xml",
+          className: "hidden",
+          onChange: (event) => handleStickerUpload(event.target.files)
+        }
+      ), /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between border-b border-slate-200/70 px-1 pb-2 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-800 dark:text-slate-100" }, "Stickers del equipo"), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] text-slate-500 dark:text-slate-400" }, "Selecciona uno para enviarlo")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onMouseDown: (event) => {
+            event.preventDefault();
+            if (stickerInputRef.current)
+              stickerInputRef.current.click();
+          },
+          disabled: uploadingSticker,
+          className: "chat-picker-action flex items-center gap-1.5 px-2 text-xs font-bold disabled:opacity-50"
+        },
+        /* @__PURE__ */ React.createElement(
+          Icon,
+          {
+            name: uploadingSticker ? "Loader2" : "Plus",
+            size: 12,
+            className: uploadingSticker ? "animate-spin" : ""
+          }
+        ),
+        "Subir"
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onMouseDown: (event) => {
+            event.preventDefault();
+            setStickerOpen(false);
+          },
+          "aria-label": "Cerrar",
+          className: "chat-composer-button"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 13 })
+      ))), /* @__PURE__ */ React.createElement("div", { className: "mt-2 max-h-72 overflow-y-auto custom-scroll" }, customStickers.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-4 gap-2 pb-1" }, customStickers.map((sticker) => /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          key: sticker.id,
+          className: "group/st relative"
+        },
+        /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            onMouseDown: (event) => {
+              event.preventDefault();
+              handleSendSticker(sticker.id);
+            },
+            title: sticker.name,
+            disabled: submitting,
+            className: "chat-sticker-tile flex w-full items-center justify-center disabled:opacity-50"
+          },
+          renderSticker(sticker.id, 60)
+        ),
+        (canModerate || String(sticker.authorId || "") === myId) && /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            onMouseDown: (event) => {
+              event.preventDefault();
+              if (onDeleteSticker && confirm(
+                "\xBFEliminar este sticker de la biblioteca?"
+              ))
+                onDeleteSticker(sticker.id);
+            },
+            "aria-label": "Eliminar sticker",
+            className: "chat-sticker-delete absolute -right-1 -top-1 items-center justify-center"
+          },
+          /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 9 })
+        )
+      ))) : /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onMouseDown: (event) => {
+            event.preventDefault();
+            if (stickerInputRef.current)
+              stickerInputRef.current.click();
+          },
+          className: "flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-slate-400 transition-colors hover:border-blue-400 hover:text-blue-500 dark:border-white/15"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "Sticker", size: 28 }),
+        /* @__PURE__ */ React.createElement("span", { className: "text-xs font-semibold" }, "A\xFAn no hay stickers"),
+        /* @__PURE__ */ React.createElement("span", { className: "text-[11px]" }, "Pulsa para subir el primero (webp, gif o png)")
+      )))), /* @__PURE__ */ React.createElement("span", { className: "chat-compose-hint ml-auto hidden sm:block" }, "Enter para enviar \xB7 Shift+Enter salto de l\xEDnea"), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: handleSubmit,
+          disabled: submitting || !text.trim() && pending.length === 0,
+          "aria-label": "Enviar mensaje",
+          className: "chat-send-button ml-auto flex items-center justify-center disabled:opacity-40"
+        },
+        /* @__PURE__ */ React.createElement(
+          Icon,
+          {
+            name: submitting ? "Loader2" : "Send",
+            size: 16,
+            className: submitting ? "animate-spin" : ""
+          }
+        )
+      ))
+    ))))
   ), deleteTarget && /* @__PURE__ */ React.createElement(
     "div",
     {
