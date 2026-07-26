@@ -4993,30 +4993,32 @@ function App() {
     }
   ));
 }
-var SidebarItem = ({
-  active,
-  onClick,
-  icon,
-  label,
-  color,
-  badge,
-  badgeColor
-}) => /* @__PURE__ */ React.createElement(
+var SIDEBAR_ACCENT_HEX = {
+  purple: "#a855f7",
+  blue: "#3b82f6",
+  indigo: "#6366f1",
+  violet: "#8b5cf6",
+  amber: "#f59e0b",
+  emerald: "#10b981",
+  slate: "#94a3b8"
+};
+var SidebarItem = ({ active, onClick, icon, label, color, badge }) => /* @__PURE__ */ React.createElement(
   "button",
   {
     onClick,
     "aria-current": active ? "page" : void 0,
-    className: `relative w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors group ${active ? "bg-[#f1f0ed] dark:bg-[#2a2a27] text-[#2f3437] dark:text-[#f1efe9]" : "text-[#787774] dark:text-[#aaa7a0] hover:bg-[#f7f6f3] dark:hover:bg-[#2a2a27] hover:text-[#2f3437] dark:hover:text-[#f1efe9]"}`
+    className: `group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors ${active ? "bg-[#f1f0ed] text-[#2f3437] dark:bg-[#2a2a27] dark:text-[#f1efe9]" : "text-[#787774] hover:bg-[#f7f6f3] hover:text-[#2f3437] dark:text-[#aaa7a0] dark:hover:bg-[#2a2a27] dark:hover:text-[#f1efe9]"}`
   },
-  /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 19, className: "shrink-0 text-[inherit]" }),
-  /* @__PURE__ */ React.createElement("span", { className: "font-medium text-sm flex-1 text-left text-[inherit] truncate" }, label),
-  badge != null && /* @__PURE__ */ React.createElement(
+  /* @__PURE__ */ React.createElement(
     "span",
     {
-      className: "text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#eae9e5] text-[#555552] dark:bg-[#333330] dark:text-[#d3d0c9]"
-    },
-    badge
-  )
+      className: `absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full transition-all ${active ? "h-5 w-1" : "h-0 w-0"}`,
+      style: active ? { backgroundColor: SIDEBAR_ACCENT_HEX[color] || "#94a3b8" } : void 0
+    }
+  ),
+  /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 18, className: "shrink-0 text-[inherit]" }),
+  /* @__PURE__ */ React.createElement("span", { className: "flex-1 truncate text-left text-sm font-medium text-[inherit]" }, label),
+  badge != null && /* @__PURE__ */ React.createElement("span", { className: "rounded-full bg-[#eae9e5] px-2 py-0.5 text-[10px] font-bold text-[#555552] dark:bg-[#333330] dark:text-[#d3d0c9]" }, badge)
 );
 var ViewTabs = ({ items, active, onChange }) => /* @__PURE__ */ React.createElement(
   "div",
@@ -8311,7 +8313,7 @@ var ClientChatView = ({
     if (!message) return "Sin mensajes";
     if (message.text) return message.text;
     const count = Array.isArray(message.attachments) ? message.attachments.length : 0;
-    return count > 0 ? `\u{1F4CE} ${count} archivo${count === 1 ? "" : "s"}` : "\u2026";
+    return count > 0 ? `${count} archivo${count === 1 ? "" : "s"}` : "\u2026";
   };
   const term = search.trim().toLowerCase();
   const sortedClients = [...clients].filter((client) => !term || (client.name || "").toLowerCase().includes(term)).sort((a, b) => {
@@ -8736,7 +8738,7 @@ var ClientChatView = ({
         size: 12,
         className: "shrink-0 text-amber-600 dark:text-amber-400"
       }
-    ), /* @__PURE__ */ React.createElement("span", { className: "shrink-0 font-bold text-slate-600 dark:text-slate-300" }, pinned.authorName, ":"), /* @__PURE__ */ React.createElement("span", { className: "truncate text-slate-500 dark:text-slate-400" }, pinned.text || (Array.isArray(pinned.attachments) && pinned.attachments.length ? "\u{1F4CE} Adjunto" : "")), /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("span", { className: "shrink-0 font-bold text-slate-600 dark:text-slate-300" }, pinned.authorName, ":"), /* @__PURE__ */ React.createElement("span", { className: "truncate text-slate-500 dark:text-slate-400" }, pinned.text || (Array.isArray(pinned.attachments) && pinned.attachments.length ? "Adjunto" : "")), /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => onPin && onPin(pinned),
@@ -9029,7 +9031,7 @@ var ClientChatView = ({
         size: 14,
         className: "shrink-0 text-blue-500"
       }
-    ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-bold text-blue-600 dark:text-blue-400" }, "Respondiendo a ", replyingTo.authorName || "mensaje"), /* @__PURE__ */ React.createElement("p", { className: "truncate text-xs text-slate-500 dark:text-slate-400" }, replyingTo.text || (Array.isArray(replyingTo.attachments) && replyingTo.attachments.length ? "\u{1F4CE} Adjunto" : ""))), /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-bold text-blue-600 dark:text-blue-400" }, "Respondiendo a ", replyingTo.authorName || "mensaje"), /* @__PURE__ */ React.createElement("p", { className: "truncate text-xs text-slate-500 dark:text-slate-400" }, replyingTo.text || (Array.isArray(replyingTo.attachments) && replyingTo.attachments.length ? "Adjunto" : ""))), /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => setReplyingTo(null),
@@ -9436,7 +9438,7 @@ var ClientChatView = ({
             if (onSendMessage) {
               created = await onSendMessage({
                 clientId: activeClient.id,
-                text: callPicker.mode === "add" ? "\u{1F4DE} Invit\xF3 a la llamada" : "\u{1F4DE} Inici\xF3 una llamada",
+                text: callPicker.mode === "add" ? "Invit\xF3 a la llamada" : "Inici\xF3 una llamada",
                 mentionedIds: callSelected,
                 call: { roomId: room, provider: "jitsi" }
               });

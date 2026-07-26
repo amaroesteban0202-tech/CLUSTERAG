@@ -6498,28 +6498,32 @@ function App() {
 }
 
 // --- SUBCOMPONENTES ---
-const SidebarItem = ({
-  active,
-  onClick,
-  icon,
-  label,
-  color,
-  badge,
-  badgeColor,
-}) => (
+const SIDEBAR_ACCENT_HEX = {
+  purple: "#a855f7",
+  blue: "#3b82f6",
+  indigo: "#6366f1",
+  violet: "#8b5cf6",
+  amber: "#f59e0b",
+  emerald: "#10b981",
+  slate: "#94a3b8",
+};
+
+const SidebarItem = ({ active, onClick, icon, label, color, badge }) => (
   <button
     onClick={onClick}
     aria-current={active ? "page" : undefined}
-    className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors group ${active ? "bg-[#f1f0ed] dark:bg-[#2a2a27] text-[#2f3437] dark:text-[#f1efe9]" : "text-[#787774] dark:text-[#aaa7a0] hover:bg-[#f7f6f3] dark:hover:bg-[#2a2a27] hover:text-[#2f3437] dark:hover:text-[#f1efe9]"}`}
+    className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors ${active ? "bg-[#f1f0ed] text-[#2f3437] dark:bg-[#2a2a27] dark:text-[#f1efe9]" : "text-[#787774] hover:bg-[#f7f6f3] hover:text-[#2f3437] dark:text-[#aaa7a0] dark:hover:bg-[#2a2a27] dark:hover:text-[#f1efe9]"}`}
   >
-    <Icon name={icon} size={19} className="shrink-0 text-[inherit]" />
-    <span className="font-medium text-sm flex-1 text-left text-[inherit] truncate">
+    <span
+      className={`absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full transition-all ${active ? "h-5 w-1" : "h-0 w-0"}`}
+      style={active ? { backgroundColor: SIDEBAR_ACCENT_HEX[color] || "#94a3b8" } : undefined}
+    />
+    <Icon name={icon} size={18} className="shrink-0 text-[inherit]" />
+    <span className="flex-1 truncate text-left text-sm font-medium text-[inherit]">
       {label}
     </span>
     {badge != null && (
-      <span
-        className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#eae9e5] text-[#555552] dark:bg-[#333330] dark:text-[#d3d0c9]"
-      >
+      <span className="rounded-full bg-[#eae9e5] px-2 py-0.5 text-[10px] font-bold text-[#555552] dark:bg-[#333330] dark:text-[#d3d0c9]">
         {badge}
       </span>
     )}
@@ -11536,7 +11540,7 @@ const ClientChatView = ({
     const count = Array.isArray(message.attachments)
       ? message.attachments.length
       : 0;
-    return count > 0 ? `📎 ${count} archivo${count === 1 ? "" : "s"}` : "…";
+    return count > 0 ? `${count} archivo${count === 1 ? "" : "s"}` : "…";
   };
 
   const term = search.trim().toLowerCase();
@@ -12072,7 +12076,7 @@ const ClientChatView = ({
                       {pinned.text ||
                         (Array.isArray(pinned.attachments) &&
                         pinned.attachments.length
-                          ? "📎 Adjunto"
+                          ? "Adjunto"
                           : "")}
                     </span>
                     <button
@@ -12419,7 +12423,7 @@ const ClientChatView = ({
                       {replyingTo.text ||
                         (Array.isArray(replyingTo.attachments) &&
                         replyingTo.attachments.length
-                          ? "📎 Adjunto"
+                          ? "Adjunto"
                           : "")}
                     </p>
                   </div>
@@ -12951,8 +12955,8 @@ const ClientChatView = ({
                       clientId: activeClient.id,
                       text:
                         callPicker.mode === "add"
-                          ? "📞 Invitó a la llamada"
-                          : "📞 Inició una llamada",
+                          ? "Invitó a la llamada"
+                          : "Inició una llamada",
                       mentionedIds: callSelected,
                       call: { roomId: room, provider: "jitsi" },
                     });
