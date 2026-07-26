@@ -12406,7 +12406,7 @@ const ClientChatView = ({
                               setMenuFor(menuFor === message.id ? null : message.id)
                             }
                             aria-label="Opciones del mensaje"
-                            className={`absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100 ${mine ? "text-white/80 hover:bg-black/20" : "text-slate-400 hover:bg-black/5 dark:hover:bg-white/10"}`}
+                            className={`absolute right-1 top-1 z-30 flex h-6 w-6 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100 ${mine ? "text-white/80 hover:bg-black/20" : "text-slate-400 hover:bg-black/5 dark:hover:bg-white/10"}`}
                           >
                             <Icon name="ChevronDown" size={14} />
                           </button>
@@ -12432,7 +12432,7 @@ const ClientChatView = ({
                         )}
                         {menuFor === message.id && (
                           <div
-                            className={`chat-action-menu absolute top-7 z-40 w-52 rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 text-slate-700 shadow-2xl backdrop-blur dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-100 ${mine ? "right-0" : "left-0"}`}
+                            className={`chat-action-menu absolute bottom-full z-50 mb-2 w-52 rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 text-slate-700 shadow-2xl backdrop-blur dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-100 ${mine ? "right-0" : "left-0"}`}
                           >
                             {[
                               {
