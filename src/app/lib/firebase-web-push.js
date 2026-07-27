@@ -70,7 +70,9 @@ export const registerFirebaseWebPush = async ({ onMessage } = {}) => {
     return {
         token,
         unsubscribe: typeof onMessage === 'function'
-            ? messaging.onMessage(onMessage)
+            ? messaging.onMessage((payload) => onMessage(payload, {
+                serviceWorkerRegistration
+            }))
             : null
     };
 };

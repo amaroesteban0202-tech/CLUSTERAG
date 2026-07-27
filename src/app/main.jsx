@@ -1659,6 +1659,33 @@ const unlockIncomingCallAudio = async () => {
   }
 };
 
+const playBrowserNotificationSound = () => {
+  try {
+    const context = getIncomingCallAudioContext();
+    if (!context || context.state !== "running") return false;
+    const startsAt = context.currentTime + 0.01;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(880, startsAt);
+    oscillator.frequency.exponentialRampToValueAtTime(660, startsAt + 0.16);
+    gain.gain.setValueAtTime(0.0001, startsAt);
+    gain.gain.exponentialRampToValueAtTime(0.16, startsAt + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startsAt + 0.24);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(startsAt);
+    oscillator.stop(startsAt + 0.25);
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      gain.disconnect();
+    };
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 // Tono sintetizado para no depender de un archivo de audio externo. El navegador
 // puede bloquearlo hasta la primera interacción del usuario; el aviso visual
 // permanece disponible en ese caso.
@@ -2142,7 +2169,7 @@ function App() {
     let disposed = false;
     let unsubscribe = null;
     registerFirebaseWebPush({
-      onMessage: (payload) => {
+      onMessage: (payload, { serviceWorkerRegistration } = {}) => {
         const data = payload?.data || {};
         const title =
           data.title ||
@@ -2154,20 +2181,11 @@ function App() {
           "Tienes una notificación nueva";
         const messageId = String(data.messageId || "");
         if (messageId) webPushShownMessageIdsRef.current.add(messageId);
-        try {
-          const notification = new Notification(title, {
-            body,
-            tag: messageId
-              ? `cluster-message-${messageId}`
-              : "cluster-notification",
-          });
-          notification.onclick = () => {
-            window.focus();
-            notification.close();
-          };
-        } catch {
-          /* El service worker conserva la entrega en segundo plano. */
-        }
+        playBrowserNotificationSound();
+        serviceWorkerRegistration?.active?.postMessage({
+          type: "cluster:show-notification",
+          notification: { title, body, data },
+        });
         window.dispatchEvent(
           new CustomEvent("cluster:push", {
             detail: { collections: ["client_chats"] },
