@@ -1,4 +1,4 @@
-import { getApp, getApps, initializeApp } from 'firebase-admin/app';
+import { cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { env } from '../config/env.js';
 
 let firebaseAdminApp = null;
@@ -13,6 +13,13 @@ export const getFirebaseAdminApp = () => {
     const options = {};
     if (env.firebase.projectId) {
         options.projectId = env.firebase.projectId;
+    }
+    if (env.firebase.clientEmail && env.firebase.privateKey) {
+        options.credential = cert({
+            projectId: env.firebase.projectId,
+            clientEmail: env.firebase.clientEmail,
+            privateKey: env.firebase.privateKey
+        });
     }
 
     firebaseAdminApp = initializeApp(options);

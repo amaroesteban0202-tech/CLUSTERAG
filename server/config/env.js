@@ -137,7 +137,9 @@ export const env = {
         storageBucket: process.env.FIREBASE_STORAGE_BUCKET || `${defaultFirebaseProjectId}.appspot.com`,
         messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
         appId: process.env.FIREBASE_APP_ID || '',
-        measurementId: process.env.FIREBASE_MEASUREMENT_ID || ''
+        measurementId: process.env.FIREBASE_MEASUREMENT_ID || '',
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
+        privateKey: normalizePem(process.env.FIREBASE_PRIVATE_KEY)
     },
     // Jitsi as a Service (8x8). La private key va SOLO en variables de entorno.
     jaas: {
