@@ -2193,7 +2193,7 @@ function App() {
       return result;
     } catch (error) {
       console.error(error);
-      showToast(errorMessage, "error");
+      showToast(error?.message || errorMessage, "error");
       await auditAction({
         action: `${action}_failed`,
         entityType,
@@ -3243,16 +3243,16 @@ function App() {
     const normalizedTime = normalizeTimeValue(data.time);
     if (!normalizedDate || !normalizedTime) {
       showToast("La tarea de gestion requiere fecha y hora limite.", "error");
-      return;
+      return null;
     }
     if (data.notificationsEnabled !== false && !normalizeEmail(member?.email)) {
       showToast(
         "El integrante asignado necesita un correo para recibir recordatorios automaticos.",
         "error"
       );
-      return;
+      return null;
     }
-    await runMutation({
+    return await runMutation({
       permission: "create_management_tasks",
       action: "create",
       entityType: "managementTask",
@@ -3277,20 +3277,20 @@ function App() {
     const normalizedTime = normalizeTimeValue(data.time);
     if (!normalizedDate || !normalizedTime) {
       showToast("La tarea de gestion requiere fecha y hora limite.", "error");
-      return;
+      return null;
     }
     if (data.notificationsEnabled !== false && !normalizeEmail(member?.email)) {
       showToast(
         "El integrante asignado necesita un correo para recibir recordatorios automaticos.",
         "error"
       );
-      return;
+      return null;
     }
     const updatePermission = userHasPermission(
       currentUserProfile,
       "manage_management_tasks"
     ) ? "manage_management_tasks" : "create_management_tasks";
-    await runMutation({
+    return await runMutation({
       permission: updatePermission,
       action: "update",
       entityType: "managementTask",
@@ -6644,7 +6644,7 @@ var TaskRoomInspector = ({
       "aria-label": "Cerrar inspector"
     },
     /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 18 })
-  )), /* @__PURE__ */ React.createElement("div", { className: "mb-6 grid grid-cols-2 gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "rounded-lg border border-[#dedbd4] bg-white px-3 py-2.5 dark:border-white/10 dark:bg-[#242824]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Estado"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200" }, status?.title || "Sin estado")), /* @__PURE__ */ React.createElement("div", { className: `rounded-lg border px-3 py-2.5 ${priority.toLowerCase() === "urgente" ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300" : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300"}` }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] opacity-70" }, "Prioridad"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs font-semibold" }, priority))), /* @__PURE__ */ React.createElement("div", { className: "mb-6 grid grid-cols-2 gap-4 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Responsable"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, assignee ? /* @__PURE__ */ React.createElement(React.Fragment, null, assignee.photo ? /* @__PURE__ */ React.createElement("img", { src: assignee.photo, alt: "", className: "h-8 w-8 rounded-full object-cover" }) : /* @__PURE__ */ React.createElement("span", { className: `flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-bold ${assignee.className}` }, assignee.initials), /* @__PURE__ */ React.createElement("span", { className: "truncate text-xs font-semibold text-slate-700 dark:text-slate-200" }, assignee.name)) : /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500" }, "Sin asignar"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Vencimiento"), /* @__PURE__ */ React.createElement("p", { className: `inline-flex items-center gap-1.5 text-xs font-semibold ${isOverdue ? "text-red-500" : "text-slate-700 dark:text-slate-200"}` }, /* @__PURE__ */ React.createElement(Icon, { name: "CalendarDays", size: 14 }), formatShortDate(task.date), isOverdue ? " \xB7 atrasada" : ""))), /* @__PURE__ */ React.createElement("div", { className: "mb-6 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", { className: "mb-2.5 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Progreso"), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-semibold text-slate-500" }, progress, "%")), /* @__PURE__ */ React.createElement("div", { className: "mb-2 h-1.5 overflow-hidden rounded-full bg-[#dedbd4] dark:bg-white/10" }, /* @__PURE__ */ React.createElement("span", { className: "block h-full rounded-full bg-[#b78000] transition-[width]", style: { width: `${progress}%` } })), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, checklist.length ? `${completed} de ${checklist.length} completadas` : "Sin checklist")), task.notes && /* @__PURE__ */ React.createElement("div", { className: "mb-6 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Descripci\xF3n"), /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap text-sm leading-relaxed text-slate-600 dark:text-slate-300" }, task.notes)), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-3 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Actividad reciente"), activity.length ? /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, activity.map((item) => /* @__PURE__ */ React.createElement("div", { key: item.id, className: "flex gap-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2f6f58] text-[9px] font-bold text-white" }, getInitials(item.author)), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-semibold text-slate-700 dark:text-slate-200" }, item.author), /* @__PURE__ */ React.createElement("p", { className: "mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400" }, item.text))))) : /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Sin actividad registrada."))), /* @__PURE__ */ React.createElement("div", { className: "border-t border-[#dedbd4] p-4 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("div", { className: "mb-6 grid grid-cols-2 gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "rounded-lg border border-[#dedbd4] bg-white px-3 py-2.5 dark:border-white/10 dark:bg-[#242824]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Estado"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200" }, status?.title || "Sin estado")), /* @__PURE__ */ React.createElement("div", { className: `rounded-lg border px-3 py-2.5 ${priority.toLowerCase() === "urgente" ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300" : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300"}` }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] opacity-70" }, "Prioridad"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs font-semibold" }, priority))), /* @__PURE__ */ React.createElement("div", { className: "mb-6 grid grid-cols-2 gap-4 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Responsable"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, assignee ? /* @__PURE__ */ React.createElement(React.Fragment, null, assignee.photo ? /* @__PURE__ */ React.createElement("img", { src: assignee.photo, alt: "", className: "h-8 w-8 rounded-full object-cover" }) : /* @__PURE__ */ React.createElement("span", { className: `flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-bold ${assignee.className}` }, assignee.initials), /* @__PURE__ */ React.createElement("span", { className: "truncate text-xs font-semibold text-slate-700 dark:text-slate-200" }, assignee.name)) : /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500" }, "Sin asignar"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Vencimiento"), /* @__PURE__ */ React.createElement("p", { className: `inline-flex items-center gap-1.5 text-xs font-semibold ${isOverdue ? "text-red-500" : "text-slate-700 dark:text-slate-200"}` }, /* @__PURE__ */ React.createElement(Icon, { name: "CalendarDays", size: 14 }), formatShortDate(task.date), isOverdue ? " \xB7 atrasada" : ""))), task.assignedByName && /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center gap-2.5 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300" }, /* @__PURE__ */ React.createElement(Icon, { name: "UserCheck", size: 15 })), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Creada por"), /* @__PURE__ */ React.createElement("p", { className: "mt-0.5 truncate text-xs font-semibold text-slate-700 dark:text-slate-200" }, task.assignedByName))), /* @__PURE__ */ React.createElement("div", { className: "mb-6 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", { className: "mb-2.5 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Progreso"), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-semibold text-slate-500" }, progress, "%")), /* @__PURE__ */ React.createElement("div", { className: "mb-2 h-1.5 overflow-hidden rounded-full bg-[#dedbd4] dark:bg-white/10" }, /* @__PURE__ */ React.createElement("span", { className: "block h-full rounded-full bg-[#b78000] transition-[width]", style: { width: `${progress}%` } })), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, checklist.length ? `${completed} de ${checklist.length} completadas` : "Sin checklist")), task.notes && /* @__PURE__ */ React.createElement("div", { className: "mb-6 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Descripci\xF3n"), /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap text-sm leading-relaxed text-slate-600 dark:text-slate-300" }, task.notes)), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-3 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Actividad reciente"), activity.length ? /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, activity.map((item) => /* @__PURE__ */ React.createElement("div", { key: item.id, className: "flex gap-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2f6f58] text-[9px] font-bold text-white" }, getInitials(item.author)), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-semibold text-slate-700 dark:text-slate-200" }, item.author), /* @__PURE__ */ React.createElement("p", { className: "mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400" }, item.text))))) : /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Sin actividad registrada."))), /* @__PURE__ */ React.createElement("div", { className: "border-t border-[#dedbd4] p-4 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       type: "button",
@@ -11961,6 +11961,7 @@ var CreateTaskModal = ({
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [confirmNoDate, setConfirmNoDate] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   useEffect(() => {
     if (config.isOpen) {
       if (config.isEdit && data) {
@@ -12067,85 +12068,93 @@ var CreateTaskModal = ({
     icon && /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 11 }),
     children || label
   );
-  const doSubmit = () => {
-    if (config.isEdit && data?.id) {
-      if (type === "accountTask")
-        actions.updateAccountTask(data.id, {
-          date,
-          title: title.trim(),
-          time,
-          contextId: assigneeId,
-          clientId,
-          notes,
-          priority
-        });
-      if (type === "editingTask")
-        actions.updateEditingTask(data.id, {
-          date,
-          title: title.trim(),
-          priority: priority || "normal",
-          hierarchy,
-          status,
-          notes,
-          contextId: assigneeId,
-          clientId
-        });
-      if (type === "managementTask")
-        actions.updateManagementTask(data.id, {
-          date,
-          title: title.trim(),
-          time,
-          contextId: assigneeId,
-          clientId,
-          category,
-          notes,
-          priority,
-          notificationsEnabled: data.notificationsEnabled || false
-        });
-    } else {
-      if (type === "accountTask")
-        actions.addAccountTask({
-          date,
-          title: title.trim(),
-          time,
-          contextId: assigneeId,
-          clientId,
-          notes,
-          priority
-        });
-      if (type === "editingTask")
-        actions.addEditingTask({
-          date,
-          title: title.trim(),
-          priority: priority || "normal",
-          hierarchy,
-          status,
-          notes,
-          contextId: assigneeId,
-          clientId
-        });
-      if (type === "managementTask")
-        actions.addManagementTask({
-          date,
-          title: title.trim(),
-          time,
-          contextId: assigneeId,
-          clientId,
-          category,
-          notes,
-          priority,
-          notificationsEnabled: false
-        });
+  const doSubmit = async () => {
+    if (submitting) return null;
+    setSubmitting(true);
+    try {
+      let result;
+      if (config.isEdit && data?.id) {
+        if (type === "accountTask")
+          result = await actions.updateAccountTask(data.id, {
+            date,
+            title: title.trim(),
+            time,
+            contextId: assigneeId,
+            clientId,
+            notes,
+            priority
+          });
+        if (type === "editingTask")
+          result = await actions.updateEditingTask(data.id, {
+            date,
+            title: title.trim(),
+            priority: priority || "normal",
+            hierarchy,
+            status,
+            notes,
+            contextId: assigneeId,
+            clientId
+          });
+        if (type === "managementTask")
+          result = await actions.updateManagementTask(data.id, {
+            date,
+            title: title.trim(),
+            time,
+            contextId: assigneeId,
+            clientId,
+            category,
+            notes,
+            priority,
+            notificationsEnabled: data.notificationsEnabled || false
+          });
+      } else {
+        if (type === "accountTask")
+          result = await actions.addAccountTask({
+            date,
+            title: title.trim(),
+            time,
+            contextId: assigneeId,
+            clientId,
+            notes,
+            priority
+          });
+        if (type === "editingTask")
+          result = await actions.addEditingTask({
+            date,
+            title: title.trim(),
+            priority: priority || "normal",
+            hierarchy,
+            status,
+            notes,
+            contextId: assigneeId,
+            clientId
+          });
+        if (type === "managementTask")
+          result = await actions.addManagementTask({
+            date,
+            title: title.trim(),
+            time,
+            contextId: assigneeId,
+            clientId,
+            category,
+            notes,
+            priority,
+            notificationsEnabled: false
+          });
+      }
+      if (type !== "managementTask" || result !== null) onClose();
+      return result;
+    } finally {
+      setSubmitting(false);
     }
-    onClose();
   };
-  const handleSubmit = () => {
-    if (!title.trim()) return;
+  const handleSubmit = async () => {
+    if (!title.trim() || submitting) return;
     if (!date && !config.isEdit) {
       setConfirmNoDate(true);
       return;
     }
-    doSubmit();
+    await doSubmit();
   };
   let displayDate = "";
   if (date) {
@@ -12474,11 +12483,11 @@ var CreateTaskModal = ({
         "button",
         {
           onClick: handleSubmit,
-          disabled: !title.trim(),
+          disabled: !title.trim() || submitting,
           className: `flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-black text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-${tagColor}-600 hover:bg-${tagColor}-700 shadow-sm`
         },
         /* @__PURE__ */ React.createElement(Icon, { name: config.isEdit ? "Save" : "Plus", size: 14 }),
-        config.isEdit ? "Guardar cambios" : `Crear ${typeLabel}`
+        submitting ? "Guardando..." : config.isEdit ? "Guardar cambios" : `Crear ${typeLabel}`
       ))
     ),
     confirmNoDate && /* @__PURE__ */ React.createElement(
@@ -12514,9 +12523,9 @@ var CreateTaskModal = ({
         ), /* @__PURE__ */ React.createElement(
           "button",
           {
-            onClick: () => {
+            onClick: async () => {
               setConfirmNoDate(false);
-              doSubmit();
+              await doSubmit();
             },
             className: "px-5 py-2 text-sm font-black text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors"
           },

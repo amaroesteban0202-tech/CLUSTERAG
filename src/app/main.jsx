@@ -3187,7 +3187,7 @@ function App() {
       return result;
     } catch (error) {
       console.error(error);
-      showToast(errorMessage, "error");
+      showToast(error?.message || errorMessage, "error");
       await auditAction({
         action: `${action}_failed`,
         entityType,
@@ -4450,16 +4450,16 @@ function App() {
     const normalizedTime = normalizeTimeValue(data.time);
     if (!normalizedDate || !normalizedTime) {
       showToast("La tarea de gestion requiere fecha y hora limite.", "error");
-      return;
+      return null;
     }
     if (data.notificationsEnabled !== false && !normalizeEmail(member?.email)) {
       showToast(
         "El integrante asignado necesita un correo para recibir recordatorios automaticos.",
         "error",
       );
-      return;
+      return null;
     }
-    await runMutation({
+    return await runMutation({
       permission: "create_management_tasks",
       action: "create",
       entityType: "managementTask",
@@ -4485,14 +4485,14 @@ function App() {
     const normalizedTime = normalizeTimeValue(data.time);
     if (!normalizedDate || !normalizedTime) {
       showToast("La tarea de gestion requiere fecha y hora limite.", "error");
-      return;
+      return null;
     }
     if (data.notificationsEnabled !== false && !normalizeEmail(member?.email)) {
       showToast(
         "El integrante asignado necesita un correo para recibir recordatorios automaticos.",
         "error",
       );
-      return;
+      return null;
     }
     const updatePermission = userHasPermission(
       currentUserProfile,
@@ -4500,7 +4500,7 @@ function App() {
     )
       ? "manage_management_tasks"
       : "create_management_tasks";
-    await runMutation({
+    return await runMutation({
       permission: updatePermission,
       action: "update",
       entityType: "managementTask",
@@ -8986,6 +8986,22 @@ const TaskRoomInspector = ({
             </p>
           </div>
         </div>
+
+        {task.assignedByName && (
+          <div className="mb-6 flex items-center gap-2.5 border-b border-[#dedbd4] pb-6 dark:border-white/10">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
+              <Icon name="UserCheck" size={15} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                Creada por
+              </p>
+              <p className="mt-0.5 truncate text-xs font-semibold text-slate-700 dark:text-slate-200">
+                {task.assignedByName}
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="mb-6 border-b border-[#dedbd4] pb-6 dark:border-white/10">
           <div className="mb-2.5 flex items-center justify-between">
@@ -16249,6 +16265,7 @@ const CreateTaskModal = ({
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [confirmNoDate, setConfirmNoDate] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // Reset / pre-fill when modal opens
   useEffect(() => {
@@ -16391,86 +16408,94 @@ const CreateTaskModal = ({
     </button>
   );
 
-  const doSubmit = () => {
-    if (config.isEdit && data?.id) {
-      if (type === "accountTask")
-        actions.updateAccountTask(data.id, {
-          date,
-          title: title.trim(),
-          time,
-          contextId: assigneeId,
-          clientId,
-          notes,
-          priority,
-        });
-      if (type === "editingTask")
-        actions.updateEditingTask(data.id, {
-          date,
-          title: title.trim(),
-          priority: priority || "normal",
-          hierarchy,
-          status,
-          notes,
-          contextId: assigneeId,
-          clientId,
-        });
-      if (type === "managementTask")
-        actions.updateManagementTask(data.id, {
-          date,
-          title: title.trim(),
-          time,
-          contextId: assigneeId,
-          clientId,
-          category,
-          notes,
-          priority,
-          notificationsEnabled: data.notificationsEnabled || false,
-        });
-    } else {
-      if (type === "accountTask")
-        actions.addAccountTask({
-          date,
-          title: title.trim(),
-          time,
-          contextId: assigneeId,
-          clientId,
-          notes,
-          priority,
-        });
-      if (type === "editingTask")
-        actions.addEditingTask({
-          date,
-          title: title.trim(),
-          priority: priority || "normal",
-          hierarchy,
-          status,
-          notes,
-          contextId: assigneeId,
-          clientId,
-        });
-      if (type === "managementTask")
-        actions.addManagementTask({
-          date,
-          title: title.trim(),
-          time,
-          contextId: assigneeId,
-          clientId,
-          category,
-          notes,
-          priority,
-          notificationsEnabled: false,
-        });
+  const doSubmit = async () => {
+    if (submitting) return null;
+    setSubmitting(true);
+    try {
+      let result;
+      if (config.isEdit && data?.id) {
+        if (type === "accountTask")
+          result = await actions.updateAccountTask(data.id, {
+            date,
+            title: title.trim(),
+            time,
+            contextId: assigneeId,
+            clientId,
+            notes,
+            priority,
+          });
+        if (type === "editingTask")
+          result = await actions.updateEditingTask(data.id, {
+            date,
+            title: title.trim(),
+            priority: priority || "normal",
+            hierarchy,
+            status,
+            notes,
+            contextId: assigneeId,
+            clientId,
+          });
+        if (type === "managementTask")
+          result = await actions.updateManagementTask(data.id, {
+            date,
+            title: title.trim(),
+            time,
+            contextId: assigneeId,
+            clientId,
+            category,
+            notes,
+            priority,
+            notificationsEnabled: data.notificationsEnabled || false,
+          });
+      } else {
+        if (type === "accountTask")
+          result = await actions.addAccountTask({
+            date,
+            title: title.trim(),
+            time,
+            contextId: assigneeId,
+            clientId,
+            notes,
+            priority,
+          });
+        if (type === "editingTask")
+          result = await actions.addEditingTask({
+            date,
+            title: title.trim(),
+            priority: priority || "normal",
+            hierarchy,
+            status,
+            notes,
+            contextId: assigneeId,
+            clientId,
+          });
+        if (type === "managementTask")
+          result = await actions.addManagementTask({
+            date,
+            title: title.trim(),
+            time,
+            contextId: assigneeId,
+            clientId,
+            category,
+            notes,
+            priority,
+            notificationsEnabled: false,
+          });
+      }
+      if (type !== "managementTask" || result !== null) onClose();
+      return result;
+    } finally {
+      setSubmitting(false);
     }
-    onClose();
   };
 
-  const handleSubmit = () => {
-    if (!title.trim()) return;
+  const handleSubmit = async () => {
+    if (!title.trim() || submitting) return;
     if (!date && !config.isEdit) {
       setConfirmNoDate(true);
       return;
     }
-    doSubmit();
+    await doSubmit();
   };
 
   let displayDate = "";
@@ -16871,11 +16896,15 @@ const CreateTaskModal = ({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!title.trim()}
+            disabled={!title.trim() || submitting}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-black text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-${tagColor}-600 hover:bg-${tagColor}-700 shadow-sm`}
           >
             <Icon name={config.isEdit ? "Save" : "Plus"} size={14} />
-            {config.isEdit ? "Guardar cambios" : `Crear ${typeLabel}`}
+            {submitting
+              ? "Guardando..."
+              : config.isEdit
+                ? "Guardar cambios"
+                : `Crear ${typeLabel}`}
           </button>
         </div>
       </div>
@@ -16918,9 +16947,9 @@ const CreateTaskModal = ({
                 Cancelar
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   setConfirmNoDate(false);
-                  doSubmit();
+                  await doSubmit();
                 }}
                 className="px-5 py-2 text-sm font-black text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors"
               >
