@@ -50,7 +50,8 @@ export const createApp = async () => {
         next();
     });
 
-    app.use(express.json({ limit: '2mb' }));
+    // Un archivo de 8 MB ocupa cerca de 10.7 MB al codificarse como base64.
+    app.use(express.json({ limit: '12mb' }));
     app.use(cookieParser());
     app.use(attachSession);
 
@@ -126,13 +127,14 @@ export const createApp = async () => {
 
     app.use((error, _req, res, _next) => {
         const status = Number(error?.status || 500);
+        const isServerError = status >= 500;
         const payload = {
             error: {
-                message: error?.message || 'Unexpected server error.',
-                code: error?.code || 'internal/error'
+                message: isServerError ? 'Error interno del servidor.' : (error?.message || 'Solicitud invalida.'),
+                code: isServerError ? 'internal/error' : (error?.code || 'request/error')
             }
         };
-        if (status >= 500) {
+        if (isServerError) {
             console.error(error);
         }
         res.status(status).json(payload);

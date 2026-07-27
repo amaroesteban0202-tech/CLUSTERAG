@@ -1,5 +1,6 @@
 import { db } from '../db/knex.js';
 import { createRecordId } from './crypto.js';
+import { createHttpError } from './http.js';
 import { nowIso } from './time.js';
 import { normalizeEmail } from './text.js';
 
@@ -14,6 +15,14 @@ const CLOSED_STATUS_BY_COLLECTION = {
 };
 
 const stripUndefined = (value) => JSON.parse(JSON.stringify(value));
+
+const isDuplicateRecordError = (error) => (
+    error?.code === '23505'
+    || error?.code === 'SQLITE_CONSTRAINT'
+    || error?.code === 'SQLITE_CONSTRAINT_UNIQUE'
+    || error?.code === 'ER_DUP_ENTRY'
+    || error?.errno === 1062
+);
 
 // Los adjuntos guardan el archivo como base64 en `data` (hasta 8MB c/u). Si se
 // devuelven completos en cada listado, el polling (cada 2 min, por pestaña)
@@ -147,10 +156,14 @@ export const createRecord = async ({ collectionName, payload, recordId = createR
         ...getIndexes(collectionName, nextPayload)
     };
 
-    await getClient(trx)('app_records')
-        .insert(row)
-        .onConflict(['collection_name', 'record_id'])
-        .merge(row);
+    try {
+        await getClient(trx)('app_records').insert(row);
+    } catch (error) {
+        if (isDuplicateRecordError(error)) {
+            throw createHttpError(409, 'El documento ya existe.', 'document/already-exists');
+        }
+        throw error;
+    }
     await trackRecordChange({ collectionName, recordId, action: 'upsert', trx });
 
     return { id: recordId, ...nextPayload };

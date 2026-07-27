@@ -1,12 +1,13 @@
-import admin from 'firebase-admin';
+import { getApp, getApps, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { env } from '../config/env.js';
 
 let firebaseAdminApp = null;
 
 export const getFirebaseAdminApp = () => {
     if (firebaseAdminApp) return firebaseAdminApp;
-    if (admin.apps.length > 0) {
-        firebaseAdminApp = admin.app();
+    if (getApps().length > 0) {
+        firebaseAdminApp = getApp();
         return firebaseAdminApp;
     }
 
@@ -15,7 +16,7 @@ export const getFirebaseAdminApp = () => {
         options.projectId = env.firebase.projectId;
     }
 
-    firebaseAdminApp = admin.initializeApp(options);
+    firebaseAdminApp = initializeApp(options);
     return firebaseAdminApp;
 };
 
@@ -23,5 +24,5 @@ export const verifyFirebaseIdToken = async (idToken = '') => {
     const normalizedToken = String(idToken || '').trim();
     if (!normalizedToken) return null;
     const app = getFirebaseAdminApp();
-    return app.auth().verifyIdToken(normalizedToken);
+    return getAuth(app).verifyIdToken(normalizedToken);
 };

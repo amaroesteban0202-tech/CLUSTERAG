@@ -46,6 +46,11 @@ export const prepareManagementTaskPayload = ({
     if ('assigneeUserId' in nextPayload) nextPayload.assigneeUserId = normalizeText(nextPayload.assigneeUserId);
     if ('notificationsEnabled' in nextPayload || isCreate) nextPayload.notificationsEnabled = nextPayload.notificationsEnabled !== false;
 
+    const titleAfterPatch = normalizeText('title' in nextPayload ? nextPayload.title : existing?.title);
+    if (!titleAfterPatch) {
+        throw createHttpError(400, 'La tarea de gestion requiere un titulo.', 'management_tasks/title-required');
+    }
+
     const hasDueInput = 'date' in nextPayload || 'time' in nextPayload || isCreate;
     const normalizedDate = normalizeManagementTaskDate(hasDueInput ? nextPayload.date : existing?.date);
     const normalizedTime = normalizeManagementTaskTime(hasDueInput ? nextPayload.time : existing?.time);

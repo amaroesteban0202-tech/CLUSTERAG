@@ -19,7 +19,9 @@ const router = express.Router();
 
 const getCollectionName = (req) => String(req.params.collectionName || '').trim();
 
-const PUBLIC_READ_COLLECTIONS = new Set([
+// Estas colecciones forman parte del estado base de la app para todos los roles,
+// pero nunca deben exponerse sin una sesion activa.
+const AUTHENTICATED_READ_COLLECTIONS = new Set([
     'clients',
     'events',
     'managers',
@@ -124,8 +126,8 @@ const ensureCollectionReadPermission = (req) => {
     if (!permission) {
         throw createHttpError(404, 'La coleccion no existe.', 'collection/not-found');
     }
-    if (PUBLIC_READ_COLLECTIONS.has(collectionName)) {
-        return { userRecord: req.auth?.userRecord || null, collectionName };
+    if (AUTHENTICATED_READ_COLLECTIONS.has(collectionName)) {
+        return { userRecord: requireAuthenticatedUser(req), collectionName };
     }
     return ensureCollectionPermission(req, 'read');
 };
@@ -234,7 +236,7 @@ router.get('/_sync', asyncHandler(async (req, res) => {
         .filter(Boolean);
     const collections = requestedCollections.filter((collectionName) => {
         const permission = getCollectionPermission(collectionName, 'read');
-        return permission && (PUBLIC_READ_COLLECTIONS.has(collectionName) || hasPermission(userRecord, permission));
+        return permission && (AUTHENTICATED_READ_COLLECTIONS.has(collectionName) || hasPermission(userRecord, permission));
     });
 
     if (req.query.latest === '1') {
