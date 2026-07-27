@@ -1531,6 +1531,7 @@ const EDITING_STATUS_OPTIONS = [
 const INCOMING_CALL_MAX_AGE_MS = 90 * 1000;
 const INCOMING_CALL_RING_MS = 45 * 1000;
 let incomingCallAudioContext = null;
+const incomingCallAudioReadyListeners = new Set();
 
 const getIncomingCallAudioContext = () => {
   if (typeof window === "undefined") return null;
@@ -1542,12 +1543,26 @@ const getIncomingCallAudioContext = () => {
   return incomingCallAudioContext;
 };
 
-const unlockIncomingCallAudio = () => {
+const unlockIncomingCallAudio = async () => {
   try {
     const context = getIncomingCallAudioContext();
-    if (context?.state === "suspended") context.resume().catch(() => {});
+    if (!context) return false;
+    if (context.state !== "running") await context.resume();
+    if (context.state !== "running") return false;
+
+    // Un buffer silencioso desbloquea Web Audio de forma más confiable en iOS
+    // y WebViews que un resume() aislado.
+    const silentBuffer = context.createBuffer(1, 1, context.sampleRate);
+    const silentSource = context.createBufferSource();
+    silentSource.buffer = silentBuffer;
+    silentSource.connect(context.destination);
+    silentSource.onended = () => silentSource.disconnect();
+    silentSource.start();
+    incomingCallAudioReadyListeners.forEach((listener) => listener());
+    return true;
   } catch {
     /* Algunos navegadores no ofrecen Web Audio. */
+    return false;
   }
 };
 
@@ -1557,6 +1572,7 @@ const unlockIncomingCallAudio = () => {
 const createIncomingCallRingtone = () => {
   let context = null;
   let intervalId = null;
+  let beginRinging = null;
   let stopped = false;
   const activeOscillators = new Set();
 
@@ -1572,8 +1588,8 @@ const createIncomingCallRingtone = () => {
         oscillator.type = "sine";
         oscillator.frequency.setValueAtTime(frequency, startsAt);
         gain.gain.setValueAtTime(0.0001, startsAt);
-        gain.gain.exponentialRampToValueAtTime(0.075, startsAt + 0.025);
-        gain.gain.setValueAtTime(0.075, endsAt - 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.14, startsAt + 0.025);
+        gain.gain.setValueAtTime(0.14, endsAt - 0.04);
         gain.gain.exponentialRampToValueAtTime(0.0001, endsAt);
         oscillator.connect(gain);
         gain.connect(context.destination);
@@ -1591,21 +1607,26 @@ const createIncomingCallRingtone = () => {
       try {
         context = getIncomingCallAudioContext();
         if (!context) return;
-        const begin = () => {
+        beginRinging = () => {
           if (stopped || context.state !== "running") return;
           ringOnce();
-          intervalId = window.setInterval(ringOnce, 2800);
+          if (intervalId === null) {
+            intervalId = window.setInterval(ringOnce, 2800);
+          }
         };
-        if (context.state === "running") begin();
-        else context.resume().then(begin).catch(() => {});
+        incomingCallAudioReadyListeners.add(beginRinging);
+        if (context.state === "running") beginRinging();
+        else unlockIncomingCallAudio();
       } catch {
         /* El aviso visual sigue funcionando cuando el audio no está disponible. */
       }
     },
     stop() {
       stopped = true;
-      if (intervalId) window.clearInterval(intervalId);
+      if (intervalId !== null) window.clearInterval(intervalId);
       intervalId = null;
+      if (beginRinging) incomingCallAudioReadyListeners.delete(beginRinging);
+      beginRinging = null;
       activeOscillators.forEach((oscillator) => {
         try {
           oscillator.stop();
@@ -1686,18 +1707,16 @@ function App() {
     window.dispatchEvent(new Event("cluster:viewchange"));
   }, [view]);
 
-  // Desbloquea Web Audio con la primera interacción para que futuras llamadas
-  // puedan sonar aunque lleguen mientras el usuario está en otra sección.
+  // Revalida Web Audio en cada interacción: algunos móviles suspenden el
+  // contexto después de bloquear la pantalla o dejar la app en segundo plano.
   useEffect(() => {
-    const unlock = () => {
-      unlockIncomingCallAudio();
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
-    };
-    window.addEventListener("pointerdown", unlock, { once: true });
-    window.addEventListener("keydown", unlock, { once: true });
+    const unlock = () => void unlockIncomingCallAudio();
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("touchstart", unlock, { passive: true });
+    window.addEventListener("keydown", unlock);
     return () => {
       window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("touchstart", unlock);
       window.removeEventListener("keydown", unlock);
     };
   }, []);
@@ -4193,7 +4212,7 @@ function App() {
       ? "Cuenta inactiva"
       : !authEmail
         ? "Sin sesión iniciada"
-        : `${currentRoleMeta.label} · ${authEmail}`;
+        : currentRoleMeta.label;
 
   let allActivities = [
     ...events.map((e) => ({
@@ -5975,48 +5994,49 @@ function App() {
           )}
         </nav>
 
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
+        <div className="space-y-2.5 border-t border-slate-100 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-900/50">
           <button
             type="button"
             onClick={() => handleNavigate("settings")}
             aria-label="Editar mi perfil"
-            className="w-full flex items-center gap-3 p-1 -m-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors text-left"
+            title={authEmail || "Editar mi perfil"}
+            className="grid w-full grid-cols-[2.5rem_minmax(0,1fr)_1rem] items-center gap-3 rounded-xl p-1.5 text-left transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:hover:bg-slate-800/60"
           >
             {currentUserProfile?.photo ? (
               <img
                 src={currentUserProfile.photo}
                 alt={currentUserProfile?.name || "Perfil"}
-                className="w-10 h-10 rounded-full object-cover border border-black/5 dark:border-white/10 shrink-0"
+                className="h-10 w-10 rounded-xl border border-black/5 object-cover dark:border-white/10"
               />
             ) : (
               <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${profileBlocked ? "bg-[#9f2f2d]" : "bg-[#555552]"}`}
+                className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold text-white ${profileBlocked ? "bg-[#9f2f2d]" : "bg-[#555552]"}`}
               >
                 {(currentUserProfile?.name || "IN").slice(0, 2).toUpperCase()}
               </div>
             )}
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-sm font-bold text-slate-700 dark:text-slate-200">
                 {currentUserProfile?.name || "Invitado"}
               </p>
               {currentUserProfile?.profession && (
-                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 truncate">
+                <p className="mt-0.5 truncate text-[10px] font-medium text-slate-500 dark:text-slate-400">
                   {currentUserProfile.profession}
                 </p>
               )}
-              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase truncate">
+              <p className="mt-0.5 truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 {sidebarFooterText}
               </p>
             </div>
             <Icon
               name="ChevronRight"
               size={16}
-              className="text-slate-400 dark:text-slate-500 shrink-0"
+              className="text-slate-400 dark:text-slate-500"
             />
           </button>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem] items-center gap-2">
             <span
-              className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${
+              className={`inline-flex h-10 min-w-0 items-center justify-center truncate whitespace-nowrap rounded-xl px-2 text-[9px] font-black uppercase tracking-wide ${
                 profileBlocked
                   ? "bg-red-50 text-red-600 dark:bg-red-500/20 dark:text-red-400"
                   : currentVerificationMeta.color === "emerald"
@@ -6040,7 +6060,7 @@ function App() {
                 isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"
               }
               title={isDark ? "Modo claro" : "Modo oscuro"}
-              className="ml-auto p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
             >
               <Icon name={isDark ? "Sun" : "Moon"} size={16} />
             </button>
@@ -6049,7 +6069,7 @@ function App() {
                 onClick={handleLogout}
                 aria-label="Cerrar sesión"
                 title="Cerrar sesión"
-                className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
               >
                 <Icon name="LogOut" size={16} />
               </button>
@@ -6059,7 +6079,7 @@ function App() {
                 disabled={isSigningIn}
                 aria-label="Iniciar sesión"
                 title="Iniciar sesión"
-                className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300 disabled:opacity-60"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
               >
                 <Icon
                   name={isSigningIn ? "Loader2" : "LogIn"}

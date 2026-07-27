@@ -893,6 +893,7 @@ var EDITING_STATUS_OPTIONS = [
 var INCOMING_CALL_MAX_AGE_MS = 90 * 1e3;
 var INCOMING_CALL_RING_MS = 45 * 1e3;
 var incomingCallAudioContext = null;
+var incomingCallAudioReadyListeners = /* @__PURE__ */ new Set();
 var getIncomingCallAudioContext = () => {
   if (typeof window === "undefined") return null;
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -902,17 +903,28 @@ var getIncomingCallAudioContext = () => {
   }
   return incomingCallAudioContext;
 };
-var unlockIncomingCallAudio = () => {
+var unlockIncomingCallAudio = async () => {
   try {
     const context = getIncomingCallAudioContext();
-    if (context?.state === "suspended") context.resume().catch(() => {
-    });
+    if (!context) return false;
+    if (context.state !== "running") await context.resume();
+    if (context.state !== "running") return false;
+    const silentBuffer = context.createBuffer(1, 1, context.sampleRate);
+    const silentSource = context.createBufferSource();
+    silentSource.buffer = silentBuffer;
+    silentSource.connect(context.destination);
+    silentSource.onended = () => silentSource.disconnect();
+    silentSource.start();
+    incomingCallAudioReadyListeners.forEach((listener) => listener());
+    return true;
   } catch {
+    return false;
   }
 };
 var createIncomingCallRingtone = () => {
   let context = null;
   let intervalId = null;
+  let beginRinging = null;
   let stopped = false;
   const activeOscillators = /* @__PURE__ */ new Set();
   const ringOnce = () => {
@@ -927,8 +939,8 @@ var createIncomingCallRingtone = () => {
         oscillator.type = "sine";
         oscillator.frequency.setValueAtTime(frequency, startsAt);
         gain.gain.setValueAtTime(1e-4, startsAt);
-        gain.gain.exponentialRampToValueAtTime(0.075, startsAt + 0.025);
-        gain.gain.setValueAtTime(0.075, endsAt - 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.14, startsAt + 0.025);
+        gain.gain.setValueAtTime(0.14, endsAt - 0.04);
         gain.gain.exponentialRampToValueAtTime(1e-4, endsAt);
         oscillator.connect(gain);
         gain.connect(context.destination);
@@ -945,21 +957,25 @@ var createIncomingCallRingtone = () => {
       try {
         context = getIncomingCallAudioContext();
         if (!context) return;
-        const begin = () => {
+        beginRinging = () => {
           if (stopped || context.state !== "running") return;
           ringOnce();
-          intervalId = window.setInterval(ringOnce, 2800);
+          if (intervalId === null) {
+            intervalId = window.setInterval(ringOnce, 2800);
+          }
         };
-        if (context.state === "running") begin();
-        else context.resume().then(begin).catch(() => {
-        });
+        incomingCallAudioReadyListeners.add(beginRinging);
+        if (context.state === "running") beginRinging();
+        else unlockIncomingCallAudio();
       } catch {
       }
     },
     stop() {
       stopped = true;
-      if (intervalId) window.clearInterval(intervalId);
+      if (intervalId !== null) window.clearInterval(intervalId);
       intervalId = null;
+      if (beginRinging) incomingCallAudioReadyListeners.delete(beginRinging);
+      beginRinging = null;
       activeOscillators.forEach((oscillator) => {
         try {
           oscillator.stop();
@@ -1031,15 +1047,13 @@ function App() {
     window.dispatchEvent(new Event("cluster:viewchange"));
   }, [view]);
   useEffect(() => {
-    const unlock = () => {
-      unlockIncomingCallAudio();
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
-    };
-    window.addEventListener("pointerdown", unlock, { once: true });
-    window.addEventListener("keydown", unlock, { once: true });
+    const unlock = () => void unlockIncomingCallAudio();
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("touchstart", unlock, { passive: true });
+    window.addEventListener("keydown", unlock);
     return () => {
       window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("touchstart", unlock);
       window.removeEventListener("keydown", unlock);
     };
   }, []);
@@ -2984,7 +2998,7 @@ function App() {
     currentUserProfile?.role
   );
   const isFirstTimeWorkspace = clients.length === 0 && accountTasks.length === 0 && editingTasks.length === 0 && managementTasks.length === 0;
-  const sidebarFooterText = currentUserProfile?.isActive === false ? "Cuenta inactiva" : !authEmail ? "Sin sesi\xF3n iniciada" : `${currentRoleMeta.label} \xB7 ${authEmail}`;
+  const sidebarFooterText = currentUserProfile?.isActive === false ? "Cuenta inactiva" : !authEmail ? "Sin sesi\xF3n iniciada" : currentRoleMeta.label;
   let allActivities = [
     ...events.map((e) => ({
       ...e,
@@ -4519,41 +4533,42 @@ function App() {
         }
       ))
     ),
-    /* @__PURE__ */ React.createElement("div", { className: "p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3" }, /* @__PURE__ */ React.createElement(
+    /* @__PURE__ */ React.createElement("div", { className: "space-y-2.5 border-t border-slate-100 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-900/50" }, /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
         onClick: () => handleNavigate("settings"),
         "aria-label": "Editar mi perfil",
-        className: "w-full flex items-center gap-3 p-1 -m-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors text-left"
+        title: authEmail || "Editar mi perfil",
+        className: "grid w-full grid-cols-[2.5rem_minmax(0,1fr)_1rem] items-center gap-3 rounded-xl p-1.5 text-left transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:hover:bg-slate-800/60"
       },
       currentUserProfile?.photo ? /* @__PURE__ */ React.createElement(
         "img",
         {
           src: currentUserProfile.photo,
           alt: currentUserProfile?.name || "Perfil",
-          className: "w-10 h-10 rounded-full object-cover border border-black/5 dark:border-white/10 shrink-0"
+          className: "h-10 w-10 rounded-xl border border-black/5 object-cover dark:border-white/10"
         }
       ) : /* @__PURE__ */ React.createElement(
         "div",
         {
-          className: `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${profileBlocked ? "bg-[#9f2f2d]" : "bg-[#555552]"}`
+          className: `flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold text-white ${profileBlocked ? "bg-[#9f2f2d]" : "bg-[#555552]"}`
         },
         (currentUserProfile?.name || "IN").slice(0, 2).toUpperCase()
       ),
-      /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-700 dark:text-slate-200 truncate" }, currentUserProfile?.name || "Invitado"), currentUserProfile?.profession && /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-semibold text-slate-500 dark:text-slate-400 truncate" }, currentUserProfile.profession), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase truncate" }, sidebarFooterText)),
+      /* @__PURE__ */ React.createElement("div", { className: "min-w-0 leading-tight" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-bold text-slate-700 dark:text-slate-200" }, currentUserProfile?.name || "Invitado"), currentUserProfile?.profession && /* @__PURE__ */ React.createElement("p", { className: "mt-0.5 truncate text-[10px] font-medium text-slate-500 dark:text-slate-400" }, currentUserProfile.profession), /* @__PURE__ */ React.createElement("p", { className: "mt-0.5 truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400" }, sidebarFooterText)),
       /* @__PURE__ */ React.createElement(
         Icon,
         {
           name: "ChevronRight",
           size: 16,
-          className: "text-slate-400 dark:text-slate-500 shrink-0"
+          className: "text-slate-400 dark:text-slate-500"
         }
       )
-    ), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem] items-center gap-2" }, /* @__PURE__ */ React.createElement(
       "span",
       {
-        className: `text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${profileBlocked ? "bg-red-50 text-red-600 dark:bg-red-500/20 dark:text-red-400" : currentVerificationMeta.color === "emerald" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400" : currentVerificationMeta.color === "amber" ? "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" : currentVerificationMeta.color === "blue" ? "bg-blue-50 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"}`
+        className: `inline-flex h-10 min-w-0 items-center justify-center truncate whitespace-nowrap rounded-xl px-2 text-[9px] font-black uppercase tracking-wide ${profileBlocked ? "bg-red-50 text-red-600 dark:bg-red-500/20 dark:text-red-400" : currentVerificationMeta.color === "emerald" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400" : currentVerificationMeta.color === "amber" ? "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" : currentVerificationMeta.color === "blue" ? "bg-blue-50 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"}`
       },
       profileBlocked ? "Bloqueado" : authEmail ? currentVerificationMeta.label : "Invitado"
     ), /* @__PURE__ */ React.createElement(
@@ -4562,7 +4577,7 @@ function App() {
         onClick: () => setIsDark(!isDark),
         "aria-label": isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro",
         title: isDark ? "Modo claro" : "Modo oscuro",
-        className: "ml-auto p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300"
+        className: "inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
       },
       /* @__PURE__ */ React.createElement(Icon, { name: isDark ? "Sun" : "Moon", size: 16 })
     ), authEmail ? /* @__PURE__ */ React.createElement(
@@ -4571,7 +4586,7 @@ function App() {
         onClick: handleLogout,
         "aria-label": "Cerrar sesi\xF3n",
         title: "Cerrar sesi\xF3n",
-        className: "p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300"
+        className: "inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "LogOut", size: 16 })
     ) : /* @__PURE__ */ React.createElement(
@@ -4581,7 +4596,7 @@ function App() {
         disabled: isSigningIn,
         "aria-label": "Iniciar sesi\xF3n",
         title: "Iniciar sesi\xF3n",
-        className: "p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-600 dark:text-slate-300 disabled:opacity-60"
+        className: "inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
       },
       /* @__PURE__ */ React.createElement(
         Icon,
