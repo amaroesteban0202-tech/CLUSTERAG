@@ -11475,16 +11475,23 @@ const renderChatText = (text = "", onColored = false) =>
     );
 
 const CHAT_REACTIONS = [
-  { key: "like", label: "Me gusta", icon: "ThumbsUp" },
-  { key: "important", label: "Importante", icon: "Heart" },
-  { key: "seen", label: "Visto", icon: "Eye" },
-  { key: "approved", label: "Aprobado", icon: "CheckCircle2" },
+  { key: "like", label: "Me gusta", emoji: "👍" },
+  { key: "important", label: "Me encanta", emoji: "❤️" },
+  { key: "laugh", label: "Me divierte", emoji: "😂" },
+  { key: "surprised", label: "Me sorprende", emoji: "😮" },
+  { key: "sad", label: "Me entristece", emoji: "😢" },
+  { key: "thanks", label: "Gracias", emoji: "🙏" },
+  { key: "seen", label: "Visto", emoji: "👀", legacy: true },
+  { key: "approved", label: "Aprobado", emoji: "✅", legacy: true },
 ];
+const CHAT_REACTION_PICKER = CHAT_REACTIONS.filter(
+  (reaction) => !reaction.legacy,
+);
 const getChatReactionDefinition = (key) =>
   CHAT_REACTIONS.find((reaction) => reaction.key === key) || {
     key,
     label: "Reacción",
-    icon: "Sparkles",
+    emoji: "✨",
   };
 // Stickers estilo meme, dibujados como SVG propios (sin imágenes con copyright,
 // sin dependencias externas, funcionan offline). Se guarda solo el `id` en el
@@ -12777,7 +12784,7 @@ const ClientChatView = ({
                           <div
                             className={`chat-reaction-picker absolute bottom-full z-40 mb-2 flex items-center gap-1 ${mine ? "right-0" : "left-0"}`}
                           >
-                            {CHAT_REACTIONS.map((reaction) => (
+                            {CHAT_REACTION_PICKER.map((reaction) => (
                               <button
                                 key={reaction.key}
                                 onMouseDown={(event) => {
@@ -12789,7 +12796,7 @@ const ClientChatView = ({
                                 title={reaction.label}
                                 className="chat-reaction-option flex items-center justify-center"
                               >
-                                <Icon name={reaction.icon} size={18} />
+                                <span aria-hidden="true">{reaction.emoji}</span>
                               </button>
                             ))}
                           </div>
@@ -13044,7 +13051,12 @@ const ClientChatView = ({
                                     title={info.names.join(", ")}
                                     className={`chat-reaction-chip flex items-center gap-1 ${info.mine ? "is-mine" : ""}`}
                                   >
-                                    <Icon name={reaction.icon} size={13} />
+                                    <span
+                                      className="chat-reaction-emoji"
+                                      aria-hidden="true"
+                                    >
+                                      {reaction.emoji}
+                                    </span>
                                     <span>{info.count}</span>
                                   </button>
                                 );

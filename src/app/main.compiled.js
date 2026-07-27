@@ -8239,15 +8239,22 @@ var renderChatText = (text = "", onColored = false) => String(text).split(/(@[^\
   ) : /* @__PURE__ */ React.createElement(React.Fragment, { key: index }, part)
 );
 var CHAT_REACTIONS = [
-  { key: "like", label: "Me gusta", icon: "ThumbsUp" },
-  { key: "important", label: "Importante", icon: "Heart" },
-  { key: "seen", label: "Visto", icon: "Eye" },
-  { key: "approved", label: "Aprobado", icon: "CheckCircle2" }
+  { key: "like", label: "Me gusta", emoji: "\u{1F44D}" },
+  { key: "important", label: "Me encanta", emoji: "\u2764\uFE0F" },
+  { key: "laugh", label: "Me divierte", emoji: "\u{1F602}" },
+  { key: "surprised", label: "Me sorprende", emoji: "\u{1F62E}" },
+  { key: "sad", label: "Me entristece", emoji: "\u{1F622}" },
+  { key: "thanks", label: "Gracias", emoji: "\u{1F64F}" },
+  { key: "seen", label: "Visto", emoji: "\u{1F440}", legacy: true },
+  { key: "approved", label: "Aprobado", emoji: "\u2705", legacy: true }
 ];
+var CHAT_REACTION_PICKER = CHAT_REACTIONS.filter(
+  (reaction) => !reaction.legacy
+);
 var getChatReactionDefinition = (key) => CHAT_REACTIONS.find((reaction) => reaction.key === key) || {
   key,
   label: "Reacci\xF3n",
-  icon: "Sparkles"
+  emoji: "\u2728"
 };
 var CHAT_STICKERS = [
   {
@@ -9353,7 +9360,7 @@ var ClientChatView = ({
               {
                 className: `chat-reaction-picker absolute bottom-full z-40 mb-2 flex items-center gap-1 ${mine ? "right-0" : "left-0"}`
               },
-              CHAT_REACTIONS.map((reaction) => /* @__PURE__ */ React.createElement(
+              CHAT_REACTION_PICKER.map((reaction) => /* @__PURE__ */ React.createElement(
                 "button",
                 {
                   key: reaction.key,
@@ -9366,7 +9373,7 @@ var ClientChatView = ({
                   title: reaction.label,
                   className: "chat-reaction-option flex items-center justify-center"
                 },
-                /* @__PURE__ */ React.createElement(Icon, { name: reaction.icon, size: 18 })
+                /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, reaction.emoji)
               ))
             ),
             menuFor === message.id && /* @__PURE__ */ React.createElement(
@@ -9583,7 +9590,14 @@ var ClientChatView = ({
                     title: info.names.join(", "),
                     className: `chat-reaction-chip flex items-center gap-1 ${info.mine ? "is-mine" : ""}`
                   },
-                  /* @__PURE__ */ React.createElement(Icon, { name: reaction.icon, size: 13 }),
+                  /* @__PURE__ */ React.createElement(
+                    "span",
+                    {
+                      className: "chat-reaction-emoji",
+                      "aria-hidden": "true"
+                    },
+                    reaction.emoji
+                  ),
                   /* @__PURE__ */ React.createElement("span", null, info.count)
                 );
               }
