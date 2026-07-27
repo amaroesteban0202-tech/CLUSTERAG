@@ -130,6 +130,15 @@ const ensureCollectionReadPermission = (req) => {
     if (AUTHENTICATED_READ_COLLECTIONS.has(collectionName)) {
         return { userRecord: requireAuthenticatedUser(req), collectionName };
     }
+    // Espejo de canUpdateOwnUser: sin view_users, cualquier usuario activo
+    // puede leer (solo) su propio registro para resolver su perfil/rol real.
+    if (collectionName === 'users') {
+        const userRecord = requireAuthenticatedUser(req);
+        if (hasPermission(userRecord, permission)) {
+            return { userRecord, collectionName };
+        }
+        return { userRecord, collectionName, selfOnly: true };
+    }
     return ensureCollectionPermission(req, 'read');
 };
 
@@ -237,7 +246,13 @@ router.get('/_sync', asyncHandler(async (req, res) => {
         .filter(Boolean);
     const collections = requestedCollections.filter((collectionName) => {
         const permission = getCollectionPermission(collectionName, 'read');
-        return permission && (AUTHENTICATED_READ_COLLECTIONS.has(collectionName) || hasPermission(userRecord, permission));
+        return permission && (
+            AUTHENTICATED_READ_COLLECTIONS.has(collectionName)
+            || hasPermission(userRecord, permission)
+            // Espejo de ensureCollectionReadPermission: sin view_users, igual se
+            // sincroniza el propio registro (filtrado abajo).
+            || collectionName === 'users'
+        );
     });
 
     if (req.query.latest === '1') {
@@ -255,11 +270,21 @@ router.get('/_sync', asyncHandler(async (req, res) => {
         collections,
         limitCount: 500
     });
-    res.json(result);
+    const canReadUsers = hasPermission(userRecord, getCollectionPermission('users', 'read'));
+    res.json({
+        ...result,
+        changes: canReadUsers
+            ? result.changes
+            : result.changes.filter((change) => (
+                change.collectionName !== 'users'
+                || String(change.recordId) === String(userRecord.id || '')
+                || canUpdateOwnUser(userRecord, change.record)
+            ))
+    });
 }));
 
 router.get('/:collectionName', asyncHandler(async (req, res) => {
-    const { collectionName } = ensureCollectionReadPermission(req);
+    const { collectionName, userRecord, selfOnly } = ensureCollectionReadPermission(req);
     const records = await listRecords({
         collectionName,
         sortBy: String(req.query.orderBy || 'updatedAt'),
@@ -270,14 +295,21 @@ router.get('/:collectionName', asyncHandler(async (req, res) => {
         includeOpenBefore: req.query.includeOpenBefore === '1'
     });
 
-    res.json({ records });
+    res.json({
+        records: selfOnly
+            ? records.filter((record) => canUpdateOwnUser(userRecord, record))
+            : records
+    });
 }));
 
 router.get('/:collectionName/:recordId', asyncHandler(async (req, res) => {
-    const { collectionName } = ensureCollectionReadPermission(req);
+    const { collectionName, userRecord, selfOnly } = ensureCollectionReadPermission(req);
     const record = await getRecord({ collectionName, recordId: req.params.recordId });
     if (!record) {
         throw createHttpError(404, 'El documento no existe.', 'document/not-found');
+    }
+    if (selfOnly && !canUpdateOwnUser(userRecord, record)) {
+        throw createHttpError(403, 'No tienes permisos para esta accion.', 'auth/insufficient-permission');
     }
     res.json({ record });
 }));

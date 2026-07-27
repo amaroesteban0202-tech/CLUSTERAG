@@ -204,6 +204,24 @@ test('editor performance report is protected and database portable', async () =>
     assert.equal(response.payload?.data?.[0]?.email, 'viewer@example.test');
 });
 
+test('users without view_users can only read their own profile', async () => {
+    const viewerList = await request('/api/collections/users', { token: viewerToken });
+    assert.equal(viewerList.status, 200);
+    assert.deepEqual(viewerList.payload.records.map((record) => record.id), ['viewer']);
+
+    const ownDoc = await request('/api/collections/users/viewer', { token: viewerToken });
+    assert.equal(ownDoc.status, 200);
+    assert.equal(ownDoc.payload.record.email, 'viewer@example.test');
+
+    const otherDoc = await request('/api/collections/users/operations', { token: viewerToken });
+    assert.equal(otherDoc.status, 403);
+
+    const operationsList = await request('/api/collections/users', { token: operationsToken });
+    assert.equal(operationsList.status, 200);
+    assert.ok(operationsList.payload.records.map((record) => record.id).includes('operations'));
+    assert.ok(operationsList.payload.records.map((record) => record.id).includes('viewer'));
+});
+
 test('OAuth web redirects stay on the application origin', () => {
     const req = {
         protocol: 'https',
