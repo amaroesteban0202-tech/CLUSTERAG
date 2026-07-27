@@ -404,6 +404,8 @@ const VIEW_PERMISSIONS = {
   "control-center": "view_users",
   reports: "view_dashboard",
   performance: "view_dashboard",
+  podcast: "view_dashboard",
+  production: "view_dashboard",
 };
 
 const normalizeEmail = (value = "") =>
@@ -6499,6 +6501,24 @@ function App() {
               color="emerald"
             />
           )}
+          {canAccessView(currentUserProfile, "podcast") && (
+            <SidebarItem
+              active={view === "podcast"}
+              onClick={() => handleNavigate("podcast")}
+              icon="Microphone"
+              label="Podcast"
+              color="rose"
+            />
+          )}
+          {canAccessView(currentUserProfile, "production") && (
+            <SidebarItem
+              active={view === "production"}
+              onClick={() => handleNavigate("production")}
+              icon="MonitorPlay"
+              label="Producción"
+              color="cyan"
+            />
+          )}
 
           {currentUserProfile && (
             <>
@@ -7130,6 +7150,20 @@ function App() {
               editors={editors}
               managers={managers}
               users={appUsers}
+            />
+          )}
+          {view === "podcast" && (
+            <PodcastView
+              events={events}
+              accountTasks={accountTasks}
+              editingTasks={editingTasks}
+            />
+          )}
+          {view === "production" && (
+            <ProductionView
+              events={events}
+              accountTasks={accountTasks}
+              editingTasks={editingTasks}
             />
           )}
           {view === "reports" && (
@@ -18685,6 +18719,314 @@ const ReportStatCard = ({ label, value, color, icon, sub }) => (
   </div>
 );
 
+const AccentStatCard = ({ label, value, icon, sub, tone = "indigo" }) => {
+  const toneClasses = {
+    amber: {
+      shell: "bg-amber-50 dark:bg-amber-500/20 border-amber-200 dark:border-amber-500/20",
+      icon: "text-amber-600 dark:text-amber-300",
+      value: "text-amber-700 dark:text-amber-300",
+    },
+    emerald: {
+      shell: "bg-emerald-50 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/20",
+      icon: "text-emerald-600 dark:text-emerald-300",
+      value: "text-emerald-700 dark:text-emerald-300",
+    },
+    indigo: {
+      shell: "bg-indigo-50 dark:bg-indigo-500/20 border-indigo-200 dark:border-indigo-500/20",
+      icon: "text-indigo-600 dark:text-indigo-300",
+      value: "text-indigo-700 dark:text-indigo-300",
+    },
+    rose: {
+      shell: "bg-rose-50 dark:bg-rose-500/20 border-rose-200 dark:border-rose-500/20",
+      icon: "text-rose-600 dark:text-rose-300",
+      value: "text-rose-700 dark:text-rose-300",
+    },
+    cyan: {
+      shell: "bg-cyan-50 dark:bg-cyan-500/20 border-cyan-200 dark:border-cyan-500/20",
+      icon: "text-cyan-600 dark:text-cyan-300",
+      value: "text-cyan-700 dark:text-cyan-300",
+    },
+    slate: {
+      shell: "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700",
+      icon: "text-slate-600 dark:text-slate-300",
+      value: "text-slate-700 dark:text-slate-200",
+    },
+  };
+  const classes = toneClasses[tone] || toneClasses.indigo;
+  return (
+    <div className={`rounded-2xl border p-5 ${classes.shell}`}>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+          {label}
+        </span>
+        <div className={`rounded-xl bg-white/70 p-2 dark:bg-slate-900/70 ${classes.icon}`}>
+          <Icon name={icon} size={16} />
+        </div>
+      </div>
+      <p className={`mt-4 text-3xl font-black ${classes.value}`}>{value}</p>
+      {sub && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{sub}</p>}
+    </div>
+  );
+};
+
+const getModuleStatusMeta = (value = "", kind = "production") => {
+  const normalized = String(value || "").trim().toLowerCase();
+  const base = {
+    programado: { label: "Programado", tone: "slate" },
+    pendiente: { label: "Pendiente", tone: "slate" },
+    grabando: { label: "Grabando", tone: "amber" },
+    "en_produccion": { label: "En producción", tone: "amber" },
+    editando: { label: "Editando", tone: "indigo" },
+    "post_produccion": { label: "Postproducción", tone: "indigo" },
+    revision: { label: "Revisión", tone: "cyan" },
+    aprobado: { label: "Aprobado", tone: "emerald" },
+    publicado: { label: "Publicado", tone: "emerald" },
+    cerrado: { label: "Cerrado", tone: "emerald" },
+  };
+  if (base[normalized]) return base[normalized];
+  if (kind === "podcast") {
+    if (normalized.includes("grab")) return base.grabando;
+    if (normalized.includes("edit")) return base.editando;
+    if (normalized.includes("pub")) return base.publicado;
+  }
+  if (kind === "production") {
+    if (normalized.includes("post")) return base["post_produccion"];
+    if (normalized.includes("produ")) return base["en_produccion"];
+    if (normalized.includes("pub")) return base.publicado;
+  }
+  return { label: normalized || "Programado", tone: "slate" };
+};
+
+const PodcastView = ({ events = [], accountTasks = [], editingTasks = [] }) => {
+  const todayStr = getHondurasTodayStr();
+  const now = new Date();
+  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const [fromDate, setFromDate] = useState(firstOfMonth);
+  const [toDate, setToDate] = useState(todayStr);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const inRange = (dateStr) => {
+    if (!dateStr) return false;
+    return (
+      compareDateOnlyStrings(dateStr, fromDate) >= 0 &&
+      compareDateOnlyStrings(dateStr, toDate) <= 0
+    );
+  };
+
+  const normalizedSearch = String(searchTerm || "").trim().toLowerCase();
+  const items = [...events, ...accountTasks, ...editingTasks]
+    .filter((item) => {
+      const haystack = `${item.title || item.name || ""} ${item.note || item.description || ""}`.toLowerCase();
+      const type = String(item.type || "").toLowerCase();
+      const matchesKind =
+        type === "podcast" || /podcast|episodio|episode|audio/i.test(haystack);
+      if (!matchesKind) return false;
+      const itemDate = normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || "");
+      if (!itemDate) return false;
+      return inRange(itemDate) && (normalizedSearch.length === 0 || haystack.includes(normalizedSearch));
+    })
+    .map((item) => ({
+      ...item,
+      itemDate: normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || ""),
+      status: item.status || "programado",
+      owner: item.assignee || item.owner || item.manager || item.editor || "",
+      summary: item.note || item.description || "Sin detalle",
+      title: item.title || item.name || "Sin título",
+    }));
+
+  const totalItems = items.length;
+  const inProgress = items.filter((item) => !["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
+  const published = items.filter((item) => ["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
+  const pending = items.filter((item) => ["programado", "pendiente"].includes(String(item.status || "").toLowerCase())).length;
+
+  return (
+    <div className="space-y-6 fade-in">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="eyebrow">Contenido</p>
+          <h2 className="text-2xl font-black text-slate-800 dark:text-white">Podcast</h2>
+          <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+            Seguimiento visual de episodios, grabaciones y publicaciones que ya están registradas en el sistema.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Buscar podcast" />
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
+            <span className="text-xs font-black text-slate-500 uppercase">Desde</span>
+            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" />
+          </div>
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
+            <span className="text-xs font-black text-slate-500 uppercase">Hasta</span>
+            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <AccentStatCard label="Total" value={totalItems} icon="Microphone" tone="rose" sub="episodios y tareas" />
+        <AccentStatCard label="En curso" value={inProgress} icon="Play" tone="amber" sub="grabación o edición" />
+        <AccentStatCard label="Publicados" value={published} icon="CheckCircle2" tone="emerald" sub="listos para salir" />
+        <AccentStatCard label="Pendientes" value={pending} icon="Clock" tone="slate" sub="por programar" />
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        {items.length === 0 ? (
+          <div className="p-16 text-center text-slate-500 dark:text-slate-400">
+            Aún no hay contenido de podcast en este rango de fechas.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[780px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Episodio</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Fecha</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Estado</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Responsable</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Detalle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, index) => {
+                  const statusMeta = getModuleStatusMeta(item.status, "podcast");
+                  return (
+                    <tr key={`${item.id || item.title}-${index}`} className={`border-b border-slate-50 dark:border-slate-800/60 ${index % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : ""}`}>
+                      <td className="p-4 font-bold text-slate-800 dark:text-white">{item.title}</td>
+                      <td className="p-4 text-sm font-semibold text-slate-600 dark:text-slate-300">{item.itemDate}</td>
+                      <td className="p-4">
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${statusMeta.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300" : statusMeta.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300" : statusMeta.tone === "indigo" ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>
+                          {statusMeta.label}
+                        </span>
+                      </td>
+                      <td className="p-4 text-sm text-slate-600 dark:text-slate-300">{item.owner || "Sin asignar"}</td>
+                      <td className="p-4 text-sm text-slate-500 dark:text-slate-400">{item.summary}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ProductionView = ({ events = [], accountTasks = [], editingTasks = [] }) => {
+  const todayStr = getHondurasTodayStr();
+  const now = new Date();
+  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const [fromDate, setFromDate] = useState(firstOfMonth);
+  const [toDate, setToDate] = useState(todayStr);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const inRange = (dateStr) => {
+    if (!dateStr) return false;
+    return (
+      compareDateOnlyStrings(dateStr, fromDate) >= 0 &&
+      compareDateOnlyStrings(dateStr, toDate) <= 0
+    );
+  };
+
+  const normalizedSearch = String(searchTerm || "").trim().toLowerCase();
+  const items = [...events, ...accountTasks, ...editingTasks]
+    .filter((item) => {
+      const haystack = `${item.title || item.name || ""} ${item.note || item.description || ""}`.toLowerCase();
+      const type = String(item.type || "").toLowerCase();
+      const matchesKind =
+        type === "production" || /producción|production|grabación|shoot|post|montaje/i.test(haystack);
+      if (!matchesKind) return false;
+      const itemDate = normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || "");
+      if (!itemDate) return false;
+      return inRange(itemDate) && (normalizedSearch.length === 0 || haystack.includes(normalizedSearch));
+    })
+    .map((item) => ({
+      ...item,
+      itemDate: normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || ""),
+      status: item.status || "programado",
+      owner: item.assignee || item.owner || item.manager || item.editor || "",
+      summary: item.note || item.description || "Sin detalle",
+      title: item.title || item.name || "Sin título",
+    }));
+
+  const totalItems = items.length;
+  const inProgress = items.filter((item) => !["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
+  const published = items.filter((item) => ["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
+  const pending = items.filter((item) => ["programado", "pendiente"].includes(String(item.status || "").toLowerCase())).length;
+
+  return (
+    <div className="space-y-6 fade-in">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="eyebrow">Operación</p>
+          <h2 className="text-2xl font-black text-slate-800 dark:text-white">Producción</h2>
+          <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+            Vista consolidada de entregas, grabaciones y fases de postproducción para mantener el control del flujo.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Buscar producción" />
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
+            <span className="text-xs font-black text-slate-500 uppercase">Desde</span>
+            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" />
+          </div>
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
+            <span className="text-xs font-black text-slate-500 uppercase">Hasta</span>
+            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <AccentStatCard label="Total" value={totalItems} icon="MonitorPlay" tone="cyan" sub="items de producción" />
+        <AccentStatCard label="En curso" value={inProgress} icon="Play" tone="amber" sub="grabación o post" />
+        <AccentStatCard label="Publicados" value={published} icon="CheckCircle2" tone="emerald" sub="cerrados y publicados" />
+        <AccentStatCard label="Pendientes" value={pending} icon="Clock" tone="slate" sub="por iniciar" />
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        {items.length === 0 ? (
+          <div className="p-16 text-center text-slate-500 dark:text-slate-400">
+            No hay elementos de producción en este rango todavía.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[780px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Elemento</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Fecha</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Estado</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Responsable</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Detalle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, index) => {
+                  const statusMeta = getModuleStatusMeta(item.status, "production");
+                  return (
+                    <tr key={`${item.id || item.title}-${index}`} className={`border-b border-slate-50 dark:border-slate-800/60 ${index % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : ""}`}>
+                      <td className="p-4 font-bold text-slate-800 dark:text-white">{item.title}</td>
+                      <td className="p-4 text-sm font-semibold text-slate-600 dark:text-slate-300">{item.itemDate}</td>
+                      <td className="p-4">
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${statusMeta.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300" : statusMeta.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300" : statusMeta.tone === "indigo" ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>
+                          {statusMeta.label}
+                        </span>
+                      </td>
+                      <td className="p-4 text-sm text-slate-600 dark:text-slate-300">{item.owner || "Sin asignar"}</td>
+                      <td className="p-4 text-sm text-slate-500 dark:text-slate-400">{item.summary}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const ReportsView = ({
   accountTasks,
   editingTasks,
@@ -19603,6 +19945,9 @@ const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], m
   const [fromDate, setFromDate] = useState(firstOfMonth);
   const [toDate, setToDate] = useState(todayStr);
   const [selectedPersonKey, setSelectedPersonKey] = useState("");
+  const [viewMode, setViewMode] = useState("simplified");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [personGroupFilter, setPersonGroupFilter] = useState("all");
 
   const inRange = (dateStr) => {
     if (!dateStr) return false;
@@ -19780,6 +20125,42 @@ const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], m
       String(left.name || "").localeCompare(String(right.name || "")),
   );
 
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const visiblePersonStats = useMemo(() => {
+    let filtered = [...personStats];
+    if (personGroupFilter !== "all") {
+      filtered = filtered.filter((person) =>
+        personGroupFilter === "editors"
+          ? person.kind === "editor"
+          : person.kind === "manager",
+      );
+    }
+    if (!normalizedSearch) return filtered;
+    return filtered.filter((person) =>
+      String(person.name || "").toLowerCase().includes(normalizedSearch),
+    );
+  }, [normalizedSearch, personGroupFilter, personStats]);
+
+  const simplifiedPersonGroups = useMemo(() => {
+    const editors = [...visiblePersonStats]
+      .filter((person) => person.kind === "editor")
+      .sort(
+        (left, right) =>
+          right.overallPerformance - left.overallPerformance ||
+          right.total - left.total ||
+          String(left.name || "").localeCompare(String(right.name || "")),
+      );
+    const managers = [...visiblePersonStats]
+      .filter((person) => person.kind === "manager")
+      .sort(
+        (left, right) =>
+          right.overallPerformance - left.overallPerformance ||
+          right.total - left.total ||
+          String(left.name || "").localeCompare(String(right.name || "")),
+      );
+    return { editors, managers };
+  }, [visiblePersonStats]);
+
   const totalTasks = filteredEditingTasks.length + filteredAccountTasks.length;
   const deliveredTasks =
     filteredEditingTasks.filter(isEditingDeliveredTask).length +
@@ -19787,10 +20168,10 @@ const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], m
   const publishedTasks =
     filteredEditingTasks.filter((task) => task.status === "publicado").length +
     filteredAccountTasks.filter((task) => task.status === "publicado").length;
-  const averagePerformance = personStats.length
+  const averagePerformance = visiblePersonStats.length
     ? Math.round(
-        personStats.reduce((sum, person) => sum + person.overallPerformance, 0) /
-          personStats.length,
+        visiblePersonStats.reduce((sum, person) => sum + person.overallPerformance, 0) /
+          visiblePersonStats.length,
       )
     : 0;
 
@@ -19815,7 +20196,7 @@ const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], m
         <div>
           <p className="eyebrow">Rendimiento</p>
           <h2 className="text-2xl font-black text-slate-800 dark:text-white">
-            Rendimiento de Editores y Account Managers
+            Rendimiento de Editores y Community Managers
           </h2>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
             Un resumen del avance de tareas y la capacidad de entrega dentro del rango de fechas seleccionado, tanto para edición como para accounts.
@@ -19843,6 +20224,63 @@ const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], m
                 Limpiar
               </button>
             )}
+          </div>
+          <label className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 min-w-[220px]">
+            <Search size={14} className="text-slate-400" />
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por nombre"
+              className="w-full bg-transparent text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none placeholder:text-slate-400"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="text-slate-400 transition-colors hover:text-slate-600"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </label>
+          <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
+            <button
+              type="button"
+              onClick={() => setPersonGroupFilter("all")}
+              className={`rounded-lg px-3 py-2 text-sm font-bold transition-colors ${personGroupFilter === "all" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`}
+            >
+              Todos
+            </button>
+            <button
+              type="button"
+              onClick={() => setPersonGroupFilter("editors")}
+              className={`rounded-lg px-3 py-2 text-sm font-bold transition-colors ${personGroupFilter === "editors" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`}
+            >
+              Editores
+            </button>
+            <button
+              type="button"
+              onClick={() => setPersonGroupFilter("managers")}
+              className={`rounded-lg px-3 py-2 text-sm font-bold transition-colors ${personGroupFilter === "managers" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`}
+            >
+              Community Managers
+            </button>
+          </div>
+          <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
+            <button
+              type="button"
+              onClick={() => setViewMode("simplified")}
+              className={`rounded-lg px-3 py-2 text-sm font-bold transition-colors ${viewMode === "simplified" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`}
+            >
+              Simplificado
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("detailed")}
+              className={`rounded-lg px-3 py-2 text-sm font-bold transition-colors ${viewMode === "detailed" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`}
+            >
+              Detalle
+            </button>
           </div>
           <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
             <span className="text-xs font-black text-slate-500 uppercase">Desde</span>
@@ -19901,9 +20339,145 @@ const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], m
       </p>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-        {personStats.length === 0 ? (
+        {visiblePersonStats.length === 0 ? (
           <div className="p-16 text-center text-slate-500 font-bold">
-            Sin datos de rendimiento para este rango de fechas
+            Sin coincidencias para este filtro de búsqueda
+          </div>
+        ) : viewMode === "simplified" ? (
+          <div className="space-y-6 p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Vista simplificada
+                </p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Mostrando {visiblePersonStats.length} personas filtradas por nombre y por el rango activo.
+                </p>
+              </div>
+              <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+                {visiblePersonStats.length} resultados
+              </div>
+            </div>
+            <div className="grid gap-6 xl:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                      Editores
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      {simplifiedPersonGroups.editors.length} personas
+                    </p>
+                  </div>
+                  <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                    {simplifiedPersonGroups.editors.length > 0 ? "Activos" : "Sin datos"}
+                  </div>
+                </div>
+                {simplifiedPersonGroups.editors.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+                    No hay editores para mostrar
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {simplifiedPersonGroups.editors.map((person) => (
+                      <div
+                        key={`${person.kind}-${person.id}`}
+                        className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-black text-slate-800 dark:text-white">{person.name}</p>
+                            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                              {person.kindLabel}
+                            </p>
+                          </div>
+                          <span className={`rounded-full px-3 py-1 text-sm font-black ${person.overallPerformance >= 80 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : person.overallPerformance >= 50 ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400" : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400"}`}>
+                            {person.overallPerformance}%
+                          </span>
+                        </div>
+                        <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
+                          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Total</p>
+                            <p className="mt-1 font-black text-slate-800 dark:text-white">{person.total}</p>
+                          </div>
+                          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Entregadas</p>
+                            <p className="mt-1 font-black text-emerald-600 dark:text-emerald-400">{person.delivered}</p>
+                          </div>
+                          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Publicadas</p>
+                            <p className="mt-1 font-black text-indigo-600 dark:text-indigo-400">{person.published}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                          <span>{person.lastSeenAt ? `Último login: ${normalizeDateOnlyString(person.lastSeenAt)}` : "Sin registro de login"}</span>
+                          <span>{person.daysSinceLogin === null ? "—" : `${person.daysSinceLogin} días`}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                      Community Managers
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      {simplifiedPersonGroups.managers.length} personas
+                    </p>
+                  </div>
+                  <div className="rounded-full bg-violet-100 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">
+                    {simplifiedPersonGroups.managers.length > 0 ? "Activos" : "Sin datos"}
+                  </div>
+                </div>
+                {simplifiedPersonGroups.managers.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+                    No hay community managers para mostrar
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {simplifiedPersonGroups.managers.map((person) => (
+                      <div
+                        key={`${person.kind}-${person.id}`}
+                        className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-black text-slate-800 dark:text-white">{person.name}</p>
+                            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                              {person.kindLabel}
+                            </p>
+                          </div>
+                          <span className={`rounded-full px-3 py-1 text-sm font-black ${person.overallPerformance >= 80 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : person.overallPerformance >= 50 ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400" : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400"}`}>
+                            {person.overallPerformance}%
+                          </span>
+                        </div>
+                        <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
+                          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Total</p>
+                            <p className="mt-1 font-black text-slate-800 dark:text-white">{person.total}</p>
+                          </div>
+                          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Entregadas</p>
+                            <p className="mt-1 font-black text-emerald-600 dark:text-emerald-400">{person.delivered}</p>
+                          </div>
+                          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Publicadas</p>
+                            <p className="mt-1 font-black text-indigo-600 dark:text-indigo-400">{person.published}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                          <span>{person.lastSeenAt ? `Último login: ${normalizeDateOnlyString(person.lastSeenAt)}` : "Sin registro de login"}</span>
+                          <span>{person.daysSinceLogin === null ? "—" : `${person.daysSinceLogin} días`}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -19921,7 +20495,7 @@ const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], m
                 </tr>
               </thead>
               <tbody>
-                {personStats.map((person, index) => (
+                {visiblePersonStats.map((person, index) => (
                   <tr
                     key={`${person.kind}-${person.id}`}
                     className={`border-b border-slate-50 dark:border-slate-800/50 ${rowStyle(index)}`}
