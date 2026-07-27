@@ -138,6 +138,7 @@ export const env = {
         messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
         appId: process.env.FIREBASE_APP_ID || '',
         measurementId: process.env.FIREBASE_MEASUREMENT_ID || '',
+        webPushVapidKey: process.env.FIREBASE_WEB_PUSH_VAPID_KEY || '',
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
         privateKey: normalizePem(process.env.FIREBASE_PRIVATE_KEY)
     },

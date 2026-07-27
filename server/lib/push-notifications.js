@@ -1,8 +1,10 @@
 import { getMessaging } from 'firebase-admin/messaging';
+import { env } from '../config/env.js';
 import { getFirebaseAdminApp } from './firebase-admin.js';
 import { deleteRecord, listRecords } from './records.js';
 
 const PUSH_TOKEN_COLLECTION = 'push_tokens';
+const CHAT_MUTE_COLLECTION = 'chat_mutes';
 const INVALID_TOKEN_CODES = new Set([
     'messaging/invalid-registration-token',
     'messaging/registration-token-not-registered'
@@ -18,17 +20,30 @@ const messagePreview = (message = {}) => {
     return 'Nuevo mensaje';
 };
 
-export const buildClientChatPush = ({ message = {}, clientName = 'Cliente' }) => {
+export const isChatMuteActive = (mute, now = Date.now()) => {
+    const mutedUntil = typeof mute === 'string' ? mute : mute?.mutedUntil;
+    if (mutedUntil === 'forever') return true;
+    const untilMs = Date.parse(String(mutedUntil || ''));
+    return Number.isFinite(untilMs) && untilMs > now;
+};
+
+export const buildClientChatPush = ({
+    message = {},
+    clientName = 'Cliente',
+    mentioned = false
+}) => {
     const isCall = Boolean(message.call?.roomId && !message.call?.ended);
     return {
         title: isCall
             ? `Llamada entrante · ${clientName}`
-            : `Nuevo mensaje · ${clientName}`,
+            : mentioned
+                ? `${message.authorName || 'Alguien'} te mencionó · ${clientName}`
+                : `Nuevo mensaje · ${clientName}`,
         body: isCall
             ? `${message.authorName || 'Alguien'} te está llamando`
             : `${message.authorName || 'Alguien'}: ${messagePreview(message)}`,
         data: {
-            type: isCall ? 'call' : 'message',
+            type: isCall ? 'call' : mentioned ? 'mention' : 'message',
             messageId: String(message.id || ''),
             clientId: String(message.clientId || ''),
             roomId: String(message.call?.roomId || '')
@@ -41,57 +56,99 @@ export const buildClientChatPush = ({ message = {}, clientName = 'Cliente' }) =>
 export const sendClientChatPush = async ({ message, clientName = 'Cliente' }) => {
     if (!message?.id || !message?.clientId) return { sent: 0, skipped: true };
 
-    const tokens = await listRecords({
-        collectionName: PUSH_TOKEN_COLLECTION,
-        sortBy: 'updatedAt',
-        sortDirection: 'desc'
-    });
+    const [tokens, chatMutes] = await Promise.all([
+        listRecords({
+            collectionName: PUSH_TOKEN_COLLECTION,
+            sortBy: 'updatedAt',
+            sortDirection: 'desc'
+        }),
+        listRecords({
+            collectionName: CHAT_MUTE_COLLECTION,
+            sortBy: 'updatedAt',
+            sortDirection: 'desc'
+        })
+    ]);
     const authorId = String(message.authorId || '');
     const mentionedIds = new Set((message.mentionedIds || []).map(String));
     const isCall = Boolean(message.call?.roomId && !message.call?.ended);
+    const activeMuteKeys = new Set(chatMutes
+        .filter((mute) => isChatMuteActive(mute))
+        .map((mute) => `${String(mute.userId || '')}__${String(mute.clientId || '')}`));
     const recipients = tokens.filter((entry) => {
         if (!entry?.token || String(entry.userId || '') === authorId) return false;
+        if (!isCall && activeMuteKeys.has(
+            `${String(entry.userId || '')}__${String(message.clientId || '')}`
+        )) return false;
         return !isCall || mentionedIds.has(String(entry.userId || ''));
     });
     if (recipients.length === 0) return { sent: 0, skipped: true };
 
-    const push = buildClientChatPush({ message, clientName });
     try {
         const messaging = getMessaging(getFirebaseAdminApp());
-        const response = await messaging.sendEachForMulticast({
-            tokens: recipients.map((entry) => entry.token),
-            notification: { title: push.title, body: push.body },
-            data: push.data,
-            android: {
-                priority: 'high',
-                notification: {
-                    channelId: push.channelId,
-                    sound: 'default',
-                    ...(push.isCall ? { priority: 'max', visibility: 'public' } : {})
+        const groups = isCall
+            ? [{ recipients, mentioned: false }]
+            : [
+                {
+                    recipients: recipients.filter((entry) =>
+                        mentionedIds.has(String(entry.userId || ''))),
+                    mentioned: true
+                },
+                {
+                    recipients: recipients.filter((entry) =>
+                        !mentionedIds.has(String(entry.userId || ''))),
+                    mentioned: false
                 }
-            },
-            apns: {
-                headers: { 'apns-priority': '10' },
-                payload: {
-                    aps: {
-                        sound: 'default',
-                        category: push.isCall ? 'CLUSTER_CALL' : 'CLUSTER_MESSAGE'
-                    }
-                }
-            }
-        });
+            ].filter((group) => group.recipients.length > 0);
+        let sent = 0;
+        let failed = 0;
 
-        await Promise.all(response.responses.map(async (result, index) => {
-            if (result.success || !INVALID_TOKEN_CODES.has(result.error?.code)) return;
-            await deleteRecord({
-                collectionName: PUSH_TOKEN_COLLECTION,
-                recordId: recipients[index].id
+        for (const group of groups) {
+            const push = buildClientChatPush({
+                message,
+                clientName,
+                mentioned: group.mentioned
             });
-        }));
-        return { sent: response.successCount, failed: response.failureCount };
+            const response = await messaging.sendEachForMulticast({
+                tokens: group.recipients.map((entry) => entry.token),
+                notification: { title: push.title, body: push.body },
+                data: push.data,
+                android: {
+                    priority: 'high',
+                    notification: {
+                        channelId: push.channelId,
+                        sound: 'default',
+                        ...(push.isCall ? { priority: 'max', visibility: 'public' } : {})
+                    }
+                },
+                apns: {
+                    headers: { 'apns-priority': '10' },
+                    payload: {
+                        aps: {
+                            sound: 'default',
+                            category: push.isCall ? 'CLUSTER_CALL' : 'CLUSTER_MESSAGE'
+                        }
+                    }
+                },
+                webpush: {
+                    headers: { Urgency: 'high' },
+                    ...(String(env.appBaseUrl || '').startsWith('https://')
+                        ? { fcmOptions: { link: env.appBaseUrl } }
+                        : {})
+                }
+            });
+            sent += response.successCount;
+            failed += response.failureCount;
+            await Promise.all(response.responses.map(async (result, index) => {
+                if (result.success || !INVALID_TOKEN_CODES.has(result.error?.code)) return;
+                await deleteRecord({
+                    collectionName: PUSH_TOKEN_COLLECTION,
+                    recordId: group.recipients[index].id
+                });
+            }));
+        }
+        return { sent, failed };
     } catch (error) {
         console.warn('[push]', error?.message || error);
         return { sent: 0, failed: recipients.length };
     }
 };
-

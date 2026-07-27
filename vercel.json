@@ -63,7 +63,7 @@
       "destination": "/index.html"
     },
     {
-      "source": "/:path((?!api/|src/|favicon\\.svg|app-config\\.js).*)",
+      "source": "/:path((?!api/|src/|favicon\\.svg|app-config\\.js|firebase-messaging-sw\\.js).*)",
       "destination": "/index.html"
     }
   ]

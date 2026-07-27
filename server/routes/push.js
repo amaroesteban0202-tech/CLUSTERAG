@@ -1,4 +1,5 @@
 import express from 'express';
+import { env } from '../config/env.js';
 import { sha256 } from '../lib/crypto.js';
 import { asyncHandler, createHttpError } from '../lib/http.js';
 import { deleteRecord, upsertRecord } from '../lib/records.js';
@@ -9,6 +10,11 @@ const router = express.Router();
 const PUSH_TOKEN_COLLECTION = 'push_tokens';
 
 const tokenRecordId = (token) => `push_${sha256(token).slice(0, 40)}`;
+
+router.get('/config', (req, res) => {
+    requireAuthenticatedUser(req);
+    res.json({ vapidKey: env.firebase.webPushVapidKey });
+});
 
 router.post('/register', asyncHandler(async (req, res) => {
     const user = requireAuthenticatedUser(req);
@@ -44,4 +50,3 @@ router.delete('/register', asyncHandler(async (req, res) => {
 }));
 
 export default router;
-

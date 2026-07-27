@@ -87,7 +87,9 @@ import {
   VideoCamera,
   ThumbsUp,
   Heart,
-  Eye
+  Eye,
+  Bell,
+  BellSlash
 } from "@phosphor-icons/react";
 import {
   signInAnonymously,
@@ -178,9 +180,85 @@ var apiFetch = async (path, options = {}) => {
   return payload;
 };
 
+// src/app/lib/firebase-web-push.js
+var FIREBASE_SDK_VERSION = "10.14.1";
+var FIREBASE_APP_SCRIPT = `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app-compat.js`;
+var FIREBASE_MESSAGING_SCRIPT = `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-messaging-compat.js`;
+var loadScript = (src) => new Promise((resolve, reject) => {
+  const existing = document.querySelector(`script[src="${src}"]`);
+  if (existing?.dataset.loaded === "true") {
+    resolve();
+    return;
+  }
+  const script = existing || document.createElement("script");
+  script.addEventListener("load", () => {
+    script.dataset.loaded = "true";
+    resolve();
+  }, { once: true });
+  script.addEventListener("error", () => {
+    reject(new Error(`No se pudo cargar ${src}`));
+  }, { once: true });
+  if (!existing) {
+    script.src = src;
+    script.async = true;
+    document.head.appendChild(script);
+  }
+});
+var getFirebaseMessaging = async () => {
+  await loadScript(FIREBASE_APP_SCRIPT);
+  await loadScript(FIREBASE_MESSAGING_SCRIPT);
+  const firebase = window.firebase;
+  const config = window.__cluster_firebase_config;
+  if (!firebase?.messaging || !config?.projectId || !config?.messagingSenderId || !config?.appId) {
+    throw new Error("Firebase Messaging no est\xE1 configurado.");
+  }
+  const app = firebase.apps.find((entry) => entry.name === "cluster-web-push") || firebase.initializeApp(config, "cluster-web-push");
+  return app.messaging();
+};
+var registerFirebaseWebPush = async ({ onMessage, vapidKey: configuredVapidKey } = {}) => {
+  if (typeof window === "undefined" || !window.isSecureContext || !("serviceWorker" in navigator) || typeof Notification === "undefined" || Notification.permission !== "granted") {
+    return null;
+  }
+  const config = window.__cluster_firebase_config;
+  const workerUrl = `/firebase-messaging-sw.js?config=${encodeURIComponent(JSON.stringify(config || {}))}`;
+  const serviceWorkerRegistration = await navigator.serviceWorker.register(workerUrl);
+  const messaging = await getFirebaseMessaging();
+  const vapidKey = String(
+    configuredVapidKey || window.__cluster_firebase_web_push_vapid_key || ""
+  ).trim();
+  const token = await messaging.getToken({
+    serviceWorkerRegistration,
+    ...vapidKey ? { vapidKey } : {}
+  });
+  if (!token) throw new Error("Firebase no devolvi\xF3 un token Web Push.");
+  return {
+    token,
+    unsubscribe: typeof onMessage === "function" ? messaging.onMessage(onMessage) : null
+  };
+};
+
 // src/app/main.jsx
 import { createPortal } from "react-dom";
 var EMBEDDED_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
+var CHAT_MUTE_FOREVER = "forever";
+var CHAT_MUTE_DURATION_MS = {
+  "8h": 8 * 60 * 60 * 1e3,
+  "1w": 7 * 24 * 60 * 60 * 1e3
+};
+var isChatMuteActive = (mutedUntil, now = Date.now()) => {
+  if (mutedUntil === CHAT_MUTE_FOREVER) return true;
+  const untilMs = Date.parse(String(mutedUntil || ""));
+  return Number.isFinite(untilMs) && untilMs > now;
+};
+var formatChatMuteUntil = (mutedUntil) => {
+  if (mutedUntil === CHAT_MUTE_FOREVER) return "para siempre";
+  const untilMs = Date.parse(String(mutedUntil || ""));
+  if (!Number.isFinite(untilMs)) return "";
+  return `hasta ${new Date(untilMs).toLocaleString("es", {
+    dateStyle: "short",
+    timeStyle: "short"
+  })}`;
+};
 var IconsMap = {
   LayoutDashboard,
   Users,
@@ -263,7 +341,9 @@ var IconsMap = {
   VideoCamera,
   ThumbsUp,
   Heart,
-  Eye
+  Eye,
+  Bell,
+  BellSlash
 };
 var Icon = ({ name, size = 18, className = "", ...props }) => {
   const PhosphorIcon = IconsMap[name];
@@ -1095,6 +1175,8 @@ function App() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [clientChats, setClientChats] = useState([]);
   const [chatReads, setChatReads] = useState([]);
+  const [chatMutes, setChatMutes] = useState([]);
+  const [chatMutesLoaded, setChatMutesLoaded] = useState(false);
   const [chatHidden, setChatHidden] = useState([]);
   const [chatReactions, setChatReactions] = useState([]);
   const [chatPins, setChatPins] = useState([]);
@@ -1104,6 +1186,10 @@ function App() {
   const [incomingCallToJoin, setIncomingCallToJoin] = useState(null);
   const [nativePushReady, setNativePushReady] = useState(false);
   const [nativeNotificationAction, setNativeNotificationAction] = useState(null);
+  const [browserNotificationPermission, setBrowserNotificationPermission] = useState(() => {
+    if (isNativeApp()) return "native";
+    return typeof Notification === "undefined" ? "unsupported" : Notification.permission;
+  });
   const handledIncomingCallIdsRef = useRef(/* @__PURE__ */ new Set());
   useEffect(() => {
     window.__cluster_active_view = view;
@@ -1210,21 +1296,43 @@ function App() {
   useEffect(() => {
     if (!currentUserProfile?.id || profileBlocked) return;
     if (!isNativeApp()) {
-      if (typeof Notification === "undefined" || Notification.permission !== "default")
+      if (typeof Notification === "undefined") {
+        setBrowserNotificationPermission("unsupported");
         return;
-      const requestBrowserPermission = () => {
-        Notification.requestPermission().catch(() => {
-        });
-        window.removeEventListener("pointerdown", requestBrowserPermission);
-        window.removeEventListener("keydown", requestBrowserPermission);
+      }
+      let disposed2 = false;
+      const syncBrowserPermission = () => {
+        if (!disposed2) setBrowserNotificationPermission(Notification.permission);
       };
-      window.addEventListener("pointerdown", requestBrowserPermission, {
-        passive: true
-      });
-      window.addEventListener("keydown", requestBrowserPermission);
-      return () => {
+      const requestBrowserPermission = async () => {
         window.removeEventListener("pointerdown", requestBrowserPermission);
         window.removeEventListener("keydown", requestBrowserPermission);
+        try {
+          const permission = await Notification.requestPermission();
+          if (!disposed2) {
+            setBrowserNotificationPermission(
+              permission || Notification.permission
+            );
+          }
+        } catch {
+          syncBrowserPermission();
+        }
+      };
+      syncBrowserPermission();
+      if (Notification.permission === "default") {
+        window.addEventListener("pointerdown", requestBrowserPermission, {
+          passive: true
+        });
+        window.addEventListener("keydown", requestBrowserPermission);
+      }
+      window.addEventListener("focus", syncBrowserPermission);
+      document.addEventListener("visibilitychange", syncBrowserPermission);
+      return () => {
+        disposed2 = true;
+        window.removeEventListener("pointerdown", requestBrowserPermission);
+        window.removeEventListener("keydown", requestBrowserPermission);
+        window.removeEventListener("focus", syncBrowserPermission);
+        document.removeEventListener("visibilitychange", syncBrowserPermission);
       };
     }
     let disposed = false;
@@ -1290,6 +1398,11 @@ function App() {
           "pushNotificationReceived",
           (notification) => {
             const data = notification.data || {};
+            window.dispatchEvent(
+              new CustomEvent("cluster:push", {
+                detail: { collections: ["client_chats"] }
+              })
+            );
             void scheduleNativeNotification({
               title: notification.title || "Cluster Agency OS",
               body: notification.body || "Tienes una notificaci\xF3n nueva",
@@ -1328,6 +1441,48 @@ function App() {
       handles.forEach((handle) => handle?.remove?.());
     };
   }, [currentUserProfile?.id, profileBlocked]);
+  useEffect(() => {
+    if (isNativeApp() || profileBlocked || !currentUserProfile?.id || browserNotificationPermission !== "granted")
+      return;
+    let disposed = false;
+    let unsubscribe = null;
+    apiFetch("/api/push/config").catch(() => ({ vapidKey: "" })).then(
+      (pushConfig) => registerFirebaseWebPush({
+        vapidKey: pushConfig?.vapidKey,
+        onMessage: () => {
+          window.dispatchEvent(
+            new CustomEvent("cluster:push", {
+              detail: { collections: ["client_chats"] }
+            })
+          );
+        }
+      })
+    ).then(async (registration) => {
+      if (!registration) return;
+      if (disposed) {
+        registration.unsubscribe?.();
+        return;
+      }
+      unsubscribe = registration.unsubscribe;
+      await apiFetch("/api/push/register", {
+        method: "POST",
+        body: JSON.stringify({
+          token: registration.token,
+          platform: "web"
+        })
+      });
+    }).catch(
+      (error) => console.warn("[web-push:setup]", error?.message || error)
+    );
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, [
+    currentUserProfile?.id,
+    profileBlocked,
+    browserNotificationPermission
+  ]);
   useEffect(() => {
     const myId = String(currentUserProfile?.id || "");
     if (!myId) {
@@ -1419,6 +1574,17 @@ function App() {
     });
     return map;
   }, [chatReads, currentUserProfile, authEmail]);
+  const chatMuteMap = useMemo(() => {
+    const uid = String(currentUserProfile?.id || authEmail || "");
+    const map = {};
+    if (!uid) return map;
+    chatMutes.forEach((entry) => {
+      if (String(entry.userId || "") === uid && entry.clientId) {
+        map[String(entry.clientId)] = entry.mutedUntil || "";
+      }
+    });
+    return map;
+  }, [chatMutes, currentUserProfile, authEmail]);
   const chatHiddenIds = useMemo(() => {
     const uid = String(currentUserProfile?.id || authEmail || "");
     const set = /* @__PURE__ */ new Set();
@@ -1921,6 +2087,19 @@ function App() {
             ...docItem.data()
           }))
         ),
+        errHandler
+      ),
+      onSnapshot(
+        dataCollection("chat_mutes"),
+        (snapshot) => {
+          setChatMutes(
+            snapshot.docs.map((docItem) => ({
+              id: docItem.id,
+              ...docItem.data()
+            }))
+          );
+          setChatMutesLoaded(true);
+        },
         errHandler
       ),
       onSnapshot(
@@ -3885,6 +4064,37 @@ function App() {
       { merge: true }
     ).catch((error) => console.warn("[chat:read]", error.message));
   };
+  const setClientChatMute = async (clientId, durationKey) => {
+    if (!clientId) return;
+    const uid = currentUserProfile?.id || authEmail;
+    if (!uid) return;
+    const recordId = `${uid}__${clientId}`;
+    try {
+      if (!durationKey) {
+        await deleteDoc(dataDoc("chat_mutes", recordId));
+        showToast("Notificaciones activadas para este grupo.", "success");
+        return;
+      }
+      const mutedUntil = durationKey === CHAT_MUTE_FOREVER ? CHAT_MUTE_FOREVER : new Date(
+        Date.now() + (CHAT_MUTE_DURATION_MS[durationKey] || 0)
+      ).toISOString();
+      await setDoc(
+        dataDoc("chat_mutes", recordId),
+        {
+          userId: String(uid),
+          clientId: String(clientId),
+          mutedUntil,
+          updatedAt: nowIso()
+        },
+        { merge: true }
+      );
+      const label = durationKey === "8h" ? "8 horas" : durationKey === "1w" ? "1 semana" : "siempre";
+      showToast(`Grupo silenciado por ${label}.`, "success");
+    } catch (error) {
+      console.warn("[chat:mute]", error.message);
+      showToast("No se pudo cambiar el silencio del grupo.", "error");
+    }
+  };
   const openClientChat = (client) => {
     setSelectedChatClient(client || null);
     if (client?.id) markClientChatRead(client.id);
@@ -4122,9 +4332,9 @@ function App() {
   }, [view, selectedChatClient?.id, clientChats]);
   useEffect(() => {
     const myId = String(currentUserProfile?.id || "");
-    if (!myId) return;
+    if (!myId || !chatMutesLoaded) return;
     const native = isNativeApp();
-    if (!native && (typeof Notification === "undefined" || Notification.permission !== "granted"))
+    if (!native && (typeof Notification === "undefined" || browserNotificationPermission !== "granted"))
       return;
     const STORAGE_KEY = "cluster_chat_notifications_v2";
     let notified = [];
@@ -4138,6 +4348,11 @@ function App() {
     clientChats.forEach((message) => {
       if (!message.id || notifiedSet.has(message.id)) return;
       if (String(message.authorId || "") === myId) return;
+      if (isChatMuteActive(chatMuteMap[String(message.clientId || "")])) {
+        notifiedSet.add(message.id);
+        changed = true;
+        return;
+      }
       if (message.deleted || message.call?.roomId) {
         notifiedSet.add(message.id);
         changed = true;
@@ -4146,7 +4361,8 @@ function App() {
       const age = Date.now() - new Date(message.createdAt || 0).getTime();
       if (age >= 0 && age < 15 * 60 * 1e3) {
         const client = clients.find((item) => item.id === message.clientId);
-        const title = `Nuevo mensaje \xB7 ${client?.name || "Cliente"}`;
+        const mentioned = (message.mentionedIds || []).map(String).includes(myId);
+        const title = mentioned ? `${message.authorName || "Alguien"} te mencion\xF3 \xB7 ${client?.name || "Cliente"}` : `Nuevo mensaje \xB7 ${client?.name || "Cliente"}`;
         const body = `${message.authorName || "Alguien"}: ${chatMessagePreview(message)}`;
         if (native) {
           if (!nativePushReady) {
@@ -4188,7 +4404,15 @@ function App() {
       } catch {
       }
     }
-  }, [clientChats, currentUserProfile, clients, nativePushReady]);
+  }, [
+    clientChats,
+    currentUserProfile,
+    clients,
+    nativePushReady,
+    browserNotificationPermission,
+    chatMuteMap,
+    chatMutesLoaded
+  ]);
   const addTaskTimeEntry = async (task, type, durationMs) => {
     const colMap = {
       accountTask: "account_tasks",
@@ -4940,8 +5164,10 @@ function App() {
           clients,
           clientChats,
           chatUnread,
+          chatMuteMap,
           activeClient: selectedChatClient,
           onSelectClient: openClientChat,
+          onSetMute: setClientChatMute,
           onSendMessage: addClientChatMessage,
           onOpenTask: openTaskFromChat,
           onDeleteForEveryone: deleteChatForEveryone,
@@ -9070,8 +9296,10 @@ var ClientChatView = ({
   clients = [],
   clientChats = [],
   chatUnread = { byClient: {}, total: 0 },
+  chatMuteMap = {},
   activeClient,
   onSelectClient,
+  onSetMute,
   onSendMessage,
   onOpenTask,
   onDeleteForEveryone,
@@ -9109,6 +9337,8 @@ var ClientChatView = ({
   const [callSearch, setCallSearch] = useState("");
   const [activeCall, setActiveCall] = useState(null);
   const [callError, setCallError] = useState("");
+  const [muteMenuOpen, setMuteMenuOpen] = useState(false);
+  const [muteClock, setMuteClock] = useState(() => Date.now());
   const callContainerRef = useRef(null);
   const jitsiApiRef = useRef(null);
   const [text, setText] = useState("");
@@ -9150,6 +9380,19 @@ var ClientChatView = ({
     []
   );
   const myId = String(currentUserProfile?.id || "");
+  const activeMuteUntil = activeClient ? chatMuteMap[String(activeClient.id)] || "" : "";
+  const activeClientMuted = isChatMuteActive(activeMuteUntil, muteClock);
+  useEffect(() => {
+    setMuteMenuOpen(false);
+  }, [activeClient?.id]);
+  useEffect(() => {
+    const hasTimedMute = Object.values(chatMuteMap).some(
+      (mutedUntil) => mutedUntil !== CHAT_MUTE_FOREVER && Number.isFinite(Date.parse(String(mutedUntil || "")))
+    );
+    if (!hasTimedMute) return;
+    const intervalId = window.setInterval(() => setMuteClock(Date.now()), 6e4);
+    return () => window.clearInterval(intervalId);
+  }, [chatMuteMap]);
   const customStickerMap = {};
   (stickers || []).forEach((item) => {
     if (item?.id) customStickerMap[item.id] = item;
@@ -9705,6 +9948,10 @@ var ClientChatView = ({
       const unread = chatUnread.byClient?.[client.id] || 0;
       const last = lastMsgByClient[client.id];
       const isActive = activeClient?.id === client.id;
+      const muted = isChatMuteActive(
+        chatMuteMap[String(client.id)] || "",
+        muteClock
+      );
       return /* @__PURE__ */ React.createElement(
         "button",
         {
@@ -9734,6 +9981,13 @@ var ClientChatView = ({
             className: `chat-contact-name truncate ${unread > 0 ? "is-unread" : ""}`
           },
           client.name || "Cliente"
+        ), muted && /* @__PURE__ */ React.createElement(
+          Icon,
+          {
+            name: "BellSlash",
+            size: 13,
+            className: "shrink-0 text-slate-400"
+          }
         ), last?.createdAt && /* @__PURE__ */ React.createElement(
           "span",
           {
@@ -9777,7 +10031,61 @@ var ClientChatView = ({
         style: { backgroundColor: chatAvatarColor(activeClient.name || activeClient.id) }
       },
       (activeClient.name || "C").slice(0, 2).toUpperCase()
-    ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "chat-header-name truncate" }, activeClient.name || "Cliente"), /* @__PURE__ */ React.createElement("p", { className: "chat-header-status" }, messages.length, " mensaje", messages.length === 1 ? "" : "s", " en el historial")), /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "chat-header-name truncate" }, activeClient.name || "Cliente"), /* @__PURE__ */ React.createElement("p", { className: "chat-header-status" }, messages.length, " mensaje", messages.length === 1 ? "" : "s", " en el historial", activeClientMuted ? ` \xB7 Silenciado ${formatChatMuteUntil(activeMuteUntil)}` : "")), /* @__PURE__ */ React.createElement("div", { className: "relative shrink-0" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        onClick: () => setMuteMenuOpen((open) => !open),
+        "aria-label": activeClientMuted ? "Cambiar silencio del grupo" : "Silenciar grupo",
+        "aria-expanded": muteMenuOpen,
+        title: activeClientMuted ? `Silenciado ${formatChatMuteUntil(activeMuteUntil)}` : "Silenciar grupo",
+        className: `chat-header-button ${activeClientMuted ? "text-amber-500" : ""}`
+      },
+      /* @__PURE__ */ React.createElement(
+        Icon,
+        {
+          name: activeClientMuted ? "BellSlash" : "Bell",
+          size: 19
+        }
+      )
+    ), muteMenuOpen && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        "aria-label": "Cerrar opciones de silencio",
+        className: "fixed inset-0 z-20 cursor-default",
+        onClick: () => setMuteMenuOpen(false)
+      }
+    ), /* @__PURE__ */ React.createElement("div", { className: "chat-action-menu absolute right-0 top-full z-30 mt-2 w-64 p-1.5" }, /* @__PURE__ */ React.createElement("div", { className: "border-b border-slate-200/70 px-3 py-2 dark:border-white/10" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black text-slate-700 dark:text-slate-100" }, "Notificaciones del grupo"), /* @__PURE__ */ React.createElement("p", { className: "mt-0.5 text-[11px] text-slate-500 dark:text-slate-400" }, activeClientMuted ? `Silenciado ${formatChatMuteUntil(activeMuteUntil)}` : "Elige durante cu\xE1nto tiempo silenciarlo.")), activeClientMuted && /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        onClick: () => {
+          onSetMute?.(activeClient.id, null);
+          setMuteMenuOpen(false);
+        },
+        className: "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-emerald-600 hover:bg-slate-50 dark:text-emerald-400 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "Bell", size: 16 }),
+      "Activar notificaciones"
+    ), [
+      { key: "8h", label: "8 horas" },
+      { key: "1w", label: "1 semana" },
+      { key: CHAT_MUTE_FOREVER, label: "Siempre" }
+    ].map((option) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: option.key,
+        type: "button",
+        onClick: () => {
+          onSetMute?.(activeClient.id, option.key);
+          setMuteMenuOpen(false);
+        },
+        className: "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+      },
+      /* @__PURE__ */ React.createElement(Icon, { name: "BellSlash", size: 16 }),
+      option.label
+    ))))), /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => {

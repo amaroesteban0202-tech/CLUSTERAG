@@ -87,6 +87,8 @@ import {
   ThumbsUp,
   Heart,
   Eye,
+  Bell,
+  BellSlash,
 } from "@phosphor-icons/react";
 import {
   signInAnonymously,
@@ -148,9 +150,31 @@ import {
   rankPendingEditingTasks,
 } from "/src/app/utils/kpi.js";
 import { apiFetch } from "./lib/backend-api.js";
+import { registerFirebaseWebPush } from "./lib/firebase-web-push.js";
 import { createPortal } from "react-dom";
 
 const EMBEDDED_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
+const CHAT_MUTE_FOREVER = "forever";
+const CHAT_MUTE_DURATION_MS = {
+  "8h": 8 * 60 * 60 * 1000,
+  "1w": 7 * 24 * 60 * 60 * 1000,
+};
+
+const isChatMuteActive = (mutedUntil, now = Date.now()) => {
+  if (mutedUntil === CHAT_MUTE_FOREVER) return true;
+  const untilMs = Date.parse(String(mutedUntil || ""));
+  return Number.isFinite(untilMs) && untilMs > now;
+};
+
+const formatChatMuteUntil = (mutedUntil) => {
+  if (mutedUntil === CHAT_MUTE_FOREVER) return "para siempre";
+  const untilMs = Date.parse(String(mutedUntil || ""));
+  if (!Number.isFinite(untilMs)) return "";
+  return `hasta ${new Date(untilMs).toLocaleString("es", {
+    dateStyle: "short",
+    timeStyle: "short",
+  })}`;
+};
 
 void TAILWIND_SAFELIST;
 
@@ -237,6 +261,8 @@ const IconsMap = {
   ThumbsUp,
   Heart,
   Eye,
+  Bell,
+  BellSlash,
 };
 
 const Icon = ({ name, size = 18, className = "", ...props }) => {
@@ -1760,6 +1786,8 @@ function App() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [clientChats, setClientChats] = useState([]);
   const [chatReads, setChatReads] = useState([]);
+  const [chatMutes, setChatMutes] = useState([]);
+  const [chatMutesLoaded, setChatMutesLoaded] = useState(false);
   const [chatHidden, setChatHidden] = useState([]);
   const [chatReactions, setChatReactions] = useState([]);
   const [chatPins, setChatPins] = useState([]);
@@ -1770,6 +1798,13 @@ function App() {
   const [nativePushReady, setNativePushReady] = useState(false);
   const [nativeNotificationAction, setNativeNotificationAction] =
     useState(null);
+  const [browserNotificationPermission, setBrowserNotificationPermission] =
+    useState(() => {
+      if (isNativeApp()) return "native";
+      return typeof Notification === "undefined"
+        ? "unsupported"
+        : Notification.permission;
+    });
   const handledIncomingCallIdsRef = useRef(new Set());
 
   useEffect(() => {
@@ -1938,23 +1973,43 @@ function App() {
     if (!currentUserProfile?.id || profileBlocked) return;
 
     if (!isNativeApp()) {
-      if (
-        typeof Notification === "undefined" ||
-        Notification.permission !== "default"
-      )
+      if (typeof Notification === "undefined") {
+        setBrowserNotificationPermission("unsupported");
         return;
-      const requestBrowserPermission = () => {
-        Notification.requestPermission().catch(() => {});
-        window.removeEventListener("pointerdown", requestBrowserPermission);
-        window.removeEventListener("keydown", requestBrowserPermission);
+      }
+      let disposed = false;
+      const syncBrowserPermission = () => {
+        if (!disposed) setBrowserNotificationPermission(Notification.permission);
       };
-      window.addEventListener("pointerdown", requestBrowserPermission, {
-        passive: true,
-      });
-      window.addEventListener("keydown", requestBrowserPermission);
-      return () => {
+      const requestBrowserPermission = async () => {
         window.removeEventListener("pointerdown", requestBrowserPermission);
         window.removeEventListener("keydown", requestBrowserPermission);
+        try {
+          const permission = await Notification.requestPermission();
+          if (!disposed) {
+            setBrowserNotificationPermission(
+              permission || Notification.permission,
+            );
+          }
+        } catch {
+          syncBrowserPermission();
+        }
+      };
+      syncBrowserPermission();
+      if (Notification.permission === "default") {
+        window.addEventListener("pointerdown", requestBrowserPermission, {
+          passive: true,
+        });
+        window.addEventListener("keydown", requestBrowserPermission);
+      }
+      window.addEventListener("focus", syncBrowserPermission);
+      document.addEventListener("visibilitychange", syncBrowserPermission);
+      return () => {
+        disposed = true;
+        window.removeEventListener("pointerdown", requestBrowserPermission);
+        window.removeEventListener("keydown", requestBrowserPermission);
+        window.removeEventListener("focus", syncBrowserPermission);
+        document.removeEventListener("visibilitychange", syncBrowserPermission);
       };
     }
 
@@ -2024,6 +2079,11 @@ function App() {
           "pushNotificationReceived",
           (notification) => {
             const data = notification.data || {};
+            window.dispatchEvent(
+              new CustomEvent("cluster:push", {
+                detail: { collections: ["client_chats"] },
+              }),
+            );
             void scheduleNativeNotification({
               title: notification.title || "Cluster Agency OS",
               body: notification.body || "Tienes una notificación nueva",
@@ -2066,6 +2126,62 @@ function App() {
       handles.forEach((handle) => handle?.remove?.());
     };
   }, [currentUserProfile?.id, profileBlocked]);
+
+  // Web Push entrega el evento aunque la pestaña esté oculta. En primer plano
+  // solicita únicamente los cambios del chat que originaron el push.
+  useEffect(() => {
+    if (
+      isNativeApp() ||
+      profileBlocked ||
+      !currentUserProfile?.id ||
+      browserNotificationPermission !== "granted"
+    )
+      return;
+
+    let disposed = false;
+    let unsubscribe = null;
+    apiFetch("/api/push/config")
+      .catch(() => ({ vapidKey: "" }))
+      .then((pushConfig) =>
+        registerFirebaseWebPush({
+          vapidKey: pushConfig?.vapidKey,
+          onMessage: () => {
+            window.dispatchEvent(
+              new CustomEvent("cluster:push", {
+                detail: { collections: ["client_chats"] },
+              }),
+            );
+          },
+        }),
+      )
+      .then(async (registration) => {
+        if (!registration) return;
+        if (disposed) {
+          registration.unsubscribe?.();
+          return;
+        }
+        unsubscribe = registration.unsubscribe;
+        await apiFetch("/api/push/register", {
+          method: "POST",
+          body: JSON.stringify({
+            token: registration.token,
+            platform: "web",
+          }),
+        });
+      })
+      .catch((error) =>
+        console.warn("[web-push:setup]", error?.message || error),
+      );
+
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, [
+    currentUserProfile?.id,
+    profileBlocked,
+    browserNotificationPermission,
+  ]);
 
   // Detecta invitaciones nuevas incluso si el usuario está fuera de la vista de
   // chat. Solo suena para la persona invitada, nunca para quien inició la llamada.
@@ -2184,6 +2300,19 @@ function App() {
     });
     return map;
   }, [chatReads, currentUserProfile, authEmail]);
+
+  // Silencio por conversación, sincronizado por usuario y cliente.
+  const chatMuteMap = useMemo(() => {
+    const uid = String(currentUserProfile?.id || authEmail || "");
+    const map = {};
+    if (!uid) return map;
+    chatMutes.forEach((entry) => {
+      if (String(entry.userId || "") === uid && entry.clientId) {
+        map[String(entry.clientId)] = entry.mutedUntil || "";
+      }
+    });
+    return map;
+  }, [chatMutes, currentUserProfile, authEmail]);
 
   // Mensajes que el usuario actual ocultó ("eliminar para mí").
   const chatHiddenIds = useMemo(() => {
@@ -2791,7 +2920,20 @@ function App() {
               id: docItem.id,
               ...docItem.data(),
             })),
-          ),
+        ),
+        errHandler,
+      ),
+      onSnapshot(
+        dataCollection("chat_mutes"),
+        (snapshot) => {
+          setChatMutes(
+            snapshot.docs.map((docItem) => ({
+              id: docItem.id,
+              ...docItem.data(),
+            })),
+          );
+          setChatMutesLoaded(true);
+        },
         errHandler,
       ),
       onSnapshot(
@@ -5201,6 +5343,46 @@ function App() {
     ).catch((error) => console.warn("[chat:read]", error.message));
   };
 
+  const setClientChatMute = async (clientId, durationKey) => {
+    if (!clientId) return;
+    const uid = currentUserProfile?.id || authEmail;
+    if (!uid) return;
+    const recordId = `${uid}__${clientId}`;
+    try {
+      if (!durationKey) {
+        await deleteDoc(dataDoc("chat_mutes", recordId));
+        showToast("Notificaciones activadas para este grupo.", "success");
+        return;
+      }
+      const mutedUntil =
+        durationKey === CHAT_MUTE_FOREVER
+          ? CHAT_MUTE_FOREVER
+          : new Date(
+              Date.now() + (CHAT_MUTE_DURATION_MS[durationKey] || 0),
+            ).toISOString();
+      await setDoc(
+        dataDoc("chat_mutes", recordId),
+        {
+          userId: String(uid),
+          clientId: String(clientId),
+          mutedUntil,
+          updatedAt: nowIso(),
+        },
+        { merge: true },
+      );
+      const label =
+        durationKey === "8h"
+          ? "8 horas"
+          : durationKey === "1w"
+            ? "1 semana"
+            : "siempre";
+      showToast(`Grupo silenciado por ${label}.`, "success");
+    } catch (error) {
+      console.warn("[chat:mute]", error.message);
+      showToast("No se pudo cambiar el silencio del grupo.", "error");
+    }
+  };
+
   // Abre el chat de un cliente y lo marca como leído.
   const openClientChat = (client) => {
     setSelectedChatClient(client || null);
@@ -5494,12 +5676,12 @@ function App() {
   // del sistema; en la app nativa usa una alerta local si push no está listo.
   useEffect(() => {
     const myId = String(currentUserProfile?.id || "");
-    if (!myId) return;
+    if (!myId || !chatMutesLoaded) return;
     const native = isNativeApp();
     if (
       !native &&
       (typeof Notification === "undefined" ||
-        Notification.permission !== "granted")
+        browserNotificationPermission !== "granted")
     )
       return;
 
@@ -5516,6 +5698,11 @@ function App() {
     clientChats.forEach((message) => {
       if (!message.id || notifiedSet.has(message.id)) return;
       if (String(message.authorId || "") === myId) return;
+      if (isChatMuteActive(chatMuteMap[String(message.clientId || "")])) {
+        notifiedSet.add(message.id);
+        changed = true;
+        return;
+      }
       if (message.deleted || message.call?.roomId) {
         notifiedSet.add(message.id);
         changed = true;
@@ -5525,7 +5712,14 @@ function App() {
       const age = Date.now() - new Date(message.createdAt || 0).getTime();
       if (age >= 0 && age < 15 * 60 * 1000) {
         const client = clients.find((item) => item.id === message.clientId);
-        const title = `Nuevo mensaje · ${client?.name || "Cliente"}`;
+        const mentioned = (message.mentionedIds || [])
+          .map(String)
+          .includes(myId);
+        const title = mentioned
+          ? `${message.authorName || "Alguien"} te mencionó · ${
+              client?.name || "Cliente"
+            }`
+          : `Nuevo mensaje · ${client?.name || "Cliente"}`;
         const body = `${message.authorName || "Alguien"}: ${chatMessagePreview(message)}`;
         if (native) {
           if (!nativePushReady) {
@@ -5571,7 +5765,15 @@ function App() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientChats, currentUserProfile, clients, nativePushReady]);
+  }, [
+    clientChats,
+    currentUserProfile,
+    clients,
+    nativePushReady,
+    browserNotificationPermission,
+    chatMuteMap,
+    chatMutesLoaded,
+  ]);
 
   const addTaskTimeEntry = async (task, type, durationMs) => {
     const colMap = {
@@ -6464,8 +6666,10 @@ function App() {
               clients={clients}
               clientChats={clientChats}
               chatUnread={chatUnread}
+              chatMuteMap={chatMuteMap}
               activeClient={selectedChatClient}
               onSelectClient={openClientChat}
+              onSetMute={setClientChatMute}
               onSendMessage={addClientChatMessage}
               onOpenTask={openTaskFromChat}
               onDeleteForEveryone={deleteChatForEveryone}
@@ -12399,8 +12603,10 @@ const ClientChatView = ({
   clients = [],
   clientChats = [],
   chatUnread = { byClient: {}, total: 0 },
+  chatMuteMap = {},
   activeClient,
   onSelectClient,
+  onSetMute,
   onSendMessage,
   onOpenTask,
   onDeleteForEveryone,
@@ -12438,6 +12644,8 @@ const ClientChatView = ({
   const [callSearch, setCallSearch] = useState("");
   const [activeCall, setActiveCall] = useState(null);
   const [callError, setCallError] = useState("");
+  const [muteMenuOpen, setMuteMenuOpen] = useState(false);
+  const [muteClock, setMuteClock] = useState(() => Date.now());
   const callContainerRef = useRef(null);
   const jitsiApiRef = useRef(null);
   const [text, setText] = useState("");
@@ -12481,6 +12689,25 @@ const ClientChatView = ({
   );
 
   const myId = String(currentUserProfile?.id || "");
+  const activeMuteUntil = activeClient
+    ? chatMuteMap[String(activeClient.id)] || ""
+    : "";
+  const activeClientMuted = isChatMuteActive(activeMuteUntil, muteClock);
+
+  useEffect(() => {
+    setMuteMenuOpen(false);
+  }, [activeClient?.id]);
+
+  useEffect(() => {
+    const hasTimedMute = Object.values(chatMuteMap).some(
+      (mutedUntil) =>
+        mutedUntil !== CHAT_MUTE_FOREVER &&
+        Number.isFinite(Date.parse(String(mutedUntil || ""))),
+    );
+    if (!hasTimedMute) return;
+    const intervalId = window.setInterval(() => setMuteClock(Date.now()), 60000);
+    return () => window.clearInterval(intervalId);
+  }, [chatMuteMap]);
 
   // Biblioteca de stickers: base SVG propia + los subidos por el equipo (webp/gif/png).
   const customStickerMap = {};
@@ -13131,6 +13358,10 @@ const ClientChatView = ({
             const unread = chatUnread.byClient?.[client.id] || 0;
             const last = lastMsgByClient[client.id];
             const isActive = activeClient?.id === client.id;
+            const muted = isChatMuteActive(
+              chatMuteMap[String(client.id)] || "",
+              muteClock,
+            );
             return (
               <button
                 key={client.id}
@@ -13159,6 +13390,13 @@ const ClientChatView = ({
                     >
                       {client.name || "Cliente"}
                     </p>
+                    {muted && (
+                      <Icon
+                        name="BellSlash"
+                        size={13}
+                        className="shrink-0 text-slate-400"
+                      />
+                    )}
                     {last?.createdAt && (
                       <span
                         className={`chat-list-time ${unread > 0 ? "is-unread" : ""}`}
@@ -13239,7 +13477,88 @@ const ClientChatView = ({
                 <p className="chat-header-status">
                   {messages.length} mensaje{messages.length === 1 ? "" : "s"} en
                   el historial
+                  {activeClientMuted
+                    ? ` · Silenciado ${formatChatMuteUntil(activeMuteUntil)}`
+                    : ""}
                 </p>
+              </div>
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setMuteMenuOpen((open) => !open)}
+                  aria-label={
+                    activeClientMuted
+                      ? "Cambiar silencio del grupo"
+                      : "Silenciar grupo"
+                  }
+                  aria-expanded={muteMenuOpen}
+                  title={
+                    activeClientMuted
+                      ? `Silenciado ${formatChatMuteUntil(activeMuteUntil)}`
+                      : "Silenciar grupo"
+                  }
+                  className={`chat-header-button ${
+                    activeClientMuted ? "text-amber-500" : ""
+                  }`}
+                >
+                  <Icon
+                    name={activeClientMuted ? "BellSlash" : "Bell"}
+                    size={19}
+                  />
+                </button>
+                {muteMenuOpen && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Cerrar opciones de silencio"
+                      className="fixed inset-0 z-20 cursor-default"
+                      onClick={() => setMuteMenuOpen(false)}
+                    />
+                    <div className="chat-action-menu absolute right-0 top-full z-30 mt-2 w-64 p-1.5">
+                      <div className="border-b border-slate-200/70 px-3 py-2 dark:border-white/10">
+                        <p className="text-xs font-black text-slate-700 dark:text-slate-100">
+                          Notificaciones del grupo
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                          {activeClientMuted
+                            ? `Silenciado ${formatChatMuteUntil(activeMuteUntil)}`
+                            : "Elige durante cuánto tiempo silenciarlo."}
+                        </p>
+                      </div>
+                      {activeClientMuted && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSetMute?.(activeClient.id, null);
+                            setMuteMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-emerald-600 hover:bg-slate-50 dark:text-emerald-400 dark:hover:bg-slate-700"
+                        >
+                          <Icon name="Bell" size={16} />
+                          Activar notificaciones
+                        </button>
+                      )}
+                      {[
+                        { key: "8h", label: "8 horas" },
+                        { key: "1w", label: "1 semana" },
+                        { key: CHAT_MUTE_FOREVER, label: "Siempre" },
+                      ].map((option) => (
+                        <button
+                          key={option.key}
+                          type="button"
+                          onClick={() => {
+                            onSetMute?.(activeClient.id, option.key);
+                            setMuteMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
+                        >
+                          <Icon name="BellSlash" size={16} />
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
               <button
                 onClick={() => {

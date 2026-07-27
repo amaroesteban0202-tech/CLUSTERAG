@@ -32,6 +32,7 @@ resetDir(publicDir);
 copyIntoPublic('index.html');
 copyIntoPublic('app-config.js');
 copyIntoPublic('favicon.svg');
+copyIntoPublic('firebase-messaging-sw.js');
 copyIntoPublic('src');
 
 console.info('Static assets preparados en public/.');

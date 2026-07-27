@@ -14,4 +14,5 @@
         appId: '1:210834819744:web:e10ca79a3f9a5eb866d7c5',
         measurementId: 'G-N16QDLDC7P'
     };
+    window.__cluster_firebase_web_push_vapid_key = '';
 })();

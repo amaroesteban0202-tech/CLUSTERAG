@@ -80,7 +80,8 @@ export const createApp = async () => {
         res.send([
             `window.__cluster_api_base_url = ${JSON.stringify(apiBaseUrl)};`,
             `window.__cluster_app_id = ${JSON.stringify(env.appId)};`,
-            `window.__cluster_firebase_config = ${JSON.stringify(firebaseConfig)};`
+            `window.__cluster_firebase_config = ${JSON.stringify(firebaseConfig)};`,
+            `window.__cluster_firebase_web_push_vapid_key = ${JSON.stringify(env.firebase.webPushVapidKey)};`
         ].join('\n'));
     });
 

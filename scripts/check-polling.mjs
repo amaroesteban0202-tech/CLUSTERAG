@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { _pollingInternals } from '../src/app/lib/firebase-firestore-compat.js';
 
-const { isPollingAllowed, mergeEntryChanges } = _pollingInternals;
+const {
+    isPollingAllowed,
+    mergeEntryChanges
+} = _pollingInternals;
 
 assert.equal(isPollingAllowed({ visibilityState: 'visible', lastActivity: 0, now: 100, idleAfter: 200 }), true);
 assert.equal(isPollingAllowed({ visibilityState: 'hidden', lastActivity: 0, now: 100, idleAfter: 200 }), false);

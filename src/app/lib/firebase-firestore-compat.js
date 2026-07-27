@@ -4,7 +4,7 @@ const registry = new Map();
 const DEFAULT_POLL_MS = 120000;
 const IDLE_AFTER_MS = 240000;
 const TASK_COLLECTIONS = new Set(['account_tasks', 'editing', 'management_tasks']);
-const STATIC_COLLECTIONS = new Set(['clients', 'events', 'managers', 'editors', 'users', 'client_chats', 'chat_reads', 'chat_hidden', 'chat_reactions', 'chat_pins', 'chat_stickers']);
+const STATIC_COLLECTIONS = new Set(['clients', 'events', 'managers', 'editors', 'users', 'client_chats', 'chat_reads', 'chat_mutes', 'chat_hidden', 'chat_reactions', 'chat_pins', 'chat_stickers']);
 const CLOSED_STATUS_BY_COLLECTION = {
     account_tasks: new Set(['publicado']),
     editing: new Set(['aprobado', 'publicado']),
@@ -217,21 +217,26 @@ const applyServerChanges = (changes) => {
     });
 };
 
-const syncCollection = async (collectionName) => {
-    let cursor = await ensureSyncCursor(collectionName);
+const syncCollections = async (collectionNames = []) => {
+    const collections = [...new Set(collectionNames.map(String).filter(Boolean))];
+    if (collections.length === 0) return;
+    const cursors = await Promise.all(collections.map(ensureSyncCursor));
+    let cursor = Math.min(...cursors);
     let hasMore = false;
     do {
         const params = new URLSearchParams({
-            collections: collectionName,
+            collections: collections.join(','),
             cursor: String(cursor)
         });
         const payload = await apiFetch(`/api/collections/_sync?${params.toString()}`);
         applyServerChanges(Array.isArray(payload?.changes) ? payload.changes : []);
         cursor = Number(payload?.cursor || cursor);
-        syncCursors.set(collectionName, cursor);
+        collections.forEach((collectionName) => syncCursors.set(collectionName, cursor));
         hasMore = payload?.hasMore === true;
     } while (hasMore);
 };
+
+const syncCollection = (collectionName) => syncCollections([collectionName]);
 
 const pauseSync = () => {
     if (syncTimerId) window.clearTimeout(syncTimerId);
@@ -321,7 +326,7 @@ if (typeof document !== 'undefined') {
         const now = Date.now();
         if (now - lastFocusRefreshAt < 10000) return;
         lastFocusRefreshAt = now;
-        Promise.all([...STATIC_COLLECTIONS].map(refreshCollection)).catch(() => {});
+        syncCollections([...STATIC_COLLECTIONS].filter(hasCollectionListeners)).catch(() => {});
     };
     ['pointerdown', 'keydown', 'touchstart'].forEach((eventName) => {
         window.addEventListener(eventName, markActivity, { passive: true });
@@ -333,6 +338,16 @@ if (typeof document !== 'undefined') {
     window.addEventListener('cluster:viewchange', () => {
         pauseSync();
         markActivity();
+    });
+    window.addEventListener('cluster:push', (event) => {
+        const collections = Array.isArray(event.detail?.collections)
+            ? [...new Set(event.detail.collections.map(String))]
+            : [];
+        Promise.all(
+            collections
+                .filter(hasCollectionListeners)
+                .map(syncCollection)
+        ).catch(() => {});
     });
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
