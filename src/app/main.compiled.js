@@ -9511,7 +9511,7 @@ var ClientChatView = ({
       {
         onClick: () => onSelectClient(null),
         "aria-label": "Volver a la lista",
-        className: "chat-header-button md:hidden"
+        className: "chat-header-button chat-back-button md:hidden"
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "ChevronLeft", size: 20 })
     ), activeClient.photo ? /* @__PURE__ */ React.createElement(

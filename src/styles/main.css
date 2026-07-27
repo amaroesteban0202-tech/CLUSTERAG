@@ -516,6 +516,7 @@ textarea:focus-visible,
     min-height: 0;
     overflow: hidden;
     background: var(--chat-canvas);
+    container-type: inline-size;
 }
 .chat-conversation-header {
     min-height: 64px;
@@ -1207,6 +1208,49 @@ textarea:focus-visible,
     .chat-message-options:focus-visible,
     .chat-message-options[aria-expanded="true"] { opacity: 1; }
 }
+
+/* Keep both chat columns useful on laptops where the app sidebar also consumes
+   horizontal space. The composer responds to its own pane, not the viewport. */
+@media (min-width: 1100px) and (max-width: 1439px) {
+    .chat-list-pane {
+        width: clamp(18rem, 24vw, 20rem);
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1099px) {
+    .chat-list-pane.hidden,
+    .chat-conversation-pane.hidden {
+        display: none;
+    }
+    .chat-back-button {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+    }
+}
+
+@container (max-width: 800px) {
+    .chat-compose-box {
+        display: block;
+    }
+    .chat-compose-input {
+        display: block;
+        min-height: 46px;
+        padding: 12px 14px 7px;
+    }
+    .chat-compose-actions {
+        min-width: 0;
+        min-height: 50px;
+        padding-top: 0;
+        padding-right: 8px;
+        padding-bottom: 6px;
+    }
+    .chat-compose-hint {
+        display: none !important;
+    }
+}
+
 @media (max-width: 767px) {
     .chat-list-pane,
     .chat-conversation-pane { width: 100%; }
