@@ -14728,6 +14728,9 @@ var PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], man
   const [fromDate, setFromDate] = useState(firstOfMonth);
   const [toDate, setToDate] = useState(todayStr);
   const [selectedPersonKey, setSelectedPersonKey] = useState("");
+  const [viewMode, setViewMode] = useState("simplified");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [personGroupFilter, setPersonGroupFilter] = useState("all");
   const inRange = (dateStr) => {
     if (!dateStr) return false;
     return compareDateOnlyStrings(dateStr, fromDate) >= 0 && compareDateOnlyStrings(dateStr, toDate) <= 0;
@@ -14845,11 +14848,33 @@ var PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], man
   const personStats = [...editorStats, ...managerStats].sort(
     (left, right) => right.overallPerformance - left.overallPerformance || right.total - left.total || String(left.name || "").localeCompare(String(right.name || ""))
   );
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const visiblePersonStats = useMemo(() => {
+    let filtered = [...personStats];
+    if (personGroupFilter !== "all") {
+      filtered = filtered.filter(
+        (person) => personGroupFilter === "editors" ? person.kind === "editor" : person.kind === "manager"
+      );
+    }
+    if (!normalizedSearch) return filtered;
+    return filtered.filter(
+      (person) => String(person.name || "").toLowerCase().includes(normalizedSearch)
+    );
+  }, [normalizedSearch, personGroupFilter, personStats]);
+  const simplifiedPersonGroups = useMemo(() => {
+    const editors2 = [...visiblePersonStats].filter((person) => person.kind === "editor").sort(
+      (left, right) => right.overallPerformance - left.overallPerformance || right.total - left.total || String(left.name || "").localeCompare(String(right.name || ""))
+    );
+    const managers2 = [...visiblePersonStats].filter((person) => person.kind === "manager").sort(
+      (left, right) => right.overallPerformance - left.overallPerformance || right.total - left.total || String(left.name || "").localeCompare(String(right.name || ""))
+    );
+    return { editors: editors2, managers: managers2 };
+  }, [visiblePersonStats]);
   const totalTasks = filteredEditingTasks.length + filteredAccountTasks.length;
   const deliveredTasks = filteredEditingTasks.filter(isEditingDeliveredTask).length + filteredAccountTasks.filter(isAccountDelivered).length;
   const publishedTasks = filteredEditingTasks.filter((task) => task.status === "publicado").length + filteredAccountTasks.filter((task) => task.status === "publicado").length;
-  const averagePerformance = personStats.length ? Math.round(
-    personStats.reduce((sum, person) => sum + person.overallPerformance, 0) / personStats.length
+  const averagePerformance = visiblePersonStats.length ? Math.round(
+    visiblePersonStats.reduce((sum, person) => sum + person.overallPerformance, 0) / visiblePersonStats.length
   ) : 0;
   const peopleOptions = [
     { value: "", label: "Todos" },
@@ -14863,7 +14888,7 @@ var PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], man
     }))
   ];
   const rowStyle = (i) => i % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : "";
-  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between flex-wrap gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Rendimiento"), /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Rendimiento de Editores y Account Managers"), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-2xl" }, "Un resumen del avance de tareas y la capacidad de entrega dentro del rango de fechas seleccionado, tanto para edici\xF3n como para accounts.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 flex-wrap" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between flex-wrap gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Rendimiento"), /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Rendimiento de Editores y Community Managers"), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-2xl" }, "Un resumen del avance de tareas y la capacidad de entrega dentro del rango de fechas seleccionado, tanto para edici\xF3n como para accounts.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 flex-wrap" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
     "select",
     {
       value: selectedPersonKey,
@@ -14879,6 +14904,62 @@ var PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], man
       className: "text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
     },
     "Limpiar"
+  )), /* @__PURE__ */ React.createElement("label", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 min-w-[220px]" }, /* @__PURE__ */ React.createElement(Search, { size: 14, className: "text-slate-400" }), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      value: searchTerm,
+      onChange: (e) => setSearchTerm(e.target.value),
+      placeholder: "Buscar por nombre",
+      className: "w-full bg-transparent text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none placeholder:text-slate-400"
+    }
+  ), searchTerm && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => setSearchTerm(""),
+      className: "text-slate-400 transition-colors hover:text-slate-600"
+    },
+    /* @__PURE__ */ React.createElement(X, { size: 13 })
+  )), /* @__PURE__ */ React.createElement("div", { className: "flex items-center rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => setPersonGroupFilter("all"),
+      className: `rounded-lg px-3 py-2 text-sm font-bold transition-colors ${personGroupFilter === "all" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`
+    },
+    "Todos"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => setPersonGroupFilter("editors"),
+      className: `rounded-lg px-3 py-2 text-sm font-bold transition-colors ${personGroupFilter === "editors" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`
+    },
+    "Editores"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => setPersonGroupFilter("managers"),
+      className: `rounded-lg px-3 py-2 text-sm font-bold transition-colors ${personGroupFilter === "managers" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`
+    },
+    "Community Managers"
+  )), /* @__PURE__ */ React.createElement("div", { className: "flex items-center rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => setViewMode("simplified"),
+      className: `rounded-lg px-3 py-2 text-sm font-bold transition-colors ${viewMode === "simplified" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`
+    },
+    "Simplificado"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => setViewMode("detailed"),
+      className: `rounded-lg px-3 py-2 text-sm font-bold transition-colors ${viewMode === "detailed" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`
+    },
+    "Detalle"
   )), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Desde"), /* @__PURE__ */ React.createElement(
     "input",
     {
@@ -14931,7 +15012,25 @@ var PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], man
       icon: "BarChart3",
       sub: "promedio por persona"
     }
-  )), /* @__PURE__ */ React.createElement("p", { className: "rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300" }, "El porcentaje de rendimiento prioriza lo que realmente mueve el negocio: publicaciones, luego entregas y aprobaciones, con un ajuste menor por frecuencia de login."), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden" }, personStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 font-bold" }, "Sin datos de rendimiento para este rango de fechas") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[900px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Persona"), /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Tipo"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Total"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "En Progreso"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Entregadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Publicadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "\xDAltimo login"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Rendimiento"))), /* @__PURE__ */ React.createElement("tbody", null, personStats.map((person, index) => /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("p", { className: "rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300" }, "El porcentaje de rendimiento prioriza lo que realmente mueve el negocio: publicaciones, luego entregas y aprobaciones, con un ajuste menor por frecuencia de login."), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden" }, visiblePersonStats.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 font-bold" }, "Sin coincidencias para este filtro de b\xFAsqueda") : viewMode === "simplified" ? /* @__PURE__ */ React.createElement("div", { className: "space-y-6 p-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400" }, "Vista simplificada"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-sm text-slate-500 dark:text-slate-400" }, "Mostrando ", visiblePersonStats.length, " personas filtradas por nombre y por el rango activo.")), /* @__PURE__ */ React.createElement("div", { className: "rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400" }, visiblePersonStats.length, " resultados")), /* @__PURE__ */ React.createElement("div", { className: "grid gap-6 xl:grid-cols-2" }, /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-5" }, /* @__PURE__ */ React.createElement("div", { className: "mb-4 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Editores"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-sm text-slate-500 dark:text-slate-400" }, simplifiedPersonGroups.editors.length, " personas")), /* @__PURE__ */ React.createElement("div", { className: "rounded-full bg-amber-100 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-amber-700 dark:bg-amber-500/10 dark:text-amber-400" }, simplifiedPersonGroups.editors.length > 0 ? "Activos" : "Sin datos")), simplifiedPersonGroups.editors.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400" }, "No hay editores para mostrar") : /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, simplifiedPersonGroups.editors.map((person) => /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      key: `${person.kind}-${person.id}`,
+      className: "rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+    },
+    /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "font-black text-slate-800 dark:text-white" }, person.name), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, person.kindLabel)), /* @__PURE__ */ React.createElement("span", { className: `rounded-full px-3 py-1 text-sm font-black ${person.overallPerformance >= 80 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : person.overallPerformance >= 50 ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400" : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400"}` }, person.overallPerformance, "%")),
+    /* @__PURE__ */ React.createElement("div", { className: "mt-4 grid grid-cols-3 gap-2 text-sm" }, /* @__PURE__ */ React.createElement("div", { className: "rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Total"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 font-black text-slate-800 dark:text-white" }, person.total)), /* @__PURE__ */ React.createElement("div", { className: "rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Entregadas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 font-black text-emerald-600 dark:text-emerald-400" }, person.delivered)), /* @__PURE__ */ React.createElement("div", { className: "rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Publicadas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 font-black text-indigo-600 dark:text-indigo-400" }, person.published))),
+    /* @__PURE__ */ React.createElement("div", { className: "mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement("span", null, person.lastSeenAt ? `\xDAltimo login: ${normalizeDateOnlyString(person.lastSeenAt)}` : "Sin registro de login"), /* @__PURE__ */ React.createElement("span", null, person.daysSinceLogin === null ? "\u2014" : `${person.daysSinceLogin} d\xEDas`))
+  )))), /* @__PURE__ */ React.createElement("div", { className: "rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-5" }, /* @__PURE__ */ React.createElement("div", { className: "mb-4 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Community Managers"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-sm text-slate-500 dark:text-slate-400" }, simplifiedPersonGroups.managers.length, " personas")), /* @__PURE__ */ React.createElement("div", { className: "rounded-full bg-violet-100 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-violet-700 dark:bg-violet-500/10 dark:text-violet-400" }, simplifiedPersonGroups.managers.length > 0 ? "Activos" : "Sin datos")), simplifiedPersonGroups.managers.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400" }, "No hay community managers para mostrar") : /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, simplifiedPersonGroups.managers.map((person) => /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      key: `${person.kind}-${person.id}`,
+      className: "rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+    },
+    /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "font-black text-slate-800 dark:text-white" }, person.name), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, person.kindLabel)), /* @__PURE__ */ React.createElement("span", { className: `rounded-full px-3 py-1 text-sm font-black ${person.overallPerformance >= 80 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : person.overallPerformance >= 50 ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400" : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400"}` }, person.overallPerformance, "%")),
+    /* @__PURE__ */ React.createElement("div", { className: "mt-4 grid grid-cols-3 gap-2 text-sm" }, /* @__PURE__ */ React.createElement("div", { className: "rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Total"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 font-black text-slate-800 dark:text-white" }, person.total)), /* @__PURE__ */ React.createElement("div", { className: "rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Entregadas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 font-black text-emerald-600 dark:text-emerald-400" }, person.delivered)), /* @__PURE__ */ React.createElement("div", { className: "rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Publicadas"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 font-black text-indigo-600 dark:text-indigo-400" }, person.published))),
+    /* @__PURE__ */ React.createElement("div", { className: "mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement("span", null, person.lastSeenAt ? `\xDAltimo login: ${normalizeDateOnlyString(person.lastSeenAt)}` : "Sin registro de login"), /* @__PURE__ */ React.createElement("span", null, person.daysSinceLogin === null ? "\u2014" : `${person.daysSinceLogin} d\xEDas`))
+  )))))) : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[900px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Persona"), /* @__PURE__ */ React.createElement("th", { className: "text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Tipo"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Total"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "En Progreso"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Entregadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Publicadas"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "\xDAltimo login"), /* @__PURE__ */ React.createElement("th", { className: "text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500" }, "Rendimiento"))), /* @__PURE__ */ React.createElement("tbody", null, visiblePersonStats.map((person, index) => /* @__PURE__ */ React.createElement(
     "tr",
     {
       key: `${person.kind}-${person.id}`,
