@@ -1806,6 +1806,7 @@ function App() {
         : Notification.permission;
     });
   const handledIncomingCallIdsRef = useRef(new Set());
+  const webPushShownMessageIdsRef = useRef(new Set());
 
   useEffect(() => {
     window.__cluster_active_view = view;
@@ -2141,7 +2142,32 @@ function App() {
     let disposed = false;
     let unsubscribe = null;
     registerFirebaseWebPush({
-      onMessage: () => {
+      onMessage: (payload) => {
+        const data = payload?.data || {};
+        const title =
+          data.title ||
+          payload?.notification?.title ||
+          "Cluster Agency OS";
+        const body =
+          data.body ||
+          payload?.notification?.body ||
+          "Tienes una notificación nueva";
+        const messageId = String(data.messageId || "");
+        if (messageId) webPushShownMessageIdsRef.current.add(messageId);
+        try {
+          const notification = new Notification(title, {
+            body,
+            tag: messageId
+              ? `cluster-message-${messageId}`
+              : "cluster-notification",
+          });
+          notification.onclick = () => {
+            window.focus();
+            notification.close();
+          };
+        } catch {
+          /* El service worker conserva la entrega en segundo plano. */
+        }
         window.dispatchEvent(
           new CustomEvent("cluster:push", {
             detail: { collections: ["client_chats"] },
@@ -5693,6 +5719,12 @@ function App() {
     clientChats.forEach((message) => {
       if (!message.id || notifiedSet.has(message.id)) return;
       if (String(message.authorId || "") === myId) return;
+      if (!native && webPushShownMessageIdsRef.current.has(String(message.id))) {
+        webPushShownMessageIdsRef.current.delete(String(message.id));
+        notifiedSet.add(message.id);
+        changed = true;
+        return;
+      }
       if (isChatMuteActive(chatMuteMap[String(message.clientId || "")])) {
         notifiedSet.add(message.id);
         changed = true;

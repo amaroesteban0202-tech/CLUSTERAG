@@ -108,43 +108,63 @@ export const sendClientChatPush = async ({ message, clientName = 'Cliente' }) =>
                 clientName,
                 mentioned: group.mentioned
             });
-            const response = await messaging.sendEachForMulticast({
-                tokens: group.recipients.map((entry) => entry.token),
-                notification: { title: push.title, body: push.body },
-                data: push.data,
-                android: {
-                    priority: 'high',
-                    notification: {
-                        channelId: push.channelId,
-                        sound: 'default',
-                        ...(push.isCall ? { priority: 'max', visibility: 'public' } : {})
-                    }
+            const deliveryGroups = [
+                {
+                    isWeb: true,
+                    recipients: group.recipients.filter((entry) =>
+                        String(entry.platform || '').toLowerCase() === 'web')
                 },
-                apns: {
-                    headers: { 'apns-priority': '10' },
-                    payload: {
-                        aps: {
-                            sound: 'default',
-                            category: push.isCall ? 'CLUSTER_CALL' : 'CLUSTER_MESSAGE'
-                        }
-                    }
-                },
-                webpush: {
-                    headers: { Urgency: 'high' },
-                    ...(String(env.appBaseUrl || '').startsWith('https://')
-                        ? { fcmOptions: { link: env.appBaseUrl } }
-                        : {})
+                {
+                    isWeb: false,
+                    recipients: group.recipients.filter((entry) =>
+                        String(entry.platform || '').toLowerCase() !== 'web')
                 }
-            });
-            sent += response.successCount;
-            failed += response.failureCount;
-            await Promise.all(response.responses.map(async (result, index) => {
-                if (result.success || !INVALID_TOKEN_CODES.has(result.error?.code)) return;
-                await deleteRecord({
-                    collectionName: PUSH_TOKEN_COLLECTION,
-                    recordId: group.recipients[index].id
-                });
-            }));
+            ].filter((delivery) => delivery.recipients.length > 0);
+
+            for (const delivery of deliveryGroups) {
+                const response = await messaging.sendEachForMulticast(delivery.isWeb
+                    ? {
+                        tokens: delivery.recipients.map((entry) => entry.token),
+                        data: {
+                            ...push.data,
+                            title: push.title,
+                            body: push.body,
+                            link: String(env.appBaseUrl || '')
+                        },
+                        webpush: { headers: { Urgency: 'high' } }
+                    }
+                    : {
+                        tokens: delivery.recipients.map((entry) => entry.token),
+                        notification: { title: push.title, body: push.body },
+                        data: push.data,
+                        android: {
+                            priority: 'high',
+                            notification: {
+                                channelId: push.channelId,
+                                sound: 'default',
+                                ...(push.isCall ? { priority: 'max', visibility: 'public' } : {})
+                            }
+                        },
+                        apns: {
+                            headers: { 'apns-priority': '10' },
+                            payload: {
+                                aps: {
+                                    sound: 'default',
+                                    category: push.isCall ? 'CLUSTER_CALL' : 'CLUSTER_MESSAGE'
+                                }
+                            }
+                        }
+                    });
+                sent += response.successCount;
+                failed += response.failureCount;
+                await Promise.all(response.responses.map(async (result, index) => {
+                    if (result.success || !INVALID_TOKEN_CODES.has(result.error?.code)) return;
+                    await deleteRecord({
+                        collectionName: PUSH_TOKEN_COLLECTION,
+                        recordId: delivery.recipients[index].id
+                    });
+                }));
+            }
         }
         return { sent, failed };
     } catch (error) {
