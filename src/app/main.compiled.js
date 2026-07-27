@@ -184,6 +184,9 @@ var apiFetch = async (path, options = {}) => {
 var FIREBASE_SDK_VERSION = "10.14.1";
 var FIREBASE_APP_SCRIPT = `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app-compat.js`;
 var FIREBASE_MESSAGING_SCRIPT = `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-messaging-compat.js`;
+var isValidVapidPublicKey = (value) => /^[A-Za-z0-9_-]{80,120}$/.test(
+  String(value || "").trim()
+);
 var loadScript = (src) => new Promise((resolve, reject) => {
   const existing = document.querySelector(`script[src="${src}"]`);
   if (existing?.dataset.loaded === "true") {
@@ -215,7 +218,7 @@ var getFirebaseMessaging = async () => {
   const app = firebase.apps.find((entry) => entry.name === "cluster-web-push") || firebase.initializeApp(config, "cluster-web-push");
   return app.messaging();
 };
-var registerFirebaseWebPush = async ({ onMessage, vapidKey: configuredVapidKey } = {}) => {
+var registerFirebaseWebPush = async ({ onMessage } = {}) => {
   if (typeof window === "undefined" || !window.isSecureContext || !("serviceWorker" in navigator) || typeof Notification === "undefined" || Notification.permission !== "granted") {
     return null;
   }
@@ -223,12 +226,13 @@ var registerFirebaseWebPush = async ({ onMessage, vapidKey: configuredVapidKey }
   const workerUrl = `/firebase-messaging-sw.js?config=${encodeURIComponent(JSON.stringify(config || {}))}`;
   const serviceWorkerRegistration = await navigator.serviceWorker.register(workerUrl);
   const messaging = await getFirebaseMessaging();
-  const vapidKey = String(
-    configuredVapidKey || window.__cluster_firebase_web_push_vapid_key || ""
-  ).trim();
+  const vapidKey = String(window.__cluster_firebase_web_push_vapid_key || "").trim();
+  if (!isValidVapidPublicKey(vapidKey)) {
+    throw new Error("La clave p\xFAblica Web Push no es v\xE1lida.");
+  }
   const token = await messaging.getToken({
     serviceWorkerRegistration,
-    ...vapidKey ? { vapidKey } : {}
+    vapidKey
   });
   if (!token) throw new Error("Firebase no devolvi\xF3 un token Web Push.");
   return {
@@ -1446,18 +1450,15 @@ function App() {
       return;
     let disposed = false;
     let unsubscribe = null;
-    apiFetch("/api/push/config").catch(() => ({ vapidKey: "" })).then(
-      (pushConfig) => registerFirebaseWebPush({
-        vapidKey: pushConfig?.vapidKey,
-        onMessage: () => {
-          window.dispatchEvent(
-            new CustomEvent("cluster:push", {
-              detail: { collections: ["client_chats"] }
-            })
-          );
-        }
-      })
-    ).then(async (registration) => {
+    registerFirebaseWebPush({
+      onMessage: () => {
+        window.dispatchEvent(
+          new CustomEvent("cluster:push", {
+            detail: { collections: ["client_chats"] }
+          })
+        );
+      }
+    }).then(async (registration) => {
       if (!registration) return;
       if (disposed) {
         registration.unsubscribe?.();

@@ -2140,20 +2140,15 @@ function App() {
 
     let disposed = false;
     let unsubscribe = null;
-    apiFetch("/api/push/config")
-      .catch(() => ({ vapidKey: "" }))
-      .then((pushConfig) =>
-        registerFirebaseWebPush({
-          vapidKey: pushConfig?.vapidKey,
-          onMessage: () => {
-            window.dispatchEvent(
-              new CustomEvent("cluster:push", {
-                detail: { collections: ["client_chats"] },
-              }),
-            );
-          },
-        }),
-      )
+    registerFirebaseWebPush({
+      onMessage: () => {
+        window.dispatchEvent(
+          new CustomEvent("cluster:push", {
+            detail: { collections: ["client_chats"] },
+          }),
+        );
+      },
+    })
       .then(async (registration) => {
         if (!registration) return;
         if (disposed) {
