@@ -10977,89 +10977,92 @@ var ClientChatView = ({
         /* @__PURE__ */ React.createElement("span", { className: "truncate text-sm font-semibold text-slate-700 dark:text-slate-200" }, client.name || "Cliente")
       )))
     )
-  ), callPicker && /* @__PURE__ */ React.createElement(
-    "div",
-    {
-      className: "fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4",
-      onClick: () => setCallPicker(null)
-    },
+  ), callPicker && createPortal(
     /* @__PURE__ */ React.createElement(
       "div",
       {
-        className: "flex max-h-[75vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800",
-        onClick: (event) => event.stopPropagation()
+        className: "fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4",
+        onClick: () => setCallPicker(null)
       },
-      /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between border-b border-slate-100 p-4 dark:border-white/10" }, /* @__PURE__ */ React.createElement("h3", { className: "text-base font-black text-slate-800 dark:text-slate-100" }, callPicker.mode === "add" ? "Agregar a la llamada" : "Iniciar llamada"), /* @__PURE__ */ React.createElement(
-        "button",
+      /* @__PURE__ */ React.createElement(
+        "div",
         {
-          onClick: () => setCallPicker(null),
-          "aria-label": "Cerrar",
-          className: "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          className: "flex max-h-[75vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800",
+          onClick: (event) => event.stopPropagation()
         },
-        /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 18 })
-      )),
-      /* @__PURE__ */ React.createElement("div", { className: "p-3" }, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-xs text-slate-500 dark:text-slate-400" }, "Elige a qui\xE9n invitar", callPicker.mode === "add" ? " (adem\xE1s de quienes ya est\xE1n)." : " primero. Podr\xE1s agregar m\xE1s durante la llamada."), /* @__PURE__ */ React.createElement(
-        "input",
-        {
-          value: callSearch,
-          onChange: (event) => setCallSearch(event.target.value),
-          placeholder: "Buscar persona...",
-          className: "w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-        }
-      )),
-      /* @__PURE__ */ React.createElement("div", { className: "flex-1 overflow-y-auto px-2 pb-2 custom-scroll" }, mentionables.filter(
-        (person) => String(person.id) !== String(currentUserId) && (!callSearch.trim() || (person.name || "").toLowerCase().includes(callSearch.trim().toLowerCase()) || (person.email || "").toLowerCase().includes(callSearch.trim().toLowerCase()))
-      ).map((person) => {
-        const checked = callSelected.includes(person.id);
-        return /* @__PURE__ */ React.createElement(
+        /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between border-b border-slate-100 p-4 dark:border-white/10" }, /* @__PURE__ */ React.createElement("h3", { className: "text-base font-black text-slate-800 dark:text-slate-100" }, callPicker.mode === "add" ? "Agregar a la llamada" : "Iniciar llamada"), /* @__PURE__ */ React.createElement(
           "button",
           {
-            key: person.id,
-            onClick: () => setCallSelected(
-              (prev) => checked ? prev.filter((id) => id !== person.id) : [...prev, person.id]
-            ),
-            className: "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
+            onClick: () => setCallPicker(null),
+            "aria-label": "Cerrar",
+            className: "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           },
-          /* @__PURE__ */ React.createElement(
-            "span",
+          /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 18 })
+        )),
+        /* @__PURE__ */ React.createElement("div", { className: "p-3" }, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-xs text-slate-500 dark:text-slate-400" }, "Elige a qui\xE9n invitar", callPicker.mode === "add" ? " (adem\xE1s de quienes ya est\xE1n)." : " primero. Podr\xE1s agregar m\xE1s durante la llamada."), /* @__PURE__ */ React.createElement(
+          "input",
+          {
+            value: callSearch,
+            onChange: (event) => setCallSearch(event.target.value),
+            placeholder: "Buscar persona...",
+            className: "w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          }
+        )),
+        /* @__PURE__ */ React.createElement("div", { className: "flex-1 overflow-y-auto px-2 pb-2 custom-scroll" }, mentionables.filter(
+          (person) => String(person.id) !== String(currentUserId) && (!callSearch.trim() || (person.name || "").toLowerCase().includes(callSearch.trim().toLowerCase()) || (person.email || "").toLowerCase().includes(callSearch.trim().toLowerCase()))
+        ).map((person) => {
+          const checked = callSelected.includes(person.id);
+          return /* @__PURE__ */ React.createElement(
+            "button",
             {
-              className: `flex h-5 w-5 shrink-0 items-center justify-center rounded border ${checked ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 dark:border-slate-600"}`
+              key: person.id,
+              onClick: () => setCallSelected(
+                (prev) => checked ? prev.filter((id) => id !== person.id) : [...prev, person.id]
+              ),
+              className: "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
             },
-            checked && /* @__PURE__ */ React.createElement(Icon, { name: "Check", size: 12 })
-          ),
-          /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-semibold text-slate-700 dark:text-slate-200" }, person.name || person.email), person.email && /* @__PURE__ */ React.createElement("p", { className: "truncate text-[11px] text-slate-400" }, person.email))
-        );
-      })),
-      /* @__PURE__ */ React.createElement("div", { className: "border-t border-slate-100 p-3 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          onClick: async () => {
-            const room = callPicker.mode === "add" ? callPicker.roomId : buildChatRoomId(activeClient?.name);
-            let created = null;
-            if (onSendMessage) {
-              created = await onSendMessage({
-                clientId: activeClient.id,
-                text: callPicker.mode === "add" ? "Invit\xF3 a la llamada" : "Inici\xF3 una llamada",
-                mentionedIds: callSelected,
-                call: { roomId: room, provider: "jitsi" }
-              });
-            }
-            if (callPicker.mode !== "add") {
-              setActiveCall({
-                roomId: room,
-                messageId: created?.id || null,
-                isHost: true
-              });
-            }
-            setCallPicker(null);
-            setCallSelected([]);
+            /* @__PURE__ */ React.createElement(
+              "span",
+              {
+                className: `flex h-5 w-5 shrink-0 items-center justify-center rounded border ${checked ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 dark:border-slate-600"}`
+              },
+              checked && /* @__PURE__ */ React.createElement(Icon, { name: "Check", size: 12 })
+            ),
+            /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-semibold text-slate-700 dark:text-slate-200" }, person.name || person.email), person.email && /* @__PURE__ */ React.createElement("p", { className: "truncate text-[11px] text-slate-400" }, person.email))
+          );
+        })),
+        /* @__PURE__ */ React.createElement("div", { className: "border-t border-slate-100 p-3 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            onClick: async () => {
+              const room = callPicker.mode === "add" ? callPicker.roomId : buildChatRoomId(activeClient?.name);
+              let created = null;
+              if (onSendMessage) {
+                created = await onSendMessage({
+                  clientId: activeClient.id,
+                  text: callPicker.mode === "add" ? "Invit\xF3 a la llamada" : "Inici\xF3 una llamada",
+                  mentionedIds: callSelected,
+                  call: { roomId: room, provider: "jitsi" }
+                });
+              }
+              if (callPicker.mode !== "add") {
+                setActiveCall({
+                  roomId: room,
+                  messageId: created?.id || null,
+                  isHost: true
+                });
+              }
+              setCallPicker(null);
+              setCallSelected([]);
+            },
+            className: "flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-700"
           },
-          className: "flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-700"
-        },
-        /* @__PURE__ */ React.createElement(Icon, { name: "VideoCamera", size: 16 }),
-        callPicker.mode === "add" ? "Invitar" : "Iniciar llamada"
-      ))
-    )
+          /* @__PURE__ */ React.createElement(Icon, { name: "VideoCamera", size: 16 }),
+          callPicker.mode === "add" ? "Invitar" : "Iniciar llamada"
+        ))
+      )
+    ),
+    document.body
   ), activeCall && createPortal(
     /* @__PURE__ */ React.createElement("div", { className: "fixed inset-0 z-[70] flex flex-col bg-slate-900" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2.5" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2 text-white" }, /* @__PURE__ */ React.createElement(
       Icon,

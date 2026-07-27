@@ -14661,10 +14661,12 @@ const ClientChatView = ({
         </div>
       )}
 
-      {/* Selector de participantes para la llamada */}
-      {callPicker && (
+      {/* Selector de participantes para la llamada — portal a body como la
+          llamada activa, para que se vea encima incluso con una llamada en curso. */}
+      {callPicker &&
+        createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4"
           onClick={() => setCallPicker(null)}
         >
           <div
@@ -14781,8 +14783,9 @@ const ClientChatView = ({
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
 
       {/* Llamada embebida (Jitsi) — portal a body para ocupar toda la ventana
           sin que ningún contenedor con transform la recorte */}
