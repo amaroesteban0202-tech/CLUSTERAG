@@ -2,6 +2,9 @@
   "name": "clusterag",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "build": "npm run build:css && npm run build:js && node scripts/prepare-public.mjs",
     "build:css": "tailwindcss -c tailwind.config.cjs -i ./src/styles/tailwind.input.css -o ./src/styles/tailwind.generated.css --minify",
