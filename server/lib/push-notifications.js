@@ -46,7 +46,10 @@ export const buildClientChatPush = ({
             type: isCall ? 'call' : mentioned ? 'mention' : 'message',
             messageId: String(message.id || ''),
             clientId: String(message.clientId || ''),
-            roomId: String(message.call?.roomId || '')
+            roomId: String(message.call?.roomId || ''),
+            clientName: String(clientName || 'Cliente'),
+            authorName: String(message.authorName || 'Alguien'),
+            mentioned: mentioned ? '1' : '0'
         },
         channelId: isCall ? 'cluster-calls' : 'cluster-messages',
         isCall
@@ -127,7 +130,7 @@ export const sendClientChatPush = async ({ message, clientName = 'Cliente' }) =>
                         tokens: delivery.recipients.map((entry) => entry.token),
                         data: {
                             ...push.data,
-                            title: push.title,
+                            title: String(clientName || push.title),
                             body: push.body,
                             link: String(env.appBaseUrl || '')
                         },
