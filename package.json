@@ -8,7 +8,7 @@
   "scripts": {
     "build": "npm run build:css && npm run build:js && node scripts/prepare-public.mjs",
     "build:css": "tailwindcss -c tailwind.config.cjs -i ./src/styles/tailwind.input.css -o ./src/styles/tailwind.generated.css --minify",
-    "build:js": "esbuild src/app/main.jsx --bundle --outfile=src/app/main.compiled.js --format=esm --external:react --external:react-dom --external:react-dom/client --external:@phosphor-icons/react --external:@capacitor/app --external:firebase/auth --external:firebase/firestore --external:/src/app/config/firebase.js --external:/src/app/constants/app.constants.js --external:/src/app/utils/date.js --external:/src/app/utils/kpi.js --legal-comments=none",
+    "build:js": "esbuild src/app/main.jsx --bundle --outfile=src/app/main.compiled.js --format=esm --external:react --external:react-dom --external:react-dom/client --external:@phosphor-icons/react --external:@capacitor/core --external:@capacitor/app --external:@capacitor/local-notifications --external:@capacitor/push-notifications --external:firebase/auth --external:firebase/firestore --external:/src/app/config/firebase.js --external:/src/app/constants/app.constants.js --external:/src/app/utils/date.js --external:/src/app/utils/kpi.js --legal-comments=none",
     "check:design": "node scripts/check-design.mjs",
     "check:kpi": "node scripts/check-kpi.mjs",
     "check:polling": "node scripts/check-polling.mjs",
@@ -37,6 +37,8 @@
     "@capacitor/cli": "^8.3.1",
     "@capacitor/core": "^8.3.1",
     "@capacitor/ios": "^8.3.1",
+    "@capacitor/local-notifications": "^8.2.1",
+    "@capacitor/push-notifications": "^8.1.2",
     "esbuild": "^0.25.5",
     "tailwindcss": "^3.4.19"
   },

@@ -1,7 +1,10 @@
 // src/app/main.jsx
 import React, { useState, useEffect, useRef, useId, useMemo } from "react";
 import { createRoot } from "react-dom/client";
+import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
+import { LocalNotifications } from "@capacitor/local-notifications";
+import { PushNotifications } from "@capacitor/push-notifications";
 import {
   SquaresFour as LayoutDashboard,
   Users,
@@ -892,8 +895,66 @@ var EDITING_STATUS_OPTIONS = [
 ];
 var INCOMING_CALL_MAX_AGE_MS = 90 * 1e3;
 var INCOMING_CALL_RING_MS = 45 * 1e3;
+var NATIVE_MESSAGE_CHANNEL = "cluster-messages";
+var NATIVE_CALL_CHANNEL = "cluster-calls";
 var incomingCallAudioContext = null;
 var incomingCallAudioReadyListeners = /* @__PURE__ */ new Set();
+var isNativeApp = () => {
+  try {
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+};
+var nativeNotificationId = (value = "") => {
+  let hash = 2166136261;
+  for (const character of String(value)) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash || 1) % 2147483647;
+};
+var scheduleNativeNotification = async ({
+  title,
+  body,
+  data = {},
+  isCall = false
+}) => {
+  if (!isNativeApp()) return false;
+  try {
+    const permission = await LocalNotifications.checkPermissions();
+    if (permission.display !== "granted") return false;
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id: nativeNotificationId(
+            data.messageId || `${data.type || "notification"}-${Date.now()}`
+          ),
+          title,
+          body,
+          sound: "default",
+          channelId: isCall ? NATIVE_CALL_CHANNEL : NATIVE_MESSAGE_CHANNEL,
+          schedule: { at: new Date(Date.now() + 150) },
+          extra: data,
+          autoCancel: true
+        }
+      ]
+    });
+    return true;
+  } catch (error) {
+    console.warn("[native-notification]", error?.message || error);
+    return false;
+  }
+};
+var chatMessagePreview = (message = {}) => {
+  if (message.text) return String(message.text).slice(0, 180);
+  if (message.sticker) return "Envi\xF3 un sticker";
+  const attachmentCount = Array.isArray(message.attachments) ? message.attachments.length : 0;
+  if (attachmentCount > 0) {
+    return `Envi\xF3 ${attachmentCount} archivo${attachmentCount === 1 ? "" : "s"}`;
+  }
+  return "Nuevo mensaje";
+};
 var getIncomingCallAudioContext = () => {
   if (typeof window === "undefined") return null;
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -1041,6 +1102,8 @@ function App() {
   const [chatDirectory, setChatDirectory] = useState([]);
   const [incomingCall, setIncomingCall] = useState(null);
   const [incomingCallToJoin, setIncomingCallToJoin] = useState(null);
+  const [nativePushReady, setNativePushReady] = useState(false);
+  const [nativeNotificationAction, setNativeNotificationAction] = useState(null);
   const handledIncomingCallIdsRef = useRef(/* @__PURE__ */ new Set());
   useEffect(() => {
     window.__cluster_active_view = view;
@@ -1145,6 +1208,127 @@ function App() {
     currentUserProfile && currentUserProfile.isActive === false
   );
   useEffect(() => {
+    if (!currentUserProfile?.id || profileBlocked) return;
+    if (!isNativeApp()) {
+      if (typeof Notification === "undefined" || Notification.permission !== "default")
+        return;
+      const requestBrowserPermission = () => {
+        Notification.requestPermission().catch(() => {
+        });
+        window.removeEventListener("pointerdown", requestBrowserPermission);
+        window.removeEventListener("keydown", requestBrowserPermission);
+      };
+      window.addEventListener("pointerdown", requestBrowserPermission, {
+        passive: true
+      });
+      window.addEventListener("keydown", requestBrowserPermission);
+      return () => {
+        window.removeEventListener("pointerdown", requestBrowserPermission);
+        window.removeEventListener("keydown", requestBrowserPermission);
+      };
+    }
+    let disposed = false;
+    const handles = [];
+    const addHandle = async (promise) => {
+      const handle = await promise;
+      if (disposed) handle?.remove?.();
+      else handles.push(handle);
+    };
+    const configureNativeNotifications = async () => {
+      if (Capacitor.getPlatform() === "android") {
+        await Promise.all([
+          LocalNotifications.createChannel({
+            id: NATIVE_MESSAGE_CHANNEL,
+            name: "Mensajes",
+            description: "Mensajes nuevos del chat interno",
+            importance: 5,
+            visibility: 1,
+            vibration: true,
+            sound: "default"
+          }),
+          LocalNotifications.createChannel({
+            id: NATIVE_CALL_CHANNEL,
+            name: "Llamadas",
+            description: "Llamadas entrantes del equipo",
+            importance: 5,
+            visibility: 1,
+            vibration: true,
+            sound: "default"
+          })
+        ]);
+      }
+      let localPermission = await LocalNotifications.checkPermissions();
+      if (localPermission.display === "prompt") {
+        localPermission = await LocalNotifications.requestPermissions();
+      }
+      await addHandle(
+        PushNotifications.addListener("registration", async ({ value }) => {
+          if (disposed || !value) return;
+          try {
+            await apiFetch("/api/push/register", {
+              method: "POST",
+              body: JSON.stringify({
+                token: value,
+                platform: Capacitor.getPlatform()
+              })
+            });
+            if (!disposed) setNativePushReady(true);
+          } catch (error) {
+            console.warn("[push:register]", error?.message || error);
+            if (!disposed) setNativePushReady(false);
+          }
+        })
+      );
+      await addHandle(
+        PushNotifications.addListener("registrationError", (error) => {
+          console.warn("[push:registration]", error?.error || error);
+          if (!disposed) setNativePushReady(false);
+        })
+      );
+      await addHandle(
+        PushNotifications.addListener(
+          "pushNotificationReceived",
+          (notification) => {
+            const data = notification.data || {};
+            void scheduleNativeNotification({
+              title: notification.title || "Cluster Agency OS",
+              body: notification.body || "Tienes una notificaci\xF3n nueva",
+              data,
+              isCall: data.type === "call"
+            });
+          }
+        )
+      );
+      await addHandle(
+        PushNotifications.addListener(
+          "pushNotificationActionPerformed",
+          ({ notification }) => setNativeNotificationAction(notification?.data || null)
+        )
+      );
+      await addHandle(
+        LocalNotifications.addListener(
+          "localNotificationActionPerformed",
+          ({ notification }) => setNativeNotificationAction(notification?.extra || null)
+        )
+      );
+      let pushPermission = await PushNotifications.checkPermissions();
+      if (pushPermission.receive === "prompt") {
+        pushPermission = await PushNotifications.requestPermissions();
+      }
+      if (pushPermission.receive === "granted") {
+        await PushNotifications.register();
+      }
+    };
+    configureNativeNotifications().catch((error) => {
+      console.warn("[notifications:setup]", error?.message || error);
+      if (!disposed) setNativePushReady(false);
+    });
+    return () => {
+      disposed = true;
+      handles.forEach((handle) => handle?.remove?.());
+    };
+  }, [currentUserProfile?.id, profileBlocked]);
+  useEffect(() => {
     const myId = String(currentUserProfile?.id || "");
     if (!myId) {
       setIncomingCall(null);
@@ -1173,6 +1357,40 @@ function App() {
     if (!incomingCall?.id) return;
     const ringtone = createIncomingCallRingtone();
     ringtone.start();
+    const client = clients.find(
+      (item) => String(item.id) === String(incomingCall.clientId)
+    );
+    const title = `Llamada entrante \xB7 ${client?.name || "Cliente"}`;
+    const body = `${incomingCall.authorName || "Alguien"} te est\xE1 llamando`;
+    if (isNativeApp()) {
+      if (!nativePushReady) {
+        void scheduleNativeNotification({
+          title,
+          body,
+          isCall: true,
+          data: {
+            type: "call",
+            messageId: String(incomingCall.id),
+            clientId: String(incomingCall.clientId || ""),
+            roomId: String(incomingCall.call?.roomId || "")
+          }
+        });
+      }
+    } else if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      try {
+        const notification = new Notification(title, {
+          body,
+          tag: `cluster-call-${incomingCall.id}`,
+          requireInteraction: true
+        });
+        notification.onclick = () => {
+          window.focus();
+          handleIncomingCall(true);
+          notification.close();
+        };
+      } catch {
+      }
+    }
     if (typeof navigator !== "undefined" && navigator.vibrate) {
       navigator.vibrate([350, 180, 350]);
     }
@@ -3689,6 +3907,25 @@ function App() {
     openClientChat(client);
     handleNavigate("chat");
   };
+  useEffect(() => {
+    if (!nativeNotificationAction?.clientId) return;
+    const client = clients.find(
+      (item) => String(item.id) === String(nativeNotificationAction.clientId)
+    ) || {
+      id: nativeNotificationAction.clientId,
+      name: "Cliente"
+    };
+    if (nativeNotificationAction.type === "call" && nativeNotificationAction.roomId) {
+      setIncomingCallToJoin({
+        roomId: nativeNotificationAction.roomId,
+        messageId: nativeNotificationAction.messageId || null,
+        clientId: nativeNotificationAction.clientId
+      });
+    }
+    openClientChat(client);
+    handleNavigate("chat");
+    setNativeNotificationAction(null);
+  }, [nativeNotificationAction, clients]);
   const deleteChatForEveryone = async (message) => {
     if (!message?.id) return;
     const myId = String(currentUserProfile?.id || "");
@@ -3884,16 +4121,12 @@ function App() {
     markClientChatRead(selectedChatClient.id);
   }, [view, selectedChatClient?.id, clientChats]);
   useEffect(() => {
-    if (typeof window === "undefined" || typeof Notification === "undefined")
-      return;
     const myId = String(currentUserProfile?.id || "");
     if (!myId) return;
-    if (Notification.permission === "default") {
-      Notification.requestPermission().catch(() => {
-      });
-    }
-    if (Notification.permission !== "granted") return;
-    const STORAGE_KEY = "cluster_chat_notifications_v1";
+    const native = isNativeApp();
+    if (!native && (typeof Notification === "undefined" || Notification.permission !== "granted"))
+      return;
+    const STORAGE_KEY = "cluster_chat_notifications_v2";
     let notified = [];
     try {
       notified = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
@@ -3905,26 +4138,42 @@ function App() {
     clientChats.forEach((message) => {
       if (!message.id || notifiedSet.has(message.id)) return;
       if (String(message.authorId || "") === myId) return;
-      const mentionsMe = Array.isArray(message.mentionedIds) && message.mentionedIds.includes(myId);
-      if (!mentionsMe) return;
+      if (message.deleted || message.call?.roomId) {
+        notifiedSet.add(message.id);
+        changed = true;
+        return;
+      }
       const age = Date.now() - new Date(message.createdAt || 0).getTime();
       if (age >= 0 && age < 15 * 60 * 1e3) {
         const client = clients.find((item) => item.id === message.clientId);
-        try {
-          const notif = new Notification(
-            `Chat \xB7 ${client?.name || "Cliente"}`,
-            {
-              body: `${message.authorName || "Alguien"}: ${message.text}`,
-              tag: `chat-${message.id}`
-            }
-          );
-          notif.onclick = () => {
-            window.focus();
-            if (client) openClientChat(client);
-            handleNavigate("chat");
-            notif.close();
-          };
-        } catch {
+        const title = `Nuevo mensaje \xB7 ${client?.name || "Cliente"}`;
+        const body = `${message.authorName || "Alguien"}: ${chatMessagePreview(message)}`;
+        if (native) {
+          if (!nativePushReady) {
+            void scheduleNativeNotification({
+              title,
+              body,
+              data: {
+                type: "message",
+                messageId: String(message.id),
+                clientId: String(message.clientId || "")
+              }
+            });
+          }
+        } else {
+          try {
+            const notification = new Notification(title, {
+              body,
+              tag: `cluster-message-${message.id}`
+            });
+            notification.onclick = () => {
+              window.focus();
+              if (client) openClientChat(client);
+              handleNavigate("chat");
+              notification.close();
+            };
+          } catch {
+          }
         }
       }
       notifiedSet.add(message.id);
@@ -3939,7 +4188,7 @@ function App() {
       } catch {
       }
     }
-  }, [clientChats, currentUserProfile]);
+  }, [clientChats, currentUserProfile, clients, nativePushReady]);
   const addTaskTimeEntry = async (task, type, durationMs) => {
     const colMap = {
       accountTask: "account_tasks",

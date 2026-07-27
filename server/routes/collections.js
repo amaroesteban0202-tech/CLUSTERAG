@@ -14,6 +14,7 @@ import {
 import { prepareManagementTaskPayload } from '../lib/management-tasks.js';
 import { requireAuthenticatedUser } from '../lib/sessions.js';
 import { normalizeEmail } from '../lib/text.js';
+import { sendClientChatPush } from '../lib/push-notifications.js';
 
 const router = express.Router();
 
@@ -293,6 +294,16 @@ router.post('/:collectionName', asyncHandler(async (req, res) => {
             isCreate: true
         })
     });
+    if (collectionName === 'client_chats') {
+        const client = await getRecord({
+            collectionName: 'clients',
+            recordId: record.clientId
+        });
+        await sendClientChatPush({
+            message: record,
+            clientName: client?.name || 'Cliente'
+        });
+    }
     res.status(201).json({ record });
 }));
 
