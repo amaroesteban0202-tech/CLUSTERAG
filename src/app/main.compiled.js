@@ -890,6 +890,88 @@ var EDITING_STATUS_OPTIONS = [
   { id: "aprobado", label: "Aprobado" },
   { id: "publicado", label: "Publicado" }
 ];
+var INCOMING_CALL_MAX_AGE_MS = 90 * 1e3;
+var INCOMING_CALL_RING_MS = 45 * 1e3;
+var incomingCallAudioContext = null;
+var getIncomingCallAudioContext = () => {
+  if (typeof window === "undefined") return null;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!incomingCallAudioContext || incomingCallAudioContext.state === "closed") {
+    incomingCallAudioContext = new AudioContextClass();
+  }
+  return incomingCallAudioContext;
+};
+var unlockIncomingCallAudio = () => {
+  try {
+    const context = getIncomingCallAudioContext();
+    if (context?.state === "suspended") context.resume().catch(() => {
+    });
+  } catch {
+  }
+};
+var createIncomingCallRingtone = () => {
+  let context = null;
+  let intervalId = null;
+  let stopped = false;
+  const activeOscillators = /* @__PURE__ */ new Set();
+  const ringOnce = () => {
+    if (stopped || !context || context.state !== "running") return;
+    const baseTime = context.currentTime + 0.03;
+    [0, 0.48].forEach((offset) => {
+      [440, 480].forEach((frequency) => {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        const startsAt = baseTime + offset;
+        const endsAt = startsAt + 0.36;
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(frequency, startsAt);
+        gain.gain.setValueAtTime(1e-4, startsAt);
+        gain.gain.exponentialRampToValueAtTime(0.075, startsAt + 0.025);
+        gain.gain.setValueAtTime(0.075, endsAt - 0.04);
+        gain.gain.exponentialRampToValueAtTime(1e-4, endsAt);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        activeOscillators.add(oscillator);
+        oscillator.onended = () => activeOscillators.delete(oscillator);
+        oscillator.start(startsAt);
+        oscillator.stop(endsAt + 0.02);
+      });
+    });
+  };
+  return {
+    start() {
+      if (stopped) return;
+      try {
+        context = getIncomingCallAudioContext();
+        if (!context) return;
+        const begin = () => {
+          if (stopped || context.state !== "running") return;
+          ringOnce();
+          intervalId = window.setInterval(ringOnce, 2800);
+        };
+        if (context.state === "running") begin();
+        else context.resume().then(begin).catch(() => {
+        });
+      } catch {
+      }
+    },
+    stop() {
+      stopped = true;
+      if (intervalId) window.clearInterval(intervalId);
+      intervalId = null;
+      activeOscillators.forEach((oscillator) => {
+        try {
+          oscillator.stop();
+          oscillator.disconnect();
+        } catch {
+        }
+      });
+      activeOscillators.clear();
+      context = null;
+    }
+  };
+};
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -941,10 +1023,26 @@ function App() {
   const [chatPins, setChatPins] = useState([]);
   const [chatStickers, setChatStickers] = useState([]);
   const [chatDirectory, setChatDirectory] = useState([]);
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [incomingCallToJoin, setIncomingCallToJoin] = useState(null);
+  const handledIncomingCallIdsRef = useRef(/* @__PURE__ */ new Set());
   useEffect(() => {
     window.__cluster_active_view = view;
     window.dispatchEvent(new Event("cluster:viewchange"));
   }, [view]);
+  useEffect(() => {
+    const unlock = () => {
+      unlockIncomingCallAudio();
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedManager, setSelectedManager] = useState(null);
   const [selectedEditor, setSelectedEditor] = useState(null);
@@ -1032,6 +1130,52 @@ function App() {
   const profileBlocked = Boolean(
     currentUserProfile && currentUserProfile.isActive === false
   );
+  useEffect(() => {
+    const myId = String(currentUserProfile?.id || "");
+    if (!myId) {
+      setIncomingCall(null);
+      return;
+    }
+    const endedRoomIds = new Set(
+      clientChats.filter((message) => message.call?.ended && message.call?.roomId).map((message) => String(message.call.roomId))
+    );
+    const now = Date.now();
+    const nextIncomingCall = [...clientChats].filter((message) => {
+      if (!message.id || !message.call?.roomId || message.call.ended) return false;
+      if (endedRoomIds.has(String(message.call.roomId))) return false;
+      if (String(message.authorId || "") === myId) return false;
+      if (!Array.isArray(message.mentionedIds) || !message.mentionedIds.map(String).includes(myId))
+        return false;
+      if (handledIncomingCallIdsRef.current.has(String(message.id))) return false;
+      const createdAt = new Date(message.createdAt || 0).getTime();
+      return Number.isFinite(createdAt) && now - createdAt >= 0 && now - createdAt < INCOMING_CALL_MAX_AGE_MS;
+    }).sort((a, b) => String(b.createdAt || "").localeCompare(a.createdAt || ""))[0];
+    setIncomingCall((current) => {
+      if (!nextIncomingCall) return null;
+      return String(current?.id || "") === String(nextIncomingCall.id) ? current : nextIncomingCall;
+    });
+  }, [clientChats, currentUserProfile?.id]);
+  useEffect(() => {
+    if (!incomingCall?.id) return;
+    const ringtone = createIncomingCallRingtone();
+    ringtone.start();
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      navigator.vibrate([350, 180, 350]);
+    }
+    const timeoutId = window.setTimeout(() => {
+      handledIncomingCallIdsRef.current.add(String(incomingCall.id));
+      setIncomingCall(
+        (current) => String(current?.id || "") === String(incomingCall.id) ? null : current
+      );
+    }, INCOMING_CALL_RING_MS);
+    return () => {
+      ringtone.stop();
+      window.clearTimeout(timeoutId);
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+        navigator.vibrate(0);
+      }
+    };
+  }, [incomingCall?.id]);
   const chatReadMap = useMemo(() => {
     const uid = String(currentUserProfile?.id || authEmail || "");
     const map = {};
@@ -3513,6 +3657,24 @@ function App() {
     setSelectedChatClient(client || null);
     if (client?.id) markClientChatRead(client.id);
   };
+  const handleIncomingCall = (shouldAnswer) => {
+    if (!incomingCall?.id) return;
+    const call = incomingCall;
+    handledIncomingCallIdsRef.current.add(String(call.id));
+    setIncomingCall(null);
+    if (!shouldAnswer) return;
+    const client = clients.find((item) => String(item.id) === String(call.clientId)) || {
+      id: call.clientId,
+      name: "Cliente"
+    };
+    setIncomingCallToJoin({
+      roomId: call.call.roomId,
+      messageId: call.id,
+      clientId: call.clientId
+    });
+    openClientChat(client);
+    handleNavigate("chat");
+  };
   const deleteChatForEveryone = async (message) => {
     if (!message?.id) return;
     const myId = String(currentUserProfile?.id || "");
@@ -4540,7 +4702,9 @@ function App() {
           accountTasks,
           editingTasks,
           managementTasks,
-          fetchFullMessage: fetchClientChatMessage
+          fetchFullMessage: fetchClientChatMessage,
+          incomingCallToJoin,
+          onIncomingCallJoined: () => setIncomingCallToJoin(null)
         }
       ),
       view === "managers" && /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement(
@@ -5047,6 +5211,46 @@ function App() {
       editingTasks,
       managementTasks
     }
+  ), incomingCall && createPortal(
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm",
+        role: "dialog",
+        "aria-modal": "true",
+        "aria-labelledby": "incoming-call-title"
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-slate-900 p-6 text-center shadow-2xl" }, /* @__PURE__ */ React.createElement("div", { className: "mx-auto mb-4 flex h-20 w-20 animate-pulse items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-400/25" }, /* @__PURE__ */ React.createElement(Icon, { name: "Phone", size: 34 })), /* @__PURE__ */ React.createElement("p", { className: "mb-1 text-xs font-bold uppercase tracking-[0.22em] text-emerald-400" }, "Llamada entrante"), /* @__PURE__ */ React.createElement(
+        "h2",
+        {
+          id: "incoming-call-title",
+          className: "text-xl font-black text-white"
+        },
+        incomingCall.authorName || "Alguien",
+        " te est\xE1 llamando"
+      ), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-slate-400" }, clients.find(
+        (item) => String(item.id) === String(incomingCall.clientId)
+      )?.name || "Conversaci\xF3n de cliente"), /* @__PURE__ */ React.createElement("div", { className: "mt-6 grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          onClick: () => handleIncomingCall(false),
+          className: "flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-red-700"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 18 }),
+        "Rechazar"
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          onClick: () => handleIncomingCall(true),
+          className: "flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-700"
+        },
+        /* @__PURE__ */ React.createElement(Icon, { name: "Phone", size: 18 }),
+        "Contestar"
+      )))
+    ),
+    document.body
   ));
 }
 var SIDEBAR_ACCENT_HEX = {
@@ -8625,7 +8829,9 @@ var ClientChatView = ({
   accountTasks = [],
   editingTasks = [],
   managementTasks = [],
-  fetchFullMessage
+  fetchFullMessage,
+  incomingCallToJoin = null,
+  onIncomingCallJoined
 }) => {
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -8763,6 +8969,15 @@ var ClientChatView = ({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [activeClient?.id, messages.length]);
+  useEffect(() => {
+    if (!incomingCallToJoin?.roomId) return;
+    setActiveCall({
+      roomId: incomingCallToJoin.roomId,
+      messageId: incomingCallToJoin.messageId || null,
+      isHost: false
+    });
+    if (onIncomingCallJoined) onIncomingCallJoined(incomingCallToJoin);
+  }, [incomingCallToJoin?.roomId, incomingCallToJoin?.messageId]);
   useEffect(() => {
     if (!activeClient || typeof fetchFullMessage !== "function") return;
     let cancelled = false;

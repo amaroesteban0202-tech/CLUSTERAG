@@ -1528,6 +1528,98 @@ const EDITING_STATUS_OPTIONS = [
   { id: "publicado", label: "Publicado" },
 ];
 
+const INCOMING_CALL_MAX_AGE_MS = 90 * 1000;
+const INCOMING_CALL_RING_MS = 45 * 1000;
+let incomingCallAudioContext = null;
+
+const getIncomingCallAudioContext = () => {
+  if (typeof window === "undefined") return null;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!incomingCallAudioContext || incomingCallAudioContext.state === "closed") {
+    incomingCallAudioContext = new AudioContextClass();
+  }
+  return incomingCallAudioContext;
+};
+
+const unlockIncomingCallAudio = () => {
+  try {
+    const context = getIncomingCallAudioContext();
+    if (context?.state === "suspended") context.resume().catch(() => {});
+  } catch {
+    /* Algunos navegadores no ofrecen Web Audio. */
+  }
+};
+
+// Tono sintetizado para no depender de un archivo de audio externo. El navegador
+// puede bloquearlo hasta la primera interacción del usuario; el aviso visual
+// permanece disponible en ese caso.
+const createIncomingCallRingtone = () => {
+  let context = null;
+  let intervalId = null;
+  let stopped = false;
+  const activeOscillators = new Set();
+
+  const ringOnce = () => {
+    if (stopped || !context || context.state !== "running") return;
+    const baseTime = context.currentTime + 0.03;
+    [0, 0.48].forEach((offset) => {
+      [440, 480].forEach((frequency) => {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        const startsAt = baseTime + offset;
+        const endsAt = startsAt + 0.36;
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(frequency, startsAt);
+        gain.gain.setValueAtTime(0.0001, startsAt);
+        gain.gain.exponentialRampToValueAtTime(0.075, startsAt + 0.025);
+        gain.gain.setValueAtTime(0.075, endsAt - 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.0001, endsAt);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        activeOscillators.add(oscillator);
+        oscillator.onended = () => activeOscillators.delete(oscillator);
+        oscillator.start(startsAt);
+        oscillator.stop(endsAt + 0.02);
+      });
+    });
+  };
+
+  return {
+    start() {
+      if (stopped) return;
+      try {
+        context = getIncomingCallAudioContext();
+        if (!context) return;
+        const begin = () => {
+          if (stopped || context.state !== "running") return;
+          ringOnce();
+          intervalId = window.setInterval(ringOnce, 2800);
+        };
+        if (context.state === "running") begin();
+        else context.resume().then(begin).catch(() => {});
+      } catch {
+        /* El aviso visual sigue funcionando cuando el audio no está disponible. */
+      }
+    },
+    stop() {
+      stopped = true;
+      if (intervalId) window.clearInterval(intervalId);
+      intervalId = null;
+      activeOscillators.forEach((oscillator) => {
+        try {
+          oscillator.stop();
+          oscillator.disconnect();
+        } catch {
+          /* El oscilador ya terminó. */
+        }
+      });
+      activeOscillators.clear();
+      context = null;
+    },
+  };
+};
+
 // --- APP PRINCIPAL ---
 function App() {
   const [user, setUser] = useState(null);
@@ -1585,11 +1677,30 @@ function App() {
   const [chatPins, setChatPins] = useState([]);
   const [chatStickers, setChatStickers] = useState([]);
   const [chatDirectory, setChatDirectory] = useState([]);
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [incomingCallToJoin, setIncomingCallToJoin] = useState(null);
+  const handledIncomingCallIdsRef = useRef(new Set());
 
   useEffect(() => {
     window.__cluster_active_view = view;
     window.dispatchEvent(new Event("cluster:viewchange"));
   }, [view]);
+
+  // Desbloquea Web Audio con la primera interacción para que futuras llamadas
+  // puedan sonar aunque lleguen mientras el usuario está en otra sección.
+  useEffect(() => {
+    const unlock = () => {
+      unlockIncomingCallAudio();
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
 
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedManager, setSelectedManager] = useState(null);
@@ -1731,6 +1842,73 @@ function App() {
   const profileBlocked = Boolean(
     currentUserProfile && currentUserProfile.isActive === false,
   );
+
+  // Detecta invitaciones nuevas incluso si el usuario está fuera de la vista de
+  // chat. Solo suena para la persona invitada, nunca para quien inició la llamada.
+  useEffect(() => {
+    const myId = String(currentUserProfile?.id || "");
+    if (!myId) {
+      setIncomingCall(null);
+      return;
+    }
+
+    const endedRoomIds = new Set(
+      clientChats
+        .filter((message) => message.call?.ended && message.call?.roomId)
+        .map((message) => String(message.call.roomId)),
+    );
+    const now = Date.now();
+    const nextIncomingCall = [...clientChats]
+      .filter((message) => {
+        if (!message.id || !message.call?.roomId || message.call.ended) return false;
+        if (endedRoomIds.has(String(message.call.roomId))) return false;
+        if (String(message.authorId || "") === myId) return false;
+        if (
+          !Array.isArray(message.mentionedIds) ||
+          !message.mentionedIds.map(String).includes(myId)
+        )
+          return false;
+        if (handledIncomingCallIdsRef.current.has(String(message.id))) return false;
+        const createdAt = new Date(message.createdAt || 0).getTime();
+        return (
+          Number.isFinite(createdAt) &&
+          now - createdAt >= 0 &&
+          now - createdAt < INCOMING_CALL_MAX_AGE_MS
+        );
+      })
+      .sort((a, b) => String(b.createdAt || "").localeCompare(a.createdAt || ""))[0];
+
+    setIncomingCall((current) => {
+      if (!nextIncomingCall) return null;
+      return String(current?.id || "") === String(nextIncomingCall.id)
+        ? current
+        : nextIncomingCall;
+    });
+  }, [clientChats, currentUserProfile?.id]);
+
+  // Mantiene el tono hasta contestar, rechazar, finalizar o alcanzar el tiempo
+  // máximo. En móvil también solicita una vibración corta como apoyo.
+  useEffect(() => {
+    if (!incomingCall?.id) return;
+    const ringtone = createIncomingCallRingtone();
+    ringtone.start();
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      navigator.vibrate([350, 180, 350]);
+    }
+    const timeoutId = window.setTimeout(() => {
+      handledIncomingCallIdsRef.current.add(String(incomingCall.id));
+      setIncomingCall((current) =>
+        String(current?.id || "") === String(incomingCall.id) ? null : current,
+      );
+    }, INCOMING_CALL_RING_MS);
+    return () => {
+      ringtone.stop();
+      window.clearTimeout(timeoutId);
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+        navigator.vibrate(0);
+      }
+    };
+  }, [incomingCall?.id]);
 
   // Estado de lectura del chat por cliente para el usuario actual.
   const chatReadMap = useMemo(() => {
@@ -4767,6 +4945,27 @@ function App() {
     if (client?.id) markClientChatRead(client.id);
   };
 
+  const handleIncomingCall = (shouldAnswer) => {
+    if (!incomingCall?.id) return;
+    const call = incomingCall;
+    handledIncomingCallIdsRef.current.add(String(call.id));
+    setIncomingCall(null);
+    if (!shouldAnswer) return;
+
+    const client =
+      clients.find((item) => String(item.id) === String(call.clientId)) || {
+        id: call.clientId,
+        name: "Cliente",
+      };
+    setIncomingCallToJoin({
+      roomId: call.call.roomId,
+      messageId: call.id,
+      clientId: call.clientId,
+    });
+    openClientChat(client);
+    handleNavigate("chat");
+  };
+
   // "Eliminar para todos": borrado suave (deja registro de quién y cuándo lo
   // borró). Solo el autor puede hacerlo (validado también en el backend).
   const deleteChatForEveryone = async (message) => {
@@ -5987,6 +6186,8 @@ function App() {
               editingTasks={editingTasks}
               managementTasks={managementTasks}
               fetchFullMessage={fetchClientChatMessage}
+              incomingCallToJoin={incomingCallToJoin}
+              onIncomingCallJoined={() => setIncomingCallToJoin(null)}
             />
           )}
           {view === "managers" && (
@@ -6560,6 +6761,55 @@ function App() {
         editingTasks={editingTasks}
         managementTasks={managementTasks}
       />
+      {incomingCall &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="incoming-call-title"
+          >
+            <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-slate-900 p-6 text-center shadow-2xl">
+              <div className="mx-auto mb-4 flex h-20 w-20 animate-pulse items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-400/25">
+                <Icon name="Phone" size={34} />
+              </div>
+              <p className="mb-1 text-xs font-bold uppercase tracking-[0.22em] text-emerald-400">
+                Llamada entrante
+              </p>
+              <h2
+                id="incoming-call-title"
+                className="text-xl font-black text-white"
+              >
+                {incomingCall.authorName || "Alguien"} te está llamando
+              </h2>
+              <p className="mt-2 text-sm text-slate-400">
+                {clients.find(
+                  (item) =>
+                    String(item.id) === String(incomingCall.clientId),
+                )?.name || "Conversación de cliente"}
+              </p>
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleIncomingCall(false)}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-red-700"
+                >
+                  <Icon name="X" size={18} />
+                  Rechazar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleIncomingCall(true)}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-700"
+                >
+                  <Icon name="Phone" size={18} />
+                  Contestar
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -11868,6 +12118,8 @@ const ClientChatView = ({
   editingTasks = [],
   managementTasks = [],
   fetchFullMessage,
+  incomingCallToJoin = null,
+  onIncomingCallJoined,
 }) => {
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -12045,6 +12297,19 @@ const ClientChatView = ({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [activeClient?.id, messages.length]);
+
+  // Al contestar desde el aviso global, abre la sala directamente sin requerir
+  // un segundo clic sobre la tarjeta del chat.
+  useEffect(() => {
+    if (!incomingCallToJoin?.roomId) return;
+    setActiveCall({
+      roomId: incomingCallToJoin.roomId,
+      messageId: incomingCallToJoin.messageId || null,
+      isHost: false,
+    });
+    if (onIncomingCallJoined) onIncomingCallJoined(incomingCallToJoin);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incomingCallToJoin?.roomId, incomingCallToJoin?.messageId]);
 
   // Trae el base64 de los adjuntos (los listados llegan solo con metadata).
   useEffect(() => {
