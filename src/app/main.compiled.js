@@ -471,7 +471,9 @@ var VIEW_PERMISSIONS = {
   calendar: "view_calendar",
   "control-center": "view_users",
   reports: "view_dashboard",
-  performance: "view_dashboard"
+  performance: "view_dashboard",
+  podcast: "view_dashboard",
+  production: "view_dashboard"
 };
 var normalizeEmail = (value = "") => String(value || "").trim().toLowerCase();
 var normalizeNameKey = (value = "") => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
@@ -5010,6 +5012,26 @@ function App() {
           color: "emerald"
         }
       ),
+      canAccessView(currentUserProfile, "podcast") && /* @__PURE__ */ React.createElement(
+        SidebarItem,
+        {
+          active: view === "podcast",
+          onClick: () => handleNavigate("podcast"),
+          icon: "Microphone",
+          label: "Podcast",
+          color: "rose"
+        }
+      ),
+      canAccessView(currentUserProfile, "production") && /* @__PURE__ */ React.createElement(
+        SidebarItem,
+        {
+          active: view === "production",
+          onClick: () => handleNavigate("production"),
+          icon: "MonitorPlay",
+          label: "Producci\xF3n",
+          color: "cyan"
+        }
+      ),
       currentUserProfile && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "pt-4 pb-2 pl-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2" }, "Configuraci\xF3n"), /* @__PURE__ */ React.createElement(
         SidebarItem,
         {
@@ -5549,6 +5571,22 @@ function App() {
           editors,
           managers,
           users: appUsers
+        }
+      ),
+      view === "podcast" && /* @__PURE__ */ React.createElement(
+        PodcastView,
+        {
+          events,
+          accountTasks,
+          editingTasks
+        }
+      ),
+      view === "production" && /* @__PURE__ */ React.createElement(
+        ProductionView,
+        {
+          events,
+          accountTasks,
+          editingTasks
         }
       ),
       view === "reports" && /* @__PURE__ */ React.createElement(
@@ -14037,6 +14075,143 @@ var ReportStatCard = ({ label, value, color, icon, sub }) => /* @__PURE__ */ Rea
   },
   value
 ), sub && /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500" }, sub));
+var AccentStatCard = ({ label, value, icon, sub, tone = "indigo" }) => {
+  const toneClasses = {
+    amber: {
+      shell: "bg-amber-50 dark:bg-amber-500/20 border-amber-200 dark:border-amber-500/20",
+      icon: "text-amber-600 dark:text-amber-300",
+      value: "text-amber-700 dark:text-amber-300"
+    },
+    emerald: {
+      shell: "bg-emerald-50 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/20",
+      icon: "text-emerald-600 dark:text-emerald-300",
+      value: "text-emerald-700 dark:text-emerald-300"
+    },
+    indigo: {
+      shell: "bg-indigo-50 dark:bg-indigo-500/20 border-indigo-200 dark:border-indigo-500/20",
+      icon: "text-indigo-600 dark:text-indigo-300",
+      value: "text-indigo-700 dark:text-indigo-300"
+    },
+    rose: {
+      shell: "bg-rose-50 dark:bg-rose-500/20 border-rose-200 dark:border-rose-500/20",
+      icon: "text-rose-600 dark:text-rose-300",
+      value: "text-rose-700 dark:text-rose-300"
+    },
+    cyan: {
+      shell: "bg-cyan-50 dark:bg-cyan-500/20 border-cyan-200 dark:border-cyan-500/20",
+      icon: "text-cyan-600 dark:text-cyan-300",
+      value: "text-cyan-700 dark:text-cyan-300"
+    },
+    slate: {
+      shell: "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700",
+      icon: "text-slate-600 dark:text-slate-300",
+      value: "text-slate-700 dark:text-slate-200"
+    }
+  };
+  const classes = toneClasses[tone] || toneClasses.indigo;
+  return /* @__PURE__ */ React.createElement("div", { className: `rounded-2xl border p-5 ${classes.shell}` }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-3" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400" }, label), /* @__PURE__ */ React.createElement("div", { className: `rounded-xl bg-white/70 p-2 dark:bg-slate-900/70 ${classes.icon}` }, /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 16 }))), /* @__PURE__ */ React.createElement("p", { className: `mt-4 text-3xl font-black ${classes.value}` }, value), sub && /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-xs text-slate-500 dark:text-slate-400" }, sub));
+};
+var getModuleStatusMeta = (value = "", kind = "production") => {
+  const normalized = String(value || "").trim().toLowerCase();
+  const base = {
+    programado: { label: "Programado", tone: "slate" },
+    pendiente: { label: "Pendiente", tone: "slate" },
+    grabando: { label: "Grabando", tone: "amber" },
+    "en_produccion": { label: "En producci\xF3n", tone: "amber" },
+    editando: { label: "Editando", tone: "indigo" },
+    "post_produccion": { label: "Postproducci\xF3n", tone: "indigo" },
+    revision: { label: "Revisi\xF3n", tone: "cyan" },
+    aprobado: { label: "Aprobado", tone: "emerald" },
+    publicado: { label: "Publicado", tone: "emerald" },
+    cerrado: { label: "Cerrado", tone: "emerald" }
+  };
+  if (base[normalized]) return base[normalized];
+  if (kind === "podcast") {
+    if (normalized.includes("grab")) return base.grabando;
+    if (normalized.includes("edit")) return base.editando;
+    if (normalized.includes("pub")) return base.publicado;
+  }
+  if (kind === "production") {
+    if (normalized.includes("post")) return base["post_produccion"];
+    if (normalized.includes("produ")) return base["en_produccion"];
+    if (normalized.includes("pub")) return base.publicado;
+  }
+  return { label: normalized || "Programado", tone: "slate" };
+};
+var PodcastView = ({ events = [], accountTasks = [], editingTasks = [] }) => {
+  const todayStr = getHondurasTodayStr();
+  const now = /* @__PURE__ */ new Date();
+  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const [fromDate, setFromDate] = useState(firstOfMonth);
+  const [toDate, setToDate] = useState(todayStr);
+  const [searchTerm, setSearchTerm] = useState("");
+  const inRange = (dateStr) => {
+    if (!dateStr) return false;
+    return compareDateOnlyStrings(dateStr, fromDate) >= 0 && compareDateOnlyStrings(dateStr, toDate) <= 0;
+  };
+  const normalizedSearch = String(searchTerm || "").trim().toLowerCase();
+  const items = [...events, ...accountTasks, ...editingTasks].filter((item) => {
+    const haystack = `${item.title || item.name || ""} ${item.note || item.description || ""}`.toLowerCase();
+    const type = String(item.type || "").toLowerCase();
+    const matchesKind = type === "podcast" || /podcast|episodio|episode|audio/i.test(haystack);
+    if (!matchesKind) return false;
+    const itemDate = normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || "");
+    if (!itemDate) return false;
+    return inRange(itemDate) && (normalizedSearch.length === 0 || haystack.includes(normalizedSearch));
+  }).map((item) => ({
+    ...item,
+    itemDate: normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || ""),
+    status: item.status || "programado",
+    owner: item.assignee || item.owner || item.manager || item.editor || "",
+    summary: item.note || item.description || "Sin detalle",
+    title: item.title || item.name || "Sin t\xEDtulo"
+  }));
+  const totalItems = items.length;
+  const inProgress = items.filter((item) => !["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
+  const published = items.filter((item) => ["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
+  const pending = items.filter((item) => ["programado", "pendiente"].includes(String(item.status || "").toLowerCase())).length;
+  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Contenido"), /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Podcast"), /* @__PURE__ */ React.createElement("p", { className: "mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400" }, "Seguimiento visual de episodios, grabaciones y publicaciones que ya est\xE1n registradas en el sistema.")), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-3" }, /* @__PURE__ */ React.createElement(SearchBar, { searchTerm, setSearchTerm, placeholder: "Buscar podcast" }), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Desde"), /* @__PURE__ */ React.createElement("input", { type: "date", value: fromDate, onChange: (e) => setFromDate(e.target.value), className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" })), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Hasta"), /* @__PURE__ */ React.createElement("input", { type: "date", value: toDate, onChange: (e) => setToDate(e.target.value), className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" })))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 gap-4 md:grid-cols-4" }, /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Total", value: totalItems, icon: "Microphone", tone: "rose", sub: "episodios y tareas" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "En curso", value: inProgress, icon: "Play", tone: "amber", sub: "grabaci\xF3n o edici\xF3n" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Publicados", value: published, icon: "CheckCircle2", tone: "emerald", sub: "listos para salir" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Pendientes", value: pending, icon: "Clock", tone: "slate", sub: "por programar" })), /* @__PURE__ */ React.createElement("div", { className: "overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900" }, items.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 dark:text-slate-400" }, "A\xFAn no hay contenido de podcast en este rango de fechas.") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[780px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Episodio"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Fecha"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Estado"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Responsable"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Detalle"))), /* @__PURE__ */ React.createElement("tbody", null, items.map((item, index) => {
+    const statusMeta = getModuleStatusMeta(item.status, "podcast");
+    return /* @__PURE__ */ React.createElement("tr", { key: `${item.id || item.title}-${index}`, className: `border-b border-slate-50 dark:border-slate-800/60 ${index % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : ""}` }, /* @__PURE__ */ React.createElement("td", { className: "p-4 font-bold text-slate-800 dark:text-white" }, item.title), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm font-semibold text-slate-600 dark:text-slate-300" }, item.itemDate), /* @__PURE__ */ React.createElement("td", { className: "p-4" }, /* @__PURE__ */ React.createElement("span", { className: `inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${statusMeta.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300" : statusMeta.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300" : statusMeta.tone === "indigo" ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}` }, statusMeta.label)), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm text-slate-600 dark:text-slate-300" }, item.owner || "Sin asignar"), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm text-slate-500 dark:text-slate-400" }, item.summary));
+  }))))));
+};
+var ProductionView = ({ events = [], accountTasks = [], editingTasks = [] }) => {
+  const todayStr = getHondurasTodayStr();
+  const now = /* @__PURE__ */ new Date();
+  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const [fromDate, setFromDate] = useState(firstOfMonth);
+  const [toDate, setToDate] = useState(todayStr);
+  const [searchTerm, setSearchTerm] = useState("");
+  const inRange = (dateStr) => {
+    if (!dateStr) return false;
+    return compareDateOnlyStrings(dateStr, fromDate) >= 0 && compareDateOnlyStrings(dateStr, toDate) <= 0;
+  };
+  const normalizedSearch = String(searchTerm || "").trim().toLowerCase();
+  const items = [...events, ...accountTasks, ...editingTasks].filter((item) => {
+    const haystack = `${item.title || item.name || ""} ${item.note || item.description || ""}`.toLowerCase();
+    const type = String(item.type || "").toLowerCase();
+    const matchesKind = type === "production" || /producción|production|grabación|shoot|post|montaje/i.test(haystack);
+    if (!matchesKind) return false;
+    const itemDate = normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || "");
+    if (!itemDate) return false;
+    return inRange(itemDate) && (normalizedSearch.length === 0 || haystack.includes(normalizedSearch));
+  }).map((item) => ({
+    ...item,
+    itemDate: normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || ""),
+    status: item.status || "programado",
+    owner: item.assignee || item.owner || item.manager || item.editor || "",
+    summary: item.note || item.description || "Sin detalle",
+    title: item.title || item.name || "Sin t\xEDtulo"
+  }));
+  const totalItems = items.length;
+  const inProgress = items.filter((item) => !["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
+  const published = items.filter((item) => ["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
+  const pending = items.filter((item) => ["programado", "pendiente"].includes(String(item.status || "").toLowerCase())).length;
+  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Producci\xF3n"), /* @__PURE__ */ React.createElement("p", { className: "mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400" }, "Vista consolidada de entregas, grabaciones y fases de postproducci\xF3n para mantener el control del flujo.")), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-3" }, /* @__PURE__ */ React.createElement(SearchBar, { searchTerm, setSearchTerm, placeholder: "Buscar producci\xF3n" }), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Desde"), /* @__PURE__ */ React.createElement("input", { type: "date", value: fromDate, onChange: (e) => setFromDate(e.target.value), className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" })), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Hasta"), /* @__PURE__ */ React.createElement("input", { type: "date", value: toDate, onChange: (e) => setToDate(e.target.value), className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" })))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 gap-4 md:grid-cols-4" }, /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Total", value: totalItems, icon: "MonitorPlay", tone: "cyan", sub: "items de producci\xF3n" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "En curso", value: inProgress, icon: "Play", tone: "amber", sub: "grabaci\xF3n o post" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Publicados", value: published, icon: "CheckCircle2", tone: "emerald", sub: "cerrados y publicados" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Pendientes", value: pending, icon: "Clock", tone: "slate", sub: "por iniciar" })), /* @__PURE__ */ React.createElement("div", { className: "overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900" }, items.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 dark:text-slate-400" }, "No hay elementos de producci\xF3n en este rango todav\xEDa.") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[780px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Elemento"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Fecha"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Estado"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Responsable"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Detalle"))), /* @__PURE__ */ React.createElement("tbody", null, items.map((item, index) => {
+    const statusMeta = getModuleStatusMeta(item.status, "production");
+    return /* @__PURE__ */ React.createElement("tr", { key: `${item.id || item.title}-${index}`, className: `border-b border-slate-50 dark:border-slate-800/60 ${index % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : ""}` }, /* @__PURE__ */ React.createElement("td", { className: "p-4 font-bold text-slate-800 dark:text-white" }, item.title), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm font-semibold text-slate-600 dark:text-slate-300" }, item.itemDate), /* @__PURE__ */ React.createElement("td", { className: "p-4" }, /* @__PURE__ */ React.createElement("span", { className: `inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${statusMeta.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300" : statusMeta.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300" : statusMeta.tone === "indigo" ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}` }, statusMeta.label)), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm text-slate-600 dark:text-slate-300" }, item.owner || "Sin asignar"), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm text-slate-500 dark:text-slate-400" }, item.summary));
+  }))))));
+};
 var ReportsView = ({
   accountTasks,
   editingTasks,

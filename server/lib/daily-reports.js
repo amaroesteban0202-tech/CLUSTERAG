@@ -41,12 +41,30 @@ const normalizeRoleName = (role) => {
     return String(role).replace(/_/g, ' ');
 };
 
+const getReportDayKey = (now = Date.now()) => {
+    const date = new Date(now);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+export const shouldSendDailyRoleReport = (date = new Date()) => {
+    const dayOfWeek = date.getDay();
+    return dayOfWeek !== 0;
+};
+
 export const summarizeRolePerformance = ({ people = [], tasks = [], collectionName, closedStatuses = new Set(), now = Date.now() }) => {
     const taskMap = new Map();
     const peopleList = Array.isArray(people) ? people : [];
     const taskList = Array.isArray(tasks) ? tasks : [];
 
+    const reportDayKey = getReportDayKey(now);
+
     for (const task of taskList) {
+        const taskDate = typeof task?.date === 'string' ? task.date.trim() : '';
+        if (taskDate !== reportDayKey) continue;
+
         const key = task.contextId || task.assigneeUserId || task.userId || task.id;
         if (!key) continue;
         const bucket = taskMap.get(key) || [];
@@ -171,6 +189,17 @@ const getCollectionPeople = async ({ collectionName }) => {
 };
 
 export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' } = {}) => {
+    const now = Date.now();
+    if (!shouldSendDailyRoleReport(new Date(now))) {
+        return {
+            ok: true,
+            skipped: true,
+            reason: 'domingo',
+            generatedAt: nowIso(),
+            to
+        };
+    }
+
     const generatedAt = nowIso();
     const editors = await getCollectionPeople({ collectionName: 'editors' });
     const accounts = await getCollectionPeople({ collectionName: 'managers' });
@@ -183,7 +212,7 @@ export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' 
         tasks: editingTasks,
         collectionName: 'editing',
         closedStatuses: new Set(['aprobado', 'publicado']),
-        now: Date.now()
+        now
     });
 
     const accountsSummary = summarizeRolePerformance({
@@ -191,7 +220,7 @@ export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' 
         tasks: accountTasks,
         collectionName: 'account_tasks',
         closedStatuses: new Set(['publicado']),
-        now: Date.now()
+        now
     });
 
     const editorPdf = await buildDailyRoleReportPdf({

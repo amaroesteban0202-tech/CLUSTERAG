@@ -404,6 +404,8 @@ const VIEW_PERMISSIONS = {
   "control-center": "view_users",
   reports: "view_dashboard",
   performance: "view_dashboard",
+  podcast: "view_dashboard",
+  production: "view_dashboard",
 };
 
 const normalizeEmail = (value = "") =>
@@ -6481,6 +6483,24 @@ function App() {
               color="emerald"
             />
           )}
+          {canAccessView(currentUserProfile, "podcast") && (
+            <SidebarItem
+              active={view === "podcast"}
+              onClick={() => handleNavigate("podcast")}
+              icon="Microphone"
+              label="Podcast"
+              color="rose"
+            />
+          )}
+          {canAccessView(currentUserProfile, "production") && (
+            <SidebarItem
+              active={view === "production"}
+              onClick={() => handleNavigate("production")}
+              icon="MonitorPlay"
+              label="Producción"
+              color="cyan"
+            />
+          )}
 
           {currentUserProfile && (
             <>
@@ -7112,6 +7132,20 @@ function App() {
               editors={editors}
               managers={managers}
               users={appUsers}
+            />
+          )}
+          {view === "podcast" && (
+            <PodcastView
+              events={events}
+              accountTasks={accountTasks}
+              editingTasks={editingTasks}
+            />
+          )}
+          {view === "production" && (
+            <ProductionView
+              events={events}
+              accountTasks={accountTasks}
+              editingTasks={editingTasks}
             />
           )}
           {view === "reports" && (
@@ -18666,6 +18700,314 @@ const ReportStatCard = ({ label, value, color, icon, sub }) => (
     {sub && <p className="text-xs text-slate-500">{sub}</p>}
   </div>
 );
+
+const AccentStatCard = ({ label, value, icon, sub, tone = "indigo" }) => {
+  const toneClasses = {
+    amber: {
+      shell: "bg-amber-50 dark:bg-amber-500/20 border-amber-200 dark:border-amber-500/20",
+      icon: "text-amber-600 dark:text-amber-300",
+      value: "text-amber-700 dark:text-amber-300",
+    },
+    emerald: {
+      shell: "bg-emerald-50 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/20",
+      icon: "text-emerald-600 dark:text-emerald-300",
+      value: "text-emerald-700 dark:text-emerald-300",
+    },
+    indigo: {
+      shell: "bg-indigo-50 dark:bg-indigo-500/20 border-indigo-200 dark:border-indigo-500/20",
+      icon: "text-indigo-600 dark:text-indigo-300",
+      value: "text-indigo-700 dark:text-indigo-300",
+    },
+    rose: {
+      shell: "bg-rose-50 dark:bg-rose-500/20 border-rose-200 dark:border-rose-500/20",
+      icon: "text-rose-600 dark:text-rose-300",
+      value: "text-rose-700 dark:text-rose-300",
+    },
+    cyan: {
+      shell: "bg-cyan-50 dark:bg-cyan-500/20 border-cyan-200 dark:border-cyan-500/20",
+      icon: "text-cyan-600 dark:text-cyan-300",
+      value: "text-cyan-700 dark:text-cyan-300",
+    },
+    slate: {
+      shell: "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700",
+      icon: "text-slate-600 dark:text-slate-300",
+      value: "text-slate-700 dark:text-slate-200",
+    },
+  };
+  const classes = toneClasses[tone] || toneClasses.indigo;
+  return (
+    <div className={`rounded-2xl border p-5 ${classes.shell}`}>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+          {label}
+        </span>
+        <div className={`rounded-xl bg-white/70 p-2 dark:bg-slate-900/70 ${classes.icon}`}>
+          <Icon name={icon} size={16} />
+        </div>
+      </div>
+      <p className={`mt-4 text-3xl font-black ${classes.value}`}>{value}</p>
+      {sub && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{sub}</p>}
+    </div>
+  );
+};
+
+const getModuleStatusMeta = (value = "", kind = "production") => {
+  const normalized = String(value || "").trim().toLowerCase();
+  const base = {
+    programado: { label: "Programado", tone: "slate" },
+    pendiente: { label: "Pendiente", tone: "slate" },
+    grabando: { label: "Grabando", tone: "amber" },
+    "en_produccion": { label: "En producción", tone: "amber" },
+    editando: { label: "Editando", tone: "indigo" },
+    "post_produccion": { label: "Postproducción", tone: "indigo" },
+    revision: { label: "Revisión", tone: "cyan" },
+    aprobado: { label: "Aprobado", tone: "emerald" },
+    publicado: { label: "Publicado", tone: "emerald" },
+    cerrado: { label: "Cerrado", tone: "emerald" },
+  };
+  if (base[normalized]) return base[normalized];
+  if (kind === "podcast") {
+    if (normalized.includes("grab")) return base.grabando;
+    if (normalized.includes("edit")) return base.editando;
+    if (normalized.includes("pub")) return base.publicado;
+  }
+  if (kind === "production") {
+    if (normalized.includes("post")) return base["post_produccion"];
+    if (normalized.includes("produ")) return base["en_produccion"];
+    if (normalized.includes("pub")) return base.publicado;
+  }
+  return { label: normalized || "Programado", tone: "slate" };
+};
+
+const PodcastView = ({ events = [], accountTasks = [], editingTasks = [] }) => {
+  const todayStr = getHondurasTodayStr();
+  const now = new Date();
+  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const [fromDate, setFromDate] = useState(firstOfMonth);
+  const [toDate, setToDate] = useState(todayStr);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const inRange = (dateStr) => {
+    if (!dateStr) return false;
+    return (
+      compareDateOnlyStrings(dateStr, fromDate) >= 0 &&
+      compareDateOnlyStrings(dateStr, toDate) <= 0
+    );
+  };
+
+  const normalizedSearch = String(searchTerm || "").trim().toLowerCase();
+  const items = [...events, ...accountTasks, ...editingTasks]
+    .filter((item) => {
+      const haystack = `${item.title || item.name || ""} ${item.note || item.description || ""}`.toLowerCase();
+      const type = String(item.type || "").toLowerCase();
+      const matchesKind =
+        type === "podcast" || /podcast|episodio|episode|audio/i.test(haystack);
+      if (!matchesKind) return false;
+      const itemDate = normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || "");
+      if (!itemDate) return false;
+      return inRange(itemDate) && (normalizedSearch.length === 0 || haystack.includes(normalizedSearch));
+    })
+    .map((item) => ({
+      ...item,
+      itemDate: normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || ""),
+      status: item.status || "programado",
+      owner: item.assignee || item.owner || item.manager || item.editor || "",
+      summary: item.note || item.description || "Sin detalle",
+      title: item.title || item.name || "Sin título",
+    }));
+
+  const totalItems = items.length;
+  const inProgress = items.filter((item) => !["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
+  const published = items.filter((item) => ["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
+  const pending = items.filter((item) => ["programado", "pendiente"].includes(String(item.status || "").toLowerCase())).length;
+
+  return (
+    <div className="space-y-6 fade-in">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="eyebrow">Contenido</p>
+          <h2 className="text-2xl font-black text-slate-800 dark:text-white">Podcast</h2>
+          <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+            Seguimiento visual de episodios, grabaciones y publicaciones que ya están registradas en el sistema.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Buscar podcast" />
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
+            <span className="text-xs font-black text-slate-500 uppercase">Desde</span>
+            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" />
+          </div>
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
+            <span className="text-xs font-black text-slate-500 uppercase">Hasta</span>
+            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <AccentStatCard label="Total" value={totalItems} icon="Microphone" tone="rose" sub="episodios y tareas" />
+        <AccentStatCard label="En curso" value={inProgress} icon="Play" tone="amber" sub="grabación o edición" />
+        <AccentStatCard label="Publicados" value={published} icon="CheckCircle2" tone="emerald" sub="listos para salir" />
+        <AccentStatCard label="Pendientes" value={pending} icon="Clock" tone="slate" sub="por programar" />
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        {items.length === 0 ? (
+          <div className="p-16 text-center text-slate-500 dark:text-slate-400">
+            Aún no hay contenido de podcast en este rango de fechas.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[780px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Episodio</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Fecha</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Estado</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Responsable</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Detalle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, index) => {
+                  const statusMeta = getModuleStatusMeta(item.status, "podcast");
+                  return (
+                    <tr key={`${item.id || item.title}-${index}`} className={`border-b border-slate-50 dark:border-slate-800/60 ${index % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : ""}`}>
+                      <td className="p-4 font-bold text-slate-800 dark:text-white">{item.title}</td>
+                      <td className="p-4 text-sm font-semibold text-slate-600 dark:text-slate-300">{item.itemDate}</td>
+                      <td className="p-4">
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${statusMeta.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300" : statusMeta.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300" : statusMeta.tone === "indigo" ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>
+                          {statusMeta.label}
+                        </span>
+                      </td>
+                      <td className="p-4 text-sm text-slate-600 dark:text-slate-300">{item.owner || "Sin asignar"}</td>
+                      <td className="p-4 text-sm text-slate-500 dark:text-slate-400">{item.summary}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ProductionView = ({ events = [], accountTasks = [], editingTasks = [] }) => {
+  const todayStr = getHondurasTodayStr();
+  const now = new Date();
+  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const [fromDate, setFromDate] = useState(firstOfMonth);
+  const [toDate, setToDate] = useState(todayStr);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const inRange = (dateStr) => {
+    if (!dateStr) return false;
+    return (
+      compareDateOnlyStrings(dateStr, fromDate) >= 0 &&
+      compareDateOnlyStrings(dateStr, toDate) <= 0
+    );
+  };
+
+  const normalizedSearch = String(searchTerm || "").trim().toLowerCase();
+  const items = [...events, ...accountTasks, ...editingTasks]
+    .filter((item) => {
+      const haystack = `${item.title || item.name || ""} ${item.note || item.description || ""}`.toLowerCase();
+      const type = String(item.type || "").toLowerCase();
+      const matchesKind =
+        type === "production" || /producción|production|grabación|shoot|post|montaje/i.test(haystack);
+      if (!matchesKind) return false;
+      const itemDate = normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || "");
+      if (!itemDate) return false;
+      return inRange(itemDate) && (normalizedSearch.length === 0 || haystack.includes(normalizedSearch));
+    })
+    .map((item) => ({
+      ...item,
+      itemDate: normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || ""),
+      status: item.status || "programado",
+      owner: item.assignee || item.owner || item.manager || item.editor || "",
+      summary: item.note || item.description || "Sin detalle",
+      title: item.title || item.name || "Sin título",
+    }));
+
+  const totalItems = items.length;
+  const inProgress = items.filter((item) => !["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
+  const published = items.filter((item) => ["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
+  const pending = items.filter((item) => ["programado", "pendiente"].includes(String(item.status || "").toLowerCase())).length;
+
+  return (
+    <div className="space-y-6 fade-in">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="eyebrow">Operación</p>
+          <h2 className="text-2xl font-black text-slate-800 dark:text-white">Producción</h2>
+          <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+            Vista consolidada de entregas, grabaciones y fases de postproducción para mantener el control del flujo.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} placeholder="Buscar producción" />
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
+            <span className="text-xs font-black text-slate-500 uppercase">Desde</span>
+            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" />
+          </div>
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
+            <span className="text-xs font-black text-slate-500 uppercase">Hasta</span>
+            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <AccentStatCard label="Total" value={totalItems} icon="MonitorPlay" tone="cyan" sub="items de producción" />
+        <AccentStatCard label="En curso" value={inProgress} icon="Play" tone="amber" sub="grabación o post" />
+        <AccentStatCard label="Publicados" value={published} icon="CheckCircle2" tone="emerald" sub="cerrados y publicados" />
+        <AccentStatCard label="Pendientes" value={pending} icon="Clock" tone="slate" sub="por iniciar" />
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        {items.length === 0 ? (
+          <div className="p-16 text-center text-slate-500 dark:text-slate-400">
+            No hay elementos de producción en este rango todavía.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[780px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Elemento</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Fecha</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Estado</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Responsable</th>
+                  <th className="p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500">Detalle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, index) => {
+                  const statusMeta = getModuleStatusMeta(item.status, "production");
+                  return (
+                    <tr key={`${item.id || item.title}-${index}`} className={`border-b border-slate-50 dark:border-slate-800/60 ${index % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : ""}`}>
+                      <td className="p-4 font-bold text-slate-800 dark:text-white">{item.title}</td>
+                      <td className="p-4 text-sm font-semibold text-slate-600 dark:text-slate-300">{item.itemDate}</td>
+                      <td className="p-4">
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${statusMeta.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300" : statusMeta.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300" : statusMeta.tone === "indigo" ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>
+                          {statusMeta.label}
+                        </span>
+                      </td>
+                      <td className="p-4 text-sm text-slate-600 dark:text-slate-300">{item.owner || "Sin asignar"}</td>
+                      <td className="p-4 text-sm text-slate-500 dark:text-slate-400">{item.summary}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const ReportsView = ({
   accountTasks,
