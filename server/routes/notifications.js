@@ -1,77 +1,90 @@
 import { Router } from 'express';
-import nodemailer from 'nodemailer';
 import { env } from '../config/env.js';
+import { escapeHtml, sendEmail } from '../lib/email.js';
+import { asyncHandler, createHttpError } from '../lib/http.js';
+import { findFirstRecordByEmail } from '../lib/records.js';
+import { getRequestOrigin } from '../lib/request-origin.js';
+import { requireAuthenticatedUser } from '../lib/sessions.js';
+import { normalizeEmail } from '../lib/text.js';
 
 const router = Router();
 
-const getTransporter = () => {
-    if (!env.smtp?.host || !env.smtp?.user || !env.smtp?.password) return null;
-    return nodemailer.createTransport({
-        host: env.smtp.host,
-        port: env.smtp.port || 587,
-        secure: env.smtp.secure || false,
-        auth: { user: env.smtp.user, pass: env.smtp.password }
-    });
+const NOTIFICATION_TYPES = new Set(['assigned', 'mention', 'chat_mention', 'call_invite']);
+const RECIPIENT_COLLECTIONS = ['users', 'managers', 'editors'];
+
+const findRecipient = async (email) => {
+    const matches = await Promise.all(RECIPIENT_COLLECTIONS.map((collectionName) => (
+        findFirstRecordByEmail({ collectionName, email })
+    )));
+    return matches.find(Boolean) || null;
 };
 
-const escHtml = (s = '') => String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const resolveRoomUrl = (value = '') => {
+    try {
+        const target = new URL(value);
+        if (target.protocol !== 'https:' || !['meet.jit.si', '8x8.vc'].includes(target.hostname)) return '';
+        return target.toString();
+    } catch {
+        return '';
+    }
+};
 
 const buildEmail = ({ type, senderName, taskTitle, taskType, comment, appUrl, clientName, roomUrl }) => {
     const isChat = type === 'chat_mention';
     const isCall = type === 'call_invite';
     const accent = isCall ? '#16a34a'
-                 : isChat ? '#0ea5e9'
-                 : taskType === 'accountTask' ? '#4f46e5'
-                 : taskType === 'editingTask' ? '#d97706'
-                 : '#7c3aed';
+        : isChat ? '#0ea5e9'
+            : taskType === 'accountTask' ? '#4f46e5'
+                : taskType === 'editingTask' ? '#d97706'
+                    : '#7c3aed';
     const typeLabel = isCall ? 'Llamada'
-                    : isChat ? 'Chat'
-                    : taskType === 'accountTask' ? 'Account'
-                    : taskType === 'editingTask' ? 'Edición'
+        : isChat ? 'Chat'
+            : taskType === 'accountTask' ? 'Account'
+                : taskType === 'editingTask' ? 'Edición'
                     : 'Gestión';
 
     const linkHref = isCall ? roomUrl : appUrl;
     const linkLabel = isCall ? 'Unirse a la llamada'
-                    : isChat ? 'Abrir chat en Cluster OS'
-                    : 'Abrir tarea en Cluster OS';
+        : isChat ? 'Abrir chat en Cluster OS'
+            : 'Abrir tarea en Cluster OS';
     const link = linkHref
-        ? `<p style="margin:20px 0 0;"><a href="${escHtml(linkHref)}" style="background:${accent};color:#fff;padding:11px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;">${linkLabel}</a></p>`
+        ? `<p style="margin:20px 0 0;"><a href="${escapeHtml(linkHref)}" style="background:${accent};color:#fff;padding:11px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;">${linkLabel}</a></p>`
         : '';
 
-    let subject, heading, body;
+    let subject = '';
+    let heading = '';
+    let body = '';
 
     if (type === 'assigned') {
         subject = `📋 Te asignaron a: ${taskTitle}`;
         heading = 'Te asignaron a una tarea';
-        body = `<strong>${escHtml(senderName)}</strong> te asignó a la tarea <strong>"${escHtml(taskTitle)}"</strong> en el módulo de <strong>${typeLabel}</strong>.`;
+        body = `<strong>${escapeHtml(senderName)}</strong> te asignó a la tarea <strong>"${escapeHtml(taskTitle)}"</strong> en el módulo de <strong>${typeLabel}</strong>.`;
     } else if (type === 'mention') {
         subject = `💬 ${senderName} te mencionó en: ${taskTitle}`;
         heading = 'Te mencionaron en un comentario';
-        body = `<strong>${escHtml(senderName)}</strong> te mencionó en la tarea <strong>"${escHtml(taskTitle)}"</strong>:<br/><br/>
+        body = `<strong>${escapeHtml(senderName)}</strong> te mencionó en la tarea <strong>"${escapeHtml(taskTitle)}"</strong>:<br/><br/>
             <blockquote style="margin:12px 0;padding:12px 16px;background:#f8fafc;border-left:3px solid ${accent};border-radius:0 8px 8px 0;color:#475569;font-style:italic;">
-                "${escHtml(comment)}"
+                "${escapeHtml(comment)}"
             </blockquote>`;
     } else if (type === 'chat_mention') {
         subject = `💬 ${senderName} te mencionó en el chat de ${clientName}`;
         heading = 'Te mencionaron en el chat';
-        body = `<strong>${escHtml(senderName)}</strong> te mencionó en el chat interno de <strong>"${escHtml(clientName)}"</strong>:<br/><br/>
+        body = `<strong>${escapeHtml(senderName)}</strong> te mencionó en el chat interno de <strong>"${escapeHtml(clientName)}"</strong>:<br/><br/>
             <blockquote style="margin:12px 0;padding:12px 16px;background:#f8fafc;border-left:3px solid ${accent};border-radius:0 8px 8px 0;color:#475569;font-style:italic;">
-                "${escHtml(comment)}"
+                "${escapeHtml(comment)}"
             </blockquote>`;
-    } else if (type === 'call_invite') {
+    } else {
         subject = `📞 ${senderName} te invitó a una llamada de ${clientName}`;
         heading = 'Te invitaron a una llamada';
-        body = `<strong>${escHtml(senderName)}</strong> te invitó a una videollamada del cliente <strong>"${escHtml(clientName)}"</strong>. Haz clic para unirte.`;
+        body = `<strong>${escapeHtml(senderName)}</strong> te invitó a una videollamada del cliente <strong>"${escapeHtml(clientName)}"</strong>. Haz clic para unirte.`;
     }
 
     const html = `
         <div style="font-family:Arial,sans-serif;background:#f1f5f9;padding:24px;">
             <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;">
                 <div style="background:${accent};padding:20px 24px;">
-                    <p style="margin:0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.75);">Cluster OS · ${escHtml(typeLabel)}</p>
-                    <h2 style="margin:6px 0 0;font-size:20px;color:#fff;">${escHtml(heading)}</h2>
+                    <p style="margin:0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.75);">Cluster OS · ${escapeHtml(typeLabel)}</p>
+                    <h2 style="margin:6px 0 0;font-size:20px;color:#fff;">${escapeHtml(heading)}</h2>
                 </div>
                 <div style="padding:24px;">
                     <p style="margin:0;color:#334155;font-size:14px;line-height:1.6;">${body}</p>
@@ -85,25 +98,31 @@ const buildEmail = ({ type, senderName, taskTitle, taskType, comment, appUrl, cl
 };
 
 // POST /api/notifications/send
-router.post('/send', async (req, res) => {
-    try {
-        const { to, type, senderName, taskTitle, taskType, comment, appUrl, clientName, roomUrl } = req.body;
-        if (!to || !type) return res.status(400).json({ error: { message: 'Missing to or type' } });
-
-        const { subject, html } = buildEmail({ type, senderName, taskTitle, taskType, comment, appUrl, clientName, roomUrl });
-        const mailer = getTransporter();
-
-        if (!mailer) {
-            console.info(`[notify:${type}] → ${to} | ${subject}`);
-            return res.json({ ok: true, mode: 'console' });
-        }
-
-        await mailer.sendMail({ from: env.smtp.from || env.smtp.user, to, subject, html });
-        res.json({ ok: true, mode: 'smtp' });
-    } catch (err) {
-        console.error('[notifications]', err);
-        res.status(500).json({ error: { message: err.message } });
+router.post('/send', asyncHandler(async (req, res) => {
+    const actor = requireAuthenticatedUser(req);
+    const to = normalizeEmail(req.body?.to);
+    const type = String(req.body?.type || '');
+    if (!to || !NOTIFICATION_TYPES.has(type)) {
+        throw createHttpError(400, 'Destinatario o tipo de notificacion invalido.', 'notifications/invalid-request');
     }
-});
+
+    const recipient = await findRecipient(to);
+    if (!recipient || recipient.isActive === false) {
+        throw createHttpError(400, 'El destinatario no pertenece al equipo activo.', 'notifications/invalid-recipient');
+    }
+
+    const { subject, html } = buildEmail({
+        type,
+        senderName: actor.name || actor.email || 'Usuario',
+        taskTitle: req.body?.taskTitle,
+        taskType: req.body?.taskType,
+        comment: req.body?.comment,
+        appUrl: env.appBaseUrl || getRequestOrigin(req),
+        clientName: req.body?.clientName,
+        roomUrl: resolveRoomUrl(req.body?.roomUrl)
+    });
+    const result = await sendEmail({ to, subject, html, logLabel: 'notification' });
+    res.json({ ok: true, mode: result.mode });
+}));
 
 export default router;

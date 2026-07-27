@@ -177,6 +177,7 @@ var apiFetch = async (path, options = {}) => {
 
 // src/app/main.jsx
 import { createPortal } from "react-dom";
+var EMBEDDED_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
 var IconsMap = {
   LayoutDashboard,
   Users,
@@ -3801,8 +3802,7 @@ function App() {
     };
     const col = colMap[type];
     if (!col || !file) return;
-    const MAX_SIZE = 8 * 1024 * 1024;
-    if (file.size > MAX_SIZE) {
+    if (file.size > EMBEDDED_UPLOAD_MAX_BYTES) {
       alert("El archivo es demasiado grande (m\xE1x. 8 MB)");
       return;
     }
@@ -3823,6 +3823,14 @@ function App() {
     };
     const currentSnap = await getDoc(dataDoc(col, task.id));
     const currentAttachments = currentSnap.data()?.attachments || [];
+    const currentSize = currentAttachments.reduce(
+      (total, attachment) => total + Number(attachment?.size || 0),
+      0
+    );
+    if (currentSize + file.size > EMBEDDED_UPLOAD_MAX_BYTES) {
+      alert("Los adjuntos de la tarea no pueden superar 8 MB en total.");
+      return;
+    }
     await updateDoc(dataDoc(col, task.id), {
       attachments: [...currentAttachments, newAttachment],
       updatedAt: nowIso()
@@ -8379,7 +8387,6 @@ var buildChatRoomId = (clientName = "") => {
   const slug = String(clientName).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24) || "sala";
   return `cluster-${slug}-${Math.random().toString(36).slice(2, 8)}`;
 };
-var CHAT_MAX_FILE = 8 * 1024 * 1024;
 var chatFileToBase64 = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
   reader.onload = () => resolve(reader.result);
@@ -8871,14 +8878,19 @@ var ClientChatView = ({
   const handleFiles = async (fileList) => {
     const files = Array.from(fileList || []);
     if (files.length === 0) return;
+    let pendingSize = pending.reduce(
+      (total, attachment) => total + Number(attachment?.size || 0),
+      0
+    );
     setUploading(true);
     try {
       for (const file of files) {
-        if (file.size > CHAT_MAX_FILE) {
-          alert(`"${file.name}" supera el m\xE1ximo de 8 MB.`);
+        if (pendingSize + file.size > EMBEDDED_UPLOAD_MAX_BYTES) {
+          alert("Los archivos pendientes no pueden superar 8 MB en total.");
           continue;
         }
         const data = await chatFileToBase64(file);
+        pendingSize += file.size;
         setPending((prev) => [
           ...prev,
           {
@@ -8957,7 +8969,7 @@ var ClientChatView = ({
           recordContextRef.current = null;
           return;
         }
-        if (blob.size > CHAT_MAX_FILE) {
+        if (blob.size > EMBEDDED_UPLOAD_MAX_BYTES) {
           alert("La nota de voz supera el m\xE1ximo de 8 MB.");
           sendRecordingRef.current = false;
           recordSecondsRef.current = 0;

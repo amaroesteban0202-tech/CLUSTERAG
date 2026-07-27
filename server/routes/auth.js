@@ -45,6 +45,23 @@ const resolveAppRedirectBaseUrl = (req) => {
     return isLocalOrigin(origin) ? origin : (env.appBaseUrl || origin || '/');
 };
 
+export const resolveSafeWebRedirect = (req, value = '') => {
+    const requested = String(value || '').trim();
+    if (!requested) return '/';
+    if (requested.startsWith('/') && !requested.startsWith('//')) return requested;
+
+    try {
+        const allowedOrigin = new URL(resolveAppRedirectBaseUrl(req)).origin;
+        const target = new URL(requested);
+        if (target.origin === allowedOrigin) {
+            return `${target.pathname}${target.search}${target.hash}`;
+        }
+    } catch {
+        // Un destino invalido o externo siempre vuelve a la raiz de la app.
+    }
+    return '/';
+};
+
 const buildGoogleAuthUrl = (req, state) => {
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     url.searchParams.set('client_id', env.google.clientId);
@@ -182,7 +199,7 @@ router.get('/google/start', asyncHandler(async (req, res) => {
     await db('auth_oauth_states').insert({
         state,
         popup: req.query.popup === '1',
-        redirect_after: req.query.redirect || '/',
+        redirect_after: resolveSafeWebRedirect(req, req.query.redirect),
         expires_at: addMinutesToIso(10),
         created_at: nowIso()
     });
@@ -333,7 +350,7 @@ router.get('/google/callback', asyncHandler(async (req, res) => {
         return;
     }
 
-    res.redirect(stateRow.redirect_after || '/');
+    res.redirect(resolveSafeWebRedirect(req, stateRow.redirect_after));
 }));
 
 export default router;

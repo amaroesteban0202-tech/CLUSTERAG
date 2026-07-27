@@ -27,12 +27,36 @@ const getTransporter = () => {
     return transporter;
 };
 
-const escapeHtml = (value = '') => String(value)
+export const escapeHtml = (value = '') => String(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+
+export const sendEmail = async ({
+    to,
+    subject,
+    html,
+    attachments = [],
+    logLabel = 'email'
+}) => {
+    const mailer = getTransporter();
+    if (!mailer) {
+        console.info(`[${logLabel}:${to}] ${subject}`);
+        return { mode: 'console' };
+    }
+
+    await mailer.sendMail({
+        from: env.smtp.from,
+        to,
+        subject,
+        html,
+        ...(attachments.length > 0 ? { attachments } : {})
+    });
+
+    return { mode: 'smtp' };
+};
 
 const buildManagementTaskEmail = ({
     variant,
@@ -115,26 +139,16 @@ const buildManagementTaskEmail = ({
 };
 
 export const sendManagementTaskReminderEmail = async (context = {}) => {
-    const mailer = getTransporter();
     const { subject, html } = buildManagementTaskEmail(context);
-
-    if (!mailer) {
-        console.info(`[management-reminder:${context.to}] ${subject}`);
-        return { mode: 'console' };
-    }
-
-    await mailer.sendMail({
-        from: env.smtp.from,
+    return sendEmail({
         to: context.to,
         subject,
-        html
+        html,
+        logLabel: 'management-reminder'
     });
-
-    return { mode: 'smtp' };
 };
 
 export const sendDailyReportEmail = async ({ to, subject, editorPdf, accountPdf, generatedAt }) => {
-    const mailer = getTransporter();
     const html = `
         <div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:24px;background:#f8fafc;">
             <div style="background:#fff;border-radius:16px;padding:24px;border:1px solid #e2e8f0;">
@@ -145,21 +159,14 @@ export const sendDailyReportEmail = async ({ to, subject, editorPdf, accountPdf,
         </div>
     `;
 
-    if (!mailer) {
-        console.info(`[daily-report:${to}] ${subject}`);
-        return { mode: 'console' };
-    }
-
-    await mailer.sendMail({
-        from: env.smtp.from,
+    return sendEmail({
         to,
         subject,
         html,
         attachments: [
             ...(editorPdf ? [createAttachmentBuffer(editorPdf, 'resumen-editores.pdf')] : []),
             ...(accountPdf ? [createAttachmentBuffer(accountPdf, 'resumen-accounts.pdf')] : [])
-        ]
+        ],
+        logLabel: 'daily-report'
     });
-
-    return { mode: 'smtp' };
 };
