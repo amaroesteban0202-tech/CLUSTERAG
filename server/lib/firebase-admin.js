@@ -1,5 +1,4 @@
 import { getApp, getApps, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
 import { env } from '../config/env.js';
 
 let firebaseAdminApp = null;
@@ -23,6 +22,7 @@ export const getFirebaseAdminApp = () => {
 export const verifyFirebaseIdToken = async (idToken = '') => {
     const normalizedToken = String(idToken || '').trim();
     if (!normalizedToken) return null;
+    const { getAuth } = await import('firebase-admin/auth');
     const app = getFirebaseAdminApp();
     return getAuth(app).verifyIdToken(normalizedToken);
 };
