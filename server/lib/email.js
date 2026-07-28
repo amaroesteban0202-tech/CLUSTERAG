@@ -152,7 +152,7 @@ export const sendDailyReportEmail = async ({ to, subject, editorPdf, accountPdf,
     const html = `
         <div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:24px;background:#f8fafc;">
             <div style="background:#fff;border-radius:16px;padding:24px;border:1px solid #e2e8f0;">
-                <h2 style="margin:0 0 8px;color:#0f172a;">Resumen diario de Editores y Accounts</h2>
+                <h2 style="margin:0 0 8px;color:#0f172a;">Resumen diario de Editores y Community Managers</h2>
                 <p style="margin:0 0 16px;color:#475569;">Se adjuntan dos PDFs separados con el resumen del día generado el ${generatedAt}.</p>
                 <p style="margin:0;color:#64748b;font-size:13px;">Este correo fue generado automáticamente por Cluster OS.</p>
             </div>
@@ -165,7 +165,7 @@ export const sendDailyReportEmail = async ({ to, subject, editorPdf, accountPdf,
         html,
         attachments: [
             ...(editorPdf ? [createAttachmentBuffer(editorPdf, 'resumen-editores.pdf')] : []),
-            ...(accountPdf ? [createAttachmentBuffer(accountPdf, 'resumen-accounts.pdf')] : [])
+            ...(accountPdf ? [createAttachmentBuffer(accountPdf, 'resumen-community-managers.pdf')] : [])
         ],
         logLabel: 'daily-report'
     });
