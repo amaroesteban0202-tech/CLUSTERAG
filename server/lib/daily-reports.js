@@ -41,17 +41,56 @@ const normalizeRoleName = (role) => {
     return String(role).replace(/_/g, ' ');
 };
 
+const getHondurasDateParts = (value = Date.now()) => {
+    const date = value instanceof Date ? value : new Date(value);
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: HONDURAS_TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        weekday: 'short'
+    }).formatToParts(date);
+    const getPart = (type) => parts.find((part) => part.type === type)?.value || '';
+    return {
+        year: getPart('year'),
+        month: getPart('month'),
+        day: getPart('day'),
+        weekday: getPart('weekday')
+    };
+};
+
+const normalizeTaskDayKey = (value = '') => {
+    if (typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    const directMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (directMatch) return directMatch[1];
+    const parsed = Date.parse(trimmed);
+    if (!Number.isFinite(parsed)) return '';
+    return getReportDayKey(parsed);
+};
+
+const getTaskOwnerKeys = (task = {}) => {
+    const keys = new Set();
+    if (Array.isArray(task.assignees)) {
+        for (const assigneeId of task.assignees) {
+            if (assigneeId) keys.add(assigneeId);
+        }
+    }
+    [task.contextId, task.ownerAtCompletionId, task.assigneeUserId, task.userId]
+        .filter(Boolean)
+        .forEach((value) => keys.add(value));
+    return [...keys];
+};
+
 const getReportDayKey = (now = Date.now()) => {
-    const date = new Date(now);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const { year, month, day } = getHondurasDateParts(now);
     return `${year}-${month}-${day}`;
 };
 
 export const shouldSendDailyRoleReport = (date = new Date()) => {
-    const dayOfWeek = date.getDay();
-    return dayOfWeek !== 0;
+    const weekday = getHondurasDateParts(date).weekday;
+    return weekday !== 'Sun';
 };
 
 export const summarizeRolePerformance = ({ people = [], tasks = [], collectionName, closedStatuses = new Set(), now = Date.now() }) => {
@@ -62,18 +101,28 @@ export const summarizeRolePerformance = ({ people = [], tasks = [], collectionNa
     const reportDayKey = getReportDayKey(now);
 
     for (const task of taskList) {
-        const taskDate = typeof task?.date === 'string' ? task.date.trim() : '';
+        const taskDate = normalizeTaskDayKey(task?.date);
         if (taskDate !== reportDayKey) continue;
 
-        const key = task.contextId || task.assigneeUserId || task.userId || task.id;
-        if (!key) continue;
-        const bucket = taskMap.get(key) || [];
-        bucket.push(task);
-        taskMap.set(key, bucket);
+        const ownerKeys = getTaskOwnerKeys(task);
+        if (ownerKeys.length === 0) continue;
+        for (const ownerKey of ownerKeys) {
+            const bucket = taskMap.get(ownerKey) || [];
+            bucket.push(task);
+            taskMap.set(ownerKey, bucket);
+        }
     }
 
     const peopleSummary = peopleList.map((person) => {
-        const perPersonTasks = taskMap.get(person.id) || taskMap.get(person.userId) || [];
+        const perPersonTaskMap = new Map();
+        [person.id, person.userId].filter(Boolean).forEach((ownerKey) => {
+            const ownerTasks = taskMap.get(ownerKey) || [];
+            ownerTasks.forEach((task) => {
+                const dedupeKey = task.id || `${task.contextId || ''}-${task.date || ''}-${task.title || ''}`;
+                if (!perPersonTaskMap.has(dedupeKey)) perPersonTaskMap.set(dedupeKey, task);
+            });
+        });
+        const perPersonTasks = [...perPersonTaskMap.values()];
         const assigned = perPersonTasks.length;
         const approved = perPersonTasks.filter((task) => closedStatuses.has(String(task.status || '').toLowerCase())).length;
         const pending = assigned - approved;
@@ -126,30 +175,43 @@ const buildPdfBuffer = async ({ title, people, totals, generatedAt }) => {
     const chunks = [];
     doc.on('data', (chunk) => chunks.push(chunk));
 
-    doc.fontSize(18).text(title, { align: 'left' });
-    doc.moveDown(0.5);
-    doc.fontSize(10).fillColor('#475569').text(`Generado: ${generatedAt}`, { align: 'left' });
-    doc.moveDown(1);
+    const drawHeader = () => {
+        doc.fontSize(18).fillColor('#0f172a').text(title, { align: 'left' });
+        doc.moveDown(0.5);
+        doc.fontSize(10).fillColor('#475569').text(`Generado: ${generatedAt}`, { align: 'left' });
+        doc.moveDown(1);
+        doc.fontSize(12).fillColor('#0f172a').text('Resumen por persona');
+        doc.moveDown(0.4);
+    };
 
-    doc.fontSize(12).fillColor('#0f172a').text('Resumen por persona');
-    doc.moveDown(0.4);
-
-    const tableTop = doc.y;
     const rowHeight = 20;
-    const colWidths = [120, 70, 55, 55, 55, 85];
+    const colWidths = [140, 64, 64, 64, 64, 95];
     const xStart = 40;
     const headers = ['Persona', 'Asignadas', 'Aprobadas', 'Pendientes', 'Vencidas', 'Última actividad'];
 
-    doc.fontSize(9).fillColor('#334155');
-    headers.forEach((header, index) => {
-        const x = xStart + colWidths.slice(0, index).reduce((sum, width) => sum + width, 0);
-        doc.text(header, x, tableTop, { width: colWidths[index], align: 'left' });
-    });
+    const drawTableHeader = (topY) => {
+        doc.fontSize(9).fillColor('#334155');
+        headers.forEach((header, index) => {
+            const x = xStart + colWidths.slice(0, index).reduce((sum, width) => sum + width, 0);
+            doc.text(header, x, topY, { width: colWidths[index], align: 'left' });
+        });
+        doc.moveTo(xStart, topY + 12)
+            .lineTo(xStart + colWidths.reduce((sum, width) => sum + width, 0), topY + 12)
+            .stroke('#cbd5e1');
+        return topY + 18;
+    };
 
-    doc.moveTo(xStart, tableTop + 12).lineTo(xStart + colWidths.reduce((sum, width) => sum + width, 0), tableTop + 12).stroke('#cbd5e1');
+    drawHeader();
+    let currentY = drawTableHeader(doc.y);
+    const pageBottom = () => doc.page.height - doc.page.margins.bottom;
 
-    let currentY = tableTop + 18;
     people.forEach((person) => {
+        if (currentY + rowHeight > pageBottom() - 30) {
+            doc.addPage();
+            drawHeader();
+            currentY = drawTableHeader(doc.y);
+        }
+
         const values = [
             person.name,
             String(person.assigned),
@@ -168,7 +230,7 @@ const buildPdfBuffer = async ({ title, people, totals, generatedAt }) => {
 
     doc.moveDown(1.5);
     doc.fontSize(11).fillColor('#0f172a').text('Totales');
-    doc.fontSize(10).fillColor('#475569').text(`Asignadas: ${totals.assigned} | Aprobadas: ${totals.approved} | Pendientes: ${totals.pending} | Vencidas: ${totals.overdue}`);
+    doc.fontSize(10).fillColor('#475569').text(`Personas: ${people.length} | Asignadas: ${totals.assigned} | Aprobadas: ${totals.approved} | Pendientes: ${totals.pending} | Vencidas: ${totals.overdue}`);
 
     doc.end();
     await new Promise((resolve, reject) => {
@@ -185,7 +247,7 @@ export const buildDailyRoleReportPdf = async ({ title, people = [], totals = {},
 
 const getCollectionPeople = async ({ collectionName }) => {
     const records = await listRecords({ collectionName });
-    return records.filter((record) => Boolean(record?.email || record?.name));
+    return records;
 };
 
 export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' } = {}) => {
@@ -202,7 +264,7 @@ export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' 
 
     const generatedAt = nowIso();
     const editors = await getCollectionPeople({ collectionName: 'editors' });
-    const accounts = await getCollectionPeople({ collectionName: 'managers' });
+    const communityManagers = await getCollectionPeople({ collectionName: 'managers' });
 
     const editingTasks = await listRecords({ collectionName: 'editing' });
     const accountTasks = await listRecords({ collectionName: 'account_tasks' });
@@ -215,11 +277,11 @@ export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' 
         now
     });
 
-    const accountsSummary = summarizeRolePerformance({
-        people: accounts,
+    const communityManagersSummary = summarizeRolePerformance({
+        people: communityManagers,
         tasks: accountTasks,
         collectionName: 'account_tasks',
-        closedStatuses: new Set(['publicado']),
+        closedStatuses: new Set(['aprobado_internamente', 'publicado']),
         now
     });
 
@@ -230,18 +292,18 @@ export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' 
         generatedAt
     });
 
-    const accountPdf = await buildDailyRoleReportPdf({
-        title: 'Resumen diario de Accounts',
-        people: accountsSummary.people,
-        totals: accountsSummary.totals,
+    const communityManagerPdf = await buildDailyRoleReportPdf({
+        title: 'Resumen diario de Community Managers',
+        people: communityManagersSummary.people,
+        totals: communityManagersSummary.totals,
         generatedAt
     });
 
     await sendDailyReportEmail({
         to,
-        subject: 'Resumen diario de Editores y Accounts',
+        subject: 'Resumen diario de Editores y Community Managers',
         editorPdf,
-        accountPdf,
+        accountPdf: communityManagerPdf,
         generatedAt
     });
 
@@ -250,6 +312,6 @@ export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' 
         to,
         generatedAt,
         editors: editorsSummary.totals,
-        accounts: accountsSummary.totals
+        communityManagers: communityManagersSummary.totals
     };
 };
