@@ -8244,12 +8244,6 @@ const CheckItem = ({ label, checked, onToggle }) => (
   </button>
 );
 
-const clampPercent = (value = 0) => {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 0;
-  return Math.max(0, Math.min(100, numeric));
-};
-
 const DASHBOARD_PALETTE = {
   emerald: { solid: "#a9c6a6", strong: "#346538" },
   amber: { solid: "#eadcae", strong: "#956400" },
@@ -8268,403 +8262,199 @@ const DASHBOARD_PALETTE = {
 const getDashboardPalette = (name = "slate") =>
   DASHBOARD_PALETTE[name] || DASHBOARD_PALETTE.slate;
 
-const PortfolioHealthChart = ({
-  totalClients,
-  activos,
-  pausados,
-  inactivos,
-  onOpenClients,
-}) => {
-  const segments = [
-    {
-      key: "activo",
-      label: "Activos",
-      value: activos,
-      color: "#a9c6a6",
-      strong: "#346538",
-    },
-    {
-      key: "pausado",
-      label: "Pausados",
-      value: pausados,
-      color: "#eadcae",
-      strong: "#956400",
-    },
-    {
-      key: "inactivo",
-      label: "Inactivos",
-      value: inactivos,
-      color: "#bdbab2",
-      strong: "#555552",
-    },
-  ];
-  const healthScore =
-    totalClients > 0 ? Math.round((activos / totalClients) * 100) : 0;
-  const healthLabel =
-    totalClients === 0
-      ? "Sin datos"
-      : healthScore >= 75
-        ? "Saludable"
-        : healthScore >= 45
-          ? "Mixta"
-          : "Baja";
-
-  return (
-    <div className="mt-6 grid grid-cols-1 gap-5">
-      <div className="grid gap-4 sm:grid-cols-[160px_minmax(0,1fr)]">
-        <div className="surface-subtle rounded-lg border border-[#e6e4df] p-4 dark:border-white/10">
-          <p className="eyebrow">Salud de cartera</p>
-          <p className="mono-meta mt-3 text-4xl font-semibold leading-none text-[#2f3437] dark:text-[#f1efe9]">
-            {healthScore}%
-          </p>
-          <p className="mt-2 text-xs text-[#787774] dark:text-[#aaa7a0]">
-            {healthLabel} · {activos} de {totalClients} activos
-          </p>
-        </div>
-        <div className="flex min-w-0 flex-col justify-center">
-          <div
-            className="flex h-5 w-full overflow-hidden rounded-md bg-[#efeee9] dark:bg-[#343431]"
-            aria-label={`Distribucion de cartera: ${healthScore}% activa`}
-          >
-            {segments.map((segment) => (
-              <div
-                key={segment.key}
-                style={{
-                  width: `${totalClients > 0 ? (segment.value / totalClients) * 100 : 0}%`,
-                  backgroundColor: segment.strong,
-                }}
-                title={`${segment.label}: ${segment.value}`}
-              />
-            ))}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
-            {segments.map((segment) => (
-              <span key={segment.key} className="flex items-center gap-2 text-xs text-[#787774] dark:text-[#aaa7a0]">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: segment.strong }} />
-                {segment.label} <strong className="mono-meta text-[#2f3437] dark:text-[#f1efe9]">{segment.value}</strong>
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid min-w-0 gap-3 sm:grid-cols-3">
-        {segments.map((segment) => {
-          const percent =
-            totalClients > 0
-              ? Math.round((segment.value / totalClients) * 100)
-              : 0;
-          return (
-            <button
-              type="button"
-              key={segment.key}
-              onClick={onOpenClients}
-              aria-label={`Ver clientes ${segment.label.toLowerCase()}`}
-              className="group min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-3 text-left shadow-sm transition-colors hover:border-[#8f8c85] dark:border-slate-800 dark:bg-slate-950/40 dark:hover:border-[#5b605c]"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex items-center gap-2">
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: segment.color }}
-                  />
-                  <span className="truncate text-sm font-bold text-slate-700 dark:text-slate-200">
-                    {segment.label}
-                  </span>
-                </div>
-                <div className="shrink-0 text-right">
-                  <span className="text-sm font-black text-slate-900 dark:text-white">
-                    {segment.value}
-                  </span>
-                  <span className="ml-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                    {percent}%
-                  </span>
-                </div>
-              </div>
-              <div className="mt-2 h-2.5 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800">
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{
-                    width: `${percent}%`,
-                    background: segment.strong,
-                  }}
-                />
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-const ProgressOverviewChart = ({
-  completionPercent,
-  completedTasks,
-  totalTasks,
-  groups,
-  onNavigate,
-}) => {
-  const safePercent = clampPercent(completionPercent);
-  const pendingTasks = Math.max(totalTasks - completedTasks, 0);
-
-  return (
-    <div className="mt-6 grid grid-cols-1 gap-5">
-      <div className="surface-subtle rounded-lg border border-[#e6e4df] p-4 dark:border-white/10">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="eyebrow">Avance consolidado</p>
-            <p className="mono-meta mt-2 text-4xl font-semibold leading-none text-[#2f3437] dark:text-[#f1efe9]">
-              {Math.round(safePercent)}%
-            </p>
-          </div>
-          <p className="mono-meta text-sm text-[#787774] dark:text-[#aaa7a0]">
-            {completedTasks} hechas · {pendingTasks} abiertas
-          </p>
-        </div>
-        <div className="mt-4 flex h-5 overflow-hidden rounded-md bg-[#dfddd7] dark:bg-[#343431]">
-          <div
-            className="bg-[#346538] transition-all duration-700"
-            style={{ width: `${safePercent}%` }}
-            title={`${completedTasks} completadas`}
-          />
-          <div
-            className="bg-transparent"
-            style={{ width: `${100 - safePercent}%` }}
-            title={`${pendingTasks} abiertas`}
-          />
-        </div>
-      </div>
-
-      <div className="min-w-0 space-y-3">
-        {groups.map((group) => {
-          const palette = getDashboardPalette(group.color);
-          return (
-            <button
-              type="button"
-              key={group.key}
-              onClick={() => onNavigate(group.view)}
-              aria-label={`Abrir ${group.label}`}
-              className="group min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-3 text-left shadow-sm transition-colors hover:border-[#8f8c85] dark:border-slate-800 dark:bg-slate-950/40 dark:hover:border-[#5b605c]"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: palette.solid }}
-                    />
-                    <span className="break-words text-sm font-bold leading-tight text-slate-800 dark:text-slate-100">
-                      {group.label}
-                    </span>
-                  </div>
-                  <p className="mt-1 break-words pr-2 text-xs leading-relaxed font-medium text-slate-500 dark:text-slate-400">
-                    {group.note}
-                  </p>
-                </div>
-                <div className="w-16 shrink-0 text-right">
-                  <p
-                    className="text-lg font-black"
-                    style={{ color: palette.strong }}
-                  >
-                    {group.percent}%
-                  </p>
-                  <p className="break-words text-[10px] leading-tight font-semibold text-slate-500 dark:text-slate-400">
-                    {group.completed}/{group.total}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-2.5 h-3 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800">
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{
-                    width: `${group.percent}%`,
-                    background: palette.strong,
-                  }}
-                />
-              </div>
-            </button>
-          );
-        })}
-
-        <div className="grid grid-cols-3 gap-2 pt-1">
-          <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-2.5 text-center dark:border-slate-800 dark:bg-slate-950/50">
-            <p className="break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-              Total
-            </p>
-            <p className="mt-1 text-lg font-black leading-none text-slate-900 dark:text-white">
-              {totalTasks}
-            </p>
-          </div>
-          <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-2.5 text-center dark:border-slate-800 dark:bg-slate-950/50">
-            <p className="break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-              Hechas
-            </p>
-            <p className="mt-1 text-lg font-black leading-none text-slate-900 dark:text-white">
-              {completedTasks}
-            </p>
-          </div>
-          <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-2.5 text-center dark:border-slate-800 dark:bg-slate-950/50">
-            <p className="break-words text-[9px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-              Abiertas
-            </p>
-            <p className="mt-1 text-lg font-black leading-none text-slate-900 dark:text-white">
-              {pendingTasks}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- DASHBOARD PRINCIPAL CON RANKING ---
+// --- PANEL PERSONAL ---
 const DashboardView = ({
-  clients,
+  clients = [],
   managers,
   users = [],
   events,
-  tasks,
-  accountTasks,
+  tasks = [],
+  accountTasks = [],
   managementTasks = [],
   currentUserProfile,
   onSignIn,
   onNavigate,
   onOpenTask,
 }) => {
-  const [rankingRefDate, setRankingRefDate] = React.useState(getHondurasTodayStr());
-
-  const goToPrevMonth = () => {
-    const p = getRankingMonthPeriod(rankingRefDate);
-    const prev = new Date(Date.UTC(p.year, p.month - 2, 1));
-    setRankingRefDate(`${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, "0")}-01`);
-  };
-  const goToNextMonth = () => {
-    const p = getRankingMonthPeriod(rankingRefDate);
-    const next = new Date(Date.UTC(p.year, p.month, 1));
-    const todayPeriod = getRankingMonthPeriod(getHondurasTodayStr());
-    if (p.year === todayPeriod.year && p.month === todayPeriod.month) return;
-    setRankingRefDate(`${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-01`);
-  };
-
+  const [taskScope, setTaskScope] = React.useState("today");
   const todayStr = getHondurasTodayStr();
   const dashboardPeriod = getRankingMonthPeriod(todayStr);
-  const isTaskInDashboardMonth = (task) =>
-    isDateWithinPeriod(task?.date, dashboardPeriod);
-  const monthlyEditingTasks = tasks.filter(isTaskInDashboardMonth);
-  const monthlyAccountTasks = accountTasks.filter(isTaskInDashboardMonth);
-  const monthlyManagementTasks = managementTasks.filter(isTaskInDashboardMonth);
-  const openMonthlyAccountTasks = monthlyAccountTasks.filter(
-    (task) => task.status !== "publicado",
-  ).length;
-  const pendingMonthlyEditingTasks = monthlyEditingTasks.filter(
-    (task) => !isCompletedStatus(task.status),
-  ).length;
+  const parseDashboardDate = (value) => {
+    const normalized = normalizeDateOnlyString(value);
+    if (!normalized) return null;
+    const [year, month, day] = normalized.split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1, day));
+  };
+  const shiftDashboardDate = (value, amount) => {
+    const date = parseDashboardDate(value);
+    if (!date) return "";
+    date.setUTCDate(date.getUTCDate() + amount);
+    return date.toISOString().slice(0, 10);
+  };
+  const todayDate = parseDashboardDate(todayStr);
+  const mondayOffset = todayDate ? -((todayDate.getUTCDay() + 6) % 7) : 0;
+  const weekStart = shiftDashboardDate(todayStr, mondayOffset);
+  const weekEnd = shiftDashboardDate(weekStart, 6);
+  const tomorrowStr = shiftDashboardDate(todayStr, 1);
 
-  const activos = clients.filter(
-    (c) => (c.status || "Activo") === "Activo",
-  ).length;
-  const pausados = clients.filter((c) => c.status === "Pausado").length;
-  const inactivos = clients.filter((c) => c.status === "Inactivo").length;
-  const realTotalClients = clients.length;
-  const totalClients = realTotalClients || 1;
-
-  const completedEditingTasks = monthlyEditingTasks.filter((task) =>
-    isCompletedStatus(task.status),
-  ).length;
-  const completedAccountTasks = monthlyAccountTasks.filter(
-    (task) =>
-      task.status === "aprobado_internamente" || task.status === "publicado",
-  ).length;
-  const completedManagementTasks = monthlyManagementTasks.filter(
-    (task) => task.status === "cerrado",
-  ).length;
-
-  const progressGroups = [
-    {
-      key: "editing",
-      label: "Edicion",
-      note: "Produccion audiovisual",
-      total: monthlyEditingTasks.length,
-      completed: completedEditingTasks,
-      color: "amber",
-      view: "editions",
-    },
-    {
-      key: "account",
-      label: "Accounts",
-      note: "Seguimiento comercial",
-      total: monthlyAccountTasks.length,
-      completed: completedAccountTasks,
-      color: "indigo",
-      view: "account-room",
-    },
-    {
-      key: "management",
-      label: "Gestion",
-      note: "Operacion interna",
-      total: monthlyManagementTasks.length,
-      completed: completedManagementTasks,
-      color: "cyan",
-      view: "management-room",
-    },
-  ].map((group) => ({
-    ...group,
-    percent:
-      group.total > 0 ? Math.round((group.completed / group.total) * 100) : 0,
-  }));
-
-  const completedTasks = progressGroups.reduce(
-    (sum, group) => sum + group.completed,
-    0,
+  const clientNames = new Map(
+    clients.map((client) => [client.id, client.name || "Sin cliente"]),
   );
-  const totalTasks = progressGroups.reduce(
-    (sum, group) => sum + group.total,
-    0,
-  );
-  const compPercent =
-    totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-  // Las alertas del panel respetan el mismo corte mensual que los contadores.
-  const urgentTasks = [
-    ...monthlyEditingTasks
-      .filter(
-        (t) =>
-          (t.priority === "urgente" ||
-            isDateBeforeDateString(t.date, todayStr)) &&
-          t.status !== "aprobado" &&
-          t.status !== "publicado",
+  const personalTasks = [
+    ...tasks
+      .filter((task) =>
+        isTaskAssignedToProfile(task, currentUserProfile, [
+          currentUserProfile?.linkedEditorId,
+        ]),
       )
-      .map((t) => ({
-        ...t,
-        _type: "Edición",
+      .map((task) => ({
+        ...task,
+        _area: "Edición",
         _taskType: "editingTask",
+        _room: "editions",
+        _done: isCompletedStatus(task.status),
       })),
-    ...monthlyAccountTasks
-      .filter(
-        (t) =>
-          isDateBeforeDateString(t.date, todayStr) && t.status !== "publicado",
+    ...accountTasks
+      .filter((task) =>
+        isTaskAssignedToProfile(task, currentUserProfile, [
+          currentUserProfile?.linkedManagerId,
+        ]),
       )
-      .map((t) => ({
-        ...t,
-        _type: "Account",
+      .map((task) => ({
+        ...task,
+        _area: "Accounts",
         _taskType: "accountTask",
+        _room: "account-room",
+        _done:
+          task.status === "aprobado_internamente" ||
+          task.status === "publicado",
       })),
-    ...monthlyManagementTasks
-      .filter(
-        (t) =>
-          (t.priority === "urgente" ||
-            isDateBeforeDateString(t.date, todayStr)) &&
-          t.status !== "cerrado",
+    ...managementTasks
+      .filter((task) =>
+        isTaskAssignedToProfile(task, currentUserProfile, [
+          currentUserProfile?.id,
+        ]),
       )
-      .map((t) => ({
-        ...t,
-        _type: "Gestion",
+      .map((task) => ({
+        ...task,
+        _area: "Gestión",
         _taskType: "managementTask",
+        _room: "management-room",
+        _done: task.status === "cerrado",
       })),
-  ]
-    .sort((a, b) => new Date(a.date) - new Date(b.date))
-    .slice(0, 6);
+  ].sort((a, b) => {
+    if (a._done !== b._done) return a._done ? 1 : -1;
+    return String(a.date || "9999-12-31").localeCompare(
+      String(b.date || "9999-12-31"),
+    );
+  });
+
+  const monthlyPersonalTasks = personalTasks.filter((task) =>
+    isDateWithinPeriod(task.date, dashboardPeriod),
+  );
+  const openPersonalTasks = personalTasks.filter((task) => !task._done);
+  const completedThisMonth = monthlyPersonalTasks.filter(
+    (task) => task._done,
+  ).length;
+  const completionPercent =
+    monthlyPersonalTasks.length > 0
+      ? Math.round(
+          (completedThisMonth / monthlyPersonalTasks.length) * 100,
+        )
+      : 0;
+  const overdueTasks = openPersonalTasks.filter((task) =>
+    isDateBeforeDateString(task.date, todayStr),
+  );
+  const dueTodayCount = openPersonalTasks.filter(
+    (task) => normalizeDateOnlyString(task.date) === todayStr,
+  ).length;
+
+  const tasksByScope = {
+    today: openPersonalTasks.filter(
+      (task) =>
+        normalizeDateOnlyString(task.date) &&
+        compareDateOnlyStrings(task.date, todayStr) <= 0,
+    ),
+    week: openPersonalTasks.filter(
+      (task) =>
+        normalizeDateOnlyString(task.date) &&
+        compareDateOnlyStrings(task.date, weekEnd) <= 0,
+    ),
+    all: openPersonalTasks,
+  };
+  const visiblePersonalTasks = (tasksByScope[taskScope] || []).slice(0, 7);
+
+  const taskScopes = [
+    { id: "today", label: "Hoy" },
+    { id: "week", label: "Esta semana" },
+    { id: "all", label: "Todas" },
+  ];
+
+  const formatDueDate = (task) => {
+    const date = normalizeDateOnlyString(task.date);
+    if (!date) return "Sin fecha";
+    if (date === todayStr) return "Hoy";
+    if (date === tomorrowStr) return "Mañana";
+    if (isDateBeforeDateString(date, todayStr))
+      return `${formatShortDate(date)} · vencida`;
+    return formatShortDate(date);
+  };
+
+  const weeklySeries = Array.from({ length: 7 }, (_, index) => {
+    const date = shiftDashboardDate(weekStart, index);
+    const dayTasks = personalTasks.filter(
+      (task) => normalizeDateOnlyString(task.date) === date,
+    );
+    const parsedDate = parseDashboardDate(date);
+    const weekday = parsedDate
+      ? new Intl.DateTimeFormat("es-HN", {
+          weekday: "short",
+          timeZone: "UTC",
+        })
+          .format(parsedDate)
+          .replace(".", "")
+      : "";
+    return {
+      date,
+      weekday,
+      day: parsedDate?.getUTCDate() || "",
+      total: dayTasks.length,
+      completed: dayTasks.filter((task) => task._done).length,
+      isToday: date === todayStr,
+    };
+  });
+  const weeklyMax = Math.max(
+    1,
+    ...weeklySeries.map((item) => item.total),
+  );
+
+  const areaLoad = ["Accounts", "Gestión", "Edición"].map((area) => {
+    const open = openPersonalTasks.filter(
+      (task) => task._area === area,
+    ).length;
+    return {
+      area,
+      open,
+      share:
+        openPersonalTasks.length > 0
+          ? Math.round((open / openPersonalTasks.length) * 100)
+          : 0,
+    };
+  });
+  const nextTask = openPersonalTasks[0] || null;
+  const displayName = currentUserProfile?.name?.trim() || "Usuario";
+  const firstName = displayName.split(/\s+/)[0];
+  const currentHour = new Date().getHours();
+  const greeting =
+    currentHour < 12
+      ? "Buenos días"
+      : currentHour < 18
+        ? "Buenas tardes"
+        : "Buenas noches";
+  const roleLabel =
+    ROLE_DEFINITIONS[currentUserProfile?.role]?.label ||
+    currentUserProfile?.profession ||
+    "Equipo Cluster";
 
   const dateOptions = {
     weekday: "long",
@@ -8674,280 +8464,293 @@ const DashboardView = ({
   };
   const formattedDate = new Date().toLocaleDateString("es-HN", dateOptions);
 
-  const rankingPeriod = getRankingMonthPeriod(rankingRefDate);
-  const isCurrentMonth = (() => { const tp = getRankingMonthPeriod(todayStr); return rankingPeriod.year === tp.year && rankingPeriod.month === tp.month; })();
-  const managerStats = buildManagerKpiStats({
-    managers: managers
-      .filter((manager) => !isManagerLinkedToInactiveUser(manager, users))
-      .map((manager) => ({
-        ...manager,
-        mappedColor: LEGACY_COLOR_MAP[manager.color] || manager.color || "slate",
-      })),
-    clients,
-    accountTasks,
-    rankingPeriod,
-  });
-
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="surface-subtle flex flex-col gap-5 rounded-xl border border-[#e6e4df] p-5 dark:border-white/10 sm:flex-row sm:items-end sm:justify-between md:p-6">
+    <div className="personal-dashboard">
+      <header className="pd-header">
         <div>
-          <p className="eyebrow">Resumen mensual</p>
-          <h2 className="editorial-title mt-1 text-4xl text-[#2f3437] dark:text-[#f1efe9] md:text-5xl">
-            Panel central
+          <p className="pd-kicker">Tu trabajo, en orden</p>
+          <h2 className="pd-title">
+            {greeting}, <span>{firstName}</span>
           </h2>
-          <p className="page-description mt-2 capitalize">{formattedDate}</p>
-        </div>
-        <div className="flex flex-col items-start gap-3 sm:items-end">
-          <span className="quiet-action px-3 text-sm">
-            <Icon name="CalendarRange" size={16} />
-            {dashboardPeriod.label}
-          </span>
-          <p className="mono-meta text-xs text-[#787774] dark:text-[#aaa7a0]">
-            {completedTasks} completadas · {urgentTasks.length} requieren atención
-          </p>
-        </div>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard
-          title="Clientes Activos"
-          value={activos}
-          icon="Briefcase"
-          detail={`${realTotalClients} clientes en cartera`}
-          onClick={() => onNavigate("clients")}
-          actionLabel="Abrir clientes activos"
-        />
-        <StatCard
-          title="Account Managers"
-          value={managers.length}
-          icon="Users"
-          detail="Equipo asignado"
-          onClick={() => onNavigate("managers")}
-          actionLabel="Abrir equipo de Account Managers"
-        />
-        <StatCard
-          title="Accounts pendientes"
-          value={openMonthlyAccountTasks}
-          icon="LayoutList"
-          detail={`${monthlyAccountTasks.length} tareas del mes`}
-          onClick={() => onNavigate("account-room")}
-          actionLabel="Abrir tareas pendientes de Accounts"
-        />
-        <StatCard
-          title="Edición pendiente"
-          value={pendingMonthlyEditingTasks}
-          icon="Video"
-          detail={`${monthlyEditingTasks.length} tareas del mes`}
-          onClick={() => onNavigate("editions")}
-          actionLabel="Abrir tareas pendientes de Edición"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <div className="xl:col-span-7">
-          <div className="h-full">
-            <div className="surface h-full p-6">
-              <div>
-                <h3 className="text-base font-semibold text-[#2f3437] dark:text-[#f1efe9] mb-1">
-                  Avance del mes
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Edición, Accounts y Gestión · {dashboardPeriod.label}
-                </p>
-              </div>
-              <ProgressOverviewChart
-                completionPercent={compPercent}
-                completedTasks={completedTasks}
-                totalTasks={totalTasks}
-                groups={progressGroups}
-                onNavigate={onNavigate}
-              />
-            </div>
+          <div className="pd-header-meta">
+            <span className="capitalize">
+              <Icon name="CalendarDays" size={15} />
+              {formattedDate}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>{roleLabel}</span>
           </div>
         </div>
 
-        {/* Tareas Urgentes */}
-        <div className="surface flex min-h-[360px] flex-col p-6 xl:col-span-5">
-          <div className="flex items-center justify-between mb-4">
+        <div className="pd-progress-summary">
+          <div
+            className="pd-progress-ring"
+            style={{ "--pd-progress": `${completionPercent * 3.6}deg` }}
+            aria-label={`${completionPercent}% de cumplimiento en ${dashboardPeriod.label}`}
+          >
+            <span>{completionPercent}%</span>
+          </div>
+          <div>
+            <p>Progreso personal</p>
+            <strong>{dashboardPeriod.label}</strong>
+          </div>
+        </div>
+      </header>
+
+      <div className="pd-workspace">
+        <section className="pd-task-ledger" aria-labelledby="pd-tasks-title">
+          <div className="pd-section-heading">
             <div>
-              <h3 className="text-base font-semibold text-[#2f3437] dark:text-[#f1efe9] mb-1">
-                Atención Requerida
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Solo tareas de {dashboardPeriod.label}
+              <h3 id="pd-tasks-title">Mis tareas</h3>
+              <p>
+                {dueTodayCount} para hoy · {overdueTasks.length} vencidas
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-black tracking-[0.12em] uppercase text-slate-500 dark:text-slate-400">
-                {urgentTasks.length}
-              </span>
-              <div className="p-2.5 bg-[#fdebec] text-[#9f2f2d] rounded-lg">
-                <Icon name="Flame" size={18} />
-              </div>
-            </div>
+            <button
+              type="button"
+              className="pd-calendar-link"
+              onClick={() => onNavigate("calendar")}
+            >
+              <Icon name="CalendarIcon" size={16} />
+              Ver calendario
+            </button>
           </div>
-          <div className="flex-1 overflow-y-auto space-y-2 custom-scroll pr-2">
-            {urgentTasks.length === 0 ? (
-              <EmptyState icon="CheckCircle2" text="No hay tareas urgentes." />
+
+          <div className="pd-task-tabs" role="tablist" aria-label="Filtrar tareas">
+            {taskScopes.map((scope) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={taskScope === scope.id}
+                key={scope.id}
+                className={taskScope === scope.id ? "is-active" : ""}
+                onClick={() => setTaskScope(scope.id)}
+              >
+                {scope.label}
+                {scope.id === "all" && (
+                  <span>{openPersonalTasks.length}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div className="pd-task-head" aria-hidden="true">
+            <span>Tarea</span>
+            <span>Cliente</span>
+            <span>Sala</span>
+            <span>Vence</span>
+            <span />
+          </div>
+
+          <div className="pd-task-list" role="tabpanel">
+            {visiblePersonalTasks.length === 0 ? (
+              <div className="pd-empty-state">
+                <span>
+                  <Icon name="Check" size={18} />
+                </span>
+                <div>
+                  <strong>Todo despejado</strong>
+                  <p>No tienes tareas pendientes en este período.</p>
+                </div>
+              </div>
             ) : (
-              urgentTasks.map((t) => (
-                <button
-                  type="button"
-                  key={t.id}
-                  onClick={() => onOpenTask(t, t._taskType)}
-                  aria-label={`Abrir tarea ${t.title}`}
-                  className="group flex min-w-0 w-full items-start gap-3 rounded-2xl border border-slate-100 p-3.5 text-left transition-colors hover:border-[#8f8c85] hover:bg-slate-50 dark:border-slate-800 dark:hover:border-[#5b605c] dark:hover:bg-slate-800/50"
-                >
-                  <div
-                    className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${isDateBeforeDateString(t.date, todayStr) ? "bg-red-500" : "bg-amber-500"}`}
-                  ></div>
-                  <div className="flex-1 min-w-0">
-                    <p className="break-words text-sm font-semibold leading-tight text-[#2f3437] dark:text-[#f1efe9]">
-                      {t.title}
-                    </p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                        {t._type}
+              visiblePersonalTasks.map((task, index) => {
+                const isOverdue = isDateBeforeDateString(
+                  task.date,
+                  todayStr,
+                );
+                return (
+                  <button
+                    type="button"
+                    key={`${task._taskType}-${task.id}`}
+                    className={`pd-task-row ${isOverdue ? "is-overdue" : ""}`}
+                    style={{ "--pd-row-index": index }}
+                    onClick={() => onOpenTask(task, task._taskType)}
+                    aria-label={`Abrir tarea ${task.title}`}
+                  >
+                    <span className="pd-task-title-cell">
+                      <span className="pd-task-check" aria-hidden="true" />
+                      <span>
+                        <strong>{task.title || "Tarea sin título"}</strong>
+                        <small>
+                          {task.priority
+                            ? `Prioridad ${task.priority}`
+                            : "Prioridad normal"}
+                        </small>
                       </span>
-                      <span
-                        className={`text-[9px] font-bold break-words ${isDateBeforeDateString(t.date, todayStr) ? "text-red-500" : "text-slate-500"}`}
-                      >
-                        Vence: {t.date}
-                      </span>
-                    </div>
-                  </div>
-                  <Icon
-                    name="ArrowRight"
-                    size={16}
-                    className="mt-1 shrink-0 text-[#9a9893] transition-transform group-hover:translate-x-0.5 dark:text-[#8f8c85]"
-                  />
-                </button>
-              ))
+                    </span>
+                    <span className="pd-task-client">
+                      <i aria-hidden="true" />
+                      {clientNames.get(task.clientId) || "Interno"}
+                    </span>
+                    <span className="pd-task-area">{task._area}</span>
+                    <span className="pd-task-due">
+                      {formatDueDate(task)}
+                    </span>
+                    <Icon
+                      name="ExternalLink"
+                      size={17}
+                      className="pd-task-arrow"
+                    />
+                  </button>
+                );
+              })
             )}
           </div>
-        </div>
-      </div>
 
-      <div className="surface p-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-[#2f3437] dark:text-[#f1efe9]">
-              Distribución de cartera
-            </h3>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Estado actual de los clientes activos, pausados e inactivos
-            </p>
-          </div>
-          <span className="mono-meta text-xs text-[#787774] dark:text-[#aaa7a0]">
-            {realTotalClients} clientes totales
-          </span>
-        </div>
-        <PortfolioHealthChart
-          totalClients={realTotalClients}
-          activos={activos}
-          pausados={pausados}
-          inactivos={inactivos}
-          onOpenClients={() => onNavigate("clients")}
-        />
-      </div>
-
-      {/* Ranking Account Managers */}
-      <div className="surface p-5 md:p-6 mt-6">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-[#2f3437] dark:text-[#f1efe9] mb-1">
-              KPI mensual por Account
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              KPI: 50% cumplimiento ponderado, 30% puntualidad verificada y
-              20% carga completada del mes.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
+          {tasksByScope[taskScope]?.length > visiblePersonalTasks.length && (
             <button
-              onClick={goToPrevMonth}
-              className="w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
-              title="Mes anterior"
+              type="button"
+              className="pd-view-more"
+              onClick={() =>
+                onNavigate(
+                  visiblePersonalTasks[0]?._room || "calendar",
+                )
+              }
             >
-              <Icon name="ChevronLeft" size={16} />
+              Ver las {tasksByScope[taskScope].length} tareas
+              <Icon name="ArrowRight" size={15} />
             </button>
-            <span className="text-sm font-black text-slate-700 dark:text-slate-200 min-w-[110px] text-center">
-              {rankingPeriod.label}
+          )}
+        </section>
+
+        <aside className="pd-kpi-rail" aria-label="KPI personales">
+          <div className="pd-kpi">
+            <span className="pd-kpi-icon">
+              <Icon name="CheckCircle2" size={19} />
             </span>
-            <button
-              onClick={goToNextMonth}
-              disabled={isCurrentMonth}
-              className={`w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 transition-colors shadow-sm ${isCurrentMonth ? "opacity-30 cursor-not-allowed text-slate-400" : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"}`}
-              title="Mes siguiente"
-            >
-              <Icon name="ChevronRight" size={16} />
-            </button>
+            <div>
+              <p>Completadas</p>
+              <strong>{completedThisMonth}</strong>
+              <small>de {monthlyPersonalTasks.length} asignadas</small>
+            </div>
           </div>
-        </div>
+          <div className="pd-kpi">
+            <span className="pd-kpi-icon">
+              <Icon name="BarChart3" size={19} />
+            </span>
+            <div>
+              <p>Cumplimiento</p>
+              <strong>{completionPercent}%</strong>
+              <small>avance del mes</small>
+            </div>
+          </div>
+          <div className={`pd-kpi ${overdueTasks.length > 0 ? "is-danger" : ""}`}>
+            <span className="pd-kpi-icon">
+              <Icon name="Timer" size={19} />
+            </span>
+            <div>
+              <p>Vencidas</p>
+              <strong>{overdueTasks.length}</strong>
+              <small>
+                {overdueTasks.length > 0
+                  ? "necesitan atención"
+                  : "sin tareas atrasadas"}
+              </small>
+            </div>
+          </div>
 
-        {managerStats.length === 0 ? (
-          <EmptyState icon="Users" text="No hay Accounts para evaluar aún." />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] border-collapse">
-              <thead>
-                <tr className="border-b border-[#e6e4df] text-left dark:border-white/10">
-                  {["Pos.", "Account", "Tareas", "A tiempo", "Cumplimiento", "Carga", "Pendientes", "KPI"].map(
-                    (label) => (
-                      <th key={label} className="eyebrow px-3 py-3 first:pl-0 last:pr-0 last:text-right">
-                        {label}
-                      </th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  let qualifiedRank = 0;
-                  return managerStats.map((ms) => {
-                    const hasEnoughTasks = ms.totalTasks >= KPI_MIN_TASKS;
-                    if (hasEnoughTasks) qualifiedRank += 1;
-                    return (
-                      <tr
-                        key={ms.id}
-                        className={`border-b border-[#efeee9] transition-colors last:border-0 hover:bg-[#fbfbfa] dark:border-white/5 dark:hover:bg-[#2a2a27] ${
-                          hasEnoughTasks ? "" : "text-[#9a9893]"
-                        }`}
-                      >
-                        <td className="mono-meta px-3 py-3.5 pl-0 text-sm">
-                          {hasEnoughTasks ? String(qualifiedRank).padStart(2, "0") : "—"}
-                        </td>
-                        <td className="px-3 py-3.5">
-                          <p className="font-semibold text-[#2f3437] dark:text-[#f1efe9]">{ms.name}</p>
-                          <p className="text-xs text-[#787774] dark:text-[#aaa7a0]">
-                            {ms.totalClients} clientes
-                            {!hasEnoughTasks && ` · mínimo ${KPI_MIN_TASKS} tareas`}
-                          </p>
-                        </td>
-                        <td className="mono-meta px-3 py-3.5 text-sm">{ms.completedTasks}/{ms.totalTasks}</td>
-                        <td className="mono-meta px-3 py-3.5 text-sm">
-                          {ms.onTimePercent === null ? "N/D" : `${ms.onTimePercent}%`}
-                        </td>
-                        <td className="mono-meta px-3 py-3.5 text-sm">{ms.weightedCompletionPercent}%</td>
-                        <td className="mono-meta px-3 py-3.5 text-sm">{ms.loadPercent}%</td>
-                        <td className="mono-meta px-3 py-3.5 text-sm">
-                          <span className={ms.overdueTasks > 0 ? "text-[#9f2f2d]" : ""}>
-                            {ms.pendingTasks}
-                          </span>
-                        </td>
-                        <td className="mono-meta px-3 py-3.5 pr-0 text-right text-lg font-semibold text-[#2f3437] dark:text-[#f1efe9]">
-                          {ms.score}%
-                        </td>
-                      </tr>
-                    );
-                  });
-                })()}
-              </tbody>
-            </table>
+          <div className="pd-next-task">
+            <span className="pd-kpi-icon">
+              <Icon name="CalendarDays" size={18} />
+            </span>
+            <div>
+              <p>Próxima acción</p>
+              {nextTask ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenTask(nextTask, nextTask._taskType)}
+                >
+                  <strong>{nextTask.title}</strong>
+                  <small>
+                    {clientNames.get(nextTask.clientId) || "Interno"} ·{" "}
+                    {formatDueDate(nextTask)}
+                  </small>
+                </button>
+              ) : (
+                <strong>Sin pendientes</strong>
+              )}
+            </div>
           </div>
-        )}
+        </aside>
+      </div>
+
+      <div className="pd-insights">
+        <section className="pd-weekly" aria-labelledby="pd-weekly-title">
+          <div className="pd-insight-heading">
+            <div>
+              <h3 id="pd-weekly-title">Rendimiento semanal</h3>
+              <p>Tareas asignadas y completadas por fecha de entrega</p>
+            </div>
+            <div className="pd-chart-legend" aria-label="Leyenda">
+              <span><i className="is-complete" />Completadas</span>
+              <span><i />Asignadas</span>
+            </div>
+          </div>
+
+          <div className="pd-week-chart">
+            {weeklySeries.map((item) => {
+              const totalHeight = Math.round((item.total / weeklyMax) * 100);
+              const completedHeight = Math.round(
+                (item.completed / weeklyMax) * 100,
+              );
+              return (
+                <div
+                  key={item.date}
+                  className={`pd-week-column ${item.isToday ? "is-today" : ""}`}
+                  title={`${item.completed} de ${item.total} completadas`}
+                >
+                  <div className="pd-week-bars">
+                    <span
+                      className="pd-week-total"
+                      style={{ "--pd-height": `${totalHeight}%` }}
+                    />
+                    <span
+                      className="pd-week-completed"
+                      style={{ "--pd-height": `${completedHeight}%` }}
+                    />
+                  </div>
+                  <strong>{item.weekday}</strong>
+                  <small>{item.day}</small>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="pd-area-load" aria-labelledby="pd-load-title">
+          <div className="pd-insight-heading">
+            <div>
+              <h3 id="pd-load-title">Carga por área</h3>
+              <p>Distribución de tus pendientes</p>
+            </div>
+          </div>
+          <div className="pd-load-list">
+            {areaLoad.map((item) => (
+              <button
+                type="button"
+                key={item.area}
+                onClick={() => {
+                  const room = {
+                    Accounts: "account-room",
+                    Gestión: "management-room",
+                    Edición: "editions",
+                  }[item.area];
+                  onNavigate(room);
+                }}
+              >
+                <span className="pd-load-label">
+                  <strong>{item.area}</strong>
+                  <small>{item.open} pendientes</small>
+                </span>
+                <span className="pd-load-track" aria-hidden="true">
+                  <i style={{ "--pd-load": `${item.share}%` }} />
+                </span>
+                <em>{item.share}%</em>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );
