@@ -150,6 +150,11 @@ import {
   rankPendingEditingTasks,
 } from "/src/app/utils/kpi.js";
 import { apiFetch } from "./lib/backend-api.js";
+import {
+  getCallRoomAlias,
+  getConsumedCallLinkUrl,
+  resolveCallLink,
+} from "./lib/call-links.js";
 import { registerFirebaseWebPush } from "./lib/firebase-web-push.js";
 import { createPortal } from "react-dom";
 
@@ -5489,11 +5494,9 @@ function App() {
   useEffect(() => {
     if (!authEmail || profileBlocked || clients.length === 0) return;
 
-    const target = new URL(window.location.href);
-    const roomId = target.searchParams.get("callRoom") || "";
-    const clientId = target.searchParams.get("callClient") || "";
-    const messageId = target.searchParams.get("callMessage") || "";
-    if (!roomId || !clientId) return;
+    const callTarget = resolveCallLink(window.location.href, clientChats);
+    if (!callTarget) return;
+    const { roomId, clientId, messageId, fromPath } = callTarget;
 
     const signature = `${roomId}:${clientId}:${messageId}`;
     if (handledCallDeepLinkRef.current === signature) return;
@@ -5508,12 +5511,13 @@ function App() {
     openClientChat(client);
     handleNavigate("chat");
 
-    ["callRoom", "callClient", "callMessage"].forEach((param) =>
-      target.searchParams.delete(param),
+    window.history.replaceState(
+      {},
+      document.title,
+      getConsumedCallLinkUrl(window.location.href, fromPath),
     );
-    window.history.replaceState({}, document.title, target.toString());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authEmail, profileBlocked, clients]);
+  }, [authEmail, profileBlocked, clients, clientChats]);
 
   // "Eliminar para todos": borrado suave (deja registro de quién y cuándo lo
   // borró). Solo el autor puede hacerlo (validado también en el backend).
@@ -13021,7 +13025,10 @@ const ClientChatView = ({
           roomName: `${tok.appId}/${activeCall.roomId}`,
           jwt: tok.jwt,
           parentNode: callContainerRef.current,
-          configOverwrite: { prejoinPageEnabled: false },
+          configOverwrite: {
+            prejoinPageEnabled: false,
+            brandingRoomAlias: getCallRoomAlias(activeCall.roomId),
+          },
           userInfo: {
             displayName: currentUserProfile?.name || "Usuario",
             email: currentUserProfile?.email || "",
