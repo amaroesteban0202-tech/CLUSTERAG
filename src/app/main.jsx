@@ -728,8 +728,10 @@ const buildEmailLinkActionUrl = () => {
   if (typeof window === "undefined") return "";
   const currentUrl = new URL(window.location.href);
   const target = new URL(window.location.origin + window.location.pathname);
-  const firestoreTarget = currentUrl.searchParams.get("firestore");
-  if (firestoreTarget) target.searchParams.set("firestore", firestoreTarget);
+  ["firestore", "callRoom", "callClient", "callMessage"].forEach((param) => {
+    const value = currentUrl.searchParams.get(param);
+    if (value) target.searchParams.set(param, value);
+  });
   target.searchParams.set("email_link", "pending");
   return target.toString();
 };
@@ -750,8 +752,10 @@ const buildEmailLinkReturnUrl = (href = "") => {
       console.warn("No se pudo leer continueUrl del email link:", error);
     }
   } else {
-    const firestoreTarget = currentUrl.searchParams.get("firestore");
-    if (firestoreTarget) nextUrl.searchParams.set("firestore", firestoreTarget);
+    ["firestore", "callRoom", "callClient", "callMessage"].forEach((param) => {
+      const value = currentUrl.searchParams.get(param);
+      if (value) nextUrl.searchParams.set(param, value);
+    });
   }
 
   ["email_link", "mode", "oobCode", "apiKey", "lang", "continueUrl"].forEach(
@@ -1836,6 +1840,7 @@ function App() {
     });
   const handledIncomingCallIdsRef = useRef(new Set());
   const webPushShownMessageIdsRef = useRef(new Set());
+  const handledCallDeepLinkRef = useRef("");
 
   useEffect(() => {
     window.__cluster_active_view = view;
@@ -5327,7 +5332,6 @@ function App() {
     });
     const client = clients.find((item) => item.id === clientId);
     const clientName = client?.name || "Cliente";
-    const roomUrl = call?.roomId ? `https://meet.jit.si/${call.roomId}` : "";
     for (const uid of mentionedIds) {
       const person = chatMentionables.find((p) => p.id === uid);
       const email = person?.email;
@@ -5339,7 +5343,9 @@ function App() {
                 type: "call_invite",
                 senderName,
                 clientName,
-                roomUrl,
+                roomId: call.roomId,
+                clientId,
+                messageId: createdMessage.id,
               }
             : {
                 to: email,
@@ -5476,6 +5482,38 @@ function App() {
     setNativeNotificationAction(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nativeNotificationAction, clients]);
+
+  // Los enlaces enviados por correo vuelven a ClusterAG y abren directamente
+  // el cliente y la sala JaaS correcta. Los parámetros se conservan durante el
+  // acceso por correo y se eliminan después de consumir la invitación.
+  useEffect(() => {
+    if (!authEmail || profileBlocked || clients.length === 0) return;
+
+    const target = new URL(window.location.href);
+    const roomId = target.searchParams.get("callRoom") || "";
+    const clientId = target.searchParams.get("callClient") || "";
+    const messageId = target.searchParams.get("callMessage") || "";
+    if (!roomId || !clientId) return;
+
+    const signature = `${roomId}:${clientId}:${messageId}`;
+    if (handledCallDeepLinkRef.current === signature) return;
+
+    const client = clients.find(
+      (item) => String(item.id) === String(clientId),
+    );
+    if (!client) return;
+
+    handledCallDeepLinkRef.current = signature;
+    setIncomingCallToJoin({ roomId, messageId: messageId || null, clientId });
+    openClientChat(client);
+    handleNavigate("chat");
+
+    ["callRoom", "callClient", "callMessage"].forEach((param) =>
+      target.searchParams.delete(param),
+    );
+    window.history.replaceState({}, document.title, target.toString());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authEmail, profileBlocked, clients]);
 
   // "Eliminar para todos": borrado suave (deja registro de quién y cuándo lo
   // borró). Solo el autor puede hacerlo (validado también en el backend).
@@ -14696,11 +14734,12 @@ const ClientChatView = ({
       )}
 
       {/* Selector de participantes para la llamada */}
-      {callPicker && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setCallPicker(null)}
-        >
+      {callPicker &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setCallPicker(null)}
+          >
           <div
             className="flex max-h-[75vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800"
             onClick={(event) => event.stopPropagation()}
@@ -14815,8 +14854,9 @@ const ClientChatView = ({
               </button>
             </div>
           </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
       {/* Llamada embebida (Jitsi) — portal a body para ocupar toda la ventana
           sin que ningún contenedor con transform la recorte */}
