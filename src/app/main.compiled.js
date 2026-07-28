@@ -180,6 +180,59 @@ var apiFetch = async (path, options = {}) => {
   return payload;
 };
 
+// src/app/lib/call-links.js
+var CALL_LINK_PARAMS = ["callRoom", "callClient", "callMessage"];
+var decodePathSegment = (value = "") => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+var getCallRoomAlias = (roomId = "") => String(roomId || "").split("/").pop().replace(/[^a-zA-Z0-9._~-]/g, "-").slice(0, 200);
+var resolveCallLink = (href, messages = []) => {
+  let target;
+  try {
+    target = new URL(href);
+  } catch {
+    return null;
+  }
+  const queryRoomId = target.searchParams.get("callRoom") || "";
+  const queryClientId = target.searchParams.get("callClient") || "";
+  if (queryRoomId && queryClientId) {
+    return {
+      roomId: queryRoomId,
+      clientId: queryClientId,
+      messageId: target.searchParams.get("callMessage") || "",
+      fromPath: false
+    };
+  }
+  const roomAlias = getCallRoomAlias(
+    decodePathSegment(target.pathname.split("/").filter(Boolean).pop() || "")
+  );
+  if (!roomAlias) return null;
+  const endedRoomIds = new Set(
+    messages.filter((message2) => message2.call?.ended && message2.call?.roomId).map((message2) => getCallRoomAlias(message2.call.roomId))
+  );
+  if (endedRoomIds.has(roomAlias)) return null;
+  const message = [...messages].reverse().find(
+    (item) => getCallRoomAlias(item.call?.roomId) === roomAlias && item.clientId && !item.call?.ended
+  );
+  if (!message) return null;
+  return {
+    roomId: message.call.roomId,
+    clientId: String(message.clientId),
+    messageId: String(message.id || ""),
+    fromPath: true
+  };
+};
+var getConsumedCallLinkUrl = (href, fromPath = false) => {
+  const target = new URL(href);
+  CALL_LINK_PARAMS.forEach((param) => target.searchParams.delete(param));
+  if (fromPath) target.pathname = "/";
+  return target.toString();
+};
+
 // src/app/lib/firebase-web-push.js
 var FIREBASE_SDK_VERSION = "10.14.1";
 var FIREBASE_APP_SCRIPT = `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app-compat.js`;
@@ -4186,11 +4239,9 @@ function App() {
   }, [nativeNotificationAction, clients]);
   useEffect(() => {
     if (!authEmail || profileBlocked || clients.length === 0) return;
-    const target = new URL(window.location.href);
-    const roomId = target.searchParams.get("callRoom") || "";
-    const clientId = target.searchParams.get("callClient") || "";
-    const messageId = target.searchParams.get("callMessage") || "";
-    if (!roomId || !clientId) return;
+    const callTarget = resolveCallLink(window.location.href, clientChats);
+    if (!callTarget) return;
+    const { roomId, clientId, messageId, fromPath } = callTarget;
     const signature = `${roomId}:${clientId}:${messageId}`;
     if (handledCallDeepLinkRef.current === signature) return;
     const client = clients.find(
@@ -4201,11 +4252,12 @@ function App() {
     setIncomingCallToJoin({ roomId, messageId: messageId || null, clientId });
     openClientChat(client);
     handleNavigate("chat");
-    ["callRoom", "callClient", "callMessage"].forEach(
-      (param) => target.searchParams.delete(param)
+    window.history.replaceState(
+      {},
+      document.title,
+      getConsumedCallLinkUrl(window.location.href, fromPath)
     );
-    window.history.replaceState({}, document.title, target.toString());
-  }, [authEmail, profileBlocked, clients]);
+  }, [authEmail, profileBlocked, clients, clientChats]);
   const deleteChatForEveryone = async (message) => {
     if (!message?.id) return;
     const myId = String(currentUserProfile?.id || "");
@@ -9650,7 +9702,10 @@ var ClientChatView = ({
           roomName: `${tok.appId}/${activeCall.roomId}`,
           jwt: tok.jwt,
           parentNode: callContainerRef.current,
-          configOverwrite: { prejoinPageEnabled: false },
+          configOverwrite: {
+            prejoinPageEnabled: false,
+            brandingRoomAlias: getCallRoomAlias(activeCall.roomId)
+          },
           userInfo: {
             displayName: currentUserProfile?.name || "Usuario",
             email: currentUserProfile?.email || ""
