@@ -19,17 +19,27 @@ const findRecipient = async (email) => {
     return matches.find(Boolean) || null;
 };
 
-const resolveRoomUrl = (value = '') => {
+const cleanJoinParam = (value = '') => String(value || '').trim().slice(0, 240);
+
+export const buildCallJoinUrl = (appUrl, { roomId, clientId, messageId } = {}) => {
+    const safeRoomId = cleanJoinParam(roomId);
+    const safeClientId = cleanJoinParam(clientId);
+    const safeMessageId = cleanJoinParam(messageId);
+    if (!safeRoomId || !safeClientId) return '';
+
     try {
-        const target = new URL(value);
-        if (target.protocol !== 'https:' || !['meet.jit.si', '8x8.vc'].includes(target.hostname)) return '';
+        const target = new URL(appUrl);
+        if (!['http:', 'https:'].includes(target.protocol)) return '';
+        target.searchParams.set('callRoom', safeRoomId);
+        target.searchParams.set('callClient', safeClientId);
+        if (safeMessageId) target.searchParams.set('callMessage', safeMessageId);
         return target.toString();
     } catch {
         return '';
     }
 };
 
-const buildEmail = ({ type, senderName, taskTitle, taskType, comment, appUrl, clientName, roomUrl }) => {
+export const buildEmail = ({ type, senderName, taskTitle, taskType, comment, appUrl, clientName, callUrl }) => {
     const isChat = type === 'chat_mention';
     const isCall = type === 'call_invite';
     const accent = isCall ? '#16a34a'
@@ -43,7 +53,7 @@ const buildEmail = ({ type, senderName, taskTitle, taskType, comment, appUrl, cl
                 : taskType === 'editingTask' ? 'Edición'
                     : 'Gestión';
 
-    const linkHref = isCall ? roomUrl : appUrl;
+    const linkHref = isCall ? callUrl : appUrl;
     const linkLabel = isCall ? 'Unirse a la llamada'
         : isChat ? 'Abrir chat en Cluster OS'
             : 'Abrir tarea en Cluster OS';
@@ -111,15 +121,20 @@ router.post('/send', asyncHandler(async (req, res) => {
         throw createHttpError(400, 'El destinatario no pertenece al equipo activo.', 'notifications/invalid-recipient');
     }
 
+    const appUrl = env.appBaseUrl || getRequestOrigin(req);
     const { subject, html } = buildEmail({
         type,
         senderName: actor.name || actor.email || 'Usuario',
         taskTitle: req.body?.taskTitle,
         taskType: req.body?.taskType,
         comment: req.body?.comment,
-        appUrl: env.appBaseUrl || getRequestOrigin(req),
+        appUrl,
         clientName: req.body?.clientName,
-        roomUrl: resolveRoomUrl(req.body?.roomUrl)
+        callUrl: buildCallJoinUrl(appUrl, {
+            roomId: req.body?.roomId,
+            clientId: req.body?.clientId,
+            messageId: req.body?.messageId
+        })
     });
     const result = await sendEmail({ to, subject, html, logLabel: 'notification' });
     res.json({ ok: true, mode: result.mode });
