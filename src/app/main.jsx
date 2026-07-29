@@ -3489,9 +3489,7 @@ function App() {
       existing?.id ||
       `auth_${user.uid || normalizeNameKey(authEmail).replace(/[^a-z0-9]+/g, "_")}`;
     const isForcedSuperAdmin = SUPER_ADMIN_EMAILS.includes(authEmail);
-    const existingRole =
-      existing?.role ||
-      (privilegedUsers.length === 0 ? "super_admin" : "viewer");
+    const existingRole = existing?.role || "viewer";
     const matchedManager =
       managers.find((item) => normalizeEmail(item.email) === authEmail) ||
       (existing?.linkedManagerId
@@ -3517,12 +3515,9 @@ function App() {
           : "viewer";
     const bootstrapRole = isForcedSuperAdmin
       ? "super_admin"
-      : privilegedUsers.length === 0 &&
-          !["super_admin", "operations"].includes(existingRole)
-        ? "super_admin"
-        : getUserRolePriority(roleByLink) > getUserRolePriority(existingRole)
-          ? roleByLink
-          : existingRole;
+      : getUserRolePriority(roleByLink) > getUserRolePriority(existingRole)
+        ? roleByLink
+        : existingRole;
     const nextRole = bootstrapRole;
     const authSource = getAuthSource(user);
     const emailVerifiedByAuth =
@@ -3610,7 +3605,6 @@ function App() {
     authEmail,
     usersLoaded,
     appUsers,
-    privilegedUsers.length,
     managers,
     editors,
   ]);

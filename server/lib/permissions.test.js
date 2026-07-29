@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { SUPER_ADMIN_EMAILS } from "../../src/app/constants/app.constants.js";
+import { DEFAULT_SUPER_ADMIN_EMAILS } from "../config/bootstrap.js";
 import { ROLE_DEFINITIONS } from "../constants/permissions.js";
 import { hasPermission } from "./permissions.js";
 
@@ -27,4 +29,11 @@ test("inactive organization users cannot create tasks", () => {
       assert.equal(hasPermission({ role, isActive: false }, permission), false);
     }
   }
+});
+
+test("the frontend cannot force extra super administrators", () => {
+  assert.deepEqual(
+    [...SUPER_ADMIN_EMAILS].sort(),
+    [...DEFAULT_SUPER_ADMIN_EMAILS].sort(),
+  );
 });

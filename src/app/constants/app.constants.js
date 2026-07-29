@@ -176,8 +176,7 @@ export const ROLE_DEFINITIONS = {
 };
 
 export const SUPER_ADMIN_EMAILS = [
-    'maycolljaramillo01@gmail.com',
-    'maferg.designer@gmail.com'
+    'maycolljaramillo01@gmail.com'
 ];
 
 export const DEFAULT_MANAGEMENT_TEAM = [

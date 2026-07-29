@@ -2607,14 +2607,14 @@ function App() {
     const existing = existingByUid || existingByEmail || matchByName;
     const targetId = existing?.id || `auth_${user.uid || normalizeNameKey(authEmail).replace(/[^a-z0-9]+/g, "_")}`;
     const isForcedSuperAdmin = SUPER_ADMIN_EMAILS.includes(authEmail);
-    const existingRole = existing?.role || (privilegedUsers.length === 0 ? "super_admin" : "viewer");
+    const existingRole = existing?.role || "viewer";
     const matchedManager = managers.find((item) => normalizeEmail(item.email) === authEmail) || (existing?.linkedManagerId ? managers.find((item) => item.id === existing.linkedManagerId) : null);
     const matchedEditor = editors.find((item) => normalizeEmail(item.email) === authEmail) || (existing?.linkedEditorId ? editors.find((item) => item.id === existing.linkedEditorId) : null);
     const preAuthorizedEditor = !matchedEditor ? DEFAULT_EDITORS_TEAM.find(
       (item) => normalizeEmail(item.email) === authEmail
     ) : null;
     const roleByLink = existing?.managementKey ? "management" : matchedManager ? "manager" : matchedEditor || preAuthorizedEditor ? "editor" : "viewer";
-    const bootstrapRole = isForcedSuperAdmin ? "super_admin" : privilegedUsers.length === 0 && !["super_admin", "operations"].includes(existingRole) ? "super_admin" : getUserRolePriority(roleByLink) > getUserRolePriority(existingRole) ? roleByLink : existingRole;
+    const bootstrapRole = isForcedSuperAdmin ? "super_admin" : getUserRolePriority(roleByLink) > getUserRolePriority(existingRole) ? roleByLink : existingRole;
     const nextRole = bootstrapRole;
     const authSource = getAuthSource(user);
     const emailVerifiedByAuth = Boolean(user.emailVerified) || authSource === "google" || authSource === "email_link";
@@ -2674,7 +2674,6 @@ function App() {
     authEmail,
     usersLoaded,
     appUsers,
-    privilegedUsers.length,
     managers,
     editors
   ]);
