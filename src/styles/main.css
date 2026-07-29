@@ -795,26 +795,56 @@ h1, h2, .editorial-title {
 }
 .pd-insights {
     display: grid;
-    grid-template-columns: minmax(0, 1.3fr) minmax(17rem, 0.7fr);
+    grid-template-columns: minmax(0, 1.18fr) minmax(22rem, 0.82fr);
     min-width: 0;
 }
 .pd-weekly,
-.pd-area-load {
+.pd-user-kpi {
     min-width: 0;
     padding-top: 1.55rem;
 }
 .pd-weekly {
     padding-right: 2rem;
 }
-.pd-area-load {
+.pd-user-kpi {
     padding-left: 2rem;
     border-left: 1px solid var(--pd-line);
+}
+.pd-week-summary {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    gap: clamp(0.8rem, 2vw, 1.4rem);
+}
+.pd-week-summary span,
+.pd-week-summary strong,
+.pd-week-summary small {
+    display: block;
+}
+.pd-week-summary span {
+    min-width: 3.8rem;
+}
+.pd-week-summary strong {
+    color: var(--pd-ink);
+    font-size: 1.1rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.035em;
+    line-height: 1;
+}
+.pd-week-summary small {
+    margin-top: 0.3rem;
+    color: var(--pd-faint);
+    font-size: 0.58rem;
+}
+.pd-week-summary .is-primary strong {
+    color: var(--pd-accent);
 }
 .pd-chart-legend {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 1rem;
     color: var(--pd-muted);
     font-size: 0.63rem;
 }
@@ -836,10 +866,10 @@ h1, h2, .editorial-title {
 .pd-week-chart {
     position: relative;
     display: grid;
-    height: 12rem;
+    height: 13.5rem;
     grid-template-columns: repeat(7, minmax(2.1rem, 1fr));
     gap: clamp(0.45rem, 1.4vw, 1rem);
-    margin-top: 1.2rem;
+    margin-top: 0.45rem;
     padding: 0.7rem 0 0;
     border-bottom: 1px solid var(--pd-line);
 }
@@ -858,11 +888,28 @@ h1, h2, .editorial-title {
     position: relative;
     z-index: 1;
     display: grid;
-    grid-template-rows: minmax(0, 1fr) auto auto;
+    grid-template-rows: 1.35rem minmax(0, 1fr) auto auto;
     align-items: end;
     justify-items: center;
     gap: 0.1rem;
     min-width: 0;
+}
+.pd-week-value {
+    display: inline-flex;
+    align-items: baseline;
+    align-self: start;
+    gap: 0.08rem;
+    color: var(--pd-muted);
+    font-variant-numeric: tabular-nums;
+}
+.pd-week-value strong {
+    color: var(--pd-ink);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+.pd-week-value small {
+    color: var(--pd-faint);
+    font-size: 0.56rem;
 }
 .pd-week-bars {
     position: relative;
@@ -890,77 +937,160 @@ h1, h2, .editorial-title {
     background: var(--pd-accent);
     box-shadow: 0 0 1.25rem rgba(199, 232, 107, 0.08);
 }
-.pd-week-column strong {
+.pd-week-column > strong {
     margin-top: 0.38rem;
     color: var(--pd-muted);
     font-size: 0.61rem;
     font-weight: 620;
     text-transform: capitalize;
 }
-.pd-week-column small {
+.pd-week-column > small {
     color: var(--pd-faint);
     font-size: 0.58rem;
 }
-.pd-week-column.is-today strong,
-.pd-week-column.is-today small {
+.pd-week-column.is-today > strong,
+.pd-week-column.is-today > small {
     color: var(--pd-accent);
 }
-.pd-load-list {
-    margin-top: 1.45rem;
-}
-.pd-load-list button {
-    display: grid;
-    width: 100%;
-    min-height: 4.15rem;
-    grid-template-columns: minmax(5.5rem, 0.7fr) minmax(5rem, 1fr) 2.6rem;
+.pd-week-empty,
+.pd-user-kpi-empty {
+    display: flex;
     align-items: center;
-    gap: 0.75rem;
+    min-height: 10rem;
+    gap: 0.9rem;
+    color: var(--pd-faint);
+}
+.pd-week-empty {
+    justify-content: center;
+    border-bottom: 1px solid var(--pd-line);
+}
+.pd-week-empty strong,
+.pd-user-kpi-empty strong {
+    display: block;
+    color: var(--pd-ink);
+    font-size: 0.78rem;
+}
+.pd-week-empty p,
+.pd-user-kpi-empty p {
+    margin: 0.2rem 0 0;
+    color: var(--pd-muted);
+    font-size: 0.66rem;
+}
+.pd-user-kpi-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    min-width: 0;
+    gap: 0.35rem;
     padding: 0;
     border: 0;
-    border-top: 1px solid var(--pd-line);
     background: transparent;
-    color: var(--pd-ink);
-    text-align: left;
-}
-.pd-load-list button:first-child {
-    border-top: 0;
-}
-.pd-load-label strong,
-.pd-load-label small {
-    display: block;
-}
-.pd-load-label strong {
-    font-size: 0.73rem;
+    color: var(--pd-accent);
+    font-size: 0.65rem;
     font-weight: 650;
 }
-.pd-load-label small {
-    margin-top: 0.15rem;
-    color: var(--pd-muted);
-    font-size: 0.62rem;
+.pd-user-kpi-link:hover {
+    color: var(--pd-accent-bright);
 }
-.pd-load-track {
-    height: 0.44rem;
+.pd-user-kpi-list {
+    margin-top: 0.9rem;
+}
+.pd-user-kpi-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1.7rem 2rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 3.55rem;
+    padding: 0.45rem 0 0.6rem;
+    border-top: 1px solid var(--pd-line);
+}
+.pd-user-kpi-row:first-child {
+    border-top: 0;
+}
+.pd-user-kpi-row.is-current {
+    margin-inline: -0.65rem;
+    padding-inline: 0.65rem;
+    background: var(--pd-accent-soft);
+}
+.pd-user-kpi-rank {
+    color: var(--pd-faint);
+    font-size: 0.62rem;
+    font-variant-numeric: tabular-nums;
+}
+.pd-user-kpi-avatar {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    place-items: center;
+    border: 1px solid var(--pd-line);
+    border-radius: 7px;
+    background: var(--pd-raised);
+    color: var(--pd-accent);
+    font-size: 0.58rem;
+    font-weight: 720;
+}
+.pd-user-kpi-identity,
+.pd-user-kpi-score {
+    min-width: 0;
+}
+.pd-user-kpi-identity strong,
+.pd-user-kpi-identity small,
+.pd-user-kpi-score strong,
+.pd-user-kpi-score small {
+    display: block;
+}
+.pd-user-kpi-identity strong {
     overflow: hidden;
-    border-radius: 3px;
+    color: var(--pd-ink);
+    font-size: 0.7rem;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pd-user-kpi-identity strong em {
+    margin-left: 0.4rem;
+    color: var(--pd-accent);
+    font-size: 0.55rem;
+    font-style: normal;
+    font-weight: 700;
+}
+.pd-user-kpi-identity small,
+.pd-user-kpi-score small {
+    overflow: hidden;
+    margin-top: 0.15rem;
+    color: var(--pd-faint);
+    font-size: 0.55rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pd-user-kpi-score {
+    text-align: right;
+}
+.pd-user-kpi-score strong {
+    color: var(--pd-ink);
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+}
+.pd-user-kpi-track {
+    position: absolute;
+    right: 0;
+    bottom: 0.22rem;
+    left: 4.25rem;
+    height: 0.16rem;
+    overflow: hidden;
+    border-radius: 2px;
     background: var(--pd-track);
 }
-.pd-load-track i {
+.pd-user-kpi-track i {
     display: block;
-    width: var(--pd-load);
+    width: var(--pd-kpi-score);
     height: 100%;
     border-radius: inherit;
     background: var(--pd-accent);
-    transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.pd-load-list em {
-    color: var(--pd-muted);
-    font-size: 0.69rem;
-    font-style: normal;
-    font-variant-numeric: tabular-nums;
-    text-align: right;
-}
-.pd-load-list button:hover .pd-load-label strong {
-    color: var(--pd-accent);
+.pd-user-kpi-empty {
+    min-height: 12rem;
 }
 .personal-dashboard button:focus-visible {
     outline: 2px solid var(--pd-accent);
@@ -988,7 +1118,7 @@ h1, h2, .editorial-title {
         display: none;
     }
     .pd-weekly { padding-right: 1.4rem; }
-    .pd-area-load { padding-left: 1.4rem; }
+    .pd-user-kpi { padding-left: 1.4rem; }
 }
 @media (max-width: 900px) {
     .pd-workspace,
@@ -1019,7 +1149,7 @@ h1, h2, .editorial-title {
     .pd-weekly {
         padding-right: 0;
     }
-    .pd-area-load {
+    .pd-user-kpi {
         padding: 1.55rem 0 0;
         border-top: 1px solid var(--pd-line);
         border-left: 0;
@@ -1099,14 +1229,28 @@ h1, h2, .editorial-title {
     .pd-insight-heading {
         flex-direction: column;
     }
+    .pd-week-summary {
+        width: 100%;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .pd-chart-legend {
+        justify-content: flex-start;
+    }
     .pd-week-chart {
         gap: 0.32rem;
     }
     .pd-week-bars {
         width: 72%;
     }
-    .pd-load-list button {
-        grid-template-columns: minmax(5.4rem, 0.75fr) minmax(4rem, 1fr) 2.5rem;
+    .pd-user-kpi-row {
+        grid-template-columns: 1.35rem 1.85rem minmax(0, 1fr) auto;
+    }
+    .pd-user-kpi-avatar {
+        width: 1.85rem;
+        height: 1.85rem;
+    }
+    .pd-user-kpi-track {
+        left: 3.8rem;
     }
 }
 

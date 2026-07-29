@@ -6771,6 +6771,7 @@ function App() {
               <DashboardView
                 clients={clients}
                 managers={managers}
+                editors={editors}
                 users={appUsers}
                 events={events}
                 tasks={editingTasks}
@@ -8403,10 +8404,54 @@ const buildCompanyTaskList = ({
   })),
 ];
 
+const buildPersonalKpiSnapshot = (
+  personalTasks = [],
+  period = getRankingMonthPeriod(),
+) => {
+  const monthlyTasks = personalTasks.filter((task) =>
+    isDateWithinPeriod(task.date, period),
+  );
+  const completedTasks = monthlyTasks.filter((task) => task._done);
+  const completionPercent =
+    monthlyTasks.length > 0
+      ? Math.round((completedTasks.length / monthlyTasks.length) * 100)
+      : 0;
+  const measuredCompletedTasks = completedTasks
+    .map((task) => ({
+      task,
+      completionIso: getTaskCompletionIso(task),
+    }))
+    .filter(({ task, completionIso }) =>
+      Boolean(normalizeDateOnlyString(task.date) && completionIso),
+    );
+  const onTimePercent =
+    measuredCompletedTasks.length > 0
+      ? Math.round(
+          (measuredCompletedTasks.filter(({ task, completionIso }) =>
+            isCompletionOnTime(task, completionIso),
+          ).length /
+            measuredCompletedTasks.length) *
+            100,
+        )
+      : null;
+
+  return {
+    monthlyTasks,
+    completedTasks,
+    completionPercent,
+    onTimePercent,
+    score:
+      onTimePercent === null
+        ? completionPercent
+        : Math.round(completionPercent * 0.7 + onTimePercent * 0.3),
+  };
+};
+
 // --- PANEL PERSONAL ---
 const DashboardView = ({
   clients = [],
-  managers,
+  managers = [],
+  editors = [],
   users = [],
   events,
   tasks = [],
@@ -8453,42 +8498,16 @@ const DashboardView = ({
     managementTasks,
   });
 
-  const monthlyPersonalTasks = personalTasks.filter((task) =>
-    isDateWithinPeriod(task.date, dashboardPeriod),
+  const personalKpi = buildPersonalKpiSnapshot(
+    personalTasks,
+    dashboardPeriod,
   );
+  const monthlyPersonalTasks = personalKpi.monthlyTasks;
   const openPersonalTasks = personalTasks.filter((task) => !task._done);
-  const completedMonthlyTasks = monthlyPersonalTasks.filter(
-    (task) => task._done,
-  );
-  const completedThisMonth = completedMonthlyTasks.length;
-  const completionPercent =
-    monthlyPersonalTasks.length > 0
-      ? Math.round(
-          (completedThisMonth / monthlyPersonalTasks.length) * 100,
-        )
-      : 0;
-  const measuredCompletedTasks = completedMonthlyTasks
-    .map((task) => ({
-      task,
-      completionIso: getTaskCompletionIso(task),
-    }))
-    .filter(({ task, completionIso }) =>
-      Boolean(normalizeDateOnlyString(task.date) && completionIso),
-    );
-  const onTimePercent =
-    measuredCompletedTasks.length > 0
-      ? Math.round(
-          (measuredCompletedTasks.filter(({ task, completionIso }) =>
-            isCompletionOnTime(task, completionIso),
-          ).length /
-            measuredCompletedTasks.length) *
-            100,
-        )
-      : null;
-  const individualKpi =
-    onTimePercent === null
-      ? completionPercent
-      : Math.round(completionPercent * 0.7 + onTimePercent * 0.3);
+  const completedThisMonth = personalKpi.completedTasks.length;
+  const completionPercent = personalKpi.completionPercent;
+  const onTimePercent = personalKpi.onTimePercent;
+  const individualKpi = personalKpi.score;
   const overdueTasks = openPersonalTasks.filter((task) =>
     isDateBeforeDateString(task.date, todayStr),
   );
@@ -8554,20 +8573,134 @@ const DashboardView = ({
     1,
     ...weeklySeries.map((item) => item.total),
   );
+  const weeklySummary = weeklySeries.reduce(
+    (summary, item) => ({
+      assigned: summary.assigned + item.total,
+      completed: summary.completed + item.completed,
+    }),
+    { assigned: 0, completed: 0 },
+  );
+  weeklySummary.rate = weeklySummary.assigned
+    ? Math.round((weeklySummary.completed / weeklySummary.assigned) * 100)
+    : 0;
 
-  const areaLoad = ["Accounts", "Gestión", "Edición"].map((area) => {
-    const open = openPersonalTasks.filter(
-      (task) => task._area === area,
-    ).length;
-    return {
-      area,
-      open,
-      share:
-        openPersonalTasks.length > 0
-          ? Math.round((open / openPersonalTasks.length) * 100)
-          : 0,
+  const teamProfiles = [];
+  const addTeamProfile = (
+    profile,
+    { linkedManagerId = "", linkedEditorId = "", fallbackRole = "" } = {},
+  ) => {
+    const candidateId = profile?.userId || profile?.id;
+    if (!candidateId || profile?.isActive === false) return;
+    const candidate = {
+      ...profile,
+      id: candidateId,
+      role: profile.role || fallbackRole,
+      linkedManagerId: profile.linkedManagerId || linkedManagerId,
+      linkedEditorId: profile.linkedEditorId || linkedEditorId,
     };
-  });
+    const candidateEmail = normalizeEmail(candidate.email);
+    const existingIndex = teamProfiles.findIndex(
+      (item) =>
+        item.id === candidate.id ||
+        (candidateEmail && normalizeEmail(item.email) === candidateEmail) ||
+        (candidate.linkedManagerId &&
+          item.linkedManagerId === candidate.linkedManagerId) ||
+        (candidate.linkedEditorId &&
+          item.linkedEditorId === candidate.linkedEditorId),
+    );
+    if (existingIndex < 0) {
+      teamProfiles.push(candidate);
+      return;
+    }
+    const existing = teamProfiles[existingIndex];
+    teamProfiles[existingIndex] = {
+      ...candidate,
+      ...existing,
+      name: existing.name || candidate.name,
+      email: existing.email || candidate.email,
+      role: existing.role || candidate.role,
+      linkedManagerId:
+        existing.linkedManagerId || candidate.linkedManagerId,
+      linkedEditorId: existing.linkedEditorId || candidate.linkedEditorId,
+    };
+  };
+  users.forEach((profile) => addTeamProfile(profile));
+  managers.forEach((manager) =>
+    addTeamProfile(manager, {
+      linkedManagerId: manager.id,
+      fallbackRole: "manager",
+    }),
+  );
+  editors.forEach((editor) =>
+    addTeamProfile(editor, {
+      linkedEditorId: editor.id,
+      fallbackRole: "editor",
+    }),
+  );
+  addTeamProfile(currentUserProfile);
+
+  const currentUserEmail = normalizeEmail(currentUserProfile?.email);
+  const userKpiCandidates = teamProfiles
+    .map((profile) => {
+      const memberTasks = buildPersonalTaskList({
+        profile,
+        tasks,
+        accountTasks,
+        managementTasks,
+      });
+      const snapshot = buildPersonalKpiSnapshot(
+        memberTasks,
+        dashboardPeriod,
+      );
+      const isCurrent =
+        profile.id === currentUserProfile?.id ||
+        Boolean(
+          currentUserEmail &&
+            normalizeEmail(profile.email) === currentUserEmail,
+        );
+      const resolvedRole =
+        ROLE_DEFINITIONS[profile.role]?.label ||
+        profile.profession ||
+        (profile.linkedManagerId
+          ? "Account Manager"
+          : profile.linkedEditorId
+            ? "Editor"
+            : "Equipo Cluster");
+      const name = profile.name?.trim() || profile.email || "Usuario";
+      const initials = name
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((part) => part[0])
+        .join("")
+        .toUpperCase();
+
+      return {
+        id: profile.id,
+        name,
+        initials,
+        role: resolvedRole,
+        score: snapshot.score,
+        completed: snapshot.completedTasks.length,
+        assigned: snapshot.monthlyTasks.length,
+        onTimePercent: snapshot.onTimePercent,
+        isCurrent,
+      };
+    })
+    .filter((item) => item.assigned > 0)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        right.completed - left.completed ||
+        left.name.localeCompare(right.name),
+    )
+    .map((item, index) => ({ ...item, rank: index + 1 }));
+  const leadingUserKpis = userKpiCandidates.slice(0, 5);
+  const currentUserKpi = userKpiCandidates.find((item) => item.isCurrent);
+  const visibleUserKpis =
+    currentUserKpi &&
+    !leadingUserKpis.some((item) => item.id === currentUserKpi.id)
+      ? [...leadingUserKpis.slice(0, 4), currentUserKpi]
+      : leadingUserKpis;
   const nextTask = openPersonalTasks[0] || null;
   const displayName = currentUserProfile?.name?.trim() || "Usuario";
   const firstName = displayName.split(/\s+/)[0];
@@ -8810,76 +8943,137 @@ const DashboardView = ({
           <div className="pd-insight-heading">
             <div>
               <h3 id="pd-weekly-title">Rendimiento semanal de la empresa</h3>
-              <p>Todas las tareas asignadas y completadas por fecha de entrega</p>
+              <p>Cumplimiento de entregas de Accounts, Gestión y Edición</p>
             </div>
-            <div className="pd-chart-legend" aria-label="Leyenda">
-              <span><i className="is-complete" />Completadas</span>
-              <span><i />Asignadas</span>
+            <div
+              className="pd-week-summary"
+              aria-label={`${weeklySummary.completed} completadas de ${weeklySummary.assigned} asignadas; ${weeklySummary.rate}% de cumplimiento`}
+            >
+              <span>
+                <strong>{weeklySummary.assigned}</strong>
+                <small>Asignadas</small>
+              </span>
+              <span>
+                <strong>{weeklySummary.completed}</strong>
+                <small>Completadas</small>
+              </span>
+              <span className="is-primary">
+                <strong>{weeklySummary.rate}%</strong>
+                <small>Cumplimiento</small>
+              </span>
             </div>
           </div>
 
-          <div className="pd-week-chart">
-            {weeklySeries.map((item) => {
-              const totalHeight = Math.round((item.total / weeklyMax) * 100);
-              const completedHeight = Math.round(
-                (item.completed / weeklyMax) * 100,
-              );
-              return (
-                <div
-                  key={item.date}
-                  className={`pd-week-column ${item.isToday ? "is-today" : ""}`}
-                  title={`${item.completed} de ${item.total} completadas`}
-                >
-                  <div className="pd-week-bars">
-                    <span
-                      className="pd-week-total"
-                      style={{ "--pd-height": `${totalHeight}%` }}
-                    />
-                    <span
-                      className="pd-week-completed"
-                      style={{ "--pd-height": `${completedHeight}%` }}
-                    />
-                  </div>
-                  <strong>{item.weekday}</strong>
-                  <small>{item.day}</small>
-                </div>
-              );
-            })}
+          <div className="pd-chart-legend" aria-label="Leyenda">
+            <span><i className="is-complete" />Completadas</span>
+            <span><i />Asignadas</span>
           </div>
+
+          {weeklySummary.assigned > 0 ? (
+            <div className="pd-week-chart">
+              {weeklySeries.map((item) => {
+                const totalHeight = Math.round((item.total / weeklyMax) * 100);
+                const completedHeight = Math.round(
+                  (item.completed / weeklyMax) * 100,
+                );
+                return (
+                  <div
+                    key={item.date}
+                    className={`pd-week-column ${item.isToday ? "is-today" : ""}`}
+                    title={`${item.completed} de ${item.total} completadas`}
+                  >
+                    <span
+                      className="pd-week-value"
+                      aria-label={`${item.completed} completadas de ${item.total} asignadas`}
+                    >
+                      <strong>{item.completed}</strong>
+                      <small>/{item.total}</small>
+                    </span>
+                    <div className="pd-week-bars">
+                      <span
+                        className="pd-week-total"
+                        style={{ "--pd-height": `${totalHeight}%` }}
+                      />
+                      <span
+                        className="pd-week-completed"
+                        style={{ "--pd-height": `${completedHeight}%` }}
+                      />
+                    </div>
+                    <strong>{item.weekday}</strong>
+                    <small>{item.day}</small>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="pd-week-empty">
+              <Icon name="BarChart3" size={22} />
+              <div>
+                <strong>Sin entregas esta semana</strong>
+                <p>La gráfica aparecerá cuando existan tareas con fecha.</p>
+              </div>
+            </div>
+          )}
         </section>
 
-        <section className="pd-area-load" aria-labelledby="pd-load-title">
+        <section className="pd-user-kpi" aria-labelledby="pd-user-kpi-title">
           <div className="pd-insight-heading">
             <div>
-              <h3 id="pd-load-title">Carga por área</h3>
-              <p>Distribución de tus pendientes</p>
+              <h3 id="pd-user-kpi-title">KPI por usuario</h3>
+              <p>{dashboardPeriod.label} · avance 70% + puntualidad 30%</p>
             </div>
+            <button
+              type="button"
+              className="pd-user-kpi-link"
+              onClick={() => onNavigate("performance")}
+            >
+              Ver reporte
+              <Icon name="ArrowRight" size={14} />
+            </button>
           </div>
-          <div className="pd-load-list">
-            {areaLoad.map((item) => (
-              <button
-                type="button"
-                key={item.area}
-                onClick={() => {
-                  const room = {
-                    Accounts: "account-room",
-                    Gestión: "management-room",
-                    Edición: "editions",
-                  }[item.area];
-                  onNavigate(room);
-                }}
-              >
-                <span className="pd-load-label">
-                  <strong>{item.area}</strong>
-                  <small>{item.open} pendientes</small>
-                </span>
-                <span className="pd-load-track" aria-hidden="true">
-                  <i style={{ "--pd-load": `${item.share}%` }} />
-                </span>
-                <em>{item.share}%</em>
-              </button>
-            ))}
-          </div>
+
+          {visibleUserKpis.length > 0 ? (
+            <div className="pd-user-kpi-list">
+              {visibleUserKpis.map((item) => (
+                <article
+                  key={item.id}
+                  className={`pd-user-kpi-row ${item.isCurrent ? "is-current" : ""}`}
+                  aria-label={`${item.name}: KPI ${item.score}%`}
+                >
+                  <span className="pd-user-kpi-rank">#{item.rank}</span>
+                  <span className="pd-user-kpi-avatar">{item.initials}</span>
+                  <span className="pd-user-kpi-identity">
+                    <strong>
+                      {item.name}
+                      {item.isCurrent && <em>Tú</em>}
+                    </strong>
+                    <small>
+                      {item.role} · {item.completed}/{item.assigned} completadas
+                    </small>
+                  </span>
+                  <span className="pd-user-kpi-score">
+                    <strong>{item.score}%</strong>
+                    <small>
+                      {item.onTimePercent === null
+                        ? "Puntualidad N/D"
+                        : `${item.onTimePercent}% puntualidad`}
+                    </small>
+                  </span>
+                  <span className="pd-user-kpi-track" aria-hidden="true">
+                    <i style={{ "--pd-kpi-score": `${item.score}%` }} />
+                  </span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="pd-user-kpi-empty">
+              <Icon name="Users" size={21} />
+              <div>
+                <strong>Sin KPI calculable</strong>
+                <p>Asigna las tareas a usuarios para medir su rendimiento.</p>
+              </div>
+            </div>
+          )}
         </section>
       </div>
     </div>
