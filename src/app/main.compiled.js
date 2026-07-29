@@ -675,6 +675,55 @@ var getVerificationPriority = (record = {}) => {
   return 0;
 };
 var getUserRecordScore = (record = {}, referenceCount = 0) => referenceCount * 1e3 + (normalizeEmail(record.email) ? 220 : 0) + (record.authUid ? 180 : 0) + (record.isActive === false ? 0 : 20) + (record.seeded ? 5 : 10) + getVerificationPriority(record) * 25 + getUserRolePriority(record.role);
+var buildOrganizationTaskAssignees = (primaryMembers = [], organizationMembers = [], linkedProfileField = "") => {
+  const organizationById = new Map(
+    organizationMembers.map((member) => [member.id, member])
+  );
+  const organizationByEmail = new Map(
+    organizationMembers.map((member) => [normalizeEmail(member.email), member]).filter(([email]) => email)
+  );
+  const organizationByLinkedProfile = new Map(
+    linkedProfileField ? organizationMembers.map((member) => [member[linkedProfileField], member]).filter(([profileId]) => profileId) : []
+  );
+  const primaryOptions = primaryMembers.map((member) => {
+    const linkedMember = organizationById.get(member.userId) || organizationByLinkedProfile.get(member.id) || organizationByEmail.get(normalizeEmail(member.email));
+    return {
+      ...member,
+      email: normalizeEmail(linkedMember?.email || member.email),
+      assigneeUserId: linkedMember?.id || member.userId || member.id,
+      isActive: linkedMember?.isActive ?? member.isActive ?? true
+    };
+  });
+  const representedPrimaryIds = new Set(primaryOptions.map((member) => member.id));
+  const representedUserIds = new Set(
+    primaryOptions.map((member) => member.assigneeUserId).filter(Boolean)
+  );
+  const representedEmails = new Set(
+    primaryOptions.map((member) => normalizeEmail(member.email)).filter(Boolean)
+  );
+  const organizationOptions = organizationMembers.filter((member) => member.isActive !== false).filter(
+    (member) => !representedPrimaryIds.has(member.id) && !representedUserIds.has(member.id) && !representedEmails.has(normalizeEmail(member.email)) && (!linkedProfileField || !representedPrimaryIds.has(member[linkedProfileField]))
+  ).map((member) => ({
+    ...member,
+    assigneeUserId: member.id,
+    isOrganizationMember: true
+  }));
+  return [...primaryOptions, ...organizationOptions].sort(
+    (left, right) => String(left.name || "").localeCompare(String(right.name || ""), "es", {
+      sensitivity: "base"
+    })
+  );
+};
+var findCurrentUserTaskAssignee = (profile, assignees = []) => {
+  if (!profile || profile.isActive === false) return null;
+  const profileIds = new Set(
+    [profile.id, profile.linkedManagerId, profile.linkedEditorId].filter(Boolean)
+  );
+  const profileEmail = normalizeEmail(profile.email);
+  return assignees.find(
+    (assignee) => assignee.isActive !== false && (profileIds.has(assignee.id) || profileIds.has(assignee.assigneeUserId) || profileEmail && normalizeEmail(assignee.email) === profileEmail)
+  ) || null;
+};
 var buildDuplicateUserGroups = (users = []) => {
   const userById = new Map(users.map((item) => [item.id, item]));
   const adjacency = new Map(users.map((item) => [item.id, /* @__PURE__ */ new Set()]));
@@ -957,7 +1006,12 @@ var isTaskAssignedToProfile = (task, profile, contextIds = []) => {
   const profileId = profile?.id;
   if (!profileId) return false;
   if (task?.assigneeUserId && task.assigneeUserId === profileId) return true;
-  return contextIds.filter(Boolean).includes(task?.contextId);
+  const profileContextIds = contextIds.filter(Boolean);
+  if (profileContextIds.includes(task?.contextId)) return true;
+  const taskAssignees = Array.isArray(task?.assignees) ? task.assignees.filter(Boolean) : [];
+  return taskAssignees.some(
+    (assigneeId) => assigneeId === profileId || profileContextIds.includes(assigneeId)
+  );
 };
 var TASK_ROOM_STATE_VERSION = 3;
 var getTaskRoomDefaults = ({ preferMine = false } = {}) => ({
@@ -1835,7 +1889,31 @@ function App() {
   }).sort(
     (a, b) => (a.name || "").localeCompare(b.name || "", "es", { sensitivity: "base" })
   );
-  const defaultManagementAssigneeId = currentUserProfile?.id && !["anonymous", "pending-user"].includes(currentUserProfile.id) && managementUsers.some((item) => item.id === currentUserProfile.id) ? currentUserProfile.id : "";
+  const accountTaskAssignees = buildOrganizationTaskAssignees(
+    managers,
+    managementUsers,
+    "linkedManagerId"
+  );
+  const editingTaskAssignees = buildOrganizationTaskAssignees(
+    editors,
+    managementUsers,
+    "linkedEditorId"
+  );
+  const currentManagementAssignee = findCurrentUserTaskAssignee(
+    currentUserProfile,
+    managementUsers
+  );
+  const currentAccountAssignee = findCurrentUserTaskAssignee(
+    currentUserProfile,
+    accountTaskAssignees
+  );
+  const currentEditingAssignee = findCurrentUserTaskAssignee(
+    currentUserProfile,
+    editingTaskAssignees
+  );
+  const defaultManagementAssigneeId = currentManagementAssignee?.id && !["anonymous", "pending-user"].includes(currentManagementAssignee.id) ? currentManagementAssignee.id : "";
+  const defaultAccountAssigneeId = currentAccountAssignee?.id || "";
+  const defaultEditingAssigneeId = currentEditingAssignee?.id || "";
   const privilegedUsers = appUsers.filter(
     (item) => item.isActive !== false && ["super_admin", "operations"].includes(item.role)
   );
@@ -3800,7 +3878,9 @@ function App() {
       });
   };
   const addAccountTask = async (data) => {
-    const manager = managers.find((item) => item.id === data.contextId);
+    const assignee = accountTaskAssignees.find(
+      (item) => item.id === data.contextId && item.isActive !== false
+    );
     await runMutation({
       permission: "create_account_tasks",
       action: "create",
@@ -3810,7 +3890,7 @@ function App() {
       successMessage: "Agendado",
       execute: () => addDoc(dataCollection("account_tasks"), {
         ...data,
-        assigneeUserId: manager?.userId || "",
+        assigneeUserId: assignee?.assigneeUserId || "",
         notificationsEnabled: data.notificationsEnabled !== false,
         status: "por_disenar",
         createdAt: nowIso(),
@@ -3820,7 +3900,9 @@ function App() {
     });
   };
   const updateAccountTask = async (id, data) => {
-    const manager = managers.find((item) => item.id === data.contextId);
+    const assignee = accountTaskAssignees.find(
+      (item) => item.id === data.contextId && item.isActive !== false
+    );
     const existingTask = accountTasks.find((item) => item.id === id);
     const historicalOwnerPatch = existingTask && isAccountTaskDone(existingTask) && (!existingTask.ownerAtCompletionId || !existingTask.dueDateAtCompletion) ? {
       ownerAtCompletionId: existingTask.ownerAtCompletionId || existingTask.contextId || "",
@@ -3836,7 +3918,7 @@ function App() {
       successMessage: "Guardado",
       execute: () => updateDoc(dataDoc("account_tasks", id), {
         ...data,
-        assigneeUserId: manager?.userId || "",
+        assigneeUserId: assignee?.assigneeUserId || "",
         ...historicalOwnerPatch,
         updatedAt: nowIso()
       }),
@@ -3867,7 +3949,9 @@ function App() {
     }
   };
   const addEditingTask = async (data) => {
-    const editor = editors.find((item) => item.id === data.contextId);
+    const assignee = editingTaskAssignees.find(
+      (item) => item.id === data.contextId && item.isActive !== false
+    );
     const stamp = nowIso();
     const initialStatus = data.status || "editar";
     const initialTask = { ...data, status: initialStatus };
@@ -3884,7 +3968,7 @@ function App() {
       execute: () => addDoc(dataCollection("editing"), {
         ...data,
         hierarchy: data.hierarchy || getEditingHierarchyId(data),
-        assigneeUserId: editor?.userId || "",
+        assigneeUserId: assignee?.assigneeUserId || "",
         notificationsEnabled: data.notificationsEnabled !== false,
         status: initialStatus,
         ...getStatusTimestampPatch(
@@ -3901,7 +3985,9 @@ function App() {
     });
   };
   const updateEditingTask = async (id, data) => {
-    const editor = editors.find((item) => item.id === data.contextId);
+    const assignee = editingTaskAssignees.find(
+      (item) => item.id === data.contextId && item.isActive !== false
+    );
     const existingTask = editingTasks.find((item) => item.id === id);
     const stamp = nowIso();
     const statusPatch = existingTask?.status && data.status && existingTask.status !== data.status ? getStatusTimestampPatch(
@@ -3922,7 +4008,7 @@ function App() {
       execute: () => updateDoc(dataDoc("editing", id), {
         ...data,
         hierarchy: data.hierarchy || getEditingHierarchyId(data),
-        assigneeUserId: editor?.userId || "",
+        assigneeUserId: assignee?.assigneeUserId || "",
         ...statusPatch,
         updatedAt: stamp
       }),
@@ -4066,12 +4152,17 @@ function App() {
     };
     const col = colMap[type];
     if (!col) return;
+    const assigneePool = type === "accountTask" ? accountTaskAssignees : type === "editingTask" ? editingTaskAssignees : managementUsers;
+    const assignee = assigneePool.find(
+      (item) => item.id === contextId && item.isActive !== false
+    );
     const historicalOwnerPatch = type === "accountTask" && isAccountTaskDone(task) && (!task.ownerAtCompletionId || !task.dueDateAtCompletion) ? {
       ownerAtCompletionId: task.ownerAtCompletionId || task.contextId || "",
       dueDateAtCompletion: task.dueDateAtCompletion || normalizeDateOnlyString(task.date)
     } : {};
     await updateDoc(dataDoc(col, task.id), {
       contextId: contextId || null,
+      assigneeUserId: assignee?.assigneeUserId || assignee?.id || "",
       ...historicalOwnerPatch,
       updatedAt: nowIso()
     });
@@ -5535,13 +5626,16 @@ function App() {
         AccountRoomView,
         {
           tasks: accountTasks,
-          managers,
+          managers: accountTaskAssignees,
           clients,
           currentUserProfile,
           onAdd: (dateStr) => setModalConfig({
             isOpen: true,
             type: "accountTask",
-            data: { date: dateStr }
+            data: {
+              date: dateStr,
+              contextId: defaultAccountAssigneeId
+            }
           }),
           onEdit: (task) => setModalConfig({
             isOpen: true,
@@ -5571,13 +5665,16 @@ function App() {
         EditionsRoomView,
         {
           tasks: editingTasks,
-          editors,
+          editors: editingTaskAssignees,
           clients,
           currentUserProfile,
           onAdd: (dateStr) => setModalConfig({
             isOpen: true,
             type: "editingTask",
-            data: { date: dateStr }
+            data: {
+              date: dateStr,
+              contextId: defaultEditingAssigneeId
+            }
           }),
           onEdit: (task) => setModalConfig({
             isOpen: true,
@@ -5806,8 +5903,8 @@ function App() {
       config: modalConfig,
       onClose: closeModal,
       clients,
-      managers,
-      editors,
+      managers: accountTaskAssignees,
+      editors: editingTaskAssignees,
       managementUsers,
       actions: {
         addClient,
@@ -5886,8 +5983,8 @@ function App() {
       onClose: () => setDayDetailsModal({ isOpen: false, date: null }),
       activities: allActivities,
       clients,
-      managers,
-      editors,
+      managers: accountTaskAssignees,
+      editors: editingTaskAssignees,
       users: managementUsers,
       canEditActivity,
       onEdit: (act, type) => setModalConfig({ isOpen: true, type, data: act, isEdit: true }),
@@ -5899,8 +5996,8 @@ function App() {
       config: taskDetailConfig,
       onClose: () => setTaskDetailConfig({ isOpen: false, task: null, type: null }),
       clients,
-      managers,
-      editors,
+      managers: accountTaskAssignees,
+      editors: editingTaskAssignees,
       users: managementUsers,
       canEdit: (type) => canEditActivity(type),
       onEdit: (task, type) => {
@@ -7166,7 +7263,7 @@ var TeamView = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const filteredTeam = team.filter(
-    (p) => p.name.toLowerCase().includes(searchTerm.toLowerCase())
+    (person) => person.isActive !== false && person.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
   return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row justify-between items-start md:items-center gap-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl md:text-3xl font-black text-slate-800 dark:text-white" }, title), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col md:flex-row w-full md:w-auto gap-3" }, /* @__PURE__ */ React.createElement(
     SearchBar,
@@ -8285,6 +8382,10 @@ var EditionsRoomView = ({
     currentUserProfile,
     "manage_editing_tasks"
   );
+  const canCreateEditingTasks = userHasPermission(
+    currentUserProfile,
+    "create_editing_tasks"
+  );
   const handleAddTask = (dateStr) => {
     const nextDate = normalizeDateOnlyString(dateStr) || todayStr;
     setCurrentDate(nextDate);
@@ -8488,7 +8589,7 @@ var EditionsRoomView = ({
     {
       groups: editingGroups,
       onAdd: () => handleAddTask(defaultAddDate),
-      canAdd: canManageEditingTasks,
+      canAdd: canCreateEditingTasks,
       renderTask: renderEditingTask,
       onDragOver: handleDragOver,
       onDragLeave: handleDragLeave,
@@ -12214,6 +12315,9 @@ var TaskDetailModal = ({
   ];
   const currentPriority = PRIORITIES.find((p) => p.id === task.priority);
   const peoplePool = type === "accountTask" ? managers : type === "editingTask" ? editors : users;
+  const activePeoplePool = peoplePool.filter(
+    (person) => person.isActive !== false
+  );
   const allMentionables = [
     ...users || [],
     ...managers || [],
@@ -12823,7 +12927,7 @@ var TaskDetailModal = ({
           "data-dropdown": true
         },
         /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 px-4 pt-2 pb-1 sticky top-0 bg-white dark:bg-slate-800" }, "Asignar a"),
-        peoplePool.map((p) => {
+        activePeoplePool.map((p) => {
           const isChecked = currentAssigneeIds.includes(p.id);
           return /* @__PURE__ */ React.createElement(
             "button",
@@ -13225,7 +13329,7 @@ var CreateTaskModal = ({
     return () => document.removeEventListener("mousedown", h);
   }, [assigneeOpen, clientOpen, priorityOpen]);
   if (!isTaskDialogOpen) return null;
-  const peoplePool = type === "accountTask" ? managers : type === "editingTask" ? editors : managementUsers;
+  const peoplePool = (type === "accountTask" ? managers : type === "editingTask" ? editors : managementUsers).filter((person) => person.isActive !== false);
   const assignee = peoplePool.find((p) => p.id === assigneeId);
   const client = clients.find((c) => c.id === clientId);
   const tagColor = type === "accountTask" ? "indigo" : type === "managementTask" ? "violet" : "amber";
@@ -14017,7 +14121,7 @@ var Modal = ({
           className: "w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none"
         },
         /* @__PURE__ */ React.createElement("option", { value: "" }, "Asignar Manager (Opcional)"),
-        managers.map((m) => /* @__PURE__ */ React.createElement("option", { key: m.id, value: m.id }, m.name))
+        managers.filter((manager) => manager.isActive !== false).map((m) => /* @__PURE__ */ React.createElement("option", { key: m.id, value: m.id }, m.name))
       )), type === "manager" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(PhotoUploader, { defaultValue: data?.photo }), /* @__PURE__ */ React.createElement(
         Input,
         {
@@ -14118,7 +14222,7 @@ var Modal = ({
           className: "w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none"
         },
         /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecciona Manager..."),
-        managers.map((m) => /* @__PURE__ */ React.createElement("option", { key: m.id, value: m.id }, m.name))
+        managers.filter((manager) => manager.isActive !== false).map((m) => /* @__PURE__ */ React.createElement("option", { key: m.id, value: m.id }, m.name))
       ), /* @__PURE__ */ React.createElement(
         "textarea",
         {
@@ -14206,7 +14310,7 @@ var Modal = ({
           className: "w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-purple-500 outline-none"
         },
         /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecciona Editor..."),
-        editors.map((e) => /* @__PURE__ */ React.createElement("option", { key: e.id, value: e.id }, e.name))
+        editors.filter((editor) => editor.isActive !== false).map((e) => /* @__PURE__ */ React.createElement("option", { key: e.id, value: e.id }, e.name))
       ), /* @__PURE__ */ React.createElement(
         "textarea",
         {
@@ -14260,7 +14364,7 @@ var Modal = ({
           className: selectClassName
         },
         /* @__PURE__ */ React.createElement("option", { value: "" }, managementUsers.length > 0 ? "Selecciona integrante..." : "Cargando integrantes..."),
-        managementUsers.map((member) => /* @__PURE__ */ React.createElement("option", { key: member.id, value: member.id }, member.name, member.email ? ` (${member.email})` : ""))
+        managementUsers.filter((member) => member.isActive !== false).map((member) => /* @__PURE__ */ React.createElement("option", { key: member.id, value: member.id }, member.name, member.email ? ` (${member.email})` : ""))
       ), /* @__PURE__ */ React.createElement(
         "select",
         {
