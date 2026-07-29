@@ -20356,8 +20356,6 @@ const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], m
   const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   const [fromDate, setFromDate] = useState(firstOfMonth);
   const [toDate, setToDate] = useState(todayStr);
-  const [selectedPersonKey, setSelectedPersonKey] = useState("");
-  const [viewMode, setViewMode] = useState("simplified");
   const [searchTerm, setSearchTerm] = useState("");
   const [personGroupFilter, setPersonGroupFilter] = useState("all");
 
@@ -20369,22 +20367,8 @@ const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], m
     );
   };
 
-  const matchesSelectedPerson = (task, type) => {
-    if (!selectedPersonKey) return true;
-    const [personType, personId] = selectedPersonKey.split(":");
-    if (personType === "editor") return type === "editing" && task.contextId === personId;
-    if (personType === "manager") return type === "account" && task.contextId === personId;
-    return false;
-  };
-
-  const filteredEditingTasks = editingTasks.filter((task) => {
-    if (!inRange(task.date)) return false;
-    return matchesSelectedPerson(task, "editing");
-  });
-  const filteredAccountTasks = accountTasks.filter((task) => {
-    if (!inRange(task.date)) return false;
-    return matchesSelectedPerson(task, "account");
-  });
+  const filteredEditingTasks = editingTasks.filter((task) => inRange(task.date));
+  const filteredAccountTasks = accountTasks.filter((task) => inRange(task.date));
 
   const userById = new Map(users.map((item) => [item.id, item]));
   const userByEditorId = new Map(
@@ -20467,6 +20451,7 @@ const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], m
         published,
         inRevision,
         inProgress,
+        pending: Math.max(total - delivered, 0),
         deliveryPerformance,
         approvalPerformance,
         publicationPerformance,
@@ -20520,6 +20505,7 @@ const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], m
         delivered,
         published,
         inProgress,
+        pending: Math.max(total - delivered, 0),
         deliveryPerformance,
         approvalPerformance,
         publicationPerformance,
@@ -20553,26 +20539,6 @@ const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], m
     );
   }, [normalizedSearch, personGroupFilter, personStats]);
 
-  const simplifiedPersonGroups = useMemo(() => {
-    const editors = [...visiblePersonStats]
-      .filter((person) => person.kind === "editor")
-      .sort(
-        (left, right) =>
-          right.overallPerformance - left.overallPerformance ||
-          right.total - left.total ||
-          String(left.name || "").localeCompare(String(right.name || "")),
-      );
-    const managers = [...visiblePersonStats]
-      .filter((person) => person.kind === "manager")
-      .sort(
-        (left, right) =>
-          right.overallPerformance - left.overallPerformance ||
-          right.total - left.total ||
-          String(left.name || "").localeCompare(String(right.name || "")),
-      );
-    return { editors, managers };
-  }, [visiblePersonStats]);
-
   const totalTasks = filteredEditingTasks.length + filteredAccountTasks.length;
   const deliveredTasks =
     filteredEditingTasks.filter(isEditingDeliveredTask).length +
@@ -20586,382 +20552,258 @@ const PerformanceView = ({ accountTasks = [], editingTasks = [], editors = [], m
           visiblePersonStats.length,
       )
     : 0;
-
-  const peopleOptions = [
-    { value: "", label: "Todos" },
-    ...editors.map((editor) => ({
-      value: `editor:${editor.id}`,
-      label: `Editor - ${editor.name || "Sin nombre"}`,
-    })),
-    ...managers.map((manager) => ({
-      value: `manager:${manager.id}`,
-      label: `Account Manager - ${manager.name || "Sin nombre"}`,
-    })),
-  ];
-
-  const rowStyle = (i) =>
-    i % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : "";
+  const deliveryRate = totalTasks
+    ? Math.round((deliveredTasks / totalTasks) * 100)
+    : 0;
+  const peopleNeedingAttention = visiblePersonStats.filter(
+    (person) => person.overallPerformance < 60 || person.pending > 0,
+  ).length;
+  const groupLabel =
+    personGroupFilter === "editors"
+      ? "Editores"
+      : personGroupFilter === "managers"
+        ? "Community Managers"
+        : "Todo el equipo";
 
   return (
-    <div className="space-y-6 fade-in">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <p className="eyebrow">Rendimiento</p>
-          <h2 className="text-2xl font-black text-slate-800 dark:text-white">
-            Rendimiento de Editores y Community Managers
-          </h2>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
-            Un resumen del avance de tareas y la capacidad de entrega dentro del rango de fechas seleccionado, tanto para edición como para accounts.
+    <section className="performance-dashboard fade-in">
+      <header className="performance-header">
+        <div className="performance-heading">
+          <p className="eyebrow">Editores y Community Managers</p>
+          <h2>Rendimiento del equipo</h2>
+          <p>
+            Entregas, publicaciones y carga pendiente en una sola lectura.
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <select
-              value={selectedPersonKey}
-              onChange={(e) => setSelectedPersonKey(e.target.value)}
-              className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 outline-none"
-            >
-              {peopleOptions.map((option) => (
-                <option key={option.value || "all"} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            {selectedPersonKey && (
-              <button
-                type="button"
-                onClick={() => setSelectedPersonKey("")}
-                className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-              >
-                Limpiar
-              </button>
-            )}
+
+        <div className="performance-period" aria-label="Rango del reporte">
+          <label>
+            <span>Desde</span>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(event) => setFromDate(event.target.value)}
+            />
+          </label>
+          <span aria-hidden="true">→</span>
+          <label>
+            <span>Hasta</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(event) => setToDate(event.target.value)}
+            />
+          </label>
+        </div>
+      </header>
+
+      <section
+        className="performance-overview"
+        aria-label="Resumen de rendimiento"
+      >
+        <div className="performance-primary-metric">
+          <p>KPI promedio</p>
+          <strong>{averagePerformance}%</strong>
+          <span>
+            {groupLabel} · {visiblePersonStats.length} personas
+          </span>
+          <small>
+            Publicación 60% · aprobación 20% · entrega 15% · actividad 5%
+          </small>
+        </div>
+
+        <dl className="performance-metric-list">
+          <div>
+            <dt>Entregadas</dt>
+            <dd>
+              {deliveredTasks}
+              <span>/{totalTasks}</span>
+            </dd>
+            <small>{deliveryRate}% del trabajo</small>
           </div>
-          <label className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 min-w-[220px]">
-            <Search size={14} className="text-slate-400" />
+          <div>
+            <dt>Publicadas</dt>
+            <dd>{publishedTasks}</dd>
+            <small>finalizadas en el rango</small>
+          </div>
+          <div className={peopleNeedingAttention > 0 ? "has-attention" : ""}>
+            <dt>Necesitan atención</dt>
+            <dd>{peopleNeedingAttention}</dd>
+            <small>KPI bajo o tareas abiertas</small>
+          </div>
+        </dl>
+      </section>
+
+      <div className="performance-toolbar">
+        <div
+          className="performance-group-filter"
+          role="tablist"
+          aria-label="Filtrar por función"
+        >
+          {[
+            { id: "all", label: "Todos" },
+            { id: "editors", label: "Editores" },
+            { id: "managers", label: "Community Managers" },
+          ].map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              role="tab"
+              aria-selected={personGroupFilter === option.id}
+              className={personGroupFilter === option.id ? "is-active" : ""}
+              onClick={() => setPersonGroupFilter(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="performance-search-wrap">
+          <label className="performance-search">
+            <Icon name="Search" size={16} />
             <input
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por nombre"
-              className="w-full bg-transparent text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none placeholder:text-slate-400"
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Buscar persona"
+              aria-label="Buscar persona"
             />
             {searchTerm && (
               <button
                 type="button"
                 onClick={() => setSearchTerm("")}
-                className="text-slate-400 transition-colors hover:text-slate-600"
+                aria-label="Limpiar búsqueda"
               >
-                <X size={13} />
+                <Icon name="X" size={14} />
               </button>
             )}
           </label>
-          <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
+          {(searchTerm || personGroupFilter !== "all") && (
             <button
               type="button"
-              onClick={() => setPersonGroupFilter("all")}
-              className={`rounded-lg px-3 py-2 text-sm font-bold transition-colors ${personGroupFilter === "all" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`}
+              className="performance-reset"
+              onClick={() => {
+                setSearchTerm("");
+                setPersonGroupFilter("all");
+              }}
             >
-              Todos
+              Limpiar filtros
             </button>
-            <button
-              type="button"
-              onClick={() => setPersonGroupFilter("editors")}
-              className={`rounded-lg px-3 py-2 text-sm font-bold transition-colors ${personGroupFilter === "editors" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`}
-            >
-              Editores
-            </button>
-            <button
-              type="button"
-              onClick={() => setPersonGroupFilter("managers")}
-              className={`rounded-lg px-3 py-2 text-sm font-bold transition-colors ${personGroupFilter === "managers" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`}
-            >
-              Community Managers
-            </button>
-          </div>
-          <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
-            <button
-              type="button"
-              onClick={() => setViewMode("simplified")}
-              className={`rounded-lg px-3 py-2 text-sm font-bold transition-colors ${viewMode === "simplified" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`}
-            >
-              Simplificado
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("detailed")}
-              className={`rounded-lg px-3 py-2 text-sm font-bold transition-colors ${viewMode === "detailed" ? "bg-slate-900 text-white dark:bg-slate-700" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`}
-            >
-              Detalle
-            </button>
-          </div>
-          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
-            <span className="text-xs font-black text-slate-500 uppercase">Desde</span>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none"
-            />
-          </div>
-          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5">
-            <span className="text-xs font-black text-slate-500 uppercase">Hasta</span>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none"
-            />
-          </div>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <ReportStatCard
-          label="Tareas del rango"
-          value={totalTasks}
-          color="amber"
-          icon="Video"
-          sub="edición + accounts"
-        />
-        <ReportStatCard
-          label="Entregadas"
-          value={deliveredTasks}
-          color="emerald"
-          icon="CheckCircle2"
-          sub="aprobadas o publicadas"
-        />
-        <ReportStatCard
-          label="Publicadas"
-          value={publishedTasks}
-          color="indigo"
-          icon="Sparkles"
-          sub="finalizadas en el rango"
-        />
-        <ReportStatCard
-          label="Rendimiento promedio"
-          value={`${averagePerformance}%`}
-          color="purple"
-          icon="BarChart3"
-          sub="promedio por persona"
-        />
-      </div>
-
-      <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-        El porcentaje de rendimiento prioriza lo que realmente mueve el negocio: publicaciones, luego entregas y aprobaciones, con un ajuste menor por frecuencia de login.
-      </p>
-
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-        {visiblePersonStats.length === 0 ? (
-          <div className="p-16 text-center text-slate-500 font-bold">
-            Sin coincidencias para este filtro de búsqueda
+      <section
+        className="performance-ranking"
+        aria-labelledby="performance-ranking-title"
+      >
+        <header className="performance-ranking-header">
+          <div>
+            <h3 id="performance-ranking-title">Equipo</h3>
+            <p>Ordenado por KPI. Lo pendiente queda visible sin abrir otra vista.</p>
           </div>
-        ) : viewMode === "simplified" ? (
-          <div className="space-y-6 p-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  Vista simplificada
-                </p>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  Mostrando {visiblePersonStats.length} personas filtradas por nombre y por el rango activo.
-                </p>
-              </div>
-              <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
-                {visiblePersonStats.length} resultados
-              </div>
-            </div>
-            <div className="grid gap-6 xl:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                      Editores
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                      {simplifiedPersonGroups.editors.length} personas
-                    </p>
-                  </div>
-                  <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                    {simplifiedPersonGroups.editors.length > 0 ? "Activos" : "Sin datos"}
-                  </div>
-                </div>
-                {simplifiedPersonGroups.editors.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-                    No hay editores para mostrar
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {simplifiedPersonGroups.editors.map((person) => (
-                      <div
-                        key={`${person.kind}-${person.id}`}
-                        className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-black text-slate-800 dark:text-white">{person.name}</p>
-                            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                              {person.kindLabel}
-                            </p>
-                          </div>
-                          <span className={`rounded-full px-3 py-1 text-sm font-black ${person.overallPerformance >= 80 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : person.overallPerformance >= 50 ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400" : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400"}`}>
-                            {person.overallPerformance}%
-                          </span>
-                        </div>
-                        <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
-                          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
-                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Total</p>
-                            <p className="mt-1 font-black text-slate-800 dark:text-white">{person.total}</p>
-                          </div>
-                          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
-                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Entregadas</p>
-                            <p className="mt-1 font-black text-emerald-600 dark:text-emerald-400">{person.delivered}</p>
-                          </div>
-                          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
-                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Publicadas</p>
-                            <p className="mt-1 font-black text-indigo-600 dark:text-indigo-400">{person.published}</p>
-                          </div>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                          <span>{person.lastSeenAt ? `Último login: ${normalizeDateOnlyString(person.lastSeenAt)}` : "Sin registro de login"}</span>
-                          <span>{person.daysSinceLogin === null ? "—" : `${person.daysSinceLogin} días`}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                      Community Managers
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                      {simplifiedPersonGroups.managers.length} personas
-                    </p>
-                  </div>
-                  <div className="rounded-full bg-violet-100 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">
-                    {simplifiedPersonGroups.managers.length > 0 ? "Activos" : "Sin datos"}
-                  </div>
-                </div>
-                {simplifiedPersonGroups.managers.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-                    No hay community managers para mostrar
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {simplifiedPersonGroups.managers.map((person) => (
-                      <div
-                        key={`${person.kind}-${person.id}`}
-                        className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-black text-slate-800 dark:text-white">{person.name}</p>
-                            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                              {person.kindLabel}
-                            </p>
-                          </div>
-                          <span className={`rounded-full px-3 py-1 text-sm font-black ${person.overallPerformance >= 80 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : person.overallPerformance >= 50 ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400" : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400"}`}>
-                            {person.overallPerformance}%
-                          </span>
-                        </div>
-                        <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
-                          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
-                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Total</p>
-                            <p className="mt-1 font-black text-slate-800 dark:text-white">{person.total}</p>
-                          </div>
-                          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
-                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Entregadas</p>
-                            <p className="mt-1 font-black text-emerald-600 dark:text-emerald-400">{person.delivered}</p>
-                          </div>
-                          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
-                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Publicadas</p>
-                            <p className="mt-1 font-black text-indigo-600 dark:text-indigo-400">{person.published}</p>
-                          </div>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                          <span>{person.lastSeenAt ? `Último login: ${normalizeDateOnlyString(person.lastSeenAt)}` : "Sin registro de login"}</span>
-                          <span>{person.daysSinceLogin === null ? "—" : `${person.daysSinceLogin} días`}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+          <span>{visiblePersonStats.length} resultados</span>
+        </header>
+
+        {visiblePersonStats.length === 0 ? (
+          <div className="performance-empty">
+            <span>
+              <Icon name="Users" size={20} />
+            </span>
+            <div>
+              <strong>Sin resultados</strong>
+              <p>Ajusta la búsqueda, el equipo o el rango de fechas.</p>
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px]">
-              <thead>
-                <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-                  <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500">Persona</th>
-                  <th className="text-left p-4 text-xs font-black uppercase tracking-widest text-slate-500">Tipo</th>
-                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Total</th>
-                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">En Progreso</th>
-                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Entregadas</th>
-                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Publicadas</th>
-                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Último login</th>
-                  <th className="text-center p-4 text-xs font-black uppercase tracking-widest text-slate-500">Rendimiento</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visiblePersonStats.map((person, index) => (
-                  <tr
-                    key={`${person.kind}-${person.id}`}
-                    className={`border-b border-slate-50 dark:border-slate-800/50 ${rowStyle(index)}`}
+          <div className="performance-person-list">
+            <div className="performance-column-head" aria-hidden="true">
+              <span />
+              <span>Persona</span>
+              <span>KPI</span>
+              <span>Publicadas</span>
+              <span>Pendientes</span>
+              <span>Actividad</span>
+            </div>
+
+            {visiblePersonStats.map((person, index) => {
+              const initials = String(person.name || "Usuario")
+                .trim()
+                .split(/\s+/)
+                .slice(0, 2)
+                .map((part) => part[0])
+                .join("")
+                .toUpperCase();
+              const activityLabel =
+                person.daysSinceLogin === null
+                  ? "Sin registro"
+                  : person.daysSinceLogin === 0
+                    ? "Hoy"
+                    : person.daysSinceLogin === 1
+                      ? "Ayer"
+                      : `${person.daysSinceLogin} días`;
+              const scoreTone =
+                person.overallPerformance >= 80
+                  ? "is-strong"
+                  : person.overallPerformance >= 60
+                    ? "is-steady"
+                    : "is-attention";
+
+              return (
+                <article
+                  key={`${person.kind}-${person.id}`}
+                  className={`performance-person-row ${index === 0 ? "is-leading" : ""}`}
+                  aria-label={`${person.name}: KPI ${person.overallPerformance}%`}
+                >
+                  <span className="performance-rank">#{index + 1}</span>
+
+                  <div className="performance-person">
+                    <span className="performance-avatar" aria-hidden="true">
+                      {initials}
+                    </span>
+                    <span>
+                      <strong>{person.name}</strong>
+                      <small>{person.kindLabel}</small>
+                    </span>
+                  </div>
+
+                  <div className={`performance-person-kpi ${scoreTone}`}>
+                    <span>
+                      <strong>{person.overallPerformance}%</strong>
+                      <small>{person.deliveryPerformance}% entregado</small>
+                    </span>
+                    <span className="performance-kpi-track" aria-hidden="true">
+                      <span
+                        style={{ width: `${person.overallPerformance}%` }}
+                      />
+                    </span>
+                  </div>
+
+                  <div className="performance-person-output">
+                    <strong>
+                      {person.published}
+                      <span>/{person.total}</span>
+                    </strong>
+                    <small>publicadas</small>
+                  </div>
+
+                  <div
+                    className={`performance-person-pending ${person.pending > 0 ? "has-pending" : ""}`}
                   >
-                    <td className="p-4 font-bold text-slate-800 dark:text-white">{person.name}</td>
-                    <td className="p-4 text-sm font-semibold text-slate-600 dark:text-slate-300">{person.kindLabel}</td>
-                    <td className="p-4 text-center font-black text-slate-800 dark:text-white">{person.total}</td>
-                    <td className="p-4 text-center text-slate-500 dark:text-slate-400">{person.inProgress}</td>
-                    <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">{person.delivered}</td>
-                    <td className="p-4 text-center font-bold text-indigo-600 dark:text-indigo-400">{person.published}</td>
-                    <td className="p-4 text-center text-slate-500 dark:text-slate-400">
-                      {person.lastSeenAt ? (
-                        <span className="block text-sm font-bold text-slate-800 dark:text-white">
-                          {normalizeDateOnlyString(person.lastSeenAt)}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-slate-400">Sin registro</span>
-                      )}
-                      {person.daysSinceLogin !== null && (
-                        <span className="block text-xs text-slate-500 dark:text-slate-400">
-                          {person.daysSinceLogin} días
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${
-                              person.overallPerformance >= 80
-                                ? "bg-emerald-500"
-                                : person.overallPerformance >= 50
-                                ? "bg-amber-500"
-                                : "bg-red-500"
-                            }`}
-                            style={{ width: `${person.overallPerformance}%` }}
-                          />
-                        </div>
-                        <span className="w-10 text-right text-sm font-black text-slate-800 dark:text-white">
-                          {person.overallPerformance}%
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[11px] text-center text-slate-500 dark:text-slate-400">
-                        {person.deliveryPerformance}% entregadas · {person.approvalPerformance}% aprobadas · {person.publicationPerformance}% publicadas
-                      </p>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    <strong>{person.pending}</strong>
+                    <small>sin entregar</small>
+                  </div>
+
+                  <div className="performance-person-activity">
+                    <strong>{activityLabel}</strong>
+                    <small>último acceso</small>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
-      </div>
-    </div>
+      </section>
+    </section>
   );
 };
 
