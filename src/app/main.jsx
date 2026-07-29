@@ -1772,6 +1772,40 @@ const createIncomingCallRingtone = () => {
   };
 };
 
+const THEME_PALETTES = [
+  {
+    id: "botanical",
+    name: "Botánica",
+    description: "Marfil, bosque y lima editorial",
+    swatches: ["#f4f6f1", "#fcfdf9", "#5e7415", "#1c241e"],
+    darkSwatches: ["#0e120f", "#151a16", "#c3e15b", "#eff3ea"],
+  },
+  {
+    id: "ocean",
+    name: "Océano",
+    description: "Niebla, petróleo y turquesa",
+    swatches: ["#f1f5f7", "#f9fcfd", "#176b73", "#14242b"],
+    darkSwatches: ["#091216", "#101c21", "#69d4d0", "#edf6f7"],
+  },
+  {
+    id: "plum",
+    name: "Ciruela",
+    description: "Lavanda mineral y mora suave",
+    swatches: ["#f7f3f8", "#fefbfe", "#79527f", "#281d2b"],
+    darkSwatches: ["#130d15", "#1b131d", "#d69cdd", "#f6eff7"],
+  },
+  {
+    id: "clay",
+    name: "Arcilla",
+    description: "Arena cálida y terracota",
+    swatches: ["#f7f2ec", "#fffdf9", "#9b4b32", "#2a211c"],
+    darkSwatches: ["#140e0b", "#1d1511", "#f09a72", "#f7f0e9"],
+  },
+];
+const THEME_PALETTE_IDS = new Set(THEME_PALETTES.map((palette) => palette.id));
+const normalizeThemePalette = (value) =>
+  THEME_PALETTE_IDS.has(value) ? value : "botanical";
+
 // --- APP PRINCIPAL ---
 function App() {
   const [user, setUser] = useState(null);
@@ -1779,18 +1813,12 @@ function App() {
   const [toast, setToast] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const [isDark, setIsDark] = useState(() => {
-    const darkDefaultVersion = "2026-07-charcoal-default";
-    const appliedDefaultVersion = localStorage.getItem(
-      "cluster_theme_default_version",
-    );
-    if (appliedDefaultVersion !== darkDefaultVersion) {
-      localStorage.setItem("cluster_theme", "dark");
-      localStorage.setItem("cluster_theme_default_version", darkDefaultVersion);
-      return true;
-    }
-    return localStorage.getItem("cluster_theme") !== "light";
-  });
+  const [isDark, setIsDark] = useState(
+    () => localStorage.getItem("cluster_theme") !== "light",
+  );
+  const [themePalette, setThemePalette] = useState(() =>
+    normalizeThemePalette(localStorage.getItem("cluster_palette")),
+  );
   const [view, setView] = useState(
     () => localStorage.getItem("cluster_os_view") || "dashboard",
   );
@@ -2006,6 +2034,25 @@ function App() {
   const profileBlocked = Boolean(
     currentUserProfile && currentUserProfile.isActive === false,
   );
+
+  useEffect(() => {
+    if (
+      !currentUserProfile?.id ||
+      currentUserProfile.pending ||
+      currentUserProfile.isAnonymous
+    )
+      return;
+    if (THEME_PALETTE_IDS.has(currentUserProfile.themePalette)) {
+      setThemePalette(currentUserProfile.themePalette);
+    }
+    if (["light", "dark"].includes(currentUserProfile.themeMode)) {
+      setIsDark(currentUserProfile.themeMode === "dark");
+    }
+  }, [
+    currentUserProfile?.id,
+    currentUserProfile?.themePalette,
+    currentUserProfile?.themeMode,
+  ]);
 
   // Activa notificaciones del sistema. En web se solicita permiso desde la
   // primera interacción válida; en la app nativa se registran canales y push.
@@ -2591,14 +2638,11 @@ function App() {
 
   useEffect(() => {
     const html = document.documentElement;
-    if (isDark) {
-      html.classList.add("dark");
-      localStorage.setItem("cluster_theme", "dark");
-    } else {
-      html.classList.remove("dark");
-      localStorage.setItem("cluster_theme", "light");
-    }
-  }, [isDark]);
+    html.classList.toggle("dark", isDark);
+    html.dataset.palette = themePalette;
+    localStorage.setItem("cluster_theme", isDark ? "dark" : "light");
+    localStorage.setItem("cluster_palette", themePalette);
+  }, [isDark, themePalette]);
 
   useEffect(() => {
     if (!auth) {
@@ -6229,13 +6273,20 @@ function App() {
       entityType: "user",
       entityId: currentUserProfile.id,
       description: "Actualiza su propio perfil",
-      changes: { name: data.name, profession: data.profession },
+      changes: {
+        name: data.name,
+        profession: data.profession,
+        themePalette: data.themePalette,
+        themeMode: data.themeMode,
+      },
       successMessage: "Perfil actualizado",
       execute: () =>
         updateDoc(dataDoc("users", currentUserProfile.id), {
           name: data.name || currentUserProfile.name || "",
           profession: data.profession || "",
           photo: data.photo || "",
+          themePalette: normalizeThemePalette(data.themePalette),
+          themeMode: data.themeMode === "light" ? "light" : "dark",
           updatedAt: nowIso(),
         }),
     });
@@ -7097,6 +7148,15 @@ function App() {
                 ""
               }
               onSave={updateMyProfile}
+              tasks={editingTasks}
+              accountTasks={accountTasks}
+              managementTasks={managementTasks}
+              themePalette={themePalette}
+              isDark={isDark}
+              onPaletteChange={(paletteId) =>
+                setThemePalette(normalizeThemePalette(paletteId))
+              }
+              onModeChange={(mode) => setIsDark(mode === "dark")}
             />
           )}
           {view === "general-calendar" && (
@@ -8268,6 +8328,53 @@ const DASHBOARD_PALETTE = {
 const getDashboardPalette = (name = "slate") =>
   DASHBOARD_PALETTE[name] || DASHBOARD_PALETTE.slate;
 
+const buildPersonalTaskList = ({
+  profile,
+  tasks = [],
+  accountTasks = [],
+  managementTasks = [],
+}) =>
+  [
+    ...tasks
+      .filter((task) =>
+        isTaskAssignedToProfile(task, profile, [profile?.linkedEditorId]),
+      )
+      .map((task) => ({
+        ...task,
+        _area: "Edición",
+        _taskType: "editingTask",
+        _room: "editions",
+        _done: isCompletedStatus(task.status),
+      })),
+    ...accountTasks
+      .filter((task) =>
+        isTaskAssignedToProfile(task, profile, [profile?.linkedManagerId]),
+      )
+      .map((task) => ({
+        ...task,
+        _area: "Accounts",
+        _taskType: "accountTask",
+        _room: "account-room",
+        _done:
+          task.status === "aprobado_internamente" ||
+          task.status === "publicado",
+      })),
+    ...managementTasks
+      .filter((task) => isTaskAssignedToProfile(task, profile, [profile?.id]))
+      .map((task) => ({
+        ...task,
+        _area: "Gestión",
+        _taskType: "managementTask",
+        _room: "management-room",
+        _done: task.status === "cerrado",
+      })),
+  ].sort((a, b) => {
+    if (a._done !== b._done) return a._done ? 1 : -1;
+    return String(a.date || "9999-12-31").localeCompare(
+      String(b.date || "9999-12-31"),
+    );
+  });
+
 // --- PANEL PERSONAL ---
 const DashboardView = ({
   clients = [],
@@ -8306,53 +8413,11 @@ const DashboardView = ({
   const clientNames = new Map(
     clients.map((client) => [client.id, client.name || "Sin cliente"]),
   );
-  const personalTasks = [
-    ...tasks
-      .filter((task) =>
-        isTaskAssignedToProfile(task, currentUserProfile, [
-          currentUserProfile?.linkedEditorId,
-        ]),
-      )
-      .map((task) => ({
-        ...task,
-        _area: "Edición",
-        _taskType: "editingTask",
-        _room: "editions",
-        _done: isCompletedStatus(task.status),
-      })),
-    ...accountTasks
-      .filter((task) =>
-        isTaskAssignedToProfile(task, currentUserProfile, [
-          currentUserProfile?.linkedManagerId,
-        ]),
-      )
-      .map((task) => ({
-        ...task,
-        _area: "Accounts",
-        _taskType: "accountTask",
-        _room: "account-room",
-        _done:
-          task.status === "aprobado_internamente" ||
-          task.status === "publicado",
-      })),
-    ...managementTasks
-      .filter((task) =>
-        isTaskAssignedToProfile(task, currentUserProfile, [
-          currentUserProfile?.id,
-        ]),
-      )
-      .map((task) => ({
-        ...task,
-        _area: "Gestión",
-        _taskType: "managementTask",
-        _room: "management-room",
-        _done: task.status === "cerrado",
-      })),
-  ].sort((a, b) => {
-    if (a._done !== b._done) return a._done ? 1 : -1;
-    return String(a.date || "9999-12-31").localeCompare(
-      String(b.date || "9999-12-31"),
-    );
+  const personalTasks = buildPersonalTaskList({
+    profile: currentUserProfile,
+    tasks,
+    accountTasks,
+    managementTasks,
   });
 
   const monthlyPersonalTasks = personalTasks.filter((task) =>
@@ -8763,81 +8828,314 @@ const DashboardView = ({
 };
 
 // Vista "Configuración" con la sección de Perfil (editar perfil propio).
-const ProfileSettingsView = ({ profile, roleLabel, onSave }) => {
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const fd = Object.fromEntries(new FormData(e.currentTarget).entries());
+const ProfileSettingsView = ({
+  profile,
+  roleLabel,
+  onSave,
+  tasks = [],
+  accountTasks = [],
+  managementTasks = [],
+  themePalette,
+  isDark,
+  onPaletteChange,
+  onModeChange,
+}) => {
+  const todayStr = getHondurasTodayStr();
+  const monthPeriod = getRankingMonthPeriod(todayStr);
+  const personalTasks = buildPersonalTaskList({
+    profile,
+    tasks,
+    accountTasks,
+    managementTasks,
+  });
+  const monthlyTasks = personalTasks.filter((task) =>
+    isDateWithinPeriod(task.date, monthPeriod),
+  );
+  const completedTasks = monthlyTasks.filter((task) => task._done);
+  const openTasks = personalTasks.filter((task) => !task._done);
+  const overdueTasks = openTasks.filter((task) =>
+    isDateBeforeDateString(task.date, todayStr),
+  );
+  const completionRate = monthlyTasks.length
+    ? Math.round((completedTasks.length / monthlyTasks.length) * 100)
+    : 0;
+  const profileFields = [
+    profile?.name,
+    profile?.email,
+    profile?.profession,
+    profile?.photo,
+  ];
+  const profileCompletion = Math.round(
+    (profileFields.filter(Boolean).length / profileFields.length) * 100,
+  );
+  const activePalette =
+    THEME_PALETTES.find((palette) => palette.id === themePalette) ||
+    THEME_PALETTES[0];
+  const workload = ["Accounts", "Gestión", "Edición"].map((area) => {
+    const count = openTasks.filter((task) => task._area === area).length;
+    return {
+      area,
+      count,
+      share: openTasks.length ? Math.round((count / openTasks.length) * 100) : 0,
+    };
+  });
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    const formData = Object.fromEntries(
+      new FormData(event.currentTarget).entries(),
+    );
     onSave({
-      name: fd.name || "",
-      profession: fd.profession || "",
-      photo: fd.photo || "",
+      name: formData.name || "",
+      profession: formData.profession || "",
+      photo: formData.photo || "",
+      themePalette,
+      themeMode: isDark ? "dark" : "light",
     });
   };
+
+  const displayName = profile?.name?.trim() || "Usuario";
+  const initials = displayName
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
   return (
-    <div className="space-y-6 fade-in max-w-2xl">
-      <div>
-        <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">
-          Configuración
-        </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Administra tu perfil personal.
-        </p>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-300">
-          <Icon name="User" size={15} /> Perfil
-        </span>
-      </div>
-
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
-        {!profile?.id ? (
-          <EmptyState icon="User" text="Inicia sesión para editar tu perfil." />
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <PhotoUploader defaultValue={profile.photo} />
-            <Input
-              name="name"
-              label="Nombre"
-              placeholder="Tu nombre"
-              defaultValue={profile.name}
-              required
-            />
-            <Input
-              name="profession"
-              label="Profesión / Cargo"
-              placeholder="ej. Director de agencia"
-              defaultValue={profile.profession}
-            />
-            <div>
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">
-                Correo
-              </label>
-              <div className="w-full p-3 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-500 dark:text-slate-400 text-sm flex items-center gap-2">
-                <Icon name="Mail" size={15} />
-                <span className="truncate">{profile.email || "—"}</span>
-                <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
-                  No editable
-                </span>
+    <div className="profile-dashboard fade-in">
+      {!profile?.id ? (
+        <EmptyState icon="User" text="Inicia sesión para ver tu perfil." />
+      ) : (
+        <>
+          <header className="profile-hero">
+            <div className="profile-identity">
+              <div className="profile-avatar">
+                {profile.photo ? (
+                  <img src={profile.photo} alt={`Foto de ${displayName}`} />
+                ) : (
+                  <span>{initials || "U"}</span>
+                )}
               </div>
-            </div>
-            {roleLabel && (
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1">
-                  Rol
-                </label>
-                <div className="w-full p-3 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-500 dark:text-slate-400 text-sm flex items-center gap-2">
-                  <Icon name="ShieldCheck" size={15} />
-                  {roleLabel}
+                <p className="profile-kicker">Espacio personal</p>
+                <h2>{displayName}</h2>
+                <div className="profile-meta">
+                  <span>
+                    <Icon name="Briefcase" size={15} />
+                    {profile.profession || roleLabel || "Equipo Cluster"}
+                  </span>
+                  <span>
+                    <Icon name="Mail" size={15} />
+                    {profile.email || "Sin correo"}
+                  </span>
                 </div>
               </div>
-            )}
-            <Button type="submit" full color="purple" icon="Save">
-              Guardar cambios
-            </Button>
-          </form>
-        )}
-      </div>
+            </div>
+            <div className="profile-completion">
+              <div
+                className="profile-completion-ring"
+                style={{ "--profile-progress": `${profileCompletion * 3.6}deg` }}
+              >
+                <span>{profileCompletion}%</span>
+              </div>
+              <div>
+                <strong>Perfil completo</strong>
+                <small>
+                  {profileCompletion === 100
+                    ? "Tu identidad está lista"
+                    : "Completa los datos pendientes"}
+                </small>
+              </div>
+            </div>
+          </header>
+
+          <section className="profile-kpi-grid" aria-label="Rendimiento personal">
+            {[
+              {
+                label: "Cumplimiento",
+                value: `${completionRate}%`,
+                note: monthPeriod.label,
+                icon: "BarChart3",
+              },
+              {
+                label: "Completadas",
+                value: completedTasks.length,
+                note: `${monthlyTasks.length} asignadas`,
+                icon: "CheckCircle2",
+              },
+              {
+                label: "Pendientes",
+                value: openTasks.length,
+                note: "en todas tus salas",
+                icon: "ClipboardList",
+              },
+              {
+                label: "Vencidas",
+                value: overdueTasks.length,
+                note: overdueTasks.length ? "requieren atención" : "todo al día",
+                icon: "Timer",
+                danger: overdueTasks.length > 0,
+              },
+            ].map((item) => (
+              <article
+                className={`profile-kpi ${item.danger ? "is-danger" : ""}`}
+                key={item.label}
+              >
+                <span><Icon name={item.icon} size={18} /></span>
+                <p>{item.label}</p>
+                <strong>{item.value}</strong>
+                <small>{item.note}</small>
+              </article>
+            ))}
+          </section>
+
+          <div className="profile-layout">
+            <main className="profile-main-column">
+              <section className="profile-panel profile-workload">
+                <div className="profile-section-heading">
+                  <div>
+                    <p>Ritmo operativo</p>
+                    <h3>Tu carga actual</h3>
+                  </div>
+                  <span>{openTasks.length} tareas abiertas</span>
+                </div>
+                <div className="profile-workload-list">
+                  {workload.map((item) => (
+                    <div key={item.area}>
+                      <div>
+                        <strong>{item.area}</strong>
+                        <span>{item.count} pendientes · {item.share}%</span>
+                      </div>
+                      <span className="profile-workload-track">
+                        <i style={{ "--profile-load": `${item.share}%` }} />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <form onSubmit={handleSubmit} className="profile-panel profile-form">
+                <div className="profile-section-heading">
+                  <div>
+                    <p>Identidad</p>
+                    <h3>Información del perfil</h3>
+                  </div>
+                  <Icon name="UserCircle2" size={21} />
+                </div>
+                <PhotoUploader defaultValue={profile.photo} />
+                <div className="profile-form-grid">
+                  <Input
+                    name="name"
+                    label="Nombre"
+                    placeholder="Tu nombre"
+                    defaultValue={profile.name}
+                    required
+                  />
+                  <Input
+                    name="profession"
+                    label="Profesión / Cargo"
+                    placeholder="Ej. Director de agencia"
+                    defaultValue={profile.profession}
+                  />
+                </div>
+                <div className="profile-readonly-grid">
+                  <div>
+                    <span>Correo de acceso</span>
+                    <strong>
+                      <Icon name="Mail" size={15} />
+                      {profile.email || "—"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Rol en el equipo</span>
+                    <strong>
+                      <Icon name="ShieldCheck" size={15} />
+                      {roleLabel || "—"}
+                    </strong>
+                  </div>
+                </div>
+                <Button type="submit" full color="purple" icon="Save">
+                  Guardar perfil y preferencias
+                </Button>
+              </form>
+            </main>
+
+            <aside className="profile-side-column">
+              <section className="profile-panel profile-theme-studio">
+                <div className="profile-section-heading">
+                  <div>
+                    <p>Apariencia</p>
+                    <h3>Hazlo tuyo</h3>
+                  </div>
+                  <Icon name="Sparkles" size={21} />
+                </div>
+                <p className="profile-theme-description">
+                  Combina una paleta con el modo que mejor se adapte a tu espacio.
+                </p>
+                <div className="profile-mode-switch" aria-label="Modo de color">
+                  <button
+                    type="button"
+                    className={!isDark ? "is-active" : ""}
+                    aria-pressed={!isDark}
+                    onClick={() => onModeChange("light")}
+                  >
+                    <Icon name="Sun" size={16} />
+                    Claro
+                  </button>
+                  <button
+                    type="button"
+                    className={isDark ? "is-active" : ""}
+                    aria-pressed={isDark}
+                    onClick={() => onModeChange("dark")}
+                  >
+                    <Icon name="Moon" size={16} />
+                    Oscuro
+                  </button>
+                </div>
+                <div className="profile-palette-grid">
+                  {THEME_PALETTES.map((palette) => {
+                    const colors = isDark
+                      ? palette.darkSwatches
+                      : palette.swatches;
+                    return (
+                      <button
+                        type="button"
+                        key={palette.id}
+                        className={themePalette === palette.id ? "is-active" : ""}
+                        aria-pressed={themePalette === palette.id}
+                        onClick={() => onPaletteChange(palette.id)}
+                      >
+                        <span className="profile-palette-preview">
+                          {colors.map((color) => (
+                            <i key={color} style={{ backgroundColor: color }} />
+                          ))}
+                        </span>
+                        <span>
+                          <strong>{palette.name}</strong>
+                          <small>{palette.description}</small>
+                        </span>
+                        {themePalette === palette.id && (
+                          <Icon name="CheckCircle2" size={17} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="profile-theme-current">
+                  <span style={{ background: "var(--primary)" }} />
+                  <div>
+                    <small>Selección actual</small>
+                    <strong>
+                      {activePalette.name} · {isDark ? "Oscuro" : "Claro"}
+                    </strong>
+                  </div>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </>
+      )}
     </div>
   );
 };

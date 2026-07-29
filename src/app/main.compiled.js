@@ -1198,23 +1198,49 @@ var createIncomingCallRingtone = () => {
     }
   };
 };
+var THEME_PALETTES = [
+  {
+    id: "botanical",
+    name: "Bot\xE1nica",
+    description: "Marfil, bosque y lima editorial",
+    swatches: ["#f4f6f1", "#fcfdf9", "#5e7415", "#1c241e"],
+    darkSwatches: ["#0e120f", "#151a16", "#c3e15b", "#eff3ea"]
+  },
+  {
+    id: "ocean",
+    name: "Oc\xE9ano",
+    description: "Niebla, petr\xF3leo y turquesa",
+    swatches: ["#f1f5f7", "#f9fcfd", "#176b73", "#14242b"],
+    darkSwatches: ["#091216", "#101c21", "#69d4d0", "#edf6f7"]
+  },
+  {
+    id: "plum",
+    name: "Ciruela",
+    description: "Lavanda mineral y mora suave",
+    swatches: ["#f7f3f8", "#fefbfe", "#79527f", "#281d2b"],
+    darkSwatches: ["#130d15", "#1b131d", "#d69cdd", "#f6eff7"]
+  },
+  {
+    id: "clay",
+    name: "Arcilla",
+    description: "Arena c\xE1lida y terracota",
+    swatches: ["#f7f2ec", "#fffdf9", "#9b4b32", "#2a211c"],
+    darkSwatches: ["#140e0b", "#1d1511", "#f09a72", "#f7f0e9"]
+  }
+];
+var THEME_PALETTE_IDS = new Set(THEME_PALETTES.map((palette) => palette.id));
+var normalizeThemePalette = (value) => THEME_PALETTE_IDS.has(value) ? value : "botanical";
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isDark, setIsDark] = useState(() => {
-    const darkDefaultVersion = "2026-07-charcoal-default";
-    const appliedDefaultVersion = localStorage.getItem(
-      "cluster_theme_default_version"
-    );
-    if (appliedDefaultVersion !== darkDefaultVersion) {
-      localStorage.setItem("cluster_theme", "dark");
-      localStorage.setItem("cluster_theme_default_version", darkDefaultVersion);
-      return true;
-    }
-    return localStorage.getItem("cluster_theme") !== "light";
-  });
+  const [isDark, setIsDark] = useState(
+    () => localStorage.getItem("cluster_theme") !== "light"
+  );
+  const [themePalette, setThemePalette] = useState(
+    () => normalizeThemePalette(localStorage.getItem("cluster_palette"))
+  );
   const [view, setView] = useState(
     () => localStorage.getItem("cluster_os_view") || "dashboard"
   );
@@ -1364,6 +1390,20 @@ function App() {
   const profileBlocked = Boolean(
     currentUserProfile && currentUserProfile.isActive === false
   );
+  useEffect(() => {
+    if (!currentUserProfile?.id || currentUserProfile.pending || currentUserProfile.isAnonymous)
+      return;
+    if (THEME_PALETTE_IDS.has(currentUserProfile.themePalette)) {
+      setThemePalette(currentUserProfile.themePalette);
+    }
+    if (["light", "dark"].includes(currentUserProfile.themeMode)) {
+      setIsDark(currentUserProfile.themeMode === "dark");
+    }
+  }, [
+    currentUserProfile?.id,
+    currentUserProfile?.themePalette,
+    currentUserProfile?.themeMode
+  ]);
   useEffect(() => {
     if (!currentUserProfile?.id || profileBlocked) return;
     if (!isNativeApp()) {
@@ -1831,14 +1871,11 @@ function App() {
   };
   useEffect(() => {
     const html = document.documentElement;
-    if (isDark) {
-      html.classList.add("dark");
-      localStorage.setItem("cluster_theme", "dark");
-    } else {
-      html.classList.remove("dark");
-      localStorage.setItem("cluster_theme", "light");
-    }
-  }, [isDark]);
+    html.classList.toggle("dark", isDark);
+    html.dataset.palette = themePalette;
+    localStorage.setItem("cluster_theme", isDark ? "dark" : "light");
+    localStorage.setItem("cluster_palette", themePalette);
+  }, [isDark, themePalette]);
   useEffect(() => {
     if (!auth) {
       setLoading(false);
@@ -4837,12 +4874,19 @@ function App() {
       entityType: "user",
       entityId: currentUserProfile.id,
       description: "Actualiza su propio perfil",
-      changes: { name: data.name, profession: data.profession },
+      changes: {
+        name: data.name,
+        profession: data.profession,
+        themePalette: data.themePalette,
+        themeMode: data.themeMode
+      },
       successMessage: "Perfil actualizado",
       execute: () => updateDoc(dataDoc("users", currentUserProfile.id), {
         name: data.name || currentUserProfile.name || "",
         profession: data.profession || "",
         photo: data.photo || "",
+        themePalette: normalizeThemePalette(data.themePalette),
+        themeMode: data.themeMode === "light" ? "light" : "dark",
         updatedAt: nowIso()
       })
     });
@@ -5576,7 +5620,14 @@ function App() {
         {
           profile: currentUserProfile,
           roleLabel: ROLE_DEFINITIONS[currentUserProfile?.role]?.label || currentUserProfile?.role || "",
-          onSave: updateMyProfile
+          onSave: updateMyProfile,
+          tasks: editingTasks,
+          accountTasks,
+          managementTasks,
+          themePalette,
+          isDark,
+          onPaletteChange: (paletteId) => setThemePalette(normalizeThemePalette(paletteId)),
+          onModeChange: (mode) => setIsDark(mode === "dark")
         }
       ),
       view === "general-calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-3xl text-[var(--text)] dark:text-[var(--text)]" }, "Calendario")), /* @__PURE__ */ React.createElement(
@@ -6461,6 +6512,43 @@ var DASHBOARD_PALETTE = {
   slate: { solid: "var(--surface-muted)", strong: "var(--text-muted)" }
 };
 var getDashboardPalette = (name = "slate") => DASHBOARD_PALETTE[name] || DASHBOARD_PALETTE.slate;
+var buildPersonalTaskList = ({
+  profile,
+  tasks = [],
+  accountTasks = [],
+  managementTasks = []
+}) => [
+  ...tasks.filter(
+    (task) => isTaskAssignedToProfile(task, profile, [profile?.linkedEditorId])
+  ).map((task) => ({
+    ...task,
+    _area: "Edici\xF3n",
+    _taskType: "editingTask",
+    _room: "editions",
+    _done: isCompletedStatus(task.status)
+  })),
+  ...accountTasks.filter(
+    (task) => isTaskAssignedToProfile(task, profile, [profile?.linkedManagerId])
+  ).map((task) => ({
+    ...task,
+    _area: "Accounts",
+    _taskType: "accountTask",
+    _room: "account-room",
+    _done: task.status === "aprobado_internamente" || task.status === "publicado"
+  })),
+  ...managementTasks.filter((task) => isTaskAssignedToProfile(task, profile, [profile?.id])).map((task) => ({
+    ...task,
+    _area: "Gesti\xF3n",
+    _taskType: "managementTask",
+    _room: "management-room",
+    _done: task.status === "cerrado"
+  }))
+].sort((a, b) => {
+  if (a._done !== b._done) return a._done ? 1 : -1;
+  return String(a.date || "9999-12-31").localeCompare(
+    String(b.date || "9999-12-31")
+  );
+});
 var DashboardView = ({
   clients = [],
   managers,
@@ -6497,45 +6585,11 @@ var DashboardView = ({
   const clientNames = new Map(
     clients.map((client) => [client.id, client.name || "Sin cliente"])
   );
-  const personalTasks = [
-    ...tasks.filter(
-      (task) => isTaskAssignedToProfile(task, currentUserProfile, [
-        currentUserProfile?.linkedEditorId
-      ])
-    ).map((task) => ({
-      ...task,
-      _area: "Edici\xF3n",
-      _taskType: "editingTask",
-      _room: "editions",
-      _done: isCompletedStatus(task.status)
-    })),
-    ...accountTasks.filter(
-      (task) => isTaskAssignedToProfile(task, currentUserProfile, [
-        currentUserProfile?.linkedManagerId
-      ])
-    ).map((task) => ({
-      ...task,
-      _area: "Accounts",
-      _taskType: "accountTask",
-      _room: "account-room",
-      _done: task.status === "aprobado_internamente" || task.status === "publicado"
-    })),
-    ...managementTasks.filter(
-      (task) => isTaskAssignedToProfile(task, currentUserProfile, [
-        currentUserProfile?.id
-      ])
-    ).map((task) => ({
-      ...task,
-      _area: "Gesti\xF3n",
-      _taskType: "managementTask",
-      _room: "management-room",
-      _done: task.status === "cerrado"
-    }))
-  ].sort((a, b) => {
-    if (a._done !== b._done) return a._done ? 1 : -1;
-    return String(a.date || "9999-12-31").localeCompare(
-      String(b.date || "9999-12-31")
-    );
+  const personalTasks = buildPersonalTaskList({
+    profile: currentUserProfile,
+    tasks,
+    accountTasks,
+    managementTasks
   });
   const monthlyPersonalTasks = personalTasks.filter(
     (task) => isDateWithinPeriod(task.date, dashboardPeriod)
@@ -6748,17 +6802,112 @@ var DashboardView = ({
     /* @__PURE__ */ React.createElement("em", null, item.share, "%")
   ))))));
 };
-var ProfileSettingsView = ({ profile, roleLabel, onSave }) => {
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const fd = Object.fromEntries(new FormData(e.currentTarget).entries());
+var ProfileSettingsView = ({
+  profile,
+  roleLabel,
+  onSave,
+  tasks = [],
+  accountTasks = [],
+  managementTasks = [],
+  themePalette,
+  isDark,
+  onPaletteChange,
+  onModeChange
+}) => {
+  const todayStr = getHondurasTodayStr();
+  const monthPeriod = getRankingMonthPeriod(todayStr);
+  const personalTasks = buildPersonalTaskList({
+    profile,
+    tasks,
+    accountTasks,
+    managementTasks
+  });
+  const monthlyTasks = personalTasks.filter(
+    (task) => isDateWithinPeriod(task.date, monthPeriod)
+  );
+  const completedTasks = monthlyTasks.filter((task) => task._done);
+  const openTasks = personalTasks.filter((task) => !task._done);
+  const overdueTasks = openTasks.filter(
+    (task) => isDateBeforeDateString(task.date, todayStr)
+  );
+  const completionRate = monthlyTasks.length ? Math.round(completedTasks.length / monthlyTasks.length * 100) : 0;
+  const profileFields = [
+    profile?.name,
+    profile?.email,
+    profile?.profession,
+    profile?.photo
+  ];
+  const profileCompletion = Math.round(
+    profileFields.filter(Boolean).length / profileFields.length * 100
+  );
+  const activePalette = THEME_PALETTES.find((palette) => palette.id === themePalette) || THEME_PALETTES[0];
+  const workload = ["Accounts", "Gesti\xF3n", "Edici\xF3n"].map((area) => {
+    const count = openTasks.filter((task) => task._area === area).length;
+    return {
+      area,
+      count,
+      share: openTasks.length ? Math.round(count / openTasks.length * 100) : 0
+    };
+  });
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    const formData = Object.fromEntries(
+      new FormData(event.currentTarget).entries()
+    );
     onSave({
-      name: fd.name || "",
-      profession: fd.profession || "",
-      photo: fd.photo || ""
+      name: formData.name || "",
+      profession: formData.profession || "",
+      photo: formData.photo || "",
+      themePalette,
+      themeMode: isDark ? "dark" : "light"
     });
   };
-  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in max-w-2xl" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl md:text-3xl font-black text-slate-800 dark:text-white" }, "Configuraci\xF3n"), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400 mt-1" }, "Administra tu perfil personal.")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-300" }, /* @__PURE__ */ React.createElement(Icon, { name: "User", size: 15 }), " Perfil")), /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6" }, !profile?.id ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "User", text: "Inicia sesi\xF3n para editar tu perfil." }) : /* @__PURE__ */ React.createElement("form", { onSubmit: handleSubmit, className: "space-y-5" }, /* @__PURE__ */ React.createElement(PhotoUploader, { defaultValue: profile.photo }), /* @__PURE__ */ React.createElement(
+  const displayName = profile?.name?.trim() || "Usuario";
+  const initials = displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+  return /* @__PURE__ */ React.createElement("div", { className: "profile-dashboard fade-in" }, !profile?.id ? /* @__PURE__ */ React.createElement(EmptyState, { icon: "User", text: "Inicia sesi\xF3n para ver tu perfil." }) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("header", { className: "profile-hero" }, /* @__PURE__ */ React.createElement("div", { className: "profile-identity" }, /* @__PURE__ */ React.createElement("div", { className: "profile-avatar" }, profile.photo ? /* @__PURE__ */ React.createElement("img", { src: profile.photo, alt: `Foto de ${displayName}` }) : /* @__PURE__ */ React.createElement("span", null, initials || "U")), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "profile-kicker" }, "Espacio personal"), /* @__PURE__ */ React.createElement("h2", null, displayName), /* @__PURE__ */ React.createElement("div", { className: "profile-meta" }, /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 15 }), profile.profession || roleLabel || "Equipo Cluster"), /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement(Icon, { name: "Mail", size: 15 }), profile.email || "Sin correo")))), /* @__PURE__ */ React.createElement("div", { className: "profile-completion" }, /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: "profile-completion-ring",
+      style: { "--profile-progress": `${profileCompletion * 3.6}deg` }
+    },
+    /* @__PURE__ */ React.createElement("span", null, profileCompletion, "%")
+  ), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "Perfil completo"), /* @__PURE__ */ React.createElement("small", null, profileCompletion === 100 ? "Tu identidad est\xE1 lista" : "Completa los datos pendientes")))), /* @__PURE__ */ React.createElement("section", { className: "profile-kpi-grid", "aria-label": "Rendimiento personal" }, [
+    {
+      label: "Cumplimiento",
+      value: `${completionRate}%`,
+      note: monthPeriod.label,
+      icon: "BarChart3"
+    },
+    {
+      label: "Completadas",
+      value: completedTasks.length,
+      note: `${monthlyTasks.length} asignadas`,
+      icon: "CheckCircle2"
+    },
+    {
+      label: "Pendientes",
+      value: openTasks.length,
+      note: "en todas tus salas",
+      icon: "ClipboardList"
+    },
+    {
+      label: "Vencidas",
+      value: overdueTasks.length,
+      note: overdueTasks.length ? "requieren atenci\xF3n" : "todo al d\xEDa",
+      icon: "Timer",
+      danger: overdueTasks.length > 0
+    }
+  ].map((item) => /* @__PURE__ */ React.createElement(
+    "article",
+    {
+      className: `profile-kpi ${item.danger ? "is-danger" : ""}`,
+      key: item.label
+    },
+    /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement(Icon, { name: item.icon, size: 18 })),
+    /* @__PURE__ */ React.createElement("p", null, item.label),
+    /* @__PURE__ */ React.createElement("strong", null, item.value),
+    /* @__PURE__ */ React.createElement("small", null, item.note)
+  ))), /* @__PURE__ */ React.createElement("div", { className: "profile-layout" }, /* @__PURE__ */ React.createElement("main", { className: "profile-main-column" }, /* @__PURE__ */ React.createElement("section", { className: "profile-panel profile-workload" }, /* @__PURE__ */ React.createElement("div", { className: "profile-section-heading" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, "Ritmo operativo"), /* @__PURE__ */ React.createElement("h3", null, "Tu carga actual")), /* @__PURE__ */ React.createElement("span", null, openTasks.length, " tareas abiertas")), /* @__PURE__ */ React.createElement("div", { className: "profile-workload-list" }, workload.map((item) => /* @__PURE__ */ React.createElement("div", { key: item.area }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, item.area), /* @__PURE__ */ React.createElement("span", null, item.count, " pendientes \xB7 ", item.share, "%")), /* @__PURE__ */ React.createElement("span", { className: "profile-workload-track" }, /* @__PURE__ */ React.createElement("i", { style: { "--profile-load": `${item.share}%` } })))))), /* @__PURE__ */ React.createElement("form", { onSubmit: handleSubmit, className: "profile-panel profile-form" }, /* @__PURE__ */ React.createElement("div", { className: "profile-section-heading" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, "Identidad"), /* @__PURE__ */ React.createElement("h3", null, "Informaci\xF3n del perfil")), /* @__PURE__ */ React.createElement(Icon, { name: "UserCircle2", size: 21 })), /* @__PURE__ */ React.createElement(PhotoUploader, { defaultValue: profile.photo }), /* @__PURE__ */ React.createElement("div", { className: "profile-form-grid" }, /* @__PURE__ */ React.createElement(
     Input,
     {
       name: "name",
@@ -6772,10 +6921,45 @@ var ProfileSettingsView = ({ profile, roleLabel, onSave }) => {
     {
       name: "profession",
       label: "Profesi\xF3n / Cargo",
-      placeholder: "ej. Director de agencia",
+      placeholder: "Ej. Director de agencia",
       defaultValue: profile.profession
     }
-  ), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1" }, "Correo"), /* @__PURE__ */ React.createElement("div", { className: "w-full p-3 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-500 dark:text-slate-400 text-sm flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Mail", size: 15 }), /* @__PURE__ */ React.createElement("span", { className: "truncate" }, profile.email || "\u2014"), /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0" }, "No editable"))), roleLabel && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5 ml-1" }, "Rol"), /* @__PURE__ */ React.createElement("div", { className: "w-full p-3 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-500 dark:text-slate-400 text-sm flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "ShieldCheck", size: 15 }), roleLabel)), /* @__PURE__ */ React.createElement(Button, { type: "submit", full: true, color: "purple", icon: "Save" }, "Guardar cambios"))));
+  )), /* @__PURE__ */ React.createElement("div", { className: "profile-readonly-grid" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", null, "Correo de acceso"), /* @__PURE__ */ React.createElement("strong", null, /* @__PURE__ */ React.createElement(Icon, { name: "Mail", size: 15 }), profile.email || "\u2014")), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", null, "Rol en el equipo"), /* @__PURE__ */ React.createElement("strong", null, /* @__PURE__ */ React.createElement(Icon, { name: "ShieldCheck", size: 15 }), roleLabel || "\u2014"))), /* @__PURE__ */ React.createElement(Button, { type: "submit", full: true, color: "purple", icon: "Save" }, "Guardar perfil y preferencias"))), /* @__PURE__ */ React.createElement("aside", { className: "profile-side-column" }, /* @__PURE__ */ React.createElement("section", { className: "profile-panel profile-theme-studio" }, /* @__PURE__ */ React.createElement("div", { className: "profile-section-heading" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, "Apariencia"), /* @__PURE__ */ React.createElement("h3", null, "Hazlo tuyo")), /* @__PURE__ */ React.createElement(Icon, { name: "Sparkles", size: 21 })), /* @__PURE__ */ React.createElement("p", { className: "profile-theme-description" }, "Combina una paleta con el modo que mejor se adapte a tu espacio."), /* @__PURE__ */ React.createElement("div", { className: "profile-mode-switch", "aria-label": "Modo de color" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      className: !isDark ? "is-active" : "",
+      "aria-pressed": !isDark,
+      onClick: () => onModeChange("light")
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "Sun", size: 16 }),
+    "Claro"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      className: isDark ? "is-active" : "",
+      "aria-pressed": isDark,
+      onClick: () => onModeChange("dark")
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "Moon", size: 16 }),
+    "Oscuro"
+  )), /* @__PURE__ */ React.createElement("div", { className: "profile-palette-grid" }, THEME_PALETTES.map((palette) => {
+    const colors = isDark ? palette.darkSwatches : palette.swatches;
+    return /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        key: palette.id,
+        className: themePalette === palette.id ? "is-active" : "",
+        "aria-pressed": themePalette === palette.id,
+        onClick: () => onPaletteChange(palette.id)
+      },
+      /* @__PURE__ */ React.createElement("span", { className: "profile-palette-preview" }, colors.map((color) => /* @__PURE__ */ React.createElement("i", { key: color, style: { backgroundColor: color } }))),
+      /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("strong", null, palette.name), /* @__PURE__ */ React.createElement("small", null, palette.description)),
+      themePalette === palette.id && /* @__PURE__ */ React.createElement(Icon, { name: "CheckCircle2", size: 17 })
+    );
+  })), /* @__PURE__ */ React.createElement("div", { className: "profile-theme-current" }, /* @__PURE__ */ React.createElement("span", { style: { background: "var(--primary)" } }), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("small", null, "Selecci\xF3n actual"), /* @__PURE__ */ React.createElement("strong", null, activePalette.name, " \xB7 ", isDark ? "Oscuro" : "Claro"))))))));
 };
 var TeamView = ({
   title,

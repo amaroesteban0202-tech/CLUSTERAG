@@ -46,7 +46,14 @@ const ensureCollectionPermission = (req, action) => {
 };
 
 // Campos que un usuario puede editar de su propio perfil (sin ser admin).
-const PROFILE_SELF_FIELDS = new Set(['name', 'profession', 'photo', 'updatedAt']);
+const PROFILE_SELF_FIELDS = new Set([
+    'name',
+    'profession',
+    'photo',
+    'themePalette',
+    'themeMode',
+    'updatedAt'
+]);
 
 const canUpdateOwnUser = (userRecord, existing = null) => {
     if (!existing) return false;

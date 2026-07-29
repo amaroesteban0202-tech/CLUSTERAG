@@ -8,12 +8,17 @@ const app = read("src/app/main.jsx");
 const css = read("src/styles/main.css");
 const html = read("index.html");
 const tailwind = read("tailwind.config.cjs");
+const collectionRoutes = read("server/routes/collections.js");
 
 const checks = [
   ["Phosphor icons", app.includes("@phosphor-icons/react") && html.includes("@phosphor-icons/react")],
   ["Newsreader editorial type", css.includes('font-family: "Newsreader"') && html.includes("Newsreader")],
   ["botanical light palette", css.includes("--canvas: #f4f6f1") && css.includes("--primary: #5e7415")],
   ["forest dark palette", css.includes("--canvas: #0e120f") && css.includes("--primary: #c3e15b")],
+  ["four user palettes", ["botanical", "ocean", "plum", "clay"].every((palette) => app.includes(`id: "${palette}"`))],
+  ["palette CSS themes", ["ocean", "plum", "clay"].every((palette) => css.includes(`data-palette="${palette}"`))],
+  ["palette preference starts before render", html.includes("cluster_palette") && html.includes("dataset.palette")],
+  ["profile preference is persisted", collectionRoutes.includes("'themePalette'") && collectionRoutes.includes("'themeMode'")],
   ["semantic surfaces", css.includes("--surface-raised") && css.includes("--border-strong") && css.includes("--primary-soft")],
   ["semantic status colors", css.includes("--status-red-bg") && css.includes("--status-blue-bg") && css.includes("--status-green-bg") && css.includes("--status-yellow-bg")],
   ["dashboard shares site palette", css.includes("--pd-accent: var(--primary)") && css.includes("--pd-raised: var(--surface-raised)")],
@@ -29,6 +34,8 @@ const checks = [
   ["dashboard charts use comparison bars", !app.includes("buildRingSegments") && app.includes("pd-week-total") && app.includes("pd-week-completed")],
   ["dashboard workload navigates", app.includes('Accounts: "account-room"') && app.includes('Edición: "editions"') && app.includes("onNavigate(room)")],
   ["personal tasks open details", app.includes("onOpenTask(task, task._taskType)") && app.includes('_taskType: "managementTask"')],
+  ["profile performance dashboard", app.includes("profile-dashboard") && app.includes('aria-label="Rendimiento personal"') && app.includes("buildPersonalTaskList")],
+  ["profile appearance studio", app.includes("profile-palette-grid") && app.includes("Guardar perfil y preferencias") && css.includes(".profile-theme-studio")],
   ["task rooms stay viewport sized", css.includes("height: calc(100vh - 7rem)") && app.includes("task-room min-h-0")],
   ["kanban columns scroll independently", app.includes("overflow-y-auto overscroll-contain") && app.includes("lg:h-full lg:min-h-0")],
   ["task cards are keyboard accessible", app.includes('aria-label={`Abrir tarea ${title}`}') && app.includes('event.key === "Enter"')],
@@ -39,7 +46,7 @@ const checks = [
   ["animated vector login", app.includes("LoginVectorArtwork") && app.includes("login-vector-orbit") && css.includes("@keyframes loginNodeFloat")],
   ["login respects reduced motion", css.includes("prefers-reduced-motion") && css.includes("animation-duration: 0.01ms")],
   ["login prioritizes form on mobile", app.includes("login-form-panel order-1") && app.includes("login-art-panel order-2")],
-  ["forest theme is the default", app.includes('localStorage.setItem("cluster_theme", "dark")') && html.includes("2026-07-forest-default")],
+  ["theme choice survives reloads", app.includes('localStorage.setItem("cluster_theme", isDark ? "dark" : "light")') && html.includes("2026-07-personal-themes")],
   ["company logo asset", fs.existsSync(path.join(root, "src/app/assets/cluster-symbol.webp")) && app.includes("cluster-symbol.webp")],
   ["two-font system", css.includes('font-family: Arial, sans-serif') && css.includes('font-family: "Newsreader"') && !/SF Mono|Geist Mono|Consolas/.test(css)],
   ["no gradient source styles", !/\b(?:linear|radial)-gradient\b|\bbg-gradient-/i.test(`${app}\n${css}`)],
