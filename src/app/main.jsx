@@ -1795,16 +1795,19 @@ const THEME_PALETTES = [
     darkSwatches: ["#130d15", "#1b131d", "#d69cdd", "#f6eff7"],
   },
   {
-    id: "clay",
-    name: "Arcilla",
-    description: "Arena cálida y terracota",
-    swatches: ["#f7f2ec", "#fffdf9", "#9b4b32", "#2a211c"],
-    darkSwatches: ["#140e0b", "#1d1511", "#f09a72", "#f7f0e9"],
+    id: "cobalt",
+    name: "Cobalto",
+    description: "Nube fría, tinta y azul eléctrico",
+    swatches: ["#f3f5fb", "#fbfcff", "#3157a4", "#182033"],
+    darkSwatches: ["#0b0e17", "#121827", "#86a8ff", "#f0f4ff"],
   },
 ];
 const THEME_PALETTE_IDS = new Set(THEME_PALETTES.map((palette) => palette.id));
+const THEME_PALETTE_ALIASES = { clay: "cobalt" };
 const normalizeThemePalette = (value) =>
-  THEME_PALETTE_IDS.has(value) ? value : "botanical";
+  THEME_PALETTE_IDS.has(value)
+    ? value
+    : THEME_PALETTE_ALIASES[value] || "botanical";
 
 // --- APP PRINCIPAL ---
 function App() {
@@ -2042,8 +2045,11 @@ function App() {
       currentUserProfile.isAnonymous
     )
       return;
-    if (THEME_PALETTE_IDS.has(currentUserProfile.themePalette)) {
-      setThemePalette(currentUserProfile.themePalette);
+    if (
+      THEME_PALETTE_IDS.has(currentUserProfile.themePalette) ||
+      THEME_PALETTE_ALIASES[currentUserProfile.themePalette]
+    ) {
+      setThemePalette(normalizeThemePalette(currentUserProfile.themePalette));
     }
     if (["light", "dark"].includes(currentUserProfile.themeMode)) {
       setIsDark(currentUserProfile.themeMode === "dark");
@@ -8375,6 +8381,28 @@ const buildPersonalTaskList = ({
     );
   });
 
+const buildCompanyTaskList = ({
+  tasks = [],
+  accountTasks = [],
+  managementTasks = [],
+}) => [
+  ...tasks.map((task) => ({
+    ...task,
+    _area: "Edición",
+    _done: isCompletedStatus(task.status),
+  })),
+  ...accountTasks.map((task) => ({
+    ...task,
+    _area: "Accounts",
+    _done: isAccountTaskDone(task),
+  })),
+  ...managementTasks.map((task) => ({
+    ...task,
+    _area: "Gestión",
+    _done: task.status === "cerrado",
+  })),
+];
+
 // --- PANEL PERSONAL ---
 const DashboardView = ({
   clients = [],
@@ -8419,20 +8447,48 @@ const DashboardView = ({
     accountTasks,
     managementTasks,
   });
+  const companyTasks = buildCompanyTaskList({
+    tasks,
+    accountTasks,
+    managementTasks,
+  });
 
   const monthlyPersonalTasks = personalTasks.filter((task) =>
     isDateWithinPeriod(task.date, dashboardPeriod),
   );
   const openPersonalTasks = personalTasks.filter((task) => !task._done);
-  const completedThisMonth = monthlyPersonalTasks.filter(
+  const completedMonthlyTasks = monthlyPersonalTasks.filter(
     (task) => task._done,
-  ).length;
+  );
+  const completedThisMonth = completedMonthlyTasks.length;
   const completionPercent =
     monthlyPersonalTasks.length > 0
       ? Math.round(
           (completedThisMonth / monthlyPersonalTasks.length) * 100,
         )
       : 0;
+  const measuredCompletedTasks = completedMonthlyTasks
+    .map((task) => ({
+      task,
+      completionIso: getTaskCompletionIso(task),
+    }))
+    .filter(({ task, completionIso }) =>
+      Boolean(normalizeDateOnlyString(task.date) && completionIso),
+    );
+  const onTimePercent =
+    measuredCompletedTasks.length > 0
+      ? Math.round(
+          (measuredCompletedTasks.filter(({ task, completionIso }) =>
+            isCompletionOnTime(task, completionIso),
+          ).length /
+            measuredCompletedTasks.length) *
+            100,
+        )
+      : null;
+  const individualKpi =
+    onTimePercent === null
+      ? completionPercent
+      : Math.round(completionPercent * 0.7 + onTimePercent * 0.3);
   const overdueTasks = openPersonalTasks.filter((task) =>
     isDateBeforeDateString(task.date, todayStr),
   );
@@ -8473,7 +8529,7 @@ const DashboardView = ({
 
   const weeklySeries = Array.from({ length: 7 }, (_, index) => {
     const date = shiftDashboardDate(weekStart, index);
-    const dayTasks = personalTasks.filter(
+    const dayTasks = companyTasks.filter(
       (task) => normalizeDateOnlyString(task.date) === date,
     );
     const parsedDate = parseDashboardDate(date);
@@ -8701,9 +8757,12 @@ const DashboardView = ({
               <Icon name="BarChart3" size={19} />
             </span>
             <div>
-              <p>Cumplimiento</p>
-              <strong>{completionPercent}%</strong>
-              <small>avance del mes</small>
+              <p>KPI individual</p>
+              <strong>{individualKpi}%</strong>
+              <small>
+                {completionPercent}% avance ·{" "}
+                {onTimePercent === null ? "N/D" : `${onTimePercent}%`} puntualidad
+              </small>
             </div>
           </div>
           <div className={`pd-kpi ${overdueTasks.length > 0 ? "is-danger" : ""}`}>
@@ -8750,8 +8809,8 @@ const DashboardView = ({
         <section className="pd-weekly" aria-labelledby="pd-weekly-title">
           <div className="pd-insight-heading">
             <div>
-              <h3 id="pd-weekly-title">Rendimiento semanal</h3>
-              <p>Tareas asignadas y completadas por fecha de entrega</p>
+              <h3 id="pd-weekly-title">Rendimiento semanal de la empresa</h3>
+              <p>Todas las tareas asignadas y completadas por fecha de entrega</p>
             </div>
             <div className="pd-chart-legend" aria-label="Leyenda">
               <span><i className="is-complete" />Completadas</span>

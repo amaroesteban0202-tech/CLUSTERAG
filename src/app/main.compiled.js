@@ -891,6 +891,47 @@ var getStatusTimestampPatch = (task = {}, newStatus = "", stamp = nowIso(), acto
   }
   return patch;
 };
+var getTaskCompletionIso = (task = {}) => {
+  const status = task.status || "";
+  if (task.statusTimestamps?.[status]) return task.statusTimestamps[status];
+  if (status === "publicado") return task.publishedAt || task.updatedAt || "";
+  if (status === "aprobado") return task.approvedAt || task.updatedAt || "";
+  if (status === "aprobado_internamente")
+    return task.internallyApprovedAt || task.updatedAt || "";
+  if (status === "cerrado") return task.closedAt || task.updatedAt || "";
+  return "";
+};
+var getHondurasDatePartsFromIso = (value = "") => {
+  if (!value) return null;
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) return null;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Tegucigalpa",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(parsedDate);
+    const getPart = (type) => parts.find((part) => part.type === type)?.value || "";
+    const year = getPart("year");
+    const month = getPart("month");
+    const day = getPart("day");
+    const hour = Number(getPart("hour"));
+    if (!year || !month || !day || !Number.isFinite(hour)) return null;
+    return { date: `${year}-${month}-${day}`, hour };
+  } catch (error) {
+    return null;
+  }
+};
+var getHondurasDateFromIso = (value = "") => getHondurasDatePartsFromIso(value)?.date || "";
+var isCompletionOnTime = (task = {}, completionIso = "") => {
+  const dueDate = normalizeDateOnlyString(task.date);
+  const completionDate = getHondurasDateFromIso(completionIso);
+  if (!dueDate || !completionDate) return false;
+  return compareDateOnlyStrings(completionDate, dueDate) <= 0;
+};
 var getRankingMonthPeriod = (referenceDate = getHondurasTodayStr()) => {
   const normalizedDate = normalizeDateOnlyString(referenceDate) || getHondurasTodayStr();
   const [yearValue, monthValue] = normalizedDate.split("-").map(Number);
@@ -1221,15 +1262,16 @@ var THEME_PALETTES = [
     darkSwatches: ["#130d15", "#1b131d", "#d69cdd", "#f6eff7"]
   },
   {
-    id: "clay",
-    name: "Arcilla",
-    description: "Arena c\xE1lida y terracota",
-    swatches: ["#f7f2ec", "#fffdf9", "#9b4b32", "#2a211c"],
-    darkSwatches: ["#140e0b", "#1d1511", "#f09a72", "#f7f0e9"]
+    id: "cobalt",
+    name: "Cobalto",
+    description: "Nube fr\xEDa, tinta y azul el\xE9ctrico",
+    swatches: ["#f3f5fb", "#fbfcff", "#3157a4", "#182033"],
+    darkSwatches: ["#0b0e17", "#121827", "#86a8ff", "#f0f4ff"]
   }
 ];
 var THEME_PALETTE_IDS = new Set(THEME_PALETTES.map((palette) => palette.id));
-var normalizeThemePalette = (value) => THEME_PALETTE_IDS.has(value) ? value : "botanical";
+var THEME_PALETTE_ALIASES = { clay: "cobalt" };
+var normalizeThemePalette = (value) => THEME_PALETTE_IDS.has(value) ? value : THEME_PALETTE_ALIASES[value] || "botanical";
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1393,8 +1435,8 @@ function App() {
   useEffect(() => {
     if (!currentUserProfile?.id || currentUserProfile.pending || currentUserProfile.isAnonymous)
       return;
-    if (THEME_PALETTE_IDS.has(currentUserProfile.themePalette)) {
-      setThemePalette(currentUserProfile.themePalette);
+    if (THEME_PALETTE_IDS.has(currentUserProfile.themePalette) || THEME_PALETTE_ALIASES[currentUserProfile.themePalette]) {
+      setThemePalette(normalizeThemePalette(currentUserProfile.themePalette));
     }
     if (["light", "dark"].includes(currentUserProfile.themeMode)) {
       setIsDark(currentUserProfile.themeMode === "dark");
@@ -6549,6 +6591,27 @@ var buildPersonalTaskList = ({
     String(b.date || "9999-12-31")
   );
 });
+var buildCompanyTaskList = ({
+  tasks = [],
+  accountTasks = [],
+  managementTasks = []
+}) => [
+  ...tasks.map((task) => ({
+    ...task,
+    _area: "Edici\xF3n",
+    _done: isCompletedStatus(task.status)
+  })),
+  ...accountTasks.map((task) => ({
+    ...task,
+    _area: "Accounts",
+    _done: isAccountTaskDone(task)
+  })),
+  ...managementTasks.map((task) => ({
+    ...task,
+    _area: "Gesti\xF3n",
+    _done: task.status === "cerrado"
+  }))
+];
 var DashboardView = ({
   clients = [],
   managers,
@@ -6591,16 +6654,34 @@ var DashboardView = ({
     accountTasks,
     managementTasks
   });
+  const companyTasks = buildCompanyTaskList({
+    tasks,
+    accountTasks,
+    managementTasks
+  });
   const monthlyPersonalTasks = personalTasks.filter(
     (task) => isDateWithinPeriod(task.date, dashboardPeriod)
   );
   const openPersonalTasks = personalTasks.filter((task) => !task._done);
-  const completedThisMonth = monthlyPersonalTasks.filter(
+  const completedMonthlyTasks = monthlyPersonalTasks.filter(
     (task) => task._done
-  ).length;
+  );
+  const completedThisMonth = completedMonthlyTasks.length;
   const completionPercent = monthlyPersonalTasks.length > 0 ? Math.round(
     completedThisMonth / monthlyPersonalTasks.length * 100
   ) : 0;
+  const measuredCompletedTasks = completedMonthlyTasks.map((task) => ({
+    task,
+    completionIso: getTaskCompletionIso(task)
+  })).filter(
+    ({ task, completionIso }) => Boolean(normalizeDateOnlyString(task.date) && completionIso)
+  );
+  const onTimePercent = measuredCompletedTasks.length > 0 ? Math.round(
+    measuredCompletedTasks.filter(
+      ({ task, completionIso }) => isCompletionOnTime(task, completionIso)
+    ).length / measuredCompletedTasks.length * 100
+  ) : null;
+  const individualKpi = onTimePercent === null ? completionPercent : Math.round(completionPercent * 0.7 + onTimePercent * 0.3);
   const overdueTasks = openPersonalTasks.filter(
     (task) => isDateBeforeDateString(task.date, todayStr)
   );
@@ -6633,7 +6714,7 @@ var DashboardView = ({
   };
   const weeklySeries = Array.from({ length: 7 }, (_, index) => {
     const date = shiftDashboardDate(weekStart, index);
-    const dayTasks = personalTasks.filter(
+    const dayTasks = companyTasks.filter(
       (task) => normalizeDateOnlyString(task.date) === date
     );
     const parsedDate = parseDashboardDate(date);
@@ -6747,7 +6828,7 @@ var DashboardView = ({
     tasksByScope[taskScope].length,
     " tareas",
     /* @__PURE__ */ React.createElement(Icon, { name: "ArrowRight", size: 15 })
-  )), /* @__PURE__ */ React.createElement("aside", { className: "pd-kpi-rail", "aria-label": "KPI personales" }, /* @__PURE__ */ React.createElement("div", { className: "pd-kpi" }, /* @__PURE__ */ React.createElement("span", { className: "pd-kpi-icon" }, /* @__PURE__ */ React.createElement(Icon, { name: "CheckCircle2", size: 19 })), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, "Completadas"), /* @__PURE__ */ React.createElement("strong", null, completedThisMonth), /* @__PURE__ */ React.createElement("small", null, "de ", monthlyPersonalTasks.length, " asignadas"))), /* @__PURE__ */ React.createElement("div", { className: "pd-kpi" }, /* @__PURE__ */ React.createElement("span", { className: "pd-kpi-icon" }, /* @__PURE__ */ React.createElement(Icon, { name: "BarChart3", size: 19 })), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, "Cumplimiento"), /* @__PURE__ */ React.createElement("strong", null, completionPercent, "%"), /* @__PURE__ */ React.createElement("small", null, "avance del mes"))), /* @__PURE__ */ React.createElement("div", { className: `pd-kpi ${overdueTasks.length > 0 ? "is-danger" : ""}` }, /* @__PURE__ */ React.createElement("span", { className: "pd-kpi-icon" }, /* @__PURE__ */ React.createElement(Icon, { name: "Timer", size: 19 })), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, "Vencidas"), /* @__PURE__ */ React.createElement("strong", null, overdueTasks.length), /* @__PURE__ */ React.createElement("small", null, overdueTasks.length > 0 ? "necesitan atenci\xF3n" : "sin tareas atrasadas"))), /* @__PURE__ */ React.createElement("div", { className: "pd-next-task" }, /* @__PURE__ */ React.createElement("span", { className: "pd-kpi-icon" }, /* @__PURE__ */ React.createElement(Icon, { name: "CalendarDays", size: 18 })), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, "Pr\xF3xima acci\xF3n"), nextTask ? /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("aside", { className: "pd-kpi-rail", "aria-label": "KPI personales" }, /* @__PURE__ */ React.createElement("div", { className: "pd-kpi" }, /* @__PURE__ */ React.createElement("span", { className: "pd-kpi-icon" }, /* @__PURE__ */ React.createElement(Icon, { name: "CheckCircle2", size: 19 })), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, "Completadas"), /* @__PURE__ */ React.createElement("strong", null, completedThisMonth), /* @__PURE__ */ React.createElement("small", null, "de ", monthlyPersonalTasks.length, " asignadas"))), /* @__PURE__ */ React.createElement("div", { className: "pd-kpi" }, /* @__PURE__ */ React.createElement("span", { className: "pd-kpi-icon" }, /* @__PURE__ */ React.createElement(Icon, { name: "BarChart3", size: 19 })), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, "KPI individual"), /* @__PURE__ */ React.createElement("strong", null, individualKpi, "%"), /* @__PURE__ */ React.createElement("small", null, completionPercent, "% avance \xB7", " ", onTimePercent === null ? "N/D" : `${onTimePercent}%`, " puntualidad"))), /* @__PURE__ */ React.createElement("div", { className: `pd-kpi ${overdueTasks.length > 0 ? "is-danger" : ""}` }, /* @__PURE__ */ React.createElement("span", { className: "pd-kpi-icon" }, /* @__PURE__ */ React.createElement(Icon, { name: "Timer", size: 19 })), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, "Vencidas"), /* @__PURE__ */ React.createElement("strong", null, overdueTasks.length), /* @__PURE__ */ React.createElement("small", null, overdueTasks.length > 0 ? "necesitan atenci\xF3n" : "sin tareas atrasadas"))), /* @__PURE__ */ React.createElement("div", { className: "pd-next-task" }, /* @__PURE__ */ React.createElement("span", { className: "pd-kpi-icon" }, /* @__PURE__ */ React.createElement(Icon, { name: "CalendarDays", size: 18 })), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", null, "Pr\xF3xima acci\xF3n"), nextTask ? /* @__PURE__ */ React.createElement(
     "button",
     {
       type: "button",
@@ -6755,7 +6836,7 @@ var DashboardView = ({
     },
     /* @__PURE__ */ React.createElement("strong", null, nextTask.title),
     /* @__PURE__ */ React.createElement("small", null, clientNames.get(nextTask.clientId) || "Interno", " \xB7", " ", formatDueDate(nextTask))
-  ) : /* @__PURE__ */ React.createElement("strong", null, "Sin pendientes"))))), /* @__PURE__ */ React.createElement("div", { className: "pd-insights" }, /* @__PURE__ */ React.createElement("section", { className: "pd-weekly", "aria-labelledby": "pd-weekly-title" }, /* @__PURE__ */ React.createElement("div", { className: "pd-insight-heading" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { id: "pd-weekly-title" }, "Rendimiento semanal"), /* @__PURE__ */ React.createElement("p", null, "Tareas asignadas y completadas por fecha de entrega")), /* @__PURE__ */ React.createElement("div", { className: "pd-chart-legend", "aria-label": "Leyenda" }, /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("i", { className: "is-complete" }), "Completadas"), /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("i", null), "Asignadas"))), /* @__PURE__ */ React.createElement("div", { className: "pd-week-chart" }, weeklySeries.map((item) => {
+  ) : /* @__PURE__ */ React.createElement("strong", null, "Sin pendientes"))))), /* @__PURE__ */ React.createElement("div", { className: "pd-insights" }, /* @__PURE__ */ React.createElement("section", { className: "pd-weekly", "aria-labelledby": "pd-weekly-title" }, /* @__PURE__ */ React.createElement("div", { className: "pd-insight-heading" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { id: "pd-weekly-title" }, "Rendimiento semanal de la empresa"), /* @__PURE__ */ React.createElement("p", null, "Todas las tareas asignadas y completadas por fecha de entrega")), /* @__PURE__ */ React.createElement("div", { className: "pd-chart-legend", "aria-label": "Leyenda" }, /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("i", { className: "is-complete" }), "Completadas"), /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("i", null), "Asignadas"))), /* @__PURE__ */ React.createElement("div", { className: "pd-week-chart" }, weeklySeries.map((item) => {
     const totalHeight = Math.round(item.total / weeklyMax * 100);
     const completedHeight = Math.round(
       item.completed / weeklyMax * 100
