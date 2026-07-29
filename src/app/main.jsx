@@ -4545,13 +4545,20 @@ function App() {
   const handleEventClick = (event, type) =>
     setEventAction({ isOpen: true, event, type });
   const triggerConfetti = () => {
-    if (window.confetti)
+    if (window.confetti) {
+      const theme = getComputedStyle(document.documentElement);
       window.confetti({
         particleCount: 150,
         spread: 80,
         origin: { y: 0.6 },
-        colors: ["#9333ea", "#3b82f6", "#10b981", "#f59e0b"],
+        colors: [
+          "--primary",
+          "--status-blue-text",
+          "--status-green-text",
+          "--status-yellow-text",
+        ].map((token) => theme.getPropertyValue(token).trim()),
       });
+    }
   };
 
   const handleGoogleSignIn = async () => {
@@ -6604,7 +6611,7 @@ function App() {
               />
             ) : (
               <div
-                className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold text-white ${profileBlocked ? "bg-[#9f2f2d]" : "bg-[#555552]"}`}
+                className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold text-white ${profileBlocked ? "bg-[var(--status-red-text)]" : "bg-[var(--text-muted)]"}`}
               >
                 {(currentUserProfile?.name || "IN").slice(0, 2).toUpperCase()}
               </div>
@@ -7097,7 +7104,7 @@ function App() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="eyebrow">Operación</p>
-                  <h2 className="editorial-title text-3xl text-[#2f3437] dark:text-[#f1efe9]">
+                  <h2 className="editorial-title text-3xl text-[var(--text)] dark:text-[var(--text)]">
                     Calendario
                   </h2>
                 </div>
@@ -7146,7 +7153,7 @@ function App() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="eyebrow">Operación</p>
-                  <h2 className="editorial-title text-3xl text-[#2f3437] dark:text-[#f1efe9]">
+                  <h2 className="editorial-title text-3xl text-[var(--text)] dark:text-[var(--text)]">
                     Calendario
                   </h2>
                 </div>
@@ -7446,31 +7453,31 @@ function App() {
 
 // --- SUBCOMPONENTES ---
 const SIDEBAR_ACCENT_HEX = {
-  purple: "#a855f7",
-  blue: "#3b82f6",
-  indigo: "#6366f1",
-  violet: "#8b5cf6",
-  amber: "#f59e0b",
-  emerald: "#10b981",
-  slate: "#94a3b8",
+  purple: "var(--primary)",
+  blue: "var(--status-blue-text)",
+  indigo: "var(--primary)",
+  violet: "var(--primary)",
+  amber: "var(--status-yellow-text)",
+  emerald: "var(--status-green-text)",
+  slate: "var(--text-faint)",
 };
 
 const SidebarItem = ({ active, onClick, icon, label, color, badge }) => (
   <button
     onClick={onClick}
     aria-current={active ? "page" : undefined}
-    className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors ${active ? "bg-[#f1f0ed] text-[#2f3437] dark:bg-[#2a2a27] dark:text-[#f1efe9]" : "text-[#787774] hover:bg-[#f7f6f3] hover:text-[#2f3437] dark:text-[#aaa7a0] dark:hover:bg-[#2a2a27] dark:hover:text-[#f1efe9]"}`}
+    className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors ${active ? "bg-[var(--primary-soft)] text-[var(--text)] dark:bg-[var(--primary-soft)] dark:text-[var(--text)]" : "text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text)] dark:text-[var(--text-muted)] dark:hover:bg-[var(--surface-muted)] dark:hover:text-[var(--text)]"}`}
   >
     <span
       className={`absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full transition-all ${active ? "h-5 w-1" : "h-0 w-0"}`}
-      style={active ? { backgroundColor: SIDEBAR_ACCENT_HEX[color] || "#94a3b8" } : undefined}
+      style={active ? { backgroundColor: SIDEBAR_ACCENT_HEX[color] || "var(--primary)" } : undefined}
     />
     <Icon name={icon} size={18} className="shrink-0 text-[inherit]" />
     <span className="flex-1 truncate text-left text-sm font-medium text-[inherit]">
       {label}
     </span>
     {badge != null && (
-      <span className="rounded-full bg-[#eae9e5] px-2 py-0.5 text-[10px] font-bold text-[#555552] dark:bg-[#333330] dark:text-[#d3d0c9]">
+      <span className="rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-[10px] font-bold text-[var(--text-muted)] dark:bg-[var(--surface-muted)] dark:text-[var(--text-muted)]">
         {badge}
       </span>
     )}
@@ -7479,7 +7486,7 @@ const SidebarItem = ({ active, onClick, icon, label, color, badge }) => (
 
 const ViewTabs = ({ items, active, onChange }) => (
   <div
-    className="inline-flex w-fit max-w-full overflow-x-auto rounded-md border border-[#e6e4df] bg-white p-1 dark:border-white/10 dark:bg-[#222220]"
+    className="inline-flex w-fit max-w-full overflow-x-auto rounded-md border border-[var(--border)] bg-white p-1 dark:border-white/10 dark:bg-[var(--surface-raised)]"
     role="tablist"
   >
     {items.map((item) => (
@@ -7491,8 +7498,8 @@ const ViewTabs = ({ items, active, onChange }) => (
         onClick={() => onChange(item.id)}
         className={`min-h-[38px] min-w-0 whitespace-nowrap rounded px-3 py-1.5 text-sm font-medium transition-colors ${
           active === item.id
-            ? "bg-[#111111] text-white dark:bg-[#f1efe9] dark:text-[#181817]"
-            : "text-[#787774] hover:bg-[#f7f6f3] hover:text-[#2f3437] dark:text-[#aaa7a0] dark:hover:bg-[#2a2a27] dark:hover:text-[#f1efe9]"
+            ? "bg-[var(--primary)] text-white dark:bg-[var(--primary)] dark:text-[var(--primary-contrast)]"
+            : "text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text)] dark:text-[var(--text-muted)] dark:hover:bg-[var(--surface-muted)] dark:hover:text-[var(--text)]"
         }`}
       >
         {item.label}
@@ -7513,7 +7520,7 @@ const Button = ({
   <button
     type={type}
     onClick={onClick}
-    className={`${full ? "w-full" : ""} primary-action min-h-[44px] whitespace-nowrap px-4 py-2.5 font-semibold flex items-center justify-center gap-2 transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#111111] dark:focus-visible:ring-[#f1efe9] dark:focus-visible:ring-offset-[#181817]`}
+    className={`${full ? "w-full" : ""} primary-action min-h-[44px] whitespace-nowrap px-4 py-2.5 font-semibold flex items-center justify-center gap-2 transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--focus)] dark:focus-visible:ring-[var(--focus)] dark:focus-visible:ring-offset-[#181817]`}
     {...props}
   >
     {icon && <Icon name={icon} />} {children}
@@ -7527,7 +7534,7 @@ const EmptyState = ({ icon, text }) => (
       size={32}
       className="text-slate-500 dark:text-slate-400 mb-3"
     />
-    <p className="text-sm font-medium text-[#787774] dark:text-[#aaa7a0]">
+    <p className="text-sm font-medium text-[var(--text-muted)] dark:text-[var(--text-muted)]">
       {text}
     </p>
   </div>
@@ -7821,7 +7828,7 @@ const MobileBottomNav = ({ view, onNavigate, currentUserProfile }) => {
             aria-current={active ? "page" : undefined}
             className={`flex-1 min-w-0 min-h-[64px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] font-bold transition-colors ${
               active
-                ? "text-[#111111] dark:text-white"
+                ? "text-[var(--text)] dark:text-white"
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
             }`}
           >
@@ -7861,43 +7868,42 @@ const LoginVectorArtwork = () => (
     </g>
 
     <g className="login-vector-node login-vector-node-one">
-      <circle cx="174" cy="184" r="42" fill="#e1f3fe" />
-      <circle cx="174" cy="171" r="12" fill="#1f6c9f" />
-      <path d="M149 207 C153 187 195 187 199 207" fill="#1f6c9f" />
+      <circle cx="174" cy="184" r="42" fill="var(--status-blue-bg)" />
+      <circle cx="174" cy="171" r="12" fill="var(--status-blue-text)" />
+      <path d="M149 207 C153 187 195 187 199 207" fill="var(--status-blue-text)" />
     </g>
     <g className="login-vector-node login-vector-node-two">
-      <circle cx="446" cy="184" r="42" fill="#edf3ec" />
-      <circle cx="446" cy="171" r="12" fill="#346538" />
-      <path d="M421 207 C425 187 467 187 471 207" fill="#346538" />
+      <circle cx="446" cy="184" r="42" fill="var(--status-green-bg)" />
+      <circle cx="446" cy="171" r="12" fill="var(--status-green-text)" />
+      <path d="M421 207 C425 187 467 187 471 207" fill="var(--status-green-text)" />
     </g>
     <g className="login-vector-node login-vector-node-three">
-      <circle cx="174" cy="320" r="42" fill="#fbf3db" />
-      <rect x="151" y="299" width="46" height="42" rx="7" fill="#956400" />
-      <path d="M160 311 H188 M160 321 H183 M160 331 H176" stroke="#fbf3db" strokeWidth="3" strokeLinecap="round" />
+      <circle cx="174" cy="320" r="42" fill="var(--status-yellow-bg)" />
+      <rect x="151" y="299" width="46" height="42" rx="7" fill="var(--status-yellow-text)" />
+      <path d="M160 311 H188 M160 321 H183 M160 331 H176" stroke="var(--status-yellow-bg)" strokeWidth="3" strokeLinecap="round" />
     </g>
     <g className="login-vector-node login-vector-node-four">
-      <circle cx="446" cy="320" r="42" fill="#fdebec" />
-      <rect x="424" y="300" width="44" height="40" rx="8" fill="#9f2f2d" />
-      <path d="M435 320 L443 328 L458 311" fill="none" stroke="#fdebec" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="446" cy="320" r="42" fill="var(--status-red-bg)" />
+      <rect x="424" y="300" width="44" height="40" rx="8" fill="var(--status-red-text)" />
+      <path d="M435 320 L443 328 L458 311" fill="none" stroke="var(--status-red-bg)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
     </g>
 
     <g className="login-vector-core">
-      <circle cx="310" cy="252" r="76" fill="#f1f0ed" className="dark:fill-[#292d2a]" />
-      <circle cx="310" cy="252" r="57" fill="#161817" className="dark:fill-[#e9e6df]" />
+      <circle cx="310" cy="252" r="76" fill="var(--surface-muted)" />
+      <circle cx="310" cy="252" r="57" fill="var(--text)" />
       <path
         d="M278 257 L302 280 L344 226"
         fill="none"
-        stroke="#e9e6df"
-        className="dark:stroke-[#161817]"
+        stroke="var(--canvas)"
         strokeWidth="8"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
     </g>
 
-    <circle cx="310" cy="126" r="6" fill="#1f6c9f" className="login-vector-pulse" />
-    <circle cx="436" cy="252" r="6" fill="#346538" className="login-vector-pulse login-vector-delay" />
-    <circle cx="310" cy="378" r="6" fill="#956400" className="login-vector-pulse login-vector-delay-two" />
+    <circle cx="310" cy="126" r="6" fill="var(--status-blue-text)" className="login-vector-pulse" />
+    <circle cx="436" cy="252" r="6" fill="var(--status-green-text)" className="login-vector-pulse login-vector-delay" />
+    <circle cx="310" cy="378" r="6" fill="var(--status-yellow-text)" className="login-vector-pulse login-vector-delay-two" />
   </svg>
 );
 
@@ -7911,15 +7917,15 @@ const LoginScreen = ({
   isDark,
   onToggleTheme,
 }) => (
-  <div className="login-screen min-h-screen bg-[#f7f6f3] text-[#2f3437] dark:bg-[#161817] dark:text-[#e9e6df]">
+  <div className="login-screen min-h-screen bg-[var(--canvas)] text-[var(--text)] dark:bg-[var(--canvas)] dark:text-[var(--text)]">
     <header className="absolute inset-x-0 top-0 z-20 flex min-h-[76px] items-center justify-between px-5 sm:px-8 lg:px-12">
       <div className="flex items-center gap-3">
         <AgencyLogo className="h-9 w-9" />
         <div>
-          <p className="brand-name text-base font-bold leading-none text-[#2f3437] dark:text-[#e9e6df]">
+          <p className="brand-name text-base font-bold leading-none text-[var(--text)] dark:text-[var(--text)]">
             CLUSTER
           </p>
-          <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#787774] dark:text-[#a6a39c]">
+          <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)] dark:text-[var(--text-muted)]">
             Agency OS
           </p>
         </div>
@@ -7935,24 +7941,24 @@ const LoginScreen = ({
     </header>
 
     <main className="flex min-h-screen items-center justify-center px-4 pb-4 pt-24 sm:px-6 lg:px-10">
-      <section className="login-frame grid w-full max-w-[1120px] overflow-hidden rounded-2xl border border-[#dedcd6] bg-white dark:border-white/10 dark:bg-[#1f2220] lg:grid-cols-[1.08fr_0.92fr]" aria-labelledby="login-title">
-        <div className="login-art-panel order-2 relative min-h-[280px] overflow-hidden border-t border-[#dedcd6] bg-[#efeee9] dark:border-white/10 dark:bg-[#1a1d1b] lg:order-1 lg:min-h-[600px] lg:border-r lg:border-t-0">
+      <section className="login-frame grid w-full max-w-[1120px] overflow-hidden rounded-2xl border border-[var(--border)] bg-white dark:border-white/10 dark:bg-[var(--surface)] lg:grid-cols-[1.08fr_0.92fr]" aria-labelledby="login-title">
+        <div className="login-art-panel order-2 relative min-h-[280px] overflow-hidden border-t border-[var(--border)] bg-[var(--surface-muted)] dark:border-white/10 dark:bg-[var(--surface)] lg:order-1 lg:min-h-[600px] lg:border-r lg:border-t-0">
           <div className="pointer-events-none absolute inset-x-0 top-4 h-[72%] opacity-90 lg:h-[76%]">
             <LoginVectorArtwork />
           </div>
           <div className="relative z-10 flex h-full min-h-[280px] flex-col justify-between p-6 sm:p-8 lg:min-h-[600px] lg:p-10">
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#555552] dark:text-[#c4c1ba]">
-              <span className="h-2 w-2 rounded-full bg-[#346538] login-vector-pulse" />
+            <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-muted)] dark:text-[var(--text-muted)]">
+              <span className="h-2 w-2 rounded-full bg-[var(--status-green-text)] login-vector-pulse" />
               Operación conectada
             </div>
             <div className="max-w-md">
               <p className="eyebrow mb-3">Todo el equipo, una sola vista</p>
-              <h2 className="editorial-title text-3xl text-[#2f3437] dark:text-[#e9e6df] sm:text-4xl lg:text-5xl">
+              <h2 className="editorial-title text-3xl text-[var(--text)] dark:text-[var(--text)] sm:text-4xl lg:text-5xl">
                 El trabajo fluye cuando todo está conectado.
               </h2>
               <div className="mt-5 hidden flex-wrap gap-2 sm:flex">
                 {["Clientes", "Producción", "Equipo"].map((label) => (
-                  <span key={label} className="rounded-full border border-[#d8d6d0] bg-white/70 px-3 py-1.5 text-xs font-semibold text-[#555552] dark:border-white/10 dark:bg-[#232624]/80 dark:text-[#c4c1ba]">
+                  <span key={label} className="rounded-full border border-[var(--border)] bg-white/70 px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] dark:border-white/10 dark:bg-[var(--surface-raised)] dark:text-[var(--text-muted)]">
                     {label}
                   </span>
                 ))}
@@ -7965,10 +7971,10 @@ const LoginScreen = ({
           <div className="w-full max-w-[390px] mx-auto">
             <div className="mb-8">
               <p className="eyebrow mb-2">Acceso seguro</p>
-              <h1 id="login-title" className="editorial-title text-[40px] leading-tight text-[#2f3437] dark:text-[#e9e6df]">
+              <h1 id="login-title" className="editorial-title text-[40px] leading-tight text-[var(--text)] dark:text-[var(--text)]">
                 Bienvenido de nuevo
               </h1>
-              <p className="mt-3 text-sm leading-6 text-[#787774] dark:text-[#a6a39c]">
+              <p className="mt-3 text-sm leading-6 text-[var(--text-muted)] dark:text-[var(--text-muted)]">
                 Entra a tu espacio para gestionar clientes, tareas y producción.
               </p>
             </div>
@@ -7987,18 +7993,18 @@ const LoginScreen = ({
             </button>
 
             <div className="my-6 flex items-center gap-4">
-              <div className="h-px flex-1 bg-[#e6e4df] dark:bg-[#343431]" />
-              <span className="text-xs text-[#787774] dark:text-[#a6a39c]">O usa tu correo</span>
-              <div className="h-px flex-1 bg-[#e6e4df] dark:bg-[#343431]" />
+              <div className="h-px flex-1 bg-[var(--surface-muted)] dark:bg-[var(--surface-muted)]" />
+              <span className="text-xs text-[var(--text-muted)] dark:text-[var(--text-muted)]">O usa tu correo</span>
+              <div className="h-px flex-1 bg-[var(--surface-muted)] dark:bg-[var(--surface-muted)]" />
             </div>
 
             <form onSubmit={onEmailSubmit} className="space-y-4">
               <div>
-                <label htmlFor="login-email" className="mb-2 block text-sm font-medium text-[#2f3437] dark:text-[#e9e6df]">
+                <label htmlFor="login-email" className="mb-2 block text-sm font-medium text-[var(--text)] dark:text-[var(--text)]">
                   Correo electrónico
                 </label>
                 <div className="relative">
-                  <Icon name="Mail" size={17} className="pointer-events-none absolute left-3.5 top-3.5 text-[#9a9893]" />
+                  <Icon name="Mail" size={17} className="pointer-events-none absolute left-3.5 top-3.5 text-[var(--text-faint)]" />
                   <input
                     id="login-email"
                     type="email"
@@ -8006,7 +8012,7 @@ const LoginScreen = ({
                     onChange={(event) => onEmailChange(event.target.value)}
                     placeholder="nombre@empresa.com"
                     autoComplete="email"
-                    className="min-h-[46px] w-full rounded-md border border-[#d8d6d0] bg-white pl-11 pr-4 text-sm text-[#2f3437] outline-none transition placeholder:text-slate-400 focus:border-[#111111] focus:ring-2 focus:ring-black/10 dark:border-[#454541] dark:bg-[#1a1d1b] dark:text-[#e9e6df]"
+                    className="min-h-[46px] w-full rounded-md border border-[var(--border)] bg-white pl-11 pr-4 text-sm text-[var(--text)] outline-none transition placeholder:text-slate-400 focus:border-[var(--focus)] focus:ring-2 focus:ring-black/10 dark:border-[var(--border-strong)] dark:bg-[var(--surface)] dark:text-[var(--text)]"
                   />
                 </div>
               </div>
@@ -8021,7 +8027,7 @@ const LoginScreen = ({
               </button>
             </form>
 
-            <div className="mt-6 flex items-center justify-center gap-2 text-xs text-[#787774] dark:text-[#a6a39c]">
+            <div className="mt-6 flex items-center justify-center gap-2 text-xs text-[var(--text-muted)] dark:text-[var(--text-muted)]">
               <Icon name="ShieldCheck" size={15} />
               Acceso exclusivo para cuentas autorizadas
             </div>
@@ -8070,19 +8076,19 @@ const StatCard = ({
       : {})}
     className={`surface group flex min-h-[118px] w-full items-start justify-between p-5 text-left transition-colors ${
       onClick
-        ? "hover:border-[#8f8c85] hover:bg-[#fbfbfa] dark:hover:border-[#5b605c] dark:hover:bg-[#242825]"
+        ? "hover:border-[var(--border-strong)] hover:bg-[var(--surface-subtle)] dark:hover:border-[var(--border-strong)] dark:hover:bg-[var(--surface-muted)]"
         : ""
     }`}
   >
     <div className="min-w-0">
-      <p className="text-xs font-medium text-[#787774] dark:text-[#aaa7a0]">
+      <p className="text-xs font-medium text-[var(--text-muted)] dark:text-[var(--text-muted)]">
         {title}
       </p>
-      <p className="mono-meta mt-2 text-3xl font-semibold leading-none text-[#2f3437] dark:text-[#f1efe9]">
+      <p className="mono-meta mt-2 text-3xl font-semibold leading-none text-[var(--text)] dark:text-[var(--text)]">
         {value}
       </p>
       {detail && (
-        <p className="mt-2 text-xs text-[#9a9893] dark:text-[#8f8c85]">
+        <p className="mt-2 text-xs text-[var(--text-faint)] dark:text-[var(--text-faint)]">
           {detail}
         </p>
       )}
@@ -8092,10 +8098,10 @@ const StatCard = ({
         <Icon
           name="ArrowRight"
           size={16}
-          className="text-[#9a9893] transition-transform group-hover:translate-x-0.5 dark:text-[#8f8c85]"
+          className="text-[var(--text-faint)] transition-transform group-hover:translate-x-0.5 dark:text-[var(--text-faint)]"
         />
       )}
-      <div className="rounded-lg bg-[#f1f0ed] p-2.5 text-[#555552] dark:bg-[#2a2a27] dark:text-[#d3d0c9]">
+      <div className="rounded-lg bg-[var(--surface-muted)] p-2.5 text-[var(--text-muted)] dark:bg-[var(--surface-muted)] dark:text-[var(--text-muted)]">
         <Icon name={icon} size={20} />
       </div>
     </div>
@@ -8116,7 +8122,7 @@ const Input = ({ label, id, className = "", ...props }) => {
       {label && (
         <label
           htmlFor={inputId}
-          className="block text-xs font-medium text-[#555552] dark:text-[#d3d0c9] mb-1.5"
+          className="block text-xs font-medium text-[var(--text-muted)] dark:text-[var(--text-muted)] mb-1.5"
         >
           {label}
         </label>
@@ -8124,7 +8130,7 @@ const Input = ({ label, id, className = "", ...props }) => {
       <input
         id={inputId}
         aria-label={ariaLabel}
-        className={`w-full p-4 md:p-3 bg-white dark:bg-[#222220] border border-[#e6e4df] dark:border-white/10 rounded-md focus:border-[#111111] dark:focus:border-[#f1efe9] focus:ring-0 outline-none font-normal text-[#2f3437] dark:text-[#f1efe9] transition-colors placeholder:text-[#9a9893] ${className}`}
+        className={`w-full p-4 md:p-3 bg-white dark:bg-[var(--surface-raised)] border border-[var(--border)] dark:border-white/10 rounded-md focus:border-[var(--focus)] dark:focus:border-[var(--focus)] focus:ring-0 outline-none font-normal text-[var(--text)] dark:text-[var(--text)] transition-colors placeholder:text-[var(--text-faint)] ${className}`}
         {...props}
       />
     </div>
@@ -8245,18 +8251,18 @@ const CheckItem = ({ label, checked, onToggle }) => (
 );
 
 const DASHBOARD_PALETTE = {
-  emerald: { solid: "#a9c6a6", strong: "#346538" },
-  amber: { solid: "#eadcae", strong: "#956400" },
-  red: { solid: "#e8b9ba", strong: "#9f2f2d" },
-  purple: { solid: "#b8dbea", strong: "#1f6c9f" },
-  violet: { solid: "#b8dbea", strong: "#1f6c9f" },
-  indigo: { solid: "#b8dbea", strong: "#1f6c9f" },
-  blue: { solid: "#b8dbea", strong: "#1f6c9f" },
-  cyan: { solid: "#b8dbea", strong: "#1f6c9f" },
-  orange: { solid: "#eadcae", strong: "#956400" },
-  fuchsia: { solid: "#e8b9ba", strong: "#9f2f2d" },
-  stone: { solid: "#bdbab2", strong: "#555552" },
-  slate: { solid: "#bdbab2", strong: "#555552" },
+  emerald: { solid: "var(--status-green-bg)", strong: "var(--status-green-text)" },
+  amber: { solid: "var(--status-yellow-bg)", strong: "var(--status-yellow-text)" },
+  red: { solid: "var(--status-red-bg)", strong: "var(--status-red-text)" },
+  purple: { solid: "var(--primary-soft)", strong: "var(--primary)" },
+  violet: { solid: "var(--primary-soft)", strong: "var(--primary)" },
+  indigo: { solid: "var(--primary-soft)", strong: "var(--primary)" },
+  blue: { solid: "var(--status-blue-bg)", strong: "var(--status-blue-text)" },
+  cyan: { solid: "var(--status-blue-bg)", strong: "var(--status-blue-text)" },
+  orange: { solid: "var(--status-yellow-bg)", strong: "var(--status-yellow-text)" },
+  fuchsia: { solid: "var(--status-red-bg)", strong: "var(--status-red-text)" },
+  stone: { solid: "var(--surface-muted)", strong: "var(--text-muted)" },
+  slate: { solid: "var(--surface-muted)", strong: "var(--text-muted)" },
 };
 
 const getDashboardPalette = (name = "slate") =>
@@ -9317,7 +9323,7 @@ const KanbanCard = ({
       draggable={draggable ? "true" : undefined}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className={`task-card group relative cursor-pointer rounded-xl border border-[#ddd9d1] border-l-[3px] bg-white p-4 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-px hover:border-[#aaa69d] focus-visible:outline-none dark:border-white/10 dark:bg-[#232724] dark:hover:border-white/20 ${selected ? "ring-2 ring-[#b78000]/70 dark:ring-[#e4aa19]/70" : ""} ${accent}`}
+      className={`task-card group relative cursor-pointer rounded-xl border border-[var(--border)] border-l-[3px] bg-white p-4 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-px hover:border-[var(--border-strong)] focus-visible:outline-none dark:border-white/10 dark:bg-[var(--surface-raised)] dark:hover:border-white/20 ${selected ? "ring-2 ring-[var(--status-yellow-text)] dark:ring-[var(--status-yellow-text)]" : ""} ${accent}`}
     >
       <div className="flex items-start justify-between gap-2 mb-1.5 min-h-[20px]">
         <div className="min-w-0 flex-1">
@@ -9378,7 +9384,7 @@ const KanbanCard = ({
               onClick={(event) => event.stopPropagation()}
               onDragStart={(event) => event.stopPropagation()}
               aria-label={`Cambiar estado de ${title}`}
-              className="min-h-11 w-full appearance-none rounded-lg border border-[#d8d5ce] bg-[#f7f6f2] px-3 py-2 pr-10 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[#1b1f1c] dark:text-slate-200 lg:min-h-9 lg:py-1.5 lg:text-xs"
+              className="min-h-11 w-full appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2 pr-10 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[var(--surface)] dark:text-slate-200 lg:min-h-9 lg:py-1.5 lg:text-xs"
             >
               {statusControl.options.map((option) => (
                 <option key={option.id} value={option.id}>
@@ -9460,23 +9466,23 @@ const KanbanColumn = ({
   const columnColor = getDashboardPalette(dotColor).strong;
   return (
     <section
-      className="task-room-column flex h-[calc(100dvh-15rem)] min-h-[32rem] w-[88vw] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-[#dedbd4] bg-[#efeee9] transition-colors dark:border-white/10 dark:bg-[#191d1a] sm:w-[24rem] lg:h-full lg:min-h-0 lg:w-auto lg:shrink"
+      className="task-room-column flex h-[calc(100dvh-15rem)] min-h-[32rem] w-[88vw] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] transition-colors dark:border-white/10 dark:bg-[var(--surface)] sm:w-[24rem] lg:h-full lg:min-h-0 lg:w-auto lg:shrink"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       aria-label={`${title}: ${count} tareas`}
     >
-      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-[#dfddd7] bg-[#f7f6f3]/80 px-4 py-3.5 dark:border-white/10 dark:bg-[#1f2320]/90">
+      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3.5 dark:border-white/10 dark:bg-[var(--surface)]">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2.5">
             <span
               className="h-2.5 w-2.5 shrink-0 rounded-full"
               style={{ backgroundColor: columnColor }}
             />
-            <span className="truncate text-sm font-semibold text-[#2f3437] dark:text-[#f1efe9]">
+            <span className="truncate text-sm font-semibold text-[var(--text)] dark:text-[var(--text)]">
               {title}
             </span>
-            <span className="mono-meta shrink-0 rounded-md bg-[#e6e4df] px-2 py-0.5 text-[11px] font-semibold text-[#787774] dark:bg-[#2a2a27] dark:text-[#aaa7a0]">
+            <span className="mono-meta shrink-0 rounded-md bg-[var(--surface-muted)] px-2 py-0.5 text-[11px] font-semibold text-[var(--text-muted)] dark:bg-[var(--surface-muted)] dark:text-[var(--text-muted)]">
               {count}
             </span>
           </div>
@@ -9492,7 +9498,7 @@ const KanbanColumn = ({
             onClick={onAdd}
             aria-label={`Añadir tarea en ${title}`}
             title="Añadir tarea"
-            className="flex h-8 min-h-0 w-8 min-w-0 items-center justify-center rounded-md text-[#787774] hover:bg-[#e6e4df] hover:text-[#2f3437] dark:text-[#aaa7a0] dark:hover:bg-[#2a2a27] dark:hover:text-[#f1efe9]"
+            className="flex h-8 min-h-0 w-8 min-w-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)] dark:text-[var(--text-muted)] dark:hover:bg-[var(--surface-muted)] dark:hover:text-[var(--text)]"
           >
             <Icon name="Plus" size={15} />
           </button>
@@ -9530,20 +9536,20 @@ const KanbanStage = ({
 
   return (
     <section
-      className="rounded-lg border border-transparent transition-colors [&.drag-over]:border-[#b78000] [&.drag-over]:bg-[#b78000]/5"
+      className="rounded-lg border border-transparent transition-colors [&.drag-over]:border-[var(--status-yellow-text)] [&.drag-over]:bg-[var(--status-yellow-text)]/5"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       aria-label={`${title}: ${tasks.length} tareas`}
     >
       {showHeader && (
-        <div className="mb-2 flex items-center justify-between rounded-lg border border-[#dfddd7] bg-[#f7f6f3] px-3 py-2.5 dark:border-white/10 dark:bg-[#202421]">
+        <div className="mb-2 flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2.5 dark:border-white/10 dark:bg-[var(--surface-muted)]">
           <div className="flex min-w-0 items-center gap-2">
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
             <span className="truncate text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-600 dark:text-slate-300">
               {title}
             </span>
-            <span className="rounded bg-[#e9e7e1] px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-[#2c302c] dark:text-slate-400">
+            <span className="rounded bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-[var(--surface-muted)] dark:text-slate-400">
               {tasks.length}
             </span>
           </div>
@@ -9566,7 +9572,7 @@ const KanbanStage = ({
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#cbc7bf] px-3 py-2.5 text-xs font-semibold text-slate-500 hover:border-[#aaa69d] hover:text-slate-700 dark:border-white/15 dark:text-slate-400 dark:hover:border-white/25 dark:hover:text-slate-200"
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[var(--border-strong)] px-3 py-2.5 text-xs font-semibold text-slate-500 hover:border-[var(--border-strong)] hover:text-slate-700 dark:border-white/15 dark:text-slate-400 dark:hover:border-white/25 dark:hover:text-slate-200"
         >
           Ver {tasks.length - collapsedLimit} más
           <Icon name="ChevronDown" size={14} />
@@ -9615,7 +9621,7 @@ const TaskRoomInspector = ({
     !isCompletedStatus(task.status);
 
   return (
-    <aside className="task-room-inspector fixed inset-x-3 bottom-3 top-20 z-40 flex min-h-0 flex-col overflow-hidden rounded-xl border border-[#d8d5ce] bg-[#f7f6f2] shadow-2xl dark:border-white/10 dark:bg-[#1c201d] 2xl:static 2xl:z-auto 2xl:shadow-none">
+    <aside className="task-room-inspector fixed inset-x-3 bottom-3 top-20 z-40 flex min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] shadow-2xl dark:border-white/10 dark:bg-[var(--surface)] 2xl:static 2xl:z-auto 2xl:shadow-none">
       <div className="custom-scroll flex-1 overflow-y-auto p-5">
         <div className="mb-6 flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -9625,7 +9631,7 @@ const TaskRoomInspector = ({
                 {client}
               </p>
             )}
-            <h3 className="text-lg font-semibold leading-snug text-slate-900 dark:text-[#f1efe9]">
+            <h3 className="text-lg font-semibold leading-snug text-slate-900 dark:text-[var(--text)]">
               {task.title}
             </h3>
           </div>
@@ -9640,7 +9646,7 @@ const TaskRoomInspector = ({
         </div>
 
         <div className="mb-6 grid grid-cols-2 gap-2">
-          <div className="rounded-lg border border-[#dedbd4] bg-white px-3 py-2.5 dark:border-white/10 dark:bg-[#242824]">
+          <div className="rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 dark:border-white/10 dark:bg-[var(--surface-raised)]">
             <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">Estado</p>
             <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200">{status?.title || "Sin estado"}</p>
           </div>
@@ -9650,7 +9656,7 @@ const TaskRoomInspector = ({
           </div>
         </div>
 
-        <div className="mb-6 grid grid-cols-2 gap-4 border-b border-[#dedbd4] pb-6 dark:border-white/10">
+        <div className="mb-6 grid grid-cols-2 gap-4 border-b border-[var(--border)] pb-6 dark:border-white/10">
           <div>
             <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">Responsable</p>
             <div className="flex items-center gap-2">
@@ -9680,7 +9686,7 @@ const TaskRoomInspector = ({
         </div>
 
         {task.assignedByName && (
-          <div className="mb-6 flex items-center gap-2.5 border-b border-[#dedbd4] pb-6 dark:border-white/10">
+          <div className="mb-6 flex items-center gap-2.5 border-b border-[var(--border)] pb-6 dark:border-white/10">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
               <Icon name="UserCheck" size={15} />
             </span>
@@ -9695,13 +9701,13 @@ const TaskRoomInspector = ({
           </div>
         )}
 
-        <div className="mb-6 border-b border-[#dedbd4] pb-6 dark:border-white/10">
+        <div className="mb-6 border-b border-[var(--border)] pb-6 dark:border-white/10">
           <div className="mb-2.5 flex items-center justify-between">
             <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">Progreso</p>
             <span className="text-xs font-semibold text-slate-500">{progress}%</span>
           </div>
-          <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-[#dedbd4] dark:bg-white/10">
-            <span className="block h-full rounded-full bg-[#b78000] transition-[width]" style={{ width: `${progress}%` }} />
+          <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)] dark:bg-white/10">
+            <span className="block h-full rounded-full bg-[var(--status-yellow-text)] transition-[width]" style={{ width: `${progress}%` }} />
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             {checklist.length ? `${completed} de ${checklist.length} completadas` : "Sin checklist"}
@@ -9709,7 +9715,7 @@ const TaskRoomInspector = ({
         </div>
 
         {task.notes && (
-          <div className="mb-6 border-b border-[#dedbd4] pb-6 dark:border-white/10">
+          <div className="mb-6 border-b border-[var(--border)] pb-6 dark:border-white/10">
             <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">Descripción</p>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600 dark:text-slate-300">{task.notes}</p>
           </div>
@@ -9721,7 +9727,7 @@ const TaskRoomInspector = ({
             <div className="space-y-3">
               {activity.map((item) => (
                 <div key={item.id} className="flex gap-2.5">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2f6f58] text-[9px] font-bold text-white">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--status-green-text)] text-[9px] font-bold text-white">
                     {getInitials(item.author)}
                   </span>
                   <div className="min-w-0">
@@ -9736,11 +9742,11 @@ const TaskRoomInspector = ({
           )}
         </div>
       </div>
-      <div className="border-t border-[#dedbd4] p-4 dark:border-white/10">
+      <div className="border-t border-[var(--border)] p-4 dark:border-white/10">
         <button
           type="button"
           onClick={onOpenFull}
-          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#171817] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#30322f] dark:bg-[#f1efe9] dark:text-[#181817] dark:hover:bg-white"
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-[var(--primary-contrast)] transition-colors hover:bg-[var(--primary-hover)] dark:bg-[var(--primary)] dark:text-[var(--primary-contrast)] dark:hover:bg-[var(--primary-hover)]"
         >
           Abrir tarea completa
           <Icon name="ExternalLink" size={15} />
@@ -9844,15 +9850,15 @@ const DateHeader = ({
   const segBase =
     "shrink-0 min-h-9 px-3 py-2 text-[12px] font-medium rounded-lg transition-colors flex items-center gap-1.5";
   const segActive =
-    "bg-white text-[#252724] shadow-sm dark:bg-[#30342f] dark:text-[#f1efe9]";
+    "bg-white text-[var(--text)] shadow-sm dark:bg-[var(--surface-muted)] dark:text-[var(--text)]";
   const segIdle =
     "text-slate-500 dark:text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/5 dark:hover:text-slate-200";
 
   return (
-    <header className="task-room-header shrink-0 border-b border-[#dedbd4] pb-3 dark:border-white/10">
+    <header className="task-room-header shrink-0 border-b border-[var(--border)] pb-3 dark:border-white/10">
       <div className="mb-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <h2 className="editorial-title truncate text-[clamp(1.75rem,3vw,2.5rem)] leading-none text-[#2f3437] dark:text-[#f1efe9]">
+          <h2 className="editorial-title truncate text-[clamp(1.75rem,3vw,2.5rem)] leading-none text-[var(--text)] dark:text-[var(--text)]">
             {title}
           </h2>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
@@ -9887,7 +9893,7 @@ const DateHeader = ({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-          <div className="flex max-w-full overflow-x-auto rounded-lg bg-[#ebe9e3] p-1 kanban-mobile-scroll dark:bg-[#242824]">
+          <div className="flex max-w-full overflow-x-auto rounded-lg bg-[var(--surface-muted)] p-1 kanban-mobile-scroll dark:bg-[var(--surface-raised)]">
             <button
               onClick={() => setFilterMode("date")}
               className={`${segBase} ${filterMode === "date" ? segActive : segIdle}`}
@@ -9906,7 +9912,7 @@ const DateHeader = ({
             )}
             <button
               onClick={() => setFilterMode("overdue")}
-              className={`${segBase} ${filterMode === "overdue" ? "bg-[#fdebec] text-[#9f2f2d] dark:bg-red-500/15 dark:text-red-300" : segIdle}`}
+              className={`${segBase} ${filterMode === "overdue" ? "bg-[var(--status-red-bg)] text-[var(--status-red-text)] dark:bg-red-500/15 dark:text-red-300" : segIdle}`}
             >
               Atrasadas <Icon name="Flame" size={14} />
             </button>
@@ -9931,7 +9937,7 @@ const DateHeader = ({
             )}
           </div>
           {setOwnershipFilter && (
-            <div className="flex max-w-full overflow-x-auto rounded-lg bg-[#ebe9e3] p-1 kanban-mobile-scroll dark:bg-[#242824]">
+            <div className="flex max-w-full overflow-x-auto rounded-lg bg-[var(--surface-muted)] p-1 kanban-mobile-scroll dark:bg-[var(--surface-raised)]">
               <button
                 onClick={() => setOwnershipFilter("all")}
                 className={`${segBase} ${ownershipFilter === "all" ? segActive : segIdle}`}
@@ -9953,7 +9959,7 @@ const DateHeader = ({
                 type="date"
                 value={currentDate}
                 onChange={(e) => setCurrentDate(e.target.value)}
-                className="min-h-10 rounded-lg border border-[#d8d5ce] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[#8e8a82] dark:border-white/10 dark:bg-[#242824] dark:text-slate-300"
+                className="min-h-10 rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[var(--focus)] dark:border-white/10 dark:bg-[var(--surface-raised)] dark:text-slate-300"
               />
               {currentDate === today && (
                 <span className="text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 font-bold px-2 py-1 rounded-full shrink-0">
@@ -9968,7 +9974,7 @@ const DateHeader = ({
                 type="date"
                 value={effectiveRangeStart}
                 onChange={handleRangeStartChange}
-                className="min-h-10 rounded-lg border border-[#d8d5ce] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[#8e8a82] dark:border-white/10 dark:bg-[#242824] dark:text-slate-300"
+                className="min-h-10 rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[var(--focus)] dark:border-white/10 dark:bg-[var(--surface-raised)] dark:text-slate-300"
               />
               <span className="text-xs font-semibold text-slate-400">→</span>
               <input
@@ -9976,7 +9982,7 @@ const DateHeader = ({
                 value={effectiveRangeEnd}
                 min={effectiveRangeStart}
                 onChange={handleRangeEndChange}
-                className="min-h-10 rounded-lg border border-[#d8d5ce] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[#8e8a82] dark:border-white/10 dark:bg-[#242824] dark:text-slate-300"
+                className="min-h-10 rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[var(--focus)] dark:border-white/10 dark:bg-[var(--surface-raised)] dark:text-slate-300"
               />
             </div>
           )}
@@ -10090,11 +10096,9 @@ const AccountRoomView = ({
       clone.style.top = "-9999px";
       clone.style.left = "-9999px";
       clone.style.opacity = "1";
-      clone.style.backgroundColor = document.documentElement.classList.contains(
-        "dark",
-      )
-        ? "#0f172a"
-        : "#ffffff";
+      clone.style.backgroundColor = getComputedStyle(
+        document.documentElement,
+      ).getPropertyValue("--surface-raised");
       clone.style.borderRadius = "0.75rem";
       clone.style.boxShadow = "0 25px 50px -12px rgba(0, 0, 0, 0.4)";
       clone.style.transform = "rotate(3deg) scale(1.05)";
@@ -10405,11 +10409,9 @@ const EditionsRoomView = ({
       clone.style.top = "-9999px";
       clone.style.left = "-9999px";
       clone.style.opacity = "1";
-      clone.style.backgroundColor = document.documentElement.classList.contains(
-        "dark",
-      )
-        ? "#0f172a"
-        : "#ffffff";
+      clone.style.backgroundColor = getComputedStyle(
+        document.documentElement,
+      ).getPropertyValue("--surface-raised");
       clone.style.borderRadius = "0.75rem";
       clone.style.boxShadow = "0 25px 50px -12px rgba(0, 0, 0, 0.4)";
       clone.style.transform = "rotate(3deg) scale(1.05)";
@@ -10913,7 +10915,7 @@ const ManagementRoomView = ({
       />
 
       <div className="flex flex-col gap-2 lg:flex-row">
-        <div className="surface-subtle flex flex-1 flex-wrap rounded-xl border border-[#e2e0da] p-1.5 dark:border-white/10">
+        <div className="surface-subtle flex flex-1 flex-wrap rounded-xl border border-[var(--border)] p-1.5 dark:border-white/10">
           {columns.map((col) => {
             const filteredCount = filteredTasks.filter(
               (t) => t.status === col.id,
@@ -12266,9 +12268,18 @@ const StickerImage = ({ id, size = 120, className = "" }) => {
   );
 };
 const CHAT_AVATAR_COLORS = [
-  "#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981",
-  "#0ea5e9", "#ef4444", "#14b8a6", "#a855f7", "#f97316",
-  "#3b82f6", "#d946ef",
+  "var(--primary)",
+  "var(--primary-hover)",
+  "var(--status-blue-text)",
+  "var(--status-green-text)",
+  "var(--status-yellow-text)",
+  "var(--status-red-text)",
+  "#407f8d",
+  "#386c4c",
+  "#93631b",
+  "#ad473e",
+  "#68746b",
+  "#39433b",
 ];
 const chatAvatarColor = (seed = "") => {
   const value = String(seed);
@@ -14030,7 +14041,7 @@ const ClientChatView = ({
                         }}
                         className="flex w-full items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
                       >
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--text-muted)] text-[9px] font-black text-white">
                           {(person.name || person.email || "?")
                             .slice(0, 2)
                             .toUpperCase()}
@@ -14530,7 +14541,7 @@ const ClientChatView = ({
                     }}
                     className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#555552] text-[10px] font-black text-white">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--text-muted)] text-[10px] font-black text-white">
                       {(client.name || "C").slice(0, 2).toUpperCase()}
                     </div>
                     <span className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -15654,25 +15665,25 @@ const TaskDetailModal = ({
       id: "urgente",
       label: "Urgente",
       color: "text-red-500",
-      iconColor: "#ef4444",
+      iconColor: "var(--status-red-text)",
     },
     {
       id: "alta",
       label: "Alta",
       color: "text-orange-400",
-      iconColor: "#fb923c",
+      iconColor: "var(--status-yellow-text)",
     },
     {
       id: "normal",
       label: "Normal",
       color: "text-blue-400",
-      iconColor: "#60a5fa",
+      iconColor: "var(--status-blue-text)",
     },
     {
       id: "baja",
       label: "Baja",
       color: "text-slate-500",
-      iconColor: "#94a3b8",
+      iconColor: "var(--text-faint)",
     },
   ];
   const currentPriority = PRIORITIES.find((p) => p.id === task.priority);
@@ -15714,7 +15725,7 @@ const TaskDetailModal = ({
 
   return (
     <div
-      className="task-detail-overlay fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-[#080b09]/75 p-3 backdrop-blur-sm md:p-6"
+      className="task-detail-overlay fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-[var(--surface-overlay)] p-3 backdrop-blur-sm md:p-6"
       onClick={onClose}
     >
       <div
@@ -15723,13 +15734,13 @@ const TaskDetailModal = ({
         aria-modal="true"
         aria-labelledby={dialogTitleId}
         tabIndex={-1}
-        className="task-detail-shell flex h-[92dvh] max-h-[860px] w-full max-w-[1320px] flex-col overflow-hidden rounded-2xl border border-[#d8d5ce] bg-[#f7f6f2] shadow-2xl outline-none dark:border-white/10 dark:bg-[#171a18]"
+        className="task-detail-shell flex h-[92dvh] max-h-[860px] w-full max-w-[1320px] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-subtle)] shadow-2xl outline-none dark:border-white/10 dark:bg-[var(--surface)]"
         onClick={function (e) {
           e.stopPropagation();
         }}
       >
         {/* Barra superior */}
-        <div className="flex min-h-[68px] shrink-0 items-center gap-2 border-b border-[#dedbd4] bg-[#f7f6f2] px-4 dark:border-white/10 dark:bg-[#171a18] md:px-5">
+        <div className="flex min-h-[68px] shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface-subtle)] px-4 dark:border-white/10 dark:bg-[var(--surface)] md:px-5">
           <div
             className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wide bg-${tagColor}-100 dark:bg-${tagColor}-500/20 text-${tagColor}-700 dark:text-${tagColor}-400`}
           >
@@ -15757,7 +15768,7 @@ const TaskDetailModal = ({
                 onClick={() => onEdit(task, type)}
                 aria-label={`Editar ${task.title || "tarea"}`}
                 title="Editar"
-                className="flex min-h-11 items-center gap-2 rounded-lg border border-[#d8d5ce] bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors hover:border-[#aaa69d] hover:bg-[#efede7] dark:border-white/10 dark:bg-[#202420] dark:text-slate-200 dark:hover:border-white/20 dark:hover:bg-[#282d29]"
+                className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--border)] bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-muted)] dark:border-white/10 dark:bg-[var(--surface-raised)] dark:text-slate-200 dark:hover:border-white/20 dark:hover:bg-[var(--surface-muted)]"
               >
                 <Icon name="Pencil" size={14} />{" "}
                 <span className="hidden sm:inline">Editar</span>
@@ -15768,12 +15779,12 @@ const TaskDetailModal = ({
                   onClick={() => setActionsOpen((value) => !value)}
                   aria-label="Más acciones"
                   aria-expanded={actionsOpen}
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-[#d8d5ce] bg-white text-slate-500 transition-colors hover:border-[#aaa69d] hover:text-slate-800 dark:border-white/10 dark:bg-[#202420] dark:text-slate-400 dark:hover:border-white/20 dark:hover:text-slate-100"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-[var(--border)] bg-white text-slate-500 transition-colors hover:border-[var(--border-strong)] hover:text-slate-800 dark:border-white/10 dark:bg-[var(--surface-raised)] dark:text-slate-400 dark:hover:border-white/20 dark:hover:text-slate-100"
                 >
                   <Icon name="MoreHorizontal" size={18} />
                 </button>
                 {actionsOpen && (
-                  <div className="absolute right-0 top-full z-30 mt-2 w-48 rounded-xl border border-[#d8d5ce] bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#242824]">
+                  <div className="absolute right-0 top-full z-30 mt-2 w-48 rounded-xl border border-[var(--border)] bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[var(--surface-raised)]">
                     <button
                       type="button"
                       onClick={() => {
@@ -15793,7 +15804,7 @@ const TaskDetailModal = ({
           <button
             onClick={onClose}
             aria-label="Cerrar modal"
-            className="ml-1 flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-transparent text-slate-500 transition-colors hover:border-[#d8d5ce] hover:bg-white hover:text-slate-800 dark:text-slate-400 dark:hover:border-white/10 dark:hover:bg-[#202420] dark:hover:text-slate-100"
+            className="ml-1 flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-transparent text-slate-500 transition-colors hover:border-[var(--border)] hover:bg-white hover:text-slate-800 dark:text-slate-400 dark:hover:border-white/10 dark:hover:bg-[var(--surface-raised)] dark:hover:text-slate-100"
           >
             <Icon name="X" size={16} />
           </button>
@@ -15802,12 +15813,12 @@ const TaskDetailModal = ({
         {/* Cuerpo */}
         <div className="task-detail-body custom-scroll min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_24rem] lg:grid-rows-1 lg:overflow-hidden">
           {/* LEFT — Contenido principal */}
-          <div className="min-w-0 overflow-visible bg-[#f7f6f2] dark:bg-[#171a18] lg:custom-scroll lg:overflow-y-auto">
+          <div className="min-w-0 overflow-visible bg-[var(--surface-subtle)] dark:bg-[var(--surface)] lg:custom-scroll lg:overflow-y-auto">
             <div className="mx-auto max-w-4xl px-5 pb-10 pt-6 md:px-8 md:pt-7">
               {/* Title */}
               <h1
                 id={dialogTitleId}
-                className="editorial-title mb-4 break-words pr-4 text-3xl leading-tight text-slate-900 dark:text-[#f1efe9] md:text-[38px]"
+                className="editorial-title mb-4 break-words pr-4 text-3xl leading-tight text-slate-900 dark:text-[var(--text)] md:text-[38px]"
               >
                 {task.title}
               </h1>
@@ -15871,7 +15882,7 @@ const TaskDetailModal = ({
                 </span>
                 {assignee && (
                   <span className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#555552] text-[9px] font-bold text-white">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--text-muted)] text-[9px] font-bold text-white">
                       {assignee.name?.slice(0, 2).toUpperCase()}
                     </span>
                     <strong className="font-semibold">{assignee.name}</strong>
@@ -15896,7 +15907,7 @@ const TaskDetailModal = ({
 
               <nav
                 aria-label="Secciones de la tarea"
-                className="sticky top-0 z-10 mb-5 flex gap-1 border-b border-[#dedbd4] bg-[#f7f6f2]/95 backdrop-blur-sm dark:border-white/10 dark:bg-[#171a18]/95"
+                className="sticky top-0 z-10 mb-5 flex gap-1 border-b border-[var(--border)] bg-[var(--surface-subtle)] backdrop-blur-sm dark:border-white/10 dark:bg-[var(--surface)]"
               >
                 {[
                   { id: "task-summary", label: "Resumen" },
@@ -15910,7 +15921,7 @@ const TaskDetailModal = ({
                     key={item.id}
                     type="button"
                     onClick={() => scrollToTaskSection(item.id)}
-                    className={`relative min-h-11 px-3 text-sm font-semibold transition-colors ${index === 0 ? "text-slate-900 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-blue-500 dark:text-[#f1efe9]" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"}`}
+                    className={`relative min-h-11 px-3 text-sm font-semibold transition-colors ${index === 0 ? "text-slate-900 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-blue-500 dark:text-[var(--text)]" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"}`}
                   >
                     {item.label}
                   </button>
@@ -15920,7 +15931,7 @@ const TaskDetailModal = ({
               {/* Descripción */}
               <section
                 id="task-summary"
-                className="mb-4 scroll-mt-16 rounded-xl border border-[#dedbd4] bg-white p-5 dark:border-white/10 dark:bg-[#202420]"
+                className="mb-4 scroll-mt-16 rounded-xl border border-[var(--border)] bg-white p-5 dark:border-white/10 dark:bg-[var(--surface-raised)]"
               >
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 mb-2">
                   Descripción
@@ -15987,7 +15998,7 @@ const TaskDetailModal = ({
                   setAddingCheck(false);
                 };
                 return (
-                  <section className="mb-4 rounded-xl border border-[#dedbd4] bg-white p-5 dark:border-white/10 dark:bg-[#202420]">
+                  <section className="mb-4 rounded-xl border border-[var(--border)] bg-white p-5 dark:border-white/10 dark:bg-[var(--surface-raised)]">
                     <div className="mb-4 flex items-center gap-2">
                       <Icon
                         name="CheckSquare"
@@ -16009,9 +16020,9 @@ const TaskDetailModal = ({
                       )}
                     </div>
                     {checklist.length > 0 && (
-                      <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-[#dedbd4] dark:bg-white/10">
+                      <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)] dark:bg-white/10">
                         <div
-                          className="h-full rounded-full bg-[#b78000] transition-all duration-500"
+                          className="h-full rounded-full bg-[var(--status-yellow-text)] transition-all duration-500"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -16020,7 +16031,7 @@ const TaskDetailModal = ({
                       {checklist.map((item) => (
                         <div
                           key={item.id}
-                          className="group flex min-h-11 items-center gap-3 rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-[#dedbd4] hover:bg-[#f7f6f2] dark:hover:border-white/10 dark:hover:bg-[#282d29]"
+                          className="group flex min-h-11 items-center gap-3 rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-[var(--border)] hover:bg-[var(--surface-subtle)] dark:hover:border-white/10 dark:hover:bg-[var(--surface-muted)]"
                         >
                           <button
                             onClick={() => toggleItem(item.id)}
@@ -16080,7 +16091,7 @@ const TaskDetailModal = ({
                     ) : (
                       <button
                         onClick={() => canAct && setAddingCheck(true)}
-                        className={`mt-3 flex min-h-11 w-full items-center gap-2 rounded-lg border border-dashed border-[#cbc7bf] bg-[#f7f6f2] px-4 py-2 text-sm text-slate-500 transition-colors hover:border-[#aaa69d] hover:text-slate-700 dark:border-white/15 dark:bg-[#1b1f1c] dark:hover:border-white/25 dark:hover:text-slate-200 ${!canAct ? "cursor-default opacity-40" : ""}`}
+                        className={`mt-3 flex min-h-11 w-full items-center gap-2 rounded-lg border border-dashed border-[var(--border-strong)] bg-[var(--surface-subtle)] px-4 py-2 text-sm text-slate-500 transition-colors hover:border-[var(--border-strong)] hover:text-slate-700 dark:border-white/15 dark:bg-[var(--surface)] dark:hover:border-white/25 dark:hover:text-slate-200 ${!canAct ? "cursor-default opacity-40" : ""}`}
                       >
                         <Icon name="Plus" size={13} /> Agregar elemento
                       </button>
@@ -16126,7 +16137,7 @@ const TaskDetailModal = ({
                 return (
                   <section
                     id="task-files"
-                    className="mb-4 scroll-mt-16 rounded-xl border border-[#dedbd4] bg-white p-5 dark:border-white/10 dark:bg-[#202420]"
+                    className="mb-4 scroll-mt-16 rounded-xl border border-[var(--border)] bg-white p-5 dark:border-white/10 dark:bg-[var(--surface-raised)]"
                   >
                     <div className="mb-4 flex items-center gap-2">
                       <Icon name="Inbox" size={13} className="text-slate-500" />
@@ -16171,7 +16182,7 @@ const TaskDetailModal = ({
                         {attachments.map((att) => (
                           <div
                             key={att.id}
-                            className="group flex items-center gap-3 rounded-lg border border-[#dedbd4] bg-[#f7f6f2] p-3 transition-colors hover:border-[#aaa69d] dark:border-white/10 dark:bg-[#282d29] dark:hover:border-white/20"
+                            className="group flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] p-3 transition-colors hover:border-[var(--border-strong)] dark:border-white/10 dark:bg-[var(--surface-muted)] dark:hover:border-white/20"
                           >
                             {isImage(att) && att.data ? (
                               <img
@@ -16237,7 +16248,7 @@ const TaskDetailModal = ({
                           fileInputRef.current &&
                           fileInputRef.current.click()
                         }
-                        className={`flex min-h-[76px] w-full items-center justify-center gap-3 rounded-lg border border-dashed border-[#cbc7bf] bg-[#f7f6f2] px-4 py-3 text-sm text-slate-500 transition-colors hover:border-blue-400 hover:text-slate-700 dark:border-white/15 dark:bg-[#1b1f1c] dark:hover:border-blue-500/60 dark:hover:text-slate-200 ${!canAct ? "cursor-default opacity-40" : ""}`}
+                        className={`flex min-h-[76px] w-full items-center justify-center gap-3 rounded-lg border border-dashed border-[var(--border-strong)] bg-[var(--surface-subtle)] px-4 py-3 text-sm text-slate-500 transition-colors hover:border-blue-400 hover:text-slate-700 dark:border-white/15 dark:bg-[var(--surface)] dark:hover:border-blue-500/60 dark:hover:text-slate-200 ${!canAct ? "cursor-default opacity-40" : ""}`}
                       >
                         <Icon name="Paperclip" size={16} />
                         <span className="text-left">
@@ -16290,7 +16301,7 @@ const TaskDetailModal = ({
                       <div className="mb-4 space-y-3">
                         {taskChatMessages.slice(-4).map((message) => (
                           <div key={message.id} className="flex gap-2.5">
-                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white">
+                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--text-muted)] text-[9px] font-black text-white">
                               {(message.authorName || "U")
                                 .slice(0, 2)
                                 .toUpperCase()}
@@ -16358,7 +16369,7 @@ const TaskDetailModal = ({
               {/* Actividad — en el contenido principal, estilo Jira */}
               <section
                 id="task-activity"
-                className="scroll-mt-16 rounded-xl border border-[#dedbd4] bg-white p-5 dark:border-white/10 dark:bg-[#202420]"
+                className="scroll-mt-16 rounded-xl border border-[var(--border)] bg-white p-5 dark:border-white/10 dark:bg-[var(--surface-raised)]"
               >
                 <div className="flex items-center gap-2 mb-5">
                   <Icon
@@ -16379,7 +16390,7 @@ const TaskDetailModal = ({
 
                 {/* Comment input */}
                 <div className="mb-6 flex gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[10px] font-black text-white">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--text-muted)] text-[10px] font-black text-white">
                     {(currentUserProfile?.name || "U")
                       .slice(0, 2)
                       .toUpperCase()}
@@ -16400,7 +16411,7 @@ const TaskDetailModal = ({
                       }}
                       placeholder="Escribe una actualización o menciona con @"
                       rows={commentText ? 3 : 1}
-                      className="min-h-[48px] w-full resize-none rounded-lg border border-[#d8d5ce] bg-[#f7f6f2] px-4 py-3 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500/70 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[#1b1f1c] dark:text-slate-200"
+                      className="min-h-[48px] w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500/70 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[var(--surface)] dark:text-slate-200"
                     />
                     {/* @mention dropdown */}
                     {mentionOpen && mentionSuggestions.length > 0 && (
@@ -16417,7 +16428,7 @@ const TaskDetailModal = ({
                             }}
                             className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                           >
-                            <div className="w-6 h-6 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0">
+                            <div className="w-6 h-6 rounded-full bg-[var(--text-muted)] flex items-center justify-center text-white font-black text-[9px] shrink-0">
                               {p.name.slice(0, 2).toUpperCase()}
                             </div>
                             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1 text-left">
@@ -16451,9 +16462,9 @@ const TaskDetailModal = ({
                 </div>
 
                 {/* Feed */}
-                <div className="space-y-4 border-l border-[#dedbd4] pl-4 dark:border-white/10">
+                <div className="space-y-4 border-l border-[var(--border)] pl-4 dark:border-white/10">
                   {activityFeed.length === 0 && (
-                    <div className="rounded-lg border border-dashed border-[#cbc7bf] bg-[#f7f6f2] px-4 py-5 text-center dark:border-white/15 dark:bg-[#1b1f1c]">
+                    <div className="rounded-lg border border-dashed border-[var(--border-strong)] bg-[var(--surface-subtle)] px-4 py-5 text-center dark:border-white/15 dark:bg-[var(--surface)]">
                       <Icon
                         name="MessageSquare"
                         size={18}
@@ -16489,7 +16500,7 @@ const TaskDetailModal = ({
                       </div>
                     ) : (
                       <div key={item.id} className="flex gap-3">
-                        <div className="w-7 h-7 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5">
+                        <div className="w-7 h-7 rounded-full bg-[var(--text-muted)] flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5">
                           {(item.authorName || "U").slice(0, 2).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -16501,7 +16512,7 @@ const TaskDetailModal = ({
                               {relativeTime(item.createdAt)}
                             </span>
                           </div>
-                          <div className="rounded-lg rounded-tl-none border border-[#dedbd4] bg-[#f7f6f2] px-4 py-3 dark:border-white/10 dark:bg-[#282d29]">
+                          <div className="rounded-lg rounded-tl-none border border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3 dark:border-white/10 dark:bg-[var(--surface-muted)]">
                             <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words">
                               {item.text.split(/(@\S+)/g).map((part, i) =>
                                 part.startsWith("@") ? (
@@ -16527,14 +16538,14 @@ const TaskDetailModal = ({
           </div>
 
           {/* RIGHT — Panel de detalles estilo Jira */}
-          <aside className="w-full overflow-visible border-t border-[#dedbd4] bg-[#efeee9] dark:border-white/10 dark:bg-[#12161a] lg:custom-scroll lg:max-h-none lg:overflow-y-auto lg:border-l lg:border-t-0">
+          <aside className="w-full overflow-visible border-t border-[var(--border)] bg-[var(--surface-muted)] dark:border-white/10 dark:bg-[var(--surface-subtle)] lg:custom-scroll lg:max-h-none lg:overflow-y-auto lg:border-l lg:border-t-0">
             <div className="space-y-3 p-5">
-              <p className="mb-4 text-sm font-semibold text-slate-800 dark:text-[#f1efe9]">
+              <p className="mb-4 text-sm font-semibold text-slate-800 dark:text-[var(--text)]">
                 Detalles
               </p>
 
               {/* Asignados */}
-              <div data-dropdown className="relative rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]">
+              <div data-dropdown className="relative rounded-xl border border-[var(--border)] bg-white p-4 dark:border-white/10 dark:bg-[var(--surface-raised)]">
                 <p className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
                   <Icon name="Users" size={14} />
                   Responsable
@@ -16548,9 +16559,9 @@ const TaskDetailModal = ({
                       return (
                         <div
                           key={uid}
-                          className="group flex min-h-10 items-center gap-2 rounded-lg bg-[#f7f6f2] py-1 pl-1.5 pr-2 dark:bg-[#282d29]"
+                          className="group flex min-h-10 items-center gap-2 rounded-lg bg-[var(--surface-subtle)] py-1 pl-1.5 pr-2 dark:bg-[var(--surface-muted)]"
                         >
-                          <div className="w-5 h-5 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[8px] shrink-0">
+                          <div className="w-5 h-5 rounded-full bg-[var(--text-muted)] flex items-center justify-center text-white font-black text-[8px] shrink-0">
                             {person.name.slice(0, 2).toUpperCase()}
                           </div>
                           <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 leading-none">
@@ -16633,7 +16644,7 @@ const TaskDetailModal = ({
                               />
                             )}
                           </div>
-                          <div className="w-6 h-6 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0">
+                          <div className="w-6 h-6 rounded-full bg-[var(--text-muted)] flex items-center justify-center text-white font-black text-[9px] shrink-0">
                             {p.name.slice(0, 2).toUpperCase()}
                           </div>
                           <span
@@ -16660,17 +16671,17 @@ const TaskDetailModal = ({
               </div>
 
               {/* Prioridad */}
-              <div data-dropdown className="relative rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]">
+              <div data-dropdown className="relative rounded-xl border border-[var(--border)] bg-white p-4 dark:border-white/10 dark:bg-[var(--surface-raised)]">
                 <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
                   <Icon name="Flag" size={14} />
                   Prioridad
                 </p>
                 <button
                   onClick={() => canAct && setPriorityOpen((o) => !o)}
-                  className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-1.5 ${canAct ? "cursor-pointer hover:bg-[#f7f6f2] dark:hover:bg-[#282d29]" : "cursor-default"} transition-colors`}
+                  className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-1.5 ${canAct ? "cursor-pointer hover:bg-[var(--surface-subtle)] dark:hover:bg-[var(--surface-muted)]" : "cursor-default"} transition-colors`}
                 >
                   <FlagIcon
-                    color={currentPriority?.iconColor || "#94a3b8"}
+                    color={currentPriority?.iconColor || "var(--text-faint)"}
                     filled={!!currentPriority}
                   />
                   <span
@@ -16723,7 +16734,7 @@ const TaskDetailModal = ({
               </div>
 
               {/* Fecha límite */}
-              <div className="rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]">
+              <div className="rounded-xl border border-[var(--border)] bg-white p-4 dark:border-white/10 dark:bg-[var(--surface-raised)]">
                 <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2">
                   Fecha límite
                 </p>
@@ -16742,7 +16753,7 @@ const TaskDetailModal = ({
               </div>
 
               {/* Cliente */}
-              <div className="rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]">
+              <div className="rounded-xl border border-[var(--border)] bg-white p-4 dark:border-white/10 dark:bg-[var(--surface-raised)]">
                 <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2">
                   Cliente
                 </p>
@@ -16766,7 +16777,7 @@ const TaskDetailModal = ({
 
               {/* Jerarquía / Categoría */}
               {type === "editingTask" && (
-                <div className="rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]">
+                <div className="rounded-xl border border-[var(--border)] bg-white p-4 dark:border-white/10 dark:bg-[var(--surface-raised)]">
                   <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2">
                     Jerarquía
                   </p>
@@ -16776,7 +16787,7 @@ const TaskDetailModal = ({
                 </div>
               )}
               {type === "managementTask" && task.category && (
-                <div className="rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]">
+                <div className="rounded-xl border border-[var(--border)] bg-white p-4 dark:border-white/10 dark:bg-[var(--surface-raised)]">
                   <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2">
                     Categoría
                   </p>
@@ -16787,7 +16798,7 @@ const TaskDetailModal = ({
               )}
 
               {/* Tiempo */}
-              <div className="rounded-xl border border-[#d8d5ce] bg-white p-5 text-center dark:border-white/10 dark:bg-[#202420]">
+              <div className="rounded-xl border border-[var(--border)] bg-white p-5 text-center dark:border-white/10 dark:bg-[var(--surface-raised)]">
                 <p className="mb-3 flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
                   <Icon name="Timer" size={14} />
                   Tiempo registrado
@@ -16869,7 +16880,7 @@ const TaskDetailModal = ({
 
               {/* Fecha creación */}
               {task.createdAt && (
-                <div className="border-t border-[#d8d5ce] px-1 pt-4 dark:border-white/10">
+                <div className="border-t border-[var(--border)] px-1 pt-4 dark:border-white/10">
                   <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2">
                     Creado
                   </p>
@@ -16888,7 +16899,7 @@ const TaskDetailModal = ({
                 </div>
               )}
               <p className="flex items-center justify-center gap-2 pt-2 text-xs text-slate-500 dark:text-slate-400">
-                <kbd className="rounded border border-[#cbc7bf] bg-white px-2 py-1 font-mono text-[10px] dark:border-white/15 dark:bg-[#202420]">
+                <kbd className="rounded border border-[var(--border-strong)] bg-white px-2 py-1 font-mono text-[10px] dark:border-white/15 dark:bg-[var(--surface-raised)]">
                   Esc
                 </kbd>
                 para cerrar
@@ -17196,25 +17207,25 @@ const CreateTaskModal = ({
     {
       id: "urgente",
       label: "Urgente",
-      iconColor: "#ef4444",
+      iconColor: "var(--status-red-text)",
       color: "text-red-500",
     },
     {
       id: "alta",
       label: "Alta",
-      iconColor: "#fb923c",
+      iconColor: "var(--status-yellow-text)",
       color: "text-orange-400",
     },
     {
       id: "normal",
       label: "Normal",
-      iconColor: "#60a5fa",
+      iconColor: "var(--status-blue-text)",
       color: "text-blue-400",
     },
     {
       id: "baja",
       label: "Baja",
-      iconColor: "#94a3b8",
+      iconColor: "var(--text-faint)",
       color: "text-slate-500",
     },
   ];
@@ -17451,7 +17462,7 @@ const CreateTaskModal = ({
             >
               {assignee ? (
                 <>
-                  <div className="w-4 h-4 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[8px]">
+                  <div className="w-4 h-4 rounded-full bg-[var(--text-muted)] flex items-center justify-center text-white font-black text-[8px]">
                     {assignee.name.slice(0, 2).toUpperCase()}
                   </div>
                   {assignee.name}
@@ -17477,7 +17488,7 @@ const CreateTaskModal = ({
                     }}
                     className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                   >
-                    <div className="w-6 h-6 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0">
+                    <div className="w-6 h-6 rounded-full bg-[var(--text-muted)] flex items-center justify-center text-white font-black text-[9px] shrink-0">
                       {p.name.slice(0, 2).toUpperCase()}
                     </div>
                     <span
@@ -17530,7 +17541,7 @@ const CreateTaskModal = ({
                             ${curPriority ? "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"}`}
             >
               <FlagIcon
-                color={curPriority?.iconColor || "#94a3b8"}
+                color={curPriority?.iconColor || "var(--text-faint)"}
                 filled={!!curPriority}
               />
               <span

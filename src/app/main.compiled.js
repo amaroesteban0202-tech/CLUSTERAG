@@ -3387,13 +3387,20 @@ function App() {
   };
   const handleEventClick = (event, type) => setEventAction({ isOpen: true, event, type });
   const triggerConfetti = () => {
-    if (window.confetti)
+    if (window.confetti) {
+      const theme = getComputedStyle(document.documentElement);
       window.confetti({
         particleCount: 150,
         spread: 80,
         origin: { y: 0.6 },
-        colors: ["#9333ea", "#3b82f6", "#10b981", "#f59e0b"]
+        colors: [
+          "--primary",
+          "--status-blue-text",
+          "--status-green-text",
+          "--status-yellow-text"
+        ].map((token) => theme.getPropertyValue(token).trim())
       });
+    }
   };
   const handleGoogleSignIn = async () => {
     if (!auth || !GOOGLE_PROVIDER) return;
@@ -5151,7 +5158,7 @@ function App() {
       ) : /* @__PURE__ */ React.createElement(
         "div",
         {
-          className: `flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold text-white ${profileBlocked ? "bg-[#9f2f2d]" : "bg-[#555552]"}`
+          className: `flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold text-white ${profileBlocked ? "bg-[var(--status-red-text)]" : "bg-[var(--text-muted)]"}`
         },
         (currentUserProfile?.name || "IN").slice(0, 2).toUpperCase()
       ),
@@ -5572,7 +5579,7 @@ function App() {
           onSave: updateMyProfile
         }
       ),
-      view === "general-calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-3xl text-[#2f3437] dark:text-[#f1efe9]" }, "Calendario")), /* @__PURE__ */ React.createElement(
+      view === "general-calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-3xl text-[var(--text)] dark:text-[var(--text)]" }, "Calendario")), /* @__PURE__ */ React.createElement(
         ViewTabs,
         {
           active: "general-calendar",
@@ -5610,7 +5617,7 @@ function App() {
           }
         }
       ))),
-      view === "calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-3xl text-[#2f3437] dark:text-[#f1efe9]" }, "Calendario")), /* @__PURE__ */ React.createElement(
+      view === "calendar" && /* @__PURE__ */ React.createElement("div", { className: "h-full flex flex-col space-y-4 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-3xl text-[var(--text)] dark:text-[var(--text)]" }, "Calendario")), /* @__PURE__ */ React.createElement(
         ViewTabs,
         {
           active: "calendar",
@@ -5886,36 +5893,36 @@ function App() {
   ));
 }
 var SIDEBAR_ACCENT_HEX = {
-  purple: "#a855f7",
-  blue: "#3b82f6",
-  indigo: "#6366f1",
-  violet: "#8b5cf6",
-  amber: "#f59e0b",
-  emerald: "#10b981",
-  slate: "#94a3b8"
+  purple: "var(--primary)",
+  blue: "var(--status-blue-text)",
+  indigo: "var(--primary)",
+  violet: "var(--primary)",
+  amber: "var(--status-yellow-text)",
+  emerald: "var(--status-green-text)",
+  slate: "var(--text-faint)"
 };
 var SidebarItem = ({ active, onClick, icon, label, color, badge }) => /* @__PURE__ */ React.createElement(
   "button",
   {
     onClick,
     "aria-current": active ? "page" : void 0,
-    className: `group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors ${active ? "bg-[#f1f0ed] text-[#2f3437] dark:bg-[#2a2a27] dark:text-[#f1efe9]" : "text-[#787774] hover:bg-[#f7f6f3] hover:text-[#2f3437] dark:text-[#aaa7a0] dark:hover:bg-[#2a2a27] dark:hover:text-[#f1efe9]"}`
+    className: `group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors ${active ? "bg-[var(--primary-soft)] text-[var(--text)] dark:bg-[var(--primary-soft)] dark:text-[var(--text)]" : "text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text)] dark:text-[var(--text-muted)] dark:hover:bg-[var(--surface-muted)] dark:hover:text-[var(--text)]"}`
   },
   /* @__PURE__ */ React.createElement(
     "span",
     {
       className: `absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full transition-all ${active ? "h-5 w-1" : "h-0 w-0"}`,
-      style: active ? { backgroundColor: SIDEBAR_ACCENT_HEX[color] || "#94a3b8" } : void 0
+      style: active ? { backgroundColor: SIDEBAR_ACCENT_HEX[color] || "var(--primary)" } : void 0
     }
   ),
   /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 18, className: "shrink-0 text-[inherit]" }),
   /* @__PURE__ */ React.createElement("span", { className: "flex-1 truncate text-left text-sm font-medium text-[inherit]" }, label),
-  badge != null && /* @__PURE__ */ React.createElement("span", { className: "rounded-full bg-[#eae9e5] px-2 py-0.5 text-[10px] font-bold text-[#555552] dark:bg-[#333330] dark:text-[#d3d0c9]" }, badge)
+  badge != null && /* @__PURE__ */ React.createElement("span", { className: "rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-[10px] font-bold text-[var(--text-muted)] dark:bg-[var(--surface-muted)] dark:text-[var(--text-muted)]" }, badge)
 );
 var ViewTabs = ({ items, active, onChange }) => /* @__PURE__ */ React.createElement(
   "div",
   {
-    className: "inline-flex w-fit max-w-full overflow-x-auto rounded-md border border-[#e6e4df] bg-white p-1 dark:border-white/10 dark:bg-[#222220]",
+    className: "inline-flex w-fit max-w-full overflow-x-auto rounded-md border border-[var(--border)] bg-white p-1 dark:border-white/10 dark:bg-[var(--surface-raised)]",
     role: "tablist"
   },
   items.map((item) => /* @__PURE__ */ React.createElement(
@@ -5926,7 +5933,7 @@ var ViewTabs = ({ items, active, onChange }) => /* @__PURE__ */ React.createElem
       role: "tab",
       "aria-selected": active === item.id,
       onClick: () => onChange(item.id),
-      className: `min-h-[38px] min-w-0 whitespace-nowrap rounded px-3 py-1.5 text-sm font-medium transition-colors ${active === item.id ? "bg-[#111111] text-white dark:bg-[#f1efe9] dark:text-[#181817]" : "text-[#787774] hover:bg-[#f7f6f3] hover:text-[#2f3437] dark:text-[#aaa7a0] dark:hover:bg-[#2a2a27] dark:hover:text-[#f1efe9]"}`
+      className: `min-h-[38px] min-w-0 whitespace-nowrap rounded px-3 py-1.5 text-sm font-medium transition-colors ${active === item.id ? "bg-[var(--primary)] text-white dark:bg-[var(--primary)] dark:text-[var(--primary-contrast)]" : "text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text)] dark:text-[var(--text-muted)] dark:hover:bg-[var(--surface-muted)] dark:hover:text-[var(--text)]"}`
     },
     item.label
   ))
@@ -5944,7 +5951,7 @@ var Button = ({
   {
     type,
     onClick,
-    className: `${full ? "w-full" : ""} primary-action min-h-[44px] whitespace-nowrap px-4 py-2.5 font-semibold flex items-center justify-center gap-2 transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#111111] dark:focus-visible:ring-[#f1efe9] dark:focus-visible:ring-offset-[#181817]`,
+    className: `${full ? "w-full" : ""} primary-action min-h-[44px] whitespace-nowrap px-4 py-2.5 font-semibold flex items-center justify-center gap-2 transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--focus)] dark:focus-visible:ring-[var(--focus)] dark:focus-visible:ring-offset-[#181817]`,
     ...props
   },
   icon && /* @__PURE__ */ React.createElement(Icon, { name: icon }),
@@ -5958,7 +5965,7 @@ var EmptyState = ({ icon, text }) => /* @__PURE__ */ React.createElement("div", 
     size: 32,
     className: "text-slate-500 dark:text-slate-400 mb-3"
   }
-), /* @__PURE__ */ React.createElement("p", { className: "text-sm font-medium text-[#787774] dark:text-[#aaa7a0]" }, text));
+), /* @__PURE__ */ React.createElement("p", { className: "text-sm font-medium text-[var(--text-muted)] dark:text-[var(--text-muted)]" }, text));
 var AppShellSkeleton = () => /* @__PURE__ */ React.createElement("div", { className: "flex h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100" }, /* @__PURE__ */ React.createElement("div", { className: "hidden md:flex w-64 shrink-0 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6" }, /* @__PURE__ */ React.createElement("div", { className: "h-10 w-36 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" }), /* @__PURE__ */ React.createElement("div", { className: "mt-10 space-y-3" }, Array.from({ length: 8 }).map((_, index) => /* @__PURE__ */ React.createElement(
   "div",
   {
@@ -6180,7 +6187,7 @@ var MobileBottomNav = ({ view, onNavigate, currentUserProfile }) => {
           onClick: () => onNavigate(item.view),
           "aria-label": item.label,
           "aria-current": active ? "page" : void 0,
-          className: `flex-1 min-w-0 min-h-[64px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] font-bold transition-colors ${active ? "text-[#111111] dark:text-white" : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"}`
+          className: `flex-1 min-w-0 min-h-[64px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] font-bold transition-colors ${active ? "text-[var(--text)] dark:text-white" : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"}`
         },
         /* @__PURE__ */ React.createElement(Icon, { name: item.icon, size: 20 }),
         /* @__PURE__ */ React.createElement("span", { className: "truncate max-w-full" }, item.label)
@@ -6215,25 +6222,24 @@ var LoginVectorArtwork = () => /* @__PURE__ */ React.createElement(
       opacity: "0.3"
     }
   ), /* @__PURE__ */ React.createElement("path", { d: "M205 252 H415 M310 142 V362", strokeWidth: "1", opacity: "0.2" })),
-  /* @__PURE__ */ React.createElement("g", { className: "login-vector-node login-vector-node-one" }, /* @__PURE__ */ React.createElement("circle", { cx: "174", cy: "184", r: "42", fill: "#e1f3fe" }), /* @__PURE__ */ React.createElement("circle", { cx: "174", cy: "171", r: "12", fill: "#1f6c9f" }), /* @__PURE__ */ React.createElement("path", { d: "M149 207 C153 187 195 187 199 207", fill: "#1f6c9f" })),
-  /* @__PURE__ */ React.createElement("g", { className: "login-vector-node login-vector-node-two" }, /* @__PURE__ */ React.createElement("circle", { cx: "446", cy: "184", r: "42", fill: "#edf3ec" }), /* @__PURE__ */ React.createElement("circle", { cx: "446", cy: "171", r: "12", fill: "#346538" }), /* @__PURE__ */ React.createElement("path", { d: "M421 207 C425 187 467 187 471 207", fill: "#346538" })),
-  /* @__PURE__ */ React.createElement("g", { className: "login-vector-node login-vector-node-three" }, /* @__PURE__ */ React.createElement("circle", { cx: "174", cy: "320", r: "42", fill: "#fbf3db" }), /* @__PURE__ */ React.createElement("rect", { x: "151", y: "299", width: "46", height: "42", rx: "7", fill: "#956400" }), /* @__PURE__ */ React.createElement("path", { d: "M160 311 H188 M160 321 H183 M160 331 H176", stroke: "#fbf3db", strokeWidth: "3", strokeLinecap: "round" })),
-  /* @__PURE__ */ React.createElement("g", { className: "login-vector-node login-vector-node-four" }, /* @__PURE__ */ React.createElement("circle", { cx: "446", cy: "320", r: "42", fill: "#fdebec" }), /* @__PURE__ */ React.createElement("rect", { x: "424", y: "300", width: "44", height: "40", rx: "8", fill: "#9f2f2d" }), /* @__PURE__ */ React.createElement("path", { d: "M435 320 L443 328 L458 311", fill: "none", stroke: "#fdebec", strokeWidth: "4", strokeLinecap: "round", strokeLinejoin: "round" })),
-  /* @__PURE__ */ React.createElement("g", { className: "login-vector-core" }, /* @__PURE__ */ React.createElement("circle", { cx: "310", cy: "252", r: "76", fill: "#f1f0ed", className: "dark:fill-[#292d2a]" }), /* @__PURE__ */ React.createElement("circle", { cx: "310", cy: "252", r: "57", fill: "#161817", className: "dark:fill-[#e9e6df]" }), /* @__PURE__ */ React.createElement(
+  /* @__PURE__ */ React.createElement("g", { className: "login-vector-node login-vector-node-one" }, /* @__PURE__ */ React.createElement("circle", { cx: "174", cy: "184", r: "42", fill: "var(--status-blue-bg)" }), /* @__PURE__ */ React.createElement("circle", { cx: "174", cy: "171", r: "12", fill: "var(--status-blue-text)" }), /* @__PURE__ */ React.createElement("path", { d: "M149 207 C153 187 195 187 199 207", fill: "var(--status-blue-text)" })),
+  /* @__PURE__ */ React.createElement("g", { className: "login-vector-node login-vector-node-two" }, /* @__PURE__ */ React.createElement("circle", { cx: "446", cy: "184", r: "42", fill: "var(--status-green-bg)" }), /* @__PURE__ */ React.createElement("circle", { cx: "446", cy: "171", r: "12", fill: "var(--status-green-text)" }), /* @__PURE__ */ React.createElement("path", { d: "M421 207 C425 187 467 187 471 207", fill: "var(--status-green-text)" })),
+  /* @__PURE__ */ React.createElement("g", { className: "login-vector-node login-vector-node-three" }, /* @__PURE__ */ React.createElement("circle", { cx: "174", cy: "320", r: "42", fill: "var(--status-yellow-bg)" }), /* @__PURE__ */ React.createElement("rect", { x: "151", y: "299", width: "46", height: "42", rx: "7", fill: "var(--status-yellow-text)" }), /* @__PURE__ */ React.createElement("path", { d: "M160 311 H188 M160 321 H183 M160 331 H176", stroke: "var(--status-yellow-bg)", strokeWidth: "3", strokeLinecap: "round" })),
+  /* @__PURE__ */ React.createElement("g", { className: "login-vector-node login-vector-node-four" }, /* @__PURE__ */ React.createElement("circle", { cx: "446", cy: "320", r: "42", fill: "var(--status-red-bg)" }), /* @__PURE__ */ React.createElement("rect", { x: "424", y: "300", width: "44", height: "40", rx: "8", fill: "var(--status-red-text)" }), /* @__PURE__ */ React.createElement("path", { d: "M435 320 L443 328 L458 311", fill: "none", stroke: "var(--status-red-bg)", strokeWidth: "4", strokeLinecap: "round", strokeLinejoin: "round" })),
+  /* @__PURE__ */ React.createElement("g", { className: "login-vector-core" }, /* @__PURE__ */ React.createElement("circle", { cx: "310", cy: "252", r: "76", fill: "var(--surface-muted)" }), /* @__PURE__ */ React.createElement("circle", { cx: "310", cy: "252", r: "57", fill: "var(--text)" }), /* @__PURE__ */ React.createElement(
     "path",
     {
       d: "M278 257 L302 280 L344 226",
       fill: "none",
-      stroke: "#e9e6df",
-      className: "dark:stroke-[#161817]",
+      stroke: "var(--canvas)",
       strokeWidth: "8",
       strokeLinecap: "round",
       strokeLinejoin: "round"
     }
   )),
-  /* @__PURE__ */ React.createElement("circle", { cx: "310", cy: "126", r: "6", fill: "#1f6c9f", className: "login-vector-pulse" }),
-  /* @__PURE__ */ React.createElement("circle", { cx: "436", cy: "252", r: "6", fill: "#346538", className: "login-vector-pulse login-vector-delay" }),
-  /* @__PURE__ */ React.createElement("circle", { cx: "310", cy: "378", r: "6", fill: "#956400", className: "login-vector-pulse login-vector-delay-two" })
+  /* @__PURE__ */ React.createElement("circle", { cx: "310", cy: "126", r: "6", fill: "var(--status-blue-text)", className: "login-vector-pulse" }),
+  /* @__PURE__ */ React.createElement("circle", { cx: "436", cy: "252", r: "6", fill: "var(--status-green-text)", className: "login-vector-pulse login-vector-delay" }),
+  /* @__PURE__ */ React.createElement("circle", { cx: "310", cy: "378", r: "6", fill: "var(--status-yellow-text)", className: "login-vector-pulse login-vector-delay-two" })
 );
 var LoginScreen = ({
   onGoogleSignIn,
@@ -6244,7 +6250,7 @@ var LoginScreen = ({
   isSendingLoginLink,
   isDark,
   onToggleTheme
-}) => /* @__PURE__ */ React.createElement("div", { className: "login-screen min-h-screen bg-[#f7f6f3] text-[#2f3437] dark:bg-[#161817] dark:text-[#e9e6df]" }, /* @__PURE__ */ React.createElement("header", { className: "absolute inset-x-0 top-0 z-20 flex min-h-[76px] items-center justify-between px-5 sm:px-8 lg:px-12" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "h-9 w-9" }), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "brand-name text-base font-bold leading-none text-[#2f3437] dark:text-[#e9e6df]" }, "CLUSTER"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#787774] dark:text-[#a6a39c]" }, "Agency OS"))), /* @__PURE__ */ React.createElement(
+}) => /* @__PURE__ */ React.createElement("div", { className: "login-screen min-h-screen bg-[var(--canvas)] text-[var(--text)] dark:bg-[var(--canvas)] dark:text-[var(--text)]" }, /* @__PURE__ */ React.createElement("header", { className: "absolute inset-x-0 top-0 z-20 flex min-h-[76px] items-center justify-between px-5 sm:px-8 lg:px-12" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3" }, /* @__PURE__ */ React.createElement(AgencyLogo, { className: "h-9 w-9" }), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "brand-name text-base font-bold leading-none text-[var(--text)] dark:text-[var(--text)]" }, "CLUSTER"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)] dark:text-[var(--text-muted)]" }, "Agency OS"))), /* @__PURE__ */ React.createElement(
   "button",
   {
     type: "button",
@@ -6253,7 +6259,7 @@ var LoginScreen = ({
     className: "quiet-action h-10 min-h-0 w-10 min-w-0 p-0"
   },
   /* @__PURE__ */ React.createElement(Icon, { name: isDark ? "Sun" : "Moon", size: 17 })
-)), /* @__PURE__ */ React.createElement("main", { className: "flex min-h-screen items-center justify-center px-4 pb-4 pt-24 sm:px-6 lg:px-10" }, /* @__PURE__ */ React.createElement("section", { className: "login-frame grid w-full max-w-[1120px] overflow-hidden rounded-2xl border border-[#dedcd6] bg-white dark:border-white/10 dark:bg-[#1f2220] lg:grid-cols-[1.08fr_0.92fr]", "aria-labelledby": "login-title" }, /* @__PURE__ */ React.createElement("div", { className: "login-art-panel order-2 relative min-h-[280px] overflow-hidden border-t border-[#dedcd6] bg-[#efeee9] dark:border-white/10 dark:bg-[#1a1d1b] lg:order-1 lg:min-h-[600px] lg:border-r lg:border-t-0" }, /* @__PURE__ */ React.createElement("div", { className: "pointer-events-none absolute inset-x-0 top-4 h-[72%] opacity-90 lg:h-[76%]" }, /* @__PURE__ */ React.createElement(LoginVectorArtwork, null)), /* @__PURE__ */ React.createElement("div", { className: "relative z-10 flex h-full min-h-[280px] flex-col justify-between p-6 sm:p-8 lg:min-h-[600px] lg:p-10" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 text-xs font-semibold text-[#555552] dark:text-[#c4c1ba]" }, /* @__PURE__ */ React.createElement("span", { className: "h-2 w-2 rounded-full bg-[#346538] login-vector-pulse" }), "Operaci\xF3n conectada"), /* @__PURE__ */ React.createElement("div", { className: "max-w-md" }, /* @__PURE__ */ React.createElement("p", { className: "eyebrow mb-3" }, "Todo el equipo, una sola vista"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-3xl text-[#2f3437] dark:text-[#e9e6df] sm:text-4xl lg:text-5xl" }, "El trabajo fluye cuando todo est\xE1 conectado."), /* @__PURE__ */ React.createElement("div", { className: "mt-5 hidden flex-wrap gap-2 sm:flex" }, ["Clientes", "Producci\xF3n", "Equipo"].map((label) => /* @__PURE__ */ React.createElement("span", { key: label, className: "rounded-full border border-[#d8d6d0] bg-white/70 px-3 py-1.5 text-xs font-semibold text-[#555552] dark:border-white/10 dark:bg-[#232624]/80 dark:text-[#c4c1ba]" }, label)))))), /* @__PURE__ */ React.createElement("div", { className: "login-form-panel order-1 flex items-center p-6 sm:p-10 lg:order-2 lg:p-12" }, /* @__PURE__ */ React.createElement("div", { className: "w-full max-w-[390px] mx-auto" }, /* @__PURE__ */ React.createElement("div", { className: "mb-8" }, /* @__PURE__ */ React.createElement("p", { className: "eyebrow mb-2" }, "Acceso seguro"), /* @__PURE__ */ React.createElement("h1", { id: "login-title", className: "editorial-title text-[40px] leading-tight text-[#2f3437] dark:text-[#e9e6df]" }, "Bienvenido de nuevo"), /* @__PURE__ */ React.createElement("p", { className: "mt-3 text-sm leading-6 text-[#787774] dark:text-[#a6a39c]" }, "Entra a tu espacio para gestionar clientes, tareas y producci\xF3n.")), /* @__PURE__ */ React.createElement(
+)), /* @__PURE__ */ React.createElement("main", { className: "flex min-h-screen items-center justify-center px-4 pb-4 pt-24 sm:px-6 lg:px-10" }, /* @__PURE__ */ React.createElement("section", { className: "login-frame grid w-full max-w-[1120px] overflow-hidden rounded-2xl border border-[var(--border)] bg-white dark:border-white/10 dark:bg-[var(--surface)] lg:grid-cols-[1.08fr_0.92fr]", "aria-labelledby": "login-title" }, /* @__PURE__ */ React.createElement("div", { className: "login-art-panel order-2 relative min-h-[280px] overflow-hidden border-t border-[var(--border)] bg-[var(--surface-muted)] dark:border-white/10 dark:bg-[var(--surface)] lg:order-1 lg:min-h-[600px] lg:border-r lg:border-t-0" }, /* @__PURE__ */ React.createElement("div", { className: "pointer-events-none absolute inset-x-0 top-4 h-[72%] opacity-90 lg:h-[76%]" }, /* @__PURE__ */ React.createElement(LoginVectorArtwork, null)), /* @__PURE__ */ React.createElement("div", { className: "relative z-10 flex h-full min-h-[280px] flex-col justify-between p-6 sm:p-8 lg:min-h-[600px] lg:p-10" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 text-xs font-semibold text-[var(--text-muted)] dark:text-[var(--text-muted)]" }, /* @__PURE__ */ React.createElement("span", { className: "h-2 w-2 rounded-full bg-[var(--status-green-text)] login-vector-pulse" }), "Operaci\xF3n conectada"), /* @__PURE__ */ React.createElement("div", { className: "max-w-md" }, /* @__PURE__ */ React.createElement("p", { className: "eyebrow mb-3" }, "Todo el equipo, una sola vista"), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title text-3xl text-[var(--text)] dark:text-[var(--text)] sm:text-4xl lg:text-5xl" }, "El trabajo fluye cuando todo est\xE1 conectado."), /* @__PURE__ */ React.createElement("div", { className: "mt-5 hidden flex-wrap gap-2 sm:flex" }, ["Clientes", "Producci\xF3n", "Equipo"].map((label) => /* @__PURE__ */ React.createElement("span", { key: label, className: "rounded-full border border-[var(--border)] bg-white/70 px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] dark:border-white/10 dark:bg-[var(--surface-raised)] dark:text-[var(--text-muted)]" }, label)))))), /* @__PURE__ */ React.createElement("div", { className: "login-form-panel order-1 flex items-center p-6 sm:p-10 lg:order-2 lg:p-12" }, /* @__PURE__ */ React.createElement("div", { className: "w-full max-w-[390px] mx-auto" }, /* @__PURE__ */ React.createElement("div", { className: "mb-8" }, /* @__PURE__ */ React.createElement("p", { className: "eyebrow mb-2" }, "Acceso seguro"), /* @__PURE__ */ React.createElement("h1", { id: "login-title", className: "editorial-title text-[40px] leading-tight text-[var(--text)] dark:text-[var(--text)]" }, "Bienvenido de nuevo"), /* @__PURE__ */ React.createElement("p", { className: "mt-3 text-sm leading-6 text-[var(--text-muted)] dark:text-[var(--text-muted)]" }, "Entra a tu espacio para gestionar clientes, tareas y producci\xF3n.")), /* @__PURE__ */ React.createElement(
   "button",
   {
     onClick: onGoogleSignIn,
@@ -6262,7 +6268,7 @@ var LoginScreen = ({
   },
   isSigningIn ? /* @__PURE__ */ React.createElement(Icon, { name: "Loader2", size: 17, className: "animate-spin" }) : /* @__PURE__ */ React.createElement("span", { className: "text-base font-bold text-blue-600", "aria-hidden": "true" }, "G"),
   "Continuar con Google"
-), /* @__PURE__ */ React.createElement("div", { className: "my-6 flex items-center gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "h-px flex-1 bg-[#e6e4df] dark:bg-[#343431]" }), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-[#787774] dark:text-[#a6a39c]" }, "O usa tu correo"), /* @__PURE__ */ React.createElement("div", { className: "h-px flex-1 bg-[#e6e4df] dark:bg-[#343431]" })), /* @__PURE__ */ React.createElement("form", { onSubmit: onEmailSubmit, className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { htmlFor: "login-email", className: "mb-2 block text-sm font-medium text-[#2f3437] dark:text-[#e9e6df]" }, "Correo electr\xF3nico"), /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(Icon, { name: "Mail", size: 17, className: "pointer-events-none absolute left-3.5 top-3.5 text-[#9a9893]" }), /* @__PURE__ */ React.createElement(
+), /* @__PURE__ */ React.createElement("div", { className: "my-6 flex items-center gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "h-px flex-1 bg-[var(--surface-muted)] dark:bg-[var(--surface-muted)]" }), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-[var(--text-muted)] dark:text-[var(--text-muted)]" }, "O usa tu correo"), /* @__PURE__ */ React.createElement("div", { className: "h-px flex-1 bg-[var(--surface-muted)] dark:bg-[var(--surface-muted)]" })), /* @__PURE__ */ React.createElement("form", { onSubmit: onEmailSubmit, className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { htmlFor: "login-email", className: "mb-2 block text-sm font-medium text-[var(--text)] dark:text-[var(--text)]" }, "Correo electr\xF3nico"), /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(Icon, { name: "Mail", size: 17, className: "pointer-events-none absolute left-3.5 top-3.5 text-[var(--text-faint)]" }), /* @__PURE__ */ React.createElement(
   "input",
   {
     id: "login-email",
@@ -6271,7 +6277,7 @@ var LoginScreen = ({
     onChange: (event) => onEmailChange(event.target.value),
     placeholder: "nombre@empresa.com",
     autoComplete: "email",
-    className: "min-h-[46px] w-full rounded-md border border-[#d8d6d0] bg-white pl-11 pr-4 text-sm text-[#2f3437] outline-none transition placeholder:text-slate-400 focus:border-[#111111] focus:ring-2 focus:ring-black/10 dark:border-[#454541] dark:bg-[#1a1d1b] dark:text-[#e9e6df]"
+    className: "min-h-[46px] w-full rounded-md border border-[var(--border)] bg-white pl-11 pr-4 text-sm text-[var(--text)] outline-none transition placeholder:text-slate-400 focus:border-[var(--focus)] focus:ring-2 focus:ring-black/10 dark:border-[var(--border-strong)] dark:bg-[var(--surface)] dark:text-[var(--text)]"
   }
 ))), /* @__PURE__ */ React.createElement(
   "button",
@@ -6282,7 +6288,7 @@ var LoginScreen = ({
   },
   /* @__PURE__ */ React.createElement(Icon, { name: isSendingLoginLink ? "Loader2" : "Send", size: 17, className: isSendingLoginLink ? "animate-spin" : "" }),
   isSendingLoginLink ? "Enviando enlace" : "Enviar enlace de acceso"
-)), /* @__PURE__ */ React.createElement("div", { className: "mt-6 flex items-center justify-center gap-2 text-xs text-[#787774] dark:text-[#a6a39c]" }, /* @__PURE__ */ React.createElement(Icon, { name: "ShieldCheck", size: 15 }), "Acceso exclusivo para cuentas autorizadas"))))));
+)), /* @__PURE__ */ React.createElement("div", { className: "mt-6 flex items-center justify-center gap-2 text-xs text-[var(--text-muted)] dark:text-[var(--text-muted)]" }, /* @__PURE__ */ React.createElement(Icon, { name: "ShieldCheck", size: 15 }), "Acceso exclusivo para cuentas autorizadas"))))));
 var SearchBar = ({ searchTerm, setSearchTerm, placeholder }) => /* @__PURE__ */ React.createElement("div", { className: "relative w-full md:w-64 shrink-0" }, /* @__PURE__ */ React.createElement(
   Icon,
   {
@@ -6318,17 +6324,17 @@ var StatCard = ({
         onClick,
         "aria-label": actionLabel || `Abrir ${title}`
       } : {},
-      className: `surface group flex min-h-[118px] w-full items-start justify-between p-5 text-left transition-colors ${onClick ? "hover:border-[#8f8c85] hover:bg-[#fbfbfa] dark:hover:border-[#5b605c] dark:hover:bg-[#242825]" : ""}`
+      className: `surface group flex min-h-[118px] w-full items-start justify-between p-5 text-left transition-colors ${onClick ? "hover:border-[var(--border-strong)] hover:bg-[var(--surface-subtle)] dark:hover:border-[var(--border-strong)] dark:hover:bg-[var(--surface-muted)]" : ""}`
     },
-    /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-medium text-[#787774] dark:text-[#aaa7a0]" }, title), /* @__PURE__ */ React.createElement("p", { className: "mono-meta mt-2 text-3xl font-semibold leading-none text-[#2f3437] dark:text-[#f1efe9]" }, value), detail && /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-xs text-[#9a9893] dark:text-[#8f8c85]" }, detail)),
+    /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-medium text-[var(--text-muted)] dark:text-[var(--text-muted)]" }, title), /* @__PURE__ */ React.createElement("p", { className: "mono-meta mt-2 text-3xl font-semibold leading-none text-[var(--text)] dark:text-[var(--text)]" }, value), detail && /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-xs text-[var(--text-faint)] dark:text-[var(--text-faint)]" }, detail)),
     /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, onClick && /* @__PURE__ */ React.createElement(
       Icon,
       {
         name: "ArrowRight",
         size: 16,
-        className: "text-[#9a9893] transition-transform group-hover:translate-x-0.5 dark:text-[#8f8c85]"
+        className: "text-[var(--text-faint)] transition-transform group-hover:translate-x-0.5 dark:text-[var(--text-faint)]"
       }
-    ), /* @__PURE__ */ React.createElement("div", { className: "rounded-lg bg-[#f1f0ed] p-2.5 text-[#555552] dark:bg-[#2a2a27] dark:text-[#d3d0c9]" }, /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 20 })))
+    ), /* @__PURE__ */ React.createElement("div", { className: "rounded-lg bg-[var(--surface-muted)] p-2.5 text-[var(--text-muted)] dark:bg-[var(--surface-muted)] dark:text-[var(--text-muted)]" }, /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 20 })))
   );
 };
 var Input = ({ label, id, className = "", ...props }) => {
@@ -6339,7 +6345,7 @@ var Input = ({ label, id, className = "", ...props }) => {
     "label",
     {
       htmlFor: inputId,
-      className: "block text-xs font-medium text-[#555552] dark:text-[#d3d0c9] mb-1.5"
+      className: "block text-xs font-medium text-[var(--text-muted)] dark:text-[var(--text-muted)] mb-1.5"
     },
     label
   ), /* @__PURE__ */ React.createElement(
@@ -6347,7 +6353,7 @@ var Input = ({ label, id, className = "", ...props }) => {
     {
       id: inputId,
       "aria-label": ariaLabel,
-      className: `w-full p-4 md:p-3 bg-white dark:bg-[#222220] border border-[#e6e4df] dark:border-white/10 rounded-md focus:border-[#111111] dark:focus:border-[#f1efe9] focus:ring-0 outline-none font-normal text-[#2f3437] dark:text-[#f1efe9] transition-colors placeholder:text-[#9a9893] ${className}`,
+      className: `w-full p-4 md:p-3 bg-white dark:bg-[var(--surface-raised)] border border-[var(--border)] dark:border-white/10 rounded-md focus:border-[var(--focus)] dark:focus:border-[var(--focus)] focus:ring-0 outline-none font-normal text-[var(--text)] dark:text-[var(--text)] transition-colors placeholder:text-[var(--text-faint)] ${className}`,
       ...props
     }
   ));
@@ -6441,18 +6447,18 @@ var PhotoUploader = ({
   ), /* @__PURE__ */ React.createElement("input", { type: "hidden", name, value: photo }));
 };
 var DASHBOARD_PALETTE = {
-  emerald: { solid: "#a9c6a6", strong: "#346538" },
-  amber: { solid: "#eadcae", strong: "#956400" },
-  red: { solid: "#e8b9ba", strong: "#9f2f2d" },
-  purple: { solid: "#b8dbea", strong: "#1f6c9f" },
-  violet: { solid: "#b8dbea", strong: "#1f6c9f" },
-  indigo: { solid: "#b8dbea", strong: "#1f6c9f" },
-  blue: { solid: "#b8dbea", strong: "#1f6c9f" },
-  cyan: { solid: "#b8dbea", strong: "#1f6c9f" },
-  orange: { solid: "#eadcae", strong: "#956400" },
-  fuchsia: { solid: "#e8b9ba", strong: "#9f2f2d" },
-  stone: { solid: "#bdbab2", strong: "#555552" },
-  slate: { solid: "#bdbab2", strong: "#555552" }
+  emerald: { solid: "var(--status-green-bg)", strong: "var(--status-green-text)" },
+  amber: { solid: "var(--status-yellow-bg)", strong: "var(--status-yellow-text)" },
+  red: { solid: "var(--status-red-bg)", strong: "var(--status-red-text)" },
+  purple: { solid: "var(--primary-soft)", strong: "var(--primary)" },
+  violet: { solid: "var(--primary-soft)", strong: "var(--primary)" },
+  indigo: { solid: "var(--primary-soft)", strong: "var(--primary)" },
+  blue: { solid: "var(--status-blue-bg)", strong: "var(--status-blue-text)" },
+  cyan: { solid: "var(--status-blue-bg)", strong: "var(--status-blue-text)" },
+  orange: { solid: "var(--status-yellow-bg)", strong: "var(--status-yellow-text)" },
+  fuchsia: { solid: "var(--status-red-bg)", strong: "var(--status-red-text)" },
+  stone: { solid: "var(--surface-muted)", strong: "var(--text-muted)" },
+  slate: { solid: "var(--surface-muted)", strong: "var(--text-muted)" }
 };
 var getDashboardPalette = (name = "slate") => DASHBOARD_PALETTE[name] || DASHBOARD_PALETTE.slate;
 var DashboardView = ({
@@ -7162,7 +7168,7 @@ var KanbanCard = ({
       draggable: draggable ? "true" : void 0,
       onDragStart,
       onDragEnd,
-      className: `task-card group relative cursor-pointer rounded-xl border border-[#ddd9d1] border-l-[3px] bg-white p-4 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-px hover:border-[#aaa69d] focus-visible:outline-none dark:border-white/10 dark:bg-[#232724] dark:hover:border-white/20 ${selected ? "ring-2 ring-[#b78000]/70 dark:ring-[#e4aa19]/70" : ""} ${accent}`
+      className: `task-card group relative cursor-pointer rounded-xl border border-[var(--border)] border-l-[3px] bg-white p-4 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-px hover:border-[var(--border-strong)] focus-visible:outline-none dark:border-white/10 dark:bg-[var(--surface-raised)] dark:hover:border-white/20 ${selected ? "ring-2 ring-[var(--status-yellow-text)] dark:ring-[var(--status-yellow-text)]" : ""} ${accent}`
     },
     /* @__PURE__ */ React.createElement("div", { className: "flex items-start justify-between gap-2 mb-1.5 min-h-[20px]" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, client && /* @__PURE__ */ React.createElement("span", { className: "inline-flex max-w-full items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 10, className: "shrink-0" }), /* @__PURE__ */ React.createElement("span", { className: "truncate" }, client))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-0.5 shrink-0" }, rank != null && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 rounded px-1.5 py-0.5" }, "#", rank), menuItems.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "opacity-70 group-hover:opacity-100 transition-opacity" }, /* @__PURE__ */ React.createElement(CardMenu, { items: menuItems })))),
     /* @__PURE__ */ React.createElement("p", { className: "mb-2.5 line-clamp-2 text-[15px] font-semibold leading-snug text-slate-800 dark:text-slate-100" }, title),
@@ -7191,7 +7197,7 @@ var KanbanCard = ({
           onClick: (event) => event.stopPropagation(),
           onDragStart: (event) => event.stopPropagation(),
           "aria-label": `Cambiar estado de ${title}`,
-          className: "min-h-11 w-full appearance-none rounded-lg border border-[#d8d5ce] bg-[#f7f6f2] px-3 py-2 pr-10 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[#1b1f1c] dark:text-slate-200 lg:min-h-9 lg:py-1.5 lg:text-xs"
+          className: "min-h-11 w-full appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2 pr-10 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[var(--surface)] dark:text-slate-200 lg:min-h-9 lg:py-1.5 lg:text-xs"
         },
         statusControl.options.map((option) => /* @__PURE__ */ React.createElement("option", { key: option.id, value: option.id }, option.label || option.title))
       ), /* @__PURE__ */ React.createElement(
@@ -7245,26 +7251,26 @@ var KanbanColumn = ({
   return /* @__PURE__ */ React.createElement(
     "section",
     {
-      className: "task-room-column flex h-[calc(100dvh-15rem)] min-h-[32rem] w-[88vw] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-[#dedbd4] bg-[#efeee9] transition-colors dark:border-white/10 dark:bg-[#191d1a] sm:w-[24rem] lg:h-full lg:min-h-0 lg:w-auto lg:shrink",
+      className: "task-room-column flex h-[calc(100dvh-15rem)] min-h-[32rem] w-[88vw] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] transition-colors dark:border-white/10 dark:bg-[var(--surface)] sm:w-[24rem] lg:h-full lg:min-h-0 lg:w-auto lg:shrink",
       onDragOver,
       onDragLeave,
       onDrop,
       "aria-label": `${title}: ${count} tareas`
     },
-    /* @__PURE__ */ React.createElement("header", { className: "flex shrink-0 items-start justify-between gap-3 border-b border-[#dfddd7] bg-[#f7f6f3]/80 px-4 py-3.5 dark:border-white/10 dark:bg-[#1f2320]/90" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2.5" }, /* @__PURE__ */ React.createElement(
+    /* @__PURE__ */ React.createElement("header", { className: "flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3.5 dark:border-white/10 dark:bg-[var(--surface)]" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2.5" }, /* @__PURE__ */ React.createElement(
       "span",
       {
         className: "h-2.5 w-2.5 shrink-0 rounded-full",
         style: { backgroundColor: columnColor }
       }
-    ), /* @__PURE__ */ React.createElement("span", { className: "truncate text-sm font-semibold text-[#2f3437] dark:text-[#f1efe9]" }, title), /* @__PURE__ */ React.createElement("span", { className: "mono-meta shrink-0 rounded-md bg-[#e6e4df] px-2 py-0.5 text-[11px] font-semibold text-[#787774] dark:bg-[#2a2a27] dark:text-[#aaa7a0]" }, count)), subtitle && /* @__PURE__ */ React.createElement("p", { className: "mt-1.5 pl-5 text-[11px] text-slate-500 dark:text-slate-400" }, subtitle)), onAdd && /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("span", { className: "truncate text-sm font-semibold text-[var(--text)] dark:text-[var(--text)]" }, title), /* @__PURE__ */ React.createElement("span", { className: "mono-meta shrink-0 rounded-md bg-[var(--surface-muted)] px-2 py-0.5 text-[11px] font-semibold text-[var(--text-muted)] dark:bg-[var(--surface-muted)] dark:text-[var(--text-muted)]" }, count)), subtitle && /* @__PURE__ */ React.createElement("p", { className: "mt-1.5 pl-5 text-[11px] text-slate-500 dark:text-slate-400" }, subtitle)), onAdd && /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
         onClick: onAdd,
         "aria-label": `A\xF1adir tarea en ${title}`,
         title: "A\xF1adir tarea",
-        className: "flex h-8 min-h-0 w-8 min-w-0 items-center justify-center rounded-md text-[#787774] hover:bg-[#e6e4df] hover:text-[#2f3437] dark:text-[#aaa7a0] dark:hover:bg-[#2a2a27] dark:hover:text-[#f1efe9]"
+        className: "flex h-8 min-h-0 w-8 min-w-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)] dark:text-[var(--text-muted)] dark:hover:bg-[var(--surface-muted)] dark:hover:text-[var(--text)]"
       },
       /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 15 })
     )),
@@ -7290,13 +7296,13 @@ var KanbanStage = ({
   return /* @__PURE__ */ React.createElement(
     "section",
     {
-      className: "rounded-lg border border-transparent transition-colors [&.drag-over]:border-[#b78000] [&.drag-over]:bg-[#b78000]/5",
+      className: "rounded-lg border border-transparent transition-colors [&.drag-over]:border-[var(--status-yellow-text)] [&.drag-over]:bg-[var(--status-yellow-text)]/5",
       onDragOver,
       onDragLeave,
       onDrop,
       "aria-label": `${title}: ${tasks.length} tareas`
     },
-    showHeader && /* @__PURE__ */ React.createElement("div", { className: "mb-2 flex items-center justify-between rounded-lg border border-[#dfddd7] bg-[#f7f6f3] px-3 py-2.5 dark:border-white/10 dark:bg-[#202421]" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "h-2 w-2 shrink-0 rounded-full", style: { backgroundColor: color } }), /* @__PURE__ */ React.createElement("span", { className: "truncate text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-600 dark:text-slate-300" }, title), /* @__PURE__ */ React.createElement("span", { className: "rounded bg-[#e9e7e1] px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-[#2c302c] dark:text-slate-400" }, tasks.length)), canCollapse && /* @__PURE__ */ React.createElement(
+    showHeader && /* @__PURE__ */ React.createElement("div", { className: "mb-2 flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2.5 dark:border-white/10 dark:bg-[var(--surface-muted)]" }, /* @__PURE__ */ React.createElement("div", { className: "flex min-w-0 items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "h-2 w-2 shrink-0 rounded-full", style: { backgroundColor: color } }), /* @__PURE__ */ React.createElement("span", { className: "truncate text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-600 dark:text-slate-300" }, title), /* @__PURE__ */ React.createElement("span", { className: "rounded bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-[var(--surface-muted)] dark:text-slate-400" }, tasks.length)), canCollapse && /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
@@ -7312,7 +7318,7 @@ var KanbanStage = ({
       {
         type: "button",
         onClick: () => setExpanded(true),
-        className: "mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#cbc7bf] px-3 py-2.5 text-xs font-semibold text-slate-500 hover:border-[#aaa69d] hover:text-slate-700 dark:border-white/15 dark:text-slate-400 dark:hover:border-white/25 dark:hover:text-slate-200"
+        className: "mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[var(--border-strong)] px-3 py-2.5 text-xs font-semibold text-slate-500 hover:border-[var(--border-strong)] hover:text-slate-700 dark:border-white/15 dark:text-slate-400 dark:hover:border-white/25 dark:hover:text-slate-200"
       },
       "Ver ",
       tasks.length - collapsedLimit,
@@ -7349,7 +7355,7 @@ var TaskRoomInspector = ({
   ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 3);
   const priority = task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : "Normal";
   const isOverdue = isDateBeforeDateString(task.date, getHondurasTodayStr()) && !isCompletedStatus(task.status);
-  return /* @__PURE__ */ React.createElement("aside", { className: "task-room-inspector fixed inset-x-3 bottom-3 top-20 z-40 flex min-h-0 flex-col overflow-hidden rounded-xl border border-[#d8d5ce] bg-[#f7f6f2] shadow-2xl dark:border-white/10 dark:bg-[#1c201d] 2xl:static 2xl:z-auto 2xl:shadow-none" }, /* @__PURE__ */ React.createElement("div", { className: "custom-scroll flex-1 overflow-y-auto p-5" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-start justify-between gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, client && /* @__PURE__ */ React.createElement("p", { className: "mb-2 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 11 }), client), /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold leading-snug text-slate-900 dark:text-[#f1efe9]" }, task.title)), /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("aside", { className: "task-room-inspector fixed inset-x-3 bottom-3 top-20 z-40 flex min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] shadow-2xl dark:border-white/10 dark:bg-[var(--surface)] 2xl:static 2xl:z-auto 2xl:shadow-none" }, /* @__PURE__ */ React.createElement("div", { className: "custom-scroll flex-1 overflow-y-auto p-5" }, /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-start justify-between gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, client && /* @__PURE__ */ React.createElement("p", { className: "mb-2 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Briefcase", size: 11 }), client), /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold leading-snug text-slate-900 dark:text-[var(--text)]" }, task.title)), /* @__PURE__ */ React.createElement(
     "button",
     {
       type: "button",
@@ -7358,12 +7364,12 @@ var TaskRoomInspector = ({
       "aria-label": "Cerrar inspector"
     },
     /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 18 })
-  )), /* @__PURE__ */ React.createElement("div", { className: "mb-6 grid grid-cols-2 gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "rounded-lg border border-[#dedbd4] bg-white px-3 py-2.5 dark:border-white/10 dark:bg-[#242824]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Estado"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200" }, status?.title || "Sin estado")), /* @__PURE__ */ React.createElement("div", { className: `rounded-lg border px-3 py-2.5 ${priority.toLowerCase() === "urgente" ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300" : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300"}` }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] opacity-70" }, "Prioridad"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs font-semibold" }, priority))), /* @__PURE__ */ React.createElement("div", { className: "mb-6 grid grid-cols-2 gap-4 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Responsable"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, assignee ? /* @__PURE__ */ React.createElement(React.Fragment, null, assignee.photo ? /* @__PURE__ */ React.createElement("img", { src: assignee.photo, alt: "", className: "h-8 w-8 rounded-full object-cover" }) : /* @__PURE__ */ React.createElement("span", { className: `flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-bold ${assignee.className}` }, assignee.initials), /* @__PURE__ */ React.createElement("span", { className: "truncate text-xs font-semibold text-slate-700 dark:text-slate-200" }, assignee.name)) : /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500" }, "Sin asignar"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Vencimiento"), /* @__PURE__ */ React.createElement("p", { className: `inline-flex items-center gap-1.5 text-xs font-semibold ${isOverdue ? "text-red-500" : "text-slate-700 dark:text-slate-200"}` }, /* @__PURE__ */ React.createElement(Icon, { name: "CalendarDays", size: 14 }), formatShortDate(task.date), isOverdue ? " \xB7 atrasada" : ""))), task.assignedByName && /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center gap-2.5 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300" }, /* @__PURE__ */ React.createElement(Icon, { name: "UserCheck", size: 15 })), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Creada por"), /* @__PURE__ */ React.createElement("p", { className: "mt-0.5 truncate text-xs font-semibold text-slate-700 dark:text-slate-200" }, task.assignedByName))), /* @__PURE__ */ React.createElement("div", { className: "mb-6 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", { className: "mb-2.5 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Progreso"), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-semibold text-slate-500" }, progress, "%")), /* @__PURE__ */ React.createElement("div", { className: "mb-2 h-1.5 overflow-hidden rounded-full bg-[#dedbd4] dark:bg-white/10" }, /* @__PURE__ */ React.createElement("span", { className: "block h-full rounded-full bg-[#b78000] transition-[width]", style: { width: `${progress}%` } })), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, checklist.length ? `${completed} de ${checklist.length} completadas` : "Sin checklist")), task.notes && /* @__PURE__ */ React.createElement("div", { className: "mb-6 border-b border-[#dedbd4] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Descripci\xF3n"), /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap text-sm leading-relaxed text-slate-600 dark:text-slate-300" }, task.notes)), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-3 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Actividad reciente"), activity.length ? /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, activity.map((item) => /* @__PURE__ */ React.createElement("div", { key: item.id, className: "flex gap-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2f6f58] text-[9px] font-bold text-white" }, getInitials(item.author)), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-semibold text-slate-700 dark:text-slate-200" }, item.author), /* @__PURE__ */ React.createElement("p", { className: "mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400" }, item.text))))) : /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Sin actividad registrada."))), /* @__PURE__ */ React.createElement("div", { className: "border-t border-[#dedbd4] p-4 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("div", { className: "mb-6 grid grid-cols-2 gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 dark:border-white/10 dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Estado"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200" }, status?.title || "Sin estado")), /* @__PURE__ */ React.createElement("div", { className: `rounded-lg border px-3 py-2.5 ${priority.toLowerCase() === "urgente" ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300" : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300"}` }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] opacity-70" }, "Prioridad"), /* @__PURE__ */ React.createElement("p", { className: "mt-1 text-xs font-semibold" }, priority))), /* @__PURE__ */ React.createElement("div", { className: "mb-6 grid grid-cols-2 gap-4 border-b border-[var(--border)] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Responsable"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, assignee ? /* @__PURE__ */ React.createElement(React.Fragment, null, assignee.photo ? /* @__PURE__ */ React.createElement("img", { src: assignee.photo, alt: "", className: "h-8 w-8 rounded-full object-cover" }) : /* @__PURE__ */ React.createElement("span", { className: `flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-bold ${assignee.className}` }, assignee.initials), /* @__PURE__ */ React.createElement("span", { className: "truncate text-xs font-semibold text-slate-700 dark:text-slate-200" }, assignee.name)) : /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500" }, "Sin asignar"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Vencimiento"), /* @__PURE__ */ React.createElement("p", { className: `inline-flex items-center gap-1.5 text-xs font-semibold ${isOverdue ? "text-red-500" : "text-slate-700 dark:text-slate-200"}` }, /* @__PURE__ */ React.createElement(Icon, { name: "CalendarDays", size: 14 }), formatShortDate(task.date), isOverdue ? " \xB7 atrasada" : ""))), task.assignedByName && /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center gap-2.5 border-b border-[var(--border)] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300" }, /* @__PURE__ */ React.createElement(Icon, { name: "UserCheck", size: 15 })), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Creada por"), /* @__PURE__ */ React.createElement("p", { className: "mt-0.5 truncate text-xs font-semibold text-slate-700 dark:text-slate-200" }, task.assignedByName))), /* @__PURE__ */ React.createElement("div", { className: "mb-6 border-b border-[var(--border)] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", { className: "mb-2.5 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("p", { className: "text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Progreso"), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-semibold text-slate-500" }, progress, "%")), /* @__PURE__ */ React.createElement("div", { className: "mb-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)] dark:bg-white/10" }, /* @__PURE__ */ React.createElement("span", { className: "block h-full rounded-full bg-[var(--status-yellow-text)] transition-[width]", style: { width: `${progress}%` } })), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, checklist.length ? `${completed} de ${checklist.length} completadas` : "Sin checklist")), task.notes && /* @__PURE__ */ React.createElement("div", { className: "mb-6 border-b border-[var(--border)] pb-6 dark:border-white/10" }, /* @__PURE__ */ React.createElement("p", { className: "mb-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Descripci\xF3n"), /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap text-sm leading-relaxed text-slate-600 dark:text-slate-300" }, task.notes)), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "mb-3 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400" }, "Actividad reciente"), activity.length ? /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, activity.map((item) => /* @__PURE__ */ React.createElement("div", { key: item.id, className: "flex gap-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--status-green-text)] text-[9px] font-bold text-white" }, getInitials(item.author)), /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-semibold text-slate-700 dark:text-slate-200" }, item.author), /* @__PURE__ */ React.createElement("p", { className: "mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400" }, item.text))))) : /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, "Sin actividad registrada."))), /* @__PURE__ */ React.createElement("div", { className: "border-t border-[var(--border)] p-4 dark:border-white/10" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       type: "button",
       onClick: onOpenFull,
-      className: "flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#171817] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#30322f] dark:bg-[#f1efe9] dark:text-[#181817] dark:hover:bg-white"
+      className: "flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-[var(--primary-contrast)] transition-colors hover:bg-[var(--primary-hover)] dark:bg-[var(--primary)] dark:text-[var(--primary-contrast)] dark:hover:bg-[var(--primary-hover)]"
     },
     "Abrir tarea completa",
     /* @__PURE__ */ React.createElement(Icon, { name: "ExternalLink", size: 15 })
@@ -7452,9 +7458,9 @@ var DateHeader = ({
       setRangeStart(val);
   };
   const segBase = "shrink-0 min-h-9 px-3 py-2 text-[12px] font-medium rounded-lg transition-colors flex items-center gap-1.5";
-  const segActive = "bg-white text-[#252724] shadow-sm dark:bg-[#30342f] dark:text-[#f1efe9]";
+  const segActive = "bg-white text-[var(--text)] shadow-sm dark:bg-[var(--surface-muted)] dark:text-[var(--text)]";
   const segIdle = "text-slate-500 dark:text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/5 dark:hover:text-slate-200";
-  return /* @__PURE__ */ React.createElement("header", { className: "task-room-header shrink-0 border-b border-[#dedbd4] pb-3 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", { className: "mb-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("h2", { className: "editorial-title truncate text-[clamp(1.75rem,3vw,2.5rem)] leading-none text-[#2f3437] dark:text-[#f1efe9]" }, title), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-slate-500 dark:text-slate-400" }, taskCount, " ", taskCount === 1 ? "tarea" : "tareas", " \xB7 ", periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1))), /* @__PURE__ */ React.createElement("div", { className: "flex w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center lg:w-auto" }, /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("header", { className: "task-room-header shrink-0 border-b border-[var(--border)] pb-3 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", { className: "mb-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("h2", { className: "editorial-title truncate text-[clamp(1.75rem,3vw,2.5rem)] leading-none text-[var(--text)] dark:text-[var(--text)]" }, title), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-slate-500 dark:text-slate-400" }, taskCount, " ", taskCount === 1 ? "tarea" : "tareas", " \xB7 ", periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1))), /* @__PURE__ */ React.createElement("div", { className: "flex w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center lg:w-auto" }, /* @__PURE__ */ React.createElement(
     SearchBar,
     {
       searchTerm,
@@ -7472,7 +7478,7 @@ var DateHeader = ({
       full: true
     },
     "Nueva Tarea"
-  )))), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "flex max-w-full overflow-x-auto rounded-lg bg-[#ebe9e3] p-1 kanban-mobile-scroll dark:bg-[#242824]" }, /* @__PURE__ */ React.createElement(
+  )))), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "flex max-w-full overflow-x-auto rounded-lg bg-[var(--surface-muted)] p-1 kanban-mobile-scroll dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setFilterMode("date"),
@@ -7492,7 +7498,7 @@ var DateHeader = ({
     "button",
     {
       onClick: () => setFilterMode("overdue"),
-      className: `${segBase} ${filterMode === "overdue" ? "bg-[#fdebec] text-[#9f2f2d] dark:bg-red-500/15 dark:text-red-300" : segIdle}`
+      className: `${segBase} ${filterMode === "overdue" ? "bg-[var(--status-red-bg)] text-[var(--status-red-text)] dark:bg-red-500/15 dark:text-red-300" : segIdle}`
     },
     "Atrasadas ",
     /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 14 })
@@ -7515,7 +7521,7 @@ var DateHeader = ({
     },
     /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 14 }),
     historyLoading ? "Cargando" : "Hist\xF3rico"
-  )), setOwnershipFilter && /* @__PURE__ */ React.createElement("div", { className: "flex max-w-full overflow-x-auto rounded-lg bg-[#ebe9e3] p-1 kanban-mobile-scroll dark:bg-[#242824]" }, /* @__PURE__ */ React.createElement(
+  )), setOwnershipFilter && /* @__PURE__ */ React.createElement("div", { className: "flex max-w-full overflow-x-auto rounded-lg bg-[var(--surface-muted)] p-1 kanban-mobile-scroll dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setOwnershipFilter("all"),
@@ -7536,7 +7542,7 @@ var DateHeader = ({
       type: "date",
       value: currentDate,
       onChange: (e) => setCurrentDate(e.target.value),
-      className: "min-h-10 rounded-lg border border-[#d8d5ce] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[#8e8a82] dark:border-white/10 dark:bg-[#242824] dark:text-slate-300"
+      className: "min-h-10 rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[var(--focus)] dark:border-white/10 dark:bg-[var(--surface-raised)] dark:text-slate-300"
     }
   ), currentDate === today && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 font-bold px-2 py-1 rounded-full shrink-0" }, "Hoy")), filterMode === "range" && hasRangeSupport && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 flex-wrap" }, /* @__PURE__ */ React.createElement(
     "input",
@@ -7544,7 +7550,7 @@ var DateHeader = ({
       type: "date",
       value: effectiveRangeStart,
       onChange: handleRangeStartChange,
-      className: "min-h-10 rounded-lg border border-[#d8d5ce] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[#8e8a82] dark:border-white/10 dark:bg-[#242824] dark:text-slate-300"
+      className: "min-h-10 rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[var(--focus)] dark:border-white/10 dark:bg-[var(--surface-raised)] dark:text-slate-300"
     }
   ), /* @__PURE__ */ React.createElement("span", { className: "text-xs font-semibold text-slate-400" }, "\u2192"), /* @__PURE__ */ React.createElement(
     "input",
@@ -7553,7 +7559,7 @@ var DateHeader = ({
       value: effectiveRangeEnd,
       min: effectiveRangeStart,
       onChange: handleRangeEndChange,
-      className: "min-h-10 rounded-lg border border-[#d8d5ce] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[#8e8a82] dark:border-white/10 dark:bg-[#242824] dark:text-slate-300"
+      className: "min-h-10 rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[var(--focus)] dark:border-white/10 dark:bg-[var(--surface-raised)] dark:text-slate-300"
     }
   ))));
 };
@@ -7651,9 +7657,9 @@ var AccountRoomView = ({
       clone.style.top = "-9999px";
       clone.style.left = "-9999px";
       clone.style.opacity = "1";
-      clone.style.backgroundColor = document.documentElement.classList.contains(
-        "dark"
-      ) ? "#0f172a" : "#ffffff";
+      clone.style.backgroundColor = getComputedStyle(
+        document.documentElement
+      ).getPropertyValue("--surface-raised");
       clone.style.borderRadius = "0.75rem";
       clone.style.boxShadow = "0 25px 50px -12px rgba(0, 0, 0, 0.4)";
       clone.style.transform = "rotate(3deg) scale(1.05)";
@@ -7931,9 +7937,9 @@ var EditionsRoomView = ({
       clone.style.top = "-9999px";
       clone.style.left = "-9999px";
       clone.style.opacity = "1";
-      clone.style.backgroundColor = document.documentElement.classList.contains(
-        "dark"
-      ) ? "#0f172a" : "#ffffff";
+      clone.style.backgroundColor = getComputedStyle(
+        document.documentElement
+      ).getPropertyValue("--surface-raised");
       clone.style.borderRadius = "0.75rem";
       clone.style.boxShadow = "0 25px 50px -12px rgba(0, 0, 0, 0.4)";
       clone.style.transform = "rotate(3deg) scale(1.05)";
@@ -8371,7 +8377,7 @@ var ManagementRoomView = ({
       historyLoading,
       taskCount: filteredTasks.length
     }
-  ), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-2 lg:flex-row" }, /* @__PURE__ */ React.createElement("div", { className: "surface-subtle flex flex-1 flex-wrap rounded-xl border border-[#e2e0da] p-1.5 dark:border-white/10" }, columns.map((col) => {
+  ), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-2 lg:flex-row" }, /* @__PURE__ */ React.createElement("div", { className: "surface-subtle flex flex-1 flex-wrap rounded-xl border border-[var(--border)] p-1.5 dark:border-white/10" }, columns.map((col) => {
     const filteredCount = filteredTasks.filter(
       (t) => t.status === col.id
     ).length;
@@ -9049,18 +9055,18 @@ var StickerImage = ({ id, size = 120, className = "" }) => {
   );
 };
 var CHAT_AVATAR_COLORS = [
-  "#6366f1",
-  "#8b5cf6",
-  "#ec4899",
-  "#f59e0b",
-  "#10b981",
-  "#0ea5e9",
-  "#ef4444",
-  "#14b8a6",
-  "#a855f7",
-  "#f97316",
-  "#3b82f6",
-  "#d946ef"
+  "var(--primary)",
+  "var(--primary-hover)",
+  "var(--status-blue-text)",
+  "var(--status-green-text)",
+  "var(--status-yellow-text)",
+  "var(--status-red-text)",
+  "#407f8d",
+  "#386c4c",
+  "#93631b",
+  "#ad473e",
+  "#68746b",
+  "#39433b"
 ];
 var chatAvatarColor = (seed = "") => {
   const value = String(seed);
@@ -10510,7 +10516,7 @@ var ClientChatView = ({
         },
         className: "flex w-full items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
       },
-      /* @__PURE__ */ React.createElement("div", { className: "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white" }, (person.name || person.email || "?").slice(0, 2).toUpperCase()),
+      /* @__PURE__ */ React.createElement("div", { className: "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--text-muted)] text-[9px] font-black text-white" }, (person.name || person.email || "?").slice(0, 2).toUpperCase()),
       /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1 text-left" }, /* @__PURE__ */ React.createElement("p", { className: "truncate text-sm font-semibold text-slate-700 dark:text-slate-200" }, person.name || person.email), person.email && /* @__PURE__ */ React.createElement("p", { className: "truncate text-[11px] text-slate-400" }, person.email))
     ))), taskPickerOpen && /* @__PURE__ */ React.createElement("div", { className: "chat-picker absolute bottom-full left-0 z-30 mb-2 max-h-64 w-72 overflow-y-auto py-1 custom-scroll" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between px-3 pb-1 pt-1.5" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500" }, "Enlazar tarea del cliente"), /* @__PURE__ */ React.createElement(
       "button",
@@ -10942,7 +10948,7 @@ var ClientChatView = ({
           },
           className: "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700"
         },
-        /* @__PURE__ */ React.createElement("div", { className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#555552] text-[10px] font-black text-white" }, (client.name || "C").slice(0, 2).toUpperCase()),
+        /* @__PURE__ */ React.createElement("div", { className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--text-muted)] text-[10px] font-black text-white" }, (client.name || "C").slice(0, 2).toUpperCase()),
         /* @__PURE__ */ React.createElement("span", { className: "truncate text-sm font-semibold text-slate-700 dark:text-slate-200" }, client.name || "Cliente")
       )))
     )
@@ -11807,25 +11813,25 @@ var TaskDetailModal = ({
       id: "urgente",
       label: "Urgente",
       color: "text-red-500",
-      iconColor: "#ef4444"
+      iconColor: "var(--status-red-text)"
     },
     {
       id: "alta",
       label: "Alta",
       color: "text-orange-400",
-      iconColor: "#fb923c"
+      iconColor: "var(--status-yellow-text)"
     },
     {
       id: "normal",
       label: "Normal",
       color: "text-blue-400",
-      iconColor: "#60a5fa"
+      iconColor: "var(--status-blue-text)"
     },
     {
       id: "baja",
       label: "Baja",
       color: "text-slate-500",
-      iconColor: "#94a3b8"
+      iconColor: "var(--text-faint)"
     }
   ];
   const currentPriority = PRIORITIES.find((p) => p.id === task.priority);
@@ -11856,7 +11862,7 @@ var TaskDetailModal = ({
   return /* @__PURE__ */ React.createElement(
     "div",
     {
-      className: "task-detail-overlay fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-[#080b09]/75 p-3 backdrop-blur-sm md:p-6",
+      className: "task-detail-overlay fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-[var(--surface-overlay)] p-3 backdrop-blur-sm md:p-6",
       onClick: onClose
     },
     /* @__PURE__ */ React.createElement(
@@ -11867,12 +11873,12 @@ var TaskDetailModal = ({
         "aria-modal": "true",
         "aria-labelledby": dialogTitleId,
         tabIndex: -1,
-        className: "task-detail-shell flex h-[92dvh] max-h-[860px] w-full max-w-[1320px] flex-col overflow-hidden rounded-2xl border border-[#d8d5ce] bg-[#f7f6f2] shadow-2xl outline-none dark:border-white/10 dark:bg-[#171a18]",
+        className: "task-detail-shell flex h-[92dvh] max-h-[860px] w-full max-w-[1320px] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-subtle)] shadow-2xl outline-none dark:border-white/10 dark:bg-[var(--surface)]",
         onClick: function(e) {
           e.stopPropagation();
         }
       },
-      /* @__PURE__ */ React.createElement("div", { className: "flex min-h-[68px] shrink-0 items-center gap-2 border-b border-[#dedbd4] bg-[#f7f6f2] px-4 dark:border-white/10 dark:bg-[#171a18] md:px-5" }, /* @__PURE__ */ React.createElement(
+      /* @__PURE__ */ React.createElement("div", { className: "flex min-h-[68px] shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface-subtle)] px-4 dark:border-white/10 dark:bg-[var(--surface)] md:px-5" }, /* @__PURE__ */ React.createElement(
         "div",
         {
           className: `flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wide bg-${tagColor}-100 dark:bg-${tagColor}-500/20 text-${tagColor}-700 dark:text-${tagColor}-400`
@@ -11892,7 +11898,7 @@ var TaskDetailModal = ({
           onClick: () => onEdit(task, type),
           "aria-label": `Editar ${task.title || "tarea"}`,
           title: "Editar",
-          className: "flex min-h-11 items-center gap-2 rounded-lg border border-[#d8d5ce] bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors hover:border-[#aaa69d] hover:bg-[#efede7] dark:border-white/10 dark:bg-[#202420] dark:text-slate-200 dark:hover:border-white/20 dark:hover:bg-[#282d29]"
+          className: "flex min-h-11 items-center gap-2 rounded-lg border border-[var(--border)] bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-muted)] dark:border-white/10 dark:bg-[var(--surface-raised)] dark:text-slate-200 dark:hover:border-white/20 dark:hover:bg-[var(--surface-muted)]"
         },
         /* @__PURE__ */ React.createElement(Icon, { name: "Pencil", size: 14 }),
         " ",
@@ -11904,10 +11910,10 @@ var TaskDetailModal = ({
           onClick: () => setActionsOpen((value) => !value),
           "aria-label": "M\xE1s acciones",
           "aria-expanded": actionsOpen,
-          className: "flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-[#d8d5ce] bg-white text-slate-500 transition-colors hover:border-[#aaa69d] hover:text-slate-800 dark:border-white/10 dark:bg-[#202420] dark:text-slate-400 dark:hover:border-white/20 dark:hover:text-slate-100"
+          className: "flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-[var(--border)] bg-white text-slate-500 transition-colors hover:border-[var(--border-strong)] hover:text-slate-800 dark:border-white/10 dark:bg-[var(--surface-raised)] dark:text-slate-400 dark:hover:border-white/20 dark:hover:text-slate-100"
         },
         /* @__PURE__ */ React.createElement(Icon, { name: "MoreHorizontal", size: 18 })
-      ), actionsOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute right-0 top-full z-30 mt-2 w-48 rounded-xl border border-[#d8d5ce] bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#242824]" }, /* @__PURE__ */ React.createElement(
+      ), actionsOpen && /* @__PURE__ */ React.createElement("div", { className: "absolute right-0 top-full z-30 mt-2 w-48 rounded-xl border border-[var(--border)] bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement(
         "button",
         {
           type: "button",
@@ -11924,15 +11930,15 @@ var TaskDetailModal = ({
         {
           onClick: onClose,
           "aria-label": "Cerrar modal",
-          className: "ml-1 flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-transparent text-slate-500 transition-colors hover:border-[#d8d5ce] hover:bg-white hover:text-slate-800 dark:text-slate-400 dark:hover:border-white/10 dark:hover:bg-[#202420] dark:hover:text-slate-100"
+          className: "ml-1 flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-transparent text-slate-500 transition-colors hover:border-[var(--border)] hover:bg-white hover:text-slate-800 dark:text-slate-400 dark:hover:border-white/10 dark:hover:bg-[var(--surface-raised)] dark:hover:text-slate-100"
         },
         /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 16 })
       )),
-      /* @__PURE__ */ React.createElement("div", { className: "task-detail-body custom-scroll min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_24rem] lg:grid-rows-1 lg:overflow-hidden" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 overflow-visible bg-[#f7f6f2] dark:bg-[#171a18] lg:custom-scroll lg:overflow-y-auto" }, /* @__PURE__ */ React.createElement("div", { className: "mx-auto max-w-4xl px-5 pb-10 pt-6 md:px-8 md:pt-7" }, /* @__PURE__ */ React.createElement(
+      /* @__PURE__ */ React.createElement("div", { className: "task-detail-body custom-scroll min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_24rem] lg:grid-rows-1 lg:overflow-hidden" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0 overflow-visible bg-[var(--surface-subtle)] dark:bg-[var(--surface)] lg:custom-scroll lg:overflow-y-auto" }, /* @__PURE__ */ React.createElement("div", { className: "mx-auto max-w-4xl px-5 pb-10 pt-6 md:px-8 md:pt-7" }, /* @__PURE__ */ React.createElement(
         "h1",
         {
           id: dialogTitleId,
-          className: "editorial-title mb-4 break-words pr-4 text-3xl leading-tight text-slate-900 dark:text-[#f1efe9] md:text-[38px]"
+          className: "editorial-title mb-4 break-words pr-4 text-3xl leading-tight text-slate-900 dark:text-[var(--text)] md:text-[38px]"
         },
         task.title
       ), /* @__PURE__ */ React.createElement(
@@ -11984,7 +11990,7 @@ var TaskDetailModal = ({
         )),
         client && /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-400" }, "Cliente"), /* @__PURE__ */ React.createElement("span", { className: "flex h-6 w-6 items-center justify-center rounded bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-500/20 dark:text-blue-300" }, client.name?.charAt(0).toUpperCase()), /* @__PURE__ */ React.createElement("strong", { className: "font-semibold" }, client.name)),
         /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300" }, /* @__PURE__ */ React.createElement(Icon, { name: "CalendarDays", size: 14, className: "text-slate-400" }), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-400" }, "Fecha l\xEDmite"), /* @__PURE__ */ React.createElement("strong", { className: "font-semibold" }, task.date || "Sin fecha")),
-        assignee && /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-7 w-7 items-center justify-center rounded-full bg-[#555552] text-[9px] font-bold text-white" }, assignee.name?.slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("strong", { className: "font-semibold" }, assignee.name)),
+        assignee && /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300" }, /* @__PURE__ */ React.createElement("span", { className: "flex h-7 w-7 items-center justify-center rounded-full bg-[var(--text-muted)] text-[9px] font-bold text-white" }, assignee.name?.slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("strong", { className: "font-semibold" }, assignee.name)),
         task.createdAt && /* @__PURE__ */ React.createElement("span", { className: "hidden items-center gap-1 text-xs text-slate-500 dark:text-slate-400 xl:flex" }, /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 11 }), "Creado el", " ", new Date(task.createdAt).toLocaleDateString("es-ES", {
           day: "numeric",
           month: "short"
@@ -11996,7 +12002,7 @@ var TaskDetailModal = ({
         "nav",
         {
           "aria-label": "Secciones de la tarea",
-          className: "sticky top-0 z-10 mb-5 flex gap-1 border-b border-[#dedbd4] bg-[#f7f6f2]/95 backdrop-blur-sm dark:border-white/10 dark:bg-[#171a18]/95"
+          className: "sticky top-0 z-10 mb-5 flex gap-1 border-b border-[var(--border)] bg-[var(--surface-subtle)] backdrop-blur-sm dark:border-white/10 dark:bg-[var(--surface)]"
         },
         [
           { id: "task-summary", label: "Resumen" },
@@ -12011,7 +12017,7 @@ var TaskDetailModal = ({
             key: item.id,
             type: "button",
             onClick: () => scrollToTaskSection(item.id),
-            className: `relative min-h-11 px-3 text-sm font-semibold transition-colors ${index === 0 ? "text-slate-900 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-blue-500 dark:text-[#f1efe9]" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"}`
+            className: `relative min-h-11 px-3 text-sm font-semibold transition-colors ${index === 0 ? "text-slate-900 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-blue-500 dark:text-[var(--text)]" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"}`
           },
           item.label
         ))
@@ -12019,7 +12025,7 @@ var TaskDetailModal = ({
         "section",
         {
           id: "task-summary",
-          className: "mb-4 scroll-mt-16 rounded-xl border border-[#dedbd4] bg-white p-5 dark:border-white/10 dark:bg-[#202420]"
+          className: "mb-4 scroll-mt-16 rounded-xl border border-[var(--border)] bg-white p-5 dark:border-white/10 dark:bg-[var(--surface-raised)]"
         },
         /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 mb-2" }, "Descripci\xF3n"),
         task.notes ? /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 px-4 py-3" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed" }, task.notes)) : /* @__PURE__ */ React.createElement(
@@ -12060,24 +12066,24 @@ var TaskDetailModal = ({
           setNewCheckItem("");
           setAddingCheck(false);
         };
-        return /* @__PURE__ */ React.createElement("section", { className: "mb-4 rounded-xl border border-[#dedbd4] bg-white p-5 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("div", { className: "mb-4 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+        return /* @__PURE__ */ React.createElement("section", { className: "mb-4 rounded-xl border border-[var(--border)] bg-white p-5 dark:border-white/10 dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement("div", { className: "mb-4 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
           Icon,
           {
             name: "CheckSquare",
             size: 13,
             className: "text-slate-500"
           }
-        ), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Lista de control"), checklist.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-1 text-xs text-slate-500" }, done, " de ", checklist.length, " completados"), checklist.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-xs font-bold text-slate-500" }, pct, "%")), checklist.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mb-4 h-1.5 overflow-hidden rounded-full bg-[#dedbd4] dark:bg-white/10" }, /* @__PURE__ */ React.createElement(
+        ), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Lista de control"), checklist.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-1 text-xs text-slate-500" }, done, " de ", checklist.length, " completados"), checklist.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-xs font-bold text-slate-500" }, pct, "%")), checklist.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mb-4 h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)] dark:bg-white/10" }, /* @__PURE__ */ React.createElement(
           "div",
           {
-            className: "h-full rounded-full bg-[#b78000] transition-all duration-500",
+            className: "h-full rounded-full bg-[var(--status-yellow-text)] transition-all duration-500",
             style: { width: `${pct}%` }
           }
         )), /* @__PURE__ */ React.createElement("div", { className: "space-y-1" }, checklist.map((item) => /* @__PURE__ */ React.createElement(
           "div",
           {
             key: item.id,
-            className: "group flex min-h-11 items-center gap-3 rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-[#dedbd4] hover:bg-[#f7f6f2] dark:hover:border-white/10 dark:hover:bg-[#282d29]"
+            className: "group flex min-h-11 items-center gap-3 rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-[var(--border)] hover:bg-[var(--surface-subtle)] dark:hover:border-white/10 dark:hover:bg-[var(--surface-muted)]"
           },
           /* @__PURE__ */ React.createElement(
             "button",
@@ -12141,7 +12147,7 @@ var TaskDetailModal = ({
           "button",
           {
             onClick: () => canAct && setAddingCheck(true),
-            className: `mt-3 flex min-h-11 w-full items-center gap-2 rounded-lg border border-dashed border-[#cbc7bf] bg-[#f7f6f2] px-4 py-2 text-sm text-slate-500 transition-colors hover:border-[#aaa69d] hover:text-slate-700 dark:border-white/15 dark:bg-[#1b1f1c] dark:hover:border-white/25 dark:hover:text-slate-200 ${!canAct ? "cursor-default opacity-40" : ""}`
+            className: `mt-3 flex min-h-11 w-full items-center gap-2 rounded-lg border border-dashed border-[var(--border-strong)] bg-[var(--surface-subtle)] px-4 py-2 text-sm text-slate-500 transition-colors hover:border-[var(--border-strong)] hover:text-slate-700 dark:border-white/15 dark:bg-[var(--surface)] dark:hover:border-white/25 dark:hover:text-slate-200 ${!canAct ? "cursor-default opacity-40" : ""}`
           },
           /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 13 }),
           " Agregar elemento"
@@ -12178,7 +12184,7 @@ var TaskDetailModal = ({
           "section",
           {
             id: "task-files",
-            className: "mb-4 scroll-mt-16 rounded-xl border border-[#dedbd4] bg-white p-5 dark:border-white/10 dark:bg-[#202420]"
+            className: "mb-4 scroll-mt-16 rounded-xl border border-[var(--border)] bg-white p-5 dark:border-white/10 dark:bg-[var(--surface-raised)]"
           },
           /* @__PURE__ */ React.createElement("div", { className: "mb-4 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Icon, { name: "Inbox", size: 13, className: "text-slate-500" }), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Archivos"), attachments.length > 0 && /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500 ml-1" }, attachments.length), canAct && attachments.length > 0 && /* @__PURE__ */ React.createElement(
             "button",
@@ -12211,7 +12217,7 @@ var TaskDetailModal = ({
             "div",
             {
               key: att.id,
-              className: "group flex items-center gap-3 rounded-lg border border-[#dedbd4] bg-[#f7f6f2] p-3 transition-colors hover:border-[#aaa69d] dark:border-white/10 dark:bg-[#282d29] dark:hover:border-white/20"
+              className: "group flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] p-3 transition-colors hover:border-[var(--border-strong)] dark:border-white/10 dark:bg-[var(--surface-muted)] dark:hover:border-white/20"
             },
             isImage(att) && att.data ? /* @__PURE__ */ React.createElement(
               "img",
@@ -12252,7 +12258,7 @@ var TaskDetailModal = ({
             "button",
             {
               onClick: () => canAct && fileInputRef.current && fileInputRef.current.click(),
-              className: `flex min-h-[76px] w-full items-center justify-center gap-3 rounded-lg border border-dashed border-[#cbc7bf] bg-[#f7f6f2] px-4 py-3 text-sm text-slate-500 transition-colors hover:border-blue-400 hover:text-slate-700 dark:border-white/15 dark:bg-[#1b1f1c] dark:hover:border-blue-500/60 dark:hover:text-slate-200 ${!canAct ? "cursor-default opacity-40" : ""}`
+              className: `flex min-h-[76px] w-full items-center justify-center gap-3 rounded-lg border border-dashed border-[var(--border-strong)] bg-[var(--surface-subtle)] px-4 py-3 text-sm text-slate-500 transition-colors hover:border-blue-400 hover:text-slate-700 dark:border-white/15 dark:bg-[var(--surface)] dark:hover:border-blue-500/60 dark:hover:text-slate-200 ${!canAct ? "cursor-default opacity-40" : ""}`
             },
             /* @__PURE__ */ React.createElement(Icon, { name: "Paperclip", size: 16 }),
             /* @__PURE__ */ React.createElement("span", { className: "text-left" }, /* @__PURE__ */ React.createElement("strong", { className: "block font-semibold text-slate-700 dark:text-slate-200" }, "Selecciona un archivo"), /* @__PURE__ */ React.createElement("span", { className: "mt-0.5 block text-xs text-slate-500" }, "Im\xE1genes, documentos, hojas de c\xE1lculo o video"))
@@ -12272,7 +12278,7 @@ var TaskDetailModal = ({
           className: "ml-auto shrink-0 text-[11px] font-bold text-blue-600 hover:underline dark:text-blue-400"
         },
         "Abrir chat completo"
-      )), !task.clientId ? /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400" }, "Esta tarea no tiene cliente asignado, as\xED que no tiene chat.") : /* @__PURE__ */ React.createElement(React.Fragment, null, taskChatMessages.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mb-4 space-y-3" }, taskChatMessages.slice(-4).map((message) => /* @__PURE__ */ React.createElement("div", { key: message.id, className: "flex gap-2.5" }, /* @__PURE__ */ React.createElement("div", { className: "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[9px] font-black text-white" }, (message.authorName || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-bold text-slate-700 dark:text-slate-200" }, message.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] text-slate-400" }, relativeTime(message.createdAt))), /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200" }, renderChatText(message.text))))), taskChatMessages.length > 4 && onOpenClientChat && /* @__PURE__ */ React.createElement(
+      )), !task.clientId ? /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400" }, "Esta tarea no tiene cliente asignado, as\xED que no tiene chat.") : /* @__PURE__ */ React.createElement(React.Fragment, null, taskChatMessages.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "mb-4 space-y-3" }, taskChatMessages.slice(-4).map((message) => /* @__PURE__ */ React.createElement("div", { key: message.id, className: "flex gap-2.5" }, /* @__PURE__ */ React.createElement("div", { className: "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--text-muted)] text-[9px] font-black text-white" }, (message.authorName || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "min-w-0 flex-1" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-bold text-slate-700 dark:text-slate-200" }, message.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-[11px] text-slate-400" }, relativeTime(message.createdAt))), /* @__PURE__ */ React.createElement("p", { className: "whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200" }, renderChatText(message.text))))), taskChatMessages.length > 4 && onOpenClientChat && /* @__PURE__ */ React.createElement(
         "button",
         {
           onClick: () => onOpenClientChat(task.clientId),
@@ -12316,7 +12322,7 @@ var TaskDetailModal = ({
         "section",
         {
           id: "task-activity",
-          className: "scroll-mt-16 rounded-xl border border-[#dedbd4] bg-white p-5 dark:border-white/10 dark:bg-[#202420]"
+          className: "scroll-mt-16 rounded-xl border border-[var(--border)] bg-white p-5 dark:border-white/10 dark:bg-[var(--surface-raised)]"
         },
         /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-5" }, /* @__PURE__ */ React.createElement(
           Icon,
@@ -12326,7 +12332,7 @@ var TaskDetailModal = ({
             className: "text-slate-500"
           }
         ), /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" }, "Actividad"), totalLoggedMs > 0 && /* @__PURE__ */ React.createElement("span", { className: "ml-auto text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1" }, /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 11 }), formatDuration(totalLoggedMs))),
-        /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#555552] text-[10px] font-black text-white" }, (currentUserProfile?.name || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "flex-1 relative" }, /* @__PURE__ */ React.createElement(
+        /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--text-muted)] text-[10px] font-black text-white" }, (currentUserProfile?.name || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "flex-1 relative" }, /* @__PURE__ */ React.createElement(
           "textarea",
           {
             ref: commentInputRef,
@@ -12343,7 +12349,7 @@ var TaskDetailModal = ({
             },
             placeholder: "Escribe una actualizaci\xF3n o menciona con @",
             rows: commentText ? 3 : 1,
-            className: "min-h-[48px] w-full resize-none rounded-lg border border-[#d8d5ce] bg-[#f7f6f2] px-4 py-3 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500/70 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[#1b1f1c] dark:text-slate-200"
+            className: "min-h-[48px] w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500/70 focus:ring-2 focus:ring-blue-500/25 dark:border-white/10 dark:bg-[var(--surface)] dark:text-slate-200"
           }
         ), mentionOpen && mentionSuggestions.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "absolute left-0 bottom-full mb-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 w-52" }, /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-black uppercase tracking-widest text-slate-500 px-3 pt-1.5 pb-1" }, "Mencionar"), mentionSuggestions.map((p) => /* @__PURE__ */ React.createElement(
           "button",
@@ -12355,7 +12361,7 @@ var TaskDetailModal = ({
             },
             className: "w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
           },
-          /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
+          /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-[var(--text-muted)] flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
           /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1 text-left" }, p.name)
         ))), commentText.trim() && /* @__PURE__ */ React.createElement("div", { className: "flex justify-end mt-2" }, /* @__PURE__ */ React.createElement(
           "button",
@@ -12374,7 +12380,7 @@ var TaskDetailModal = ({
           ) : /* @__PURE__ */ React.createElement(Icon, { name: "Send", size: 12 }),
           submitting ? "Enviando..." : "Comentar"
         )))),
-        /* @__PURE__ */ React.createElement("div", { className: "space-y-4 border-l border-[#dedbd4] pl-4 dark:border-white/10" }, activityFeed.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "rounded-lg border border-dashed border-[#cbc7bf] bg-[#f7f6f2] px-4 py-5 text-center dark:border-white/15 dark:bg-[#1b1f1c]" }, /* @__PURE__ */ React.createElement(
+        /* @__PURE__ */ React.createElement("div", { className: "space-y-4 border-l border-[var(--border)] pl-4 dark:border-white/10" }, activityFeed.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "rounded-lg border border-dashed border-[var(--border-strong)] bg-[var(--surface-subtle)] px-4 py-5 text-center dark:border-white/15 dark:bg-[var(--surface)]" }, /* @__PURE__ */ React.createElement(
           Icon,
           {
             name: "MessageSquare",
@@ -12389,7 +12395,7 @@ var TaskDetailModal = ({
               size: 12,
               className: "text-emerald-600 dark:text-emerald-400"
             }
-          )), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement("span", { className: "font-bold text-slate-700 dark:text-slate-200" }, item.authorName), " ", "registr\xF3", " ", /* @__PURE__ */ React.createElement("span", { className: "font-bold text-emerald-600 dark:text-emerald-400" }, formatDuration(item.durationMs)), /* @__PURE__ */ React.createElement("span", { className: "text-slate-500 text-xs ml-2" }, relativeTime(item.loggedAt)))) : /* @__PURE__ */ React.createElement("div", { key: item.id, className: "flex gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "w-7 h-7 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5" }, (item.authorName || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2 mb-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm font-bold text-slate-700 dark:text-slate-200" }, item.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500" }, relativeTime(item.createdAt))), /* @__PURE__ */ React.createElement("div", { className: "rounded-lg rounded-tl-none border border-[#dedbd4] bg-[#f7f6f2] px-4 py-3 dark:border-white/10 dark:bg-[#282d29]" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words" }, item.text.split(/(@\S+)/g).map(
+          )), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement("span", { className: "font-bold text-slate-700 dark:text-slate-200" }, item.authorName), " ", "registr\xF3", " ", /* @__PURE__ */ React.createElement("span", { className: "font-bold text-emerald-600 dark:text-emerald-400" }, formatDuration(item.durationMs)), /* @__PURE__ */ React.createElement("span", { className: "text-slate-500 text-xs ml-2" }, relativeTime(item.loggedAt)))) : /* @__PURE__ */ React.createElement("div", { key: item.id, className: "flex gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "w-7 h-7 rounded-full bg-[var(--text-muted)] flex items-center justify-center text-white font-black text-[9px] shrink-0 mt-0.5" }, (item.authorName || "U").slice(0, 2).toUpperCase()), /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-baseline gap-2 mb-1.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm font-bold text-slate-700 dark:text-slate-200" }, item.authorName || "Usuario"), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-slate-500" }, relativeTime(item.createdAt))), /* @__PURE__ */ React.createElement("div", { className: "rounded-lg rounded-tl-none border border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3 dark:border-white/10 dark:bg-[var(--surface-muted)]" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-700 dark:text-slate-200 leading-relaxed break-words" }, item.text.split(/(@\S+)/g).map(
             (part, i) => part.startsWith("@") ? /* @__PURE__ */ React.createElement(
               "span",
               {
@@ -12400,16 +12406,16 @@ var TaskDetailModal = ({
             ) : part
           )))))
         ))
-      ))), /* @__PURE__ */ React.createElement("aside", { className: "w-full overflow-visible border-t border-[#dedbd4] bg-[#efeee9] dark:border-white/10 dark:bg-[#12161a] lg:custom-scroll lg:max-h-none lg:overflow-y-auto lg:border-l lg:border-t-0" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-3 p-5" }, /* @__PURE__ */ React.createElement("p", { className: "mb-4 text-sm font-semibold text-slate-800 dark:text-[#f1efe9]" }, "Detalles"), /* @__PURE__ */ React.createElement("div", { "data-dropdown": true, className: "relative rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Users", size: 14 }), "Responsable"), /* @__PURE__ */ React.createElement("div", { className: "flex min-h-10 flex-wrap items-center gap-2" }, currentAssigneeIds.length > 0 ? currentAssigneeIds.map((uid) => {
+      ))), /* @__PURE__ */ React.createElement("aside", { className: "w-full overflow-visible border-t border-[var(--border)] bg-[var(--surface-muted)] dark:border-white/10 dark:bg-[var(--surface-subtle)] lg:custom-scroll lg:max-h-none lg:overflow-y-auto lg:border-l lg:border-t-0" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-3 p-5" }, /* @__PURE__ */ React.createElement("p", { className: "mb-4 text-sm font-semibold text-slate-800 dark:text-[var(--text)]" }, "Detalles"), /* @__PURE__ */ React.createElement("div", { "data-dropdown": true, className: "relative rounded-xl border border-[var(--border)] bg-white p-4 dark:border-white/10 dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement("p", { className: "mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Users", size: 14 }), "Responsable"), /* @__PURE__ */ React.createElement("div", { className: "flex min-h-10 flex-wrap items-center gap-2" }, currentAssigneeIds.length > 0 ? currentAssigneeIds.map((uid) => {
         const person = peoplePool.find((p) => p.id === uid);
         if (!person) return null;
         return /* @__PURE__ */ React.createElement(
           "div",
           {
             key: uid,
-            className: "group flex min-h-10 items-center gap-2 rounded-lg bg-[#f7f6f2] py-1 pl-1.5 pr-2 dark:bg-[#282d29]"
+            className: "group flex min-h-10 items-center gap-2 rounded-lg bg-[var(--surface-subtle)] py-1 pl-1.5 pr-2 dark:bg-[var(--surface-muted)]"
           },
-          /* @__PURE__ */ React.createElement("div", { className: "w-5 h-5 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[8px] shrink-0" }, person.name.slice(0, 2).toUpperCase()),
+          /* @__PURE__ */ React.createElement("div", { className: "w-5 h-5 rounded-full bg-[var(--text-muted)] flex items-center justify-center text-white font-black text-[8px] shrink-0" }, person.name.slice(0, 2).toUpperCase()),
           /* @__PURE__ */ React.createElement("span", { className: "text-[11px] font-semibold text-slate-700 dark:text-slate-300 leading-none" }, person.name.split(" ")[0]),
           canAct && /* @__PURE__ */ React.createElement(
             "button",
@@ -12476,7 +12482,7 @@ var TaskDetailModal = ({
                 }
               )
             ),
-            /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
+            /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-[var(--text-muted)] flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
             /* @__PURE__ */ React.createElement(
               "span",
               {
@@ -12498,16 +12504,16 @@ var TaskDetailModal = ({
           /* @__PURE__ */ React.createElement(Icon, { name: "UserX", size: 13 }),
           " Quitar todos"
         )
-      )), /* @__PURE__ */ React.createElement("div", { "data-dropdown": true, className: "relative rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flag", size: 14 }), "Prioridad"), /* @__PURE__ */ React.createElement(
+      )), /* @__PURE__ */ React.createElement("div", { "data-dropdown": true, className: "relative rounded-xl border border-[var(--border)] bg-white p-4 dark:border-white/10 dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement("p", { className: "mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Flag", size: 14 }), "Prioridad"), /* @__PURE__ */ React.createElement(
         "button",
         {
           onClick: () => canAct && setPriorityOpen((o) => !o),
-          className: `flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-1.5 ${canAct ? "cursor-pointer hover:bg-[#f7f6f2] dark:hover:bg-[#282d29]" : "cursor-default"} transition-colors`
+          className: `flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-1.5 ${canAct ? "cursor-pointer hover:bg-[var(--surface-subtle)] dark:hover:bg-[var(--surface-muted)]" : "cursor-default"} transition-colors`
         },
         /* @__PURE__ */ React.createElement(
           FlagIcon,
           {
-            color: currentPriority?.iconColor || "#94a3b8",
+            color: currentPriority?.iconColor || "var(--text-faint)",
             filled: !!currentPriority
           }
         ),
@@ -12558,7 +12564,7 @@ var TaskDetailModal = ({
           /* @__PURE__ */ React.createElement(Icon, { name: "X", size: 12 }),
           " Quitar prioridad"
         )
-      )), /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Fecha l\xEDmite"), /* @__PURE__ */ React.createElement("div", { className: "min-h-[38px] flex items-center gap-2 py-1 -mx-1 px-2 rounded-xl" }, /* @__PURE__ */ React.createElement(
+      )), /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[var(--border)] bg-white p-4 dark:border-white/10 dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Fecha l\xEDmite"), /* @__PURE__ */ React.createElement("div", { className: "min-h-[38px] flex items-center gap-2 py-1 -mx-1 px-2 rounded-xl" }, /* @__PURE__ */ React.createElement(
         Icon,
         {
           name: "CalendarDays",
@@ -12571,7 +12577,7 @@ var TaskDetailModal = ({
           className: `text-sm font-semibold ${task.date ? "text-slate-700 dark:text-slate-200" : "text-slate-500 italic"}`
         },
         task.date || "Sin fecha"
-      ))), /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Cliente"), /* @__PURE__ */ React.createElement("div", { className: "min-h-[38px] flex items-center gap-2 py-1 -mx-1 px-2 rounded-xl" }, client ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "w-5 h-5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-[9px] shrink-0" }, client.name?.charAt(0).toUpperCase()), /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200" }, client.name)) : /* @__PURE__ */ React.createElement("span", { className: "text-sm text-slate-500 italic" }, "Interno"))), type === "editingTask" && /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Jerarqu\xEDa"), /* @__PURE__ */ React.createElement("span", { className: "px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800" }, getEditingHierarchyId(task).toUpperCase())), type === "managementTask" && task.category && /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[#d8d5ce] bg-white p-4 dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Categor\xEDa"), /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200" }, task.category)), /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[#d8d5ce] bg-white p-5 text-center dark:border-white/10 dark:bg-[#202420]" }, /* @__PURE__ */ React.createElement("p", { className: "mb-3 flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Timer", size: 14 }), "Tiempo registrado"), /* @__PURE__ */ React.createElement("div", { className: "flex min-h-[74px] flex-col items-center justify-center gap-3" }, timerRunning ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-red-500" }, /* @__PURE__ */ React.createElement("span", { className: "h-2 w-2 shrink-0 animate-pulse rounded-full bg-red-500" }), "En curso"), /* @__PURE__ */ React.createElement("span", { className: "text-2xl font-semibold tabular-nums text-red-500 dark:text-red-400" }, formatClockDuration(timerElapsed)), /* @__PURE__ */ React.createElement(
+      ))), /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[var(--border)] bg-white p-4 dark:border-white/10 dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Cliente"), /* @__PURE__ */ React.createElement("div", { className: "min-h-[38px] flex items-center gap-2 py-1 -mx-1 px-2 rounded-xl" }, client ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "w-5 h-5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-[9px] shrink-0" }, client.name?.charAt(0).toUpperCase()), /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200" }, client.name)) : /* @__PURE__ */ React.createElement("span", { className: "text-sm text-slate-500 italic" }, "Interno"))), type === "editingTask" && /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[var(--border)] bg-white p-4 dark:border-white/10 dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Jerarqu\xEDa"), /* @__PURE__ */ React.createElement("span", { className: "px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800" }, getEditingHierarchyId(task).toUpperCase())), type === "managementTask" && task.category && /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[var(--border)] bg-white p-4 dark:border-white/10 dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Categor\xEDa"), /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold text-slate-700 dark:text-slate-200" }, task.category)), /* @__PURE__ */ React.createElement("div", { className: "rounded-xl border border-[var(--border)] bg-white p-5 text-center dark:border-white/10 dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement("p", { className: "mb-3 flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement(Icon, { name: "Timer", size: 14 }), "Tiempo registrado"), /* @__PURE__ */ React.createElement("div", { className: "flex min-h-[74px] flex-col items-center justify-center gap-3" }, timerRunning ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", { className: "inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-red-500" }, /* @__PURE__ */ React.createElement("span", { className: "h-2 w-2 shrink-0 animate-pulse rounded-full bg-red-500" }), "En curso"), /* @__PURE__ */ React.createElement("span", { className: "text-2xl font-semibold tabular-nums text-red-500 dark:text-red-400" }, formatClockDuration(timerElapsed)), /* @__PURE__ */ React.createElement(
         "button",
         {
           onClick: handleStopTimer,
@@ -12614,14 +12620,14 @@ var TaskDetailModal = ({
         /* @__PURE__ */ React.createElement("span", { className: "font-bold text-slate-600 dark:text-slate-300" }, formatDuration(e.durationMs)),
         /* @__PURE__ */ React.createElement("span", { className: "truncate" }, e.authorName),
         /* @__PURE__ */ React.createElement("span", { className: "ml-auto shrink-0" }, relativeTime(e.loggedAt))
-      )))), task.createdAt && /* @__PURE__ */ React.createElement("div", { className: "border-t border-[#d8d5ce] px-1 pt-4 dark:border-white/10" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Creado"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, new Date(task.createdAt).toLocaleDateString("es-ES", {
+      )))), task.createdAt && /* @__PURE__ */ React.createElement("div", { className: "border-t border-[var(--border)] px-1 pt-4 dark:border-white/10" }, /* @__PURE__ */ React.createElement("p", { className: "text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 mb-2" }, "Creado"), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500 dark:text-slate-400" }, new Date(task.createdAt).toLocaleDateString("es-ES", {
         day: "numeric",
         month: "long",
         year: "numeric"
       }), /* @__PURE__ */ React.createElement("br", null), new Date(task.createdAt).toLocaleTimeString("es-ES", {
         hour: "2-digit",
         minute: "2-digit"
-      }))), /* @__PURE__ */ React.createElement("p", { className: "flex items-center justify-center gap-2 pt-2 text-xs text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement("kbd", { className: "rounded border border-[#cbc7bf] bg-white px-2 py-1 font-mono text-[10px] dark:border-white/15 dark:bg-[#202420]" }, "Esc"), "para cerrar"))))
+      }))), /* @__PURE__ */ React.createElement("p", { className: "flex items-center justify-center gap-2 pt-2 text-xs text-slate-500 dark:text-slate-400" }, /* @__PURE__ */ React.createElement("kbd", { className: "rounded border border-[var(--border-strong)] bg-white px-2 py-1 font-mono text-[10px] dark:border-white/15 dark:bg-[var(--surface-raised)]" }, "Esc"), "para cerrar"))))
     )
   );
 };
@@ -12851,25 +12857,25 @@ var CreateTaskModal = ({
     {
       id: "urgente",
       label: "Urgente",
-      iconColor: "#ef4444",
+      iconColor: "var(--status-red-text)",
       color: "text-red-500"
     },
     {
       id: "alta",
       label: "Alta",
-      iconColor: "#fb923c",
+      iconColor: "var(--status-yellow-text)",
       color: "text-orange-400"
     },
     {
       id: "normal",
       label: "Normal",
-      iconColor: "#60a5fa",
+      iconColor: "var(--status-blue-text)",
       color: "text-blue-400"
     },
     {
       id: "baja",
       label: "Baja",
-      iconColor: "#94a3b8",
+      iconColor: "var(--text-faint)",
       color: "text-slate-500"
     }
   ];
@@ -13082,7 +13088,7 @@ var CreateTaskModal = ({
           active: !!assignee,
           onClick: () => setAssigneeOpen((o) => !o)
         },
-        assignee ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[8px]" }, assignee.name.slice(0, 2).toUpperCase()), assignee.name) : "Persona asignada"
+        assignee ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 rounded-full bg-[var(--text-muted)] flex items-center justify-center text-white font-black text-[8px]" }, assignee.name.slice(0, 2).toUpperCase()), assignee.name) : "Persona asignada"
       ), assigneeOpen && /* @__PURE__ */ React.createElement(
         "div",
         {
@@ -13100,7 +13106,7 @@ var CreateTaskModal = ({
             },
             className: "w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
           },
-          /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-[#555552] flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
+          /* @__PURE__ */ React.createElement("div", { className: "w-6 h-6 rounded-full bg-[var(--text-muted)] flex items-center justify-center text-white font-black text-[9px] shrink-0" }, p.name.slice(0, 2).toUpperCase()),
           /* @__PURE__ */ React.createElement(
             "span",
             {
@@ -13146,7 +13152,7 @@ var CreateTaskModal = ({
         /* @__PURE__ */ React.createElement(
           FlagIcon,
           {
-            color: curPriority?.iconColor || "#94a3b8",
+            color: curPriority?.iconColor || "var(--text-faint)",
             filled: !!curPriority
           }
         ),
