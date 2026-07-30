@@ -1888,6 +1888,13 @@ const THEME_PALETTES = [
     swatches: ["#f3f5fb", "#fbfcff", "#3157a4", "#182033"],
     darkSwatches: ["#0b0e17", "#121827", "#86a8ff", "#f0f4ff"],
   },
+  {
+    id: "sand",
+    name: "Arena",
+    description: "Lino, duna y terracota serena",
+    swatches: ["#f5efe5", "#fdfaf5", "#8a5a2b", "#2b241c"],
+    darkSwatches: ["#17130f", "#201a14", "#d9aa6d", "#f5ede2"],
+  },
 ];
 const THEME_PALETTE_IDS = new Set(THEME_PALETTES.map((palette) => palette.id));
 const THEME_PALETTE_ALIASES = { clay: "cobalt" };
