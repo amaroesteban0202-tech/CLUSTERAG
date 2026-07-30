@@ -176,42 +176,42 @@ html.dark[data-palette="cobalt"] {
 }
 
 html[data-palette="sand"] {
-    --canvas: #f5efe5;
-    --surface: #fdfaf5;
-    --surface-subtle: #faf5ed;
-    --surface-muted: #ebe1d2;
-    --surface-raised: #fffdf9;
-    --surface-overlay: rgba(55, 42, 28, 0.72);
-    --text: #2b241c;
-    --text-muted: #6f6254;
-    --text-faint: #988977;
-    --border: #dfd2c1;
-    --border-strong: #c8b69f;
-    --primary: #8a5a2b;
-    --primary-hover: #70461f;
-    --primary-soft: #f1e3d0;
-    --primary-contrast: #fffaf2;
-    --focus: #9b6a36;
-    --shadow-color: 63, 44, 25;
+    --canvas: #ece3c6;
+    --surface: #fff0c9;
+    --surface-subtle: #fcfac7;
+    --surface-muted: #e0d8b1;
+    --surface-raised: #fffdf4;
+    --surface-overlay: rgba(50, 41, 26, 0.74);
+    --text: #32291a;
+    --text-muted: #665942;
+    --text-faint: #8a7a5c;
+    --border: #d5c493;
+    --border-strong: #bca86c;
+    --primary: #7e5b08;
+    --primary-hover: #654706;
+    --primary-soft: #fcfac7;
+    --primary-contrast: #fff9e8;
+    --focus: #7e5b08;
+    --shadow-color: 66, 50, 17;
 }
 html.dark[data-palette="sand"] {
-    --canvas: #17130f;
-    --surface: #201a14;
-    --surface-subtle: #1b1611;
-    --surface-muted: #2d251d;
-    --surface-raised: #261f18;
-    --surface-overlay: rgba(7, 5, 3, 0.82);
-    --text: #f5ede2;
-    --text-muted: #b9aa98;
-    --text-faint: #817362;
-    --border: rgba(241, 226, 207, 0.11);
-    --border-strong: rgba(241, 226, 207, 0.2);
-    --primary: #d9aa6d;
-    --primary-hover: #e8bc82;
-    --primary-soft: rgba(217, 170, 109, 0.14);
-    --primary-contrast: #241507;
-    --focus: #d9aa6d;
-    --shadow-color: 7, 4, 2;
+    --canvas: #18140d;
+    --surface: #211b11;
+    --surface-subtle: #1c170f;
+    --surface-muted: #302717;
+    --surface-raised: #2a2215;
+    --surface-overlay: rgba(7, 5, 2, 0.84);
+    --text: #fff4d6;
+    --text-muted: #c9b98b;
+    --text-faint: #8f805c;
+    --border: rgba(255, 240, 201, 0.11);
+    --border-strong: rgba(255, 240, 201, 0.2);
+    --primary: #f9d95e;
+    --primary-hover: #ffe77d;
+    --primary-soft: rgba(249, 217, 94, 0.14);
+    --primary-contrast: #2a2108;
+    --focus: #f9d95e;
+    --shadow-color: 7, 4, 1;
 }
 
 html, body, #root { min-height: 100%; }

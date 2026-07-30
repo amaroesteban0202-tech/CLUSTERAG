@@ -1891,9 +1891,9 @@ const THEME_PALETTES = [
   {
     id: "sand",
     name: "Arena",
-    description: "Lino, duna y terracota serena",
-    swatches: ["#f5efe5", "#fdfaf5", "#8a5a2b", "#2b241c"],
-    darkSwatches: ["#17130f", "#201a14", "#d9aa6d", "#f5ede2"],
+    description: "Arena, crema y mostaza dorada",
+    swatches: ["#ece3c6", "#fff0c9", "#7e5b08", "#32291a"],
+    darkSwatches: ["#18140d", "#211b11", "#f9d95e", "#fff4d6"],
   },
 ];
 const THEME_PALETTE_IDS = new Set(THEME_PALETTES.map((palette) => palette.id));
