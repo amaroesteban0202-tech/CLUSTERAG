@@ -15,6 +15,7 @@ import { prepareManagementTaskPayload } from '../lib/management-tasks.js';
 import { requireAuthenticatedUser } from '../lib/sessions.js';
 import { normalizeEmail } from '../lib/text.js';
 import { sendClientChatPush } from '../lib/push-notifications.js';
+import { buildChatGroups, canManageChatGroups } from '../lib/chat-groups.js';
 
 const router = express.Router();
 
@@ -140,6 +141,43 @@ const ensureCollectionReadPermission = (req) => {
     return ensureCollectionPermission(req, 'read');
 };
 
+const loadChatGroupAccess = async (userRecord, messages = null) => {
+    if (canManageChatGroups(userRecord)) return { canAccessAll: true, clientIds: new Set() };
+    const [clients, allMessages, membershipRecords, users, managers, editors] = await Promise.all([
+        listRecords({ collectionName: 'clients' }),
+        messages ? Promise.resolve(messages) : listRecords({ collectionName: 'client_chats' }),
+        listRecords({ collectionName: 'chat_group_memberships' }),
+        listRecords({ collectionName: 'users' }),
+        listRecords({ collectionName: 'managers' }),
+        listRecords({ collectionName: 'editors' })
+    ]);
+    const context = buildChatGroups({
+        clients,
+        messages: allMessages,
+        membershipRecords,
+        users,
+        managers,
+        editors
+    });
+    const actorId = context.resolvePersonId({
+        id: userRecord?.id,
+        email: userRecord?.email,
+        name: userRecord?.name
+    });
+    return {
+        canAccessAll: false,
+        clientIds: new Set(context.groups
+            .filter((group) => group.memberIds.map(String).includes(String(actorId)))
+            .map((group) => String(group.clientId)))
+    };
+};
+
+const ensureChatClientAccess = async (userRecord, clientId) => {
+    const access = await loadChatGroupAccess(userRecord);
+    if (access.canAccessAll || access.clientIds.has(String(clientId || ''))) return;
+    throw createHttpError(403, 'No perteneces a este grupo.', 'chat-groups/membership-required');
+};
+
 const prepareCollectionPayload = ({ collectionName, payload, existing = null, actor = null, isCreate = false }) => {
     if (collectionName === 'management_tasks') {
         return prepareManagementTaskPayload({
@@ -262,35 +300,56 @@ router.get('/_sync', asyncHandler(async (req, res) => {
         collections,
         limitCount: 500
     });
+    if (collections.includes('client_chats') && !canManageChatGroups(userRecord)) {
+        const access = await loadChatGroupAccess(userRecord);
+        result.changes = result.changes.filter((change) => (
+            change.collectionName !== 'client_chats'
+            || !change.record
+            || access.clientIds.has(String(change.record.clientId || ''))
+        ));
+    }
     res.json(result);
 }));
 
 router.get('/:collectionName', asyncHandler(async (req, res) => {
-    const { collectionName } = ensureCollectionReadPermission(req);
-    const records = await listRecords({
+    const { collectionName, userRecord } = ensureCollectionReadPermission(req);
+    const mustFilterChat = collectionName === 'client_chats' && !canManageChatGroups(userRecord);
+    let records = await listRecords({
         collectionName,
         sortBy: String(req.query.orderBy || 'updatedAt'),
         sortDirection: String(req.query.orderDir || 'asc'),
-        limitCount: req.query.limit ? Number(req.query.limit) : undefined,
+        limitCount: mustFilterChat ? undefined : (req.query.limit ? Number(req.query.limit) : undefined),
         dateFrom: req.query.dateFrom ? String(req.query.dateFrom) : undefined,
         dateTo: req.query.dateTo ? String(req.query.dateTo) : undefined,
         includeOpenBefore: req.query.includeOpenBefore === '1'
     });
 
+    if (mustFilterChat) {
+        const access = await loadChatGroupAccess(userRecord, records);
+        records = records.filter((record) => access.clientIds.has(String(record.clientId || '')));
+        if (req.query.limit) records = records.slice(0, Number(req.query.limit));
+    }
+
     res.json({ records });
 }));
 
 router.get('/:collectionName/:recordId', asyncHandler(async (req, res) => {
-    const { collectionName } = ensureCollectionReadPermission(req);
+    const { collectionName, userRecord } = ensureCollectionReadPermission(req);
     const record = await getRecord({ collectionName, recordId: req.params.recordId });
     if (!record) {
         throw createHttpError(404, 'El documento no existe.', 'document/not-found');
+    }
+    if (collectionName === 'client_chats') {
+        await ensureChatClientAccess(userRecord, record.clientId);
     }
     res.json({ record });
 }));
 
 router.post('/:collectionName', asyncHandler(async (req, res) => {
     const { collectionName, userRecord } = ensureCollectionPermission(req, 'create');
+    if (collectionName === 'client_chats') {
+        await ensureChatClientAccess(userRecord, req.body?.data?.clientId);
+    }
     const record = await createRecord({
         collectionName,
         recordId: req.body?.id,
@@ -316,6 +375,9 @@ router.post('/:collectionName', asyncHandler(async (req, res) => {
 
 router.put('/:collectionName/:recordId', asyncHandler(async (req, res) => {
     const { collectionName, userRecord, existing, selfEdit } = await ensureCollectionUpdatePermission(req, req.params.recordId);
+    if (collectionName === 'client_chats') {
+        await ensureChatClientAccess(userRecord, existing?.clientId || req.body?.data?.clientId);
+    }
     const rawPayload = req.body?.data || {};
     const record = await upsertRecord({
         collectionName,
@@ -334,6 +396,9 @@ router.put('/:collectionName/:recordId', asyncHandler(async (req, res) => {
 
 router.patch('/:collectionName/:recordId', asyncHandler(async (req, res) => {
     const { collectionName, userRecord, existing, selfEdit } = await ensureCollectionUpdatePermission(req, req.params.recordId);
+    if (collectionName === 'client_chats') {
+        await ensureChatClientAccess(userRecord, existing?.clientId || req.body?.data?.clientId);
+    }
     const rawPayload = req.body?.data || {};
     const record = await upsertRecord({
         collectionName,
@@ -367,6 +432,10 @@ router.delete('/:collectionName/:recordId', asyncHandler(async (req, res) => {
         if (!(selfDeletable && canUpdateOwnChatMessage(userRecord, existing))) {
             throw createHttpError(403, 'No tienes permisos para esta accion.', 'auth/insufficient-permission');
         }
+    }
+    if (collectionName === 'client_chats') {
+        const message = await getRecord({ collectionName, recordId: req.params.recordId });
+        await ensureChatClientAccess(userRecord, message?.clientId);
     }
     await deleteRecord({
         collectionName,

@@ -1956,6 +1956,9 @@ function App() {
   const [chatPins, setChatPins] = useState([]);
   const [chatStickers, setChatStickers] = useState([]);
   const [chatDirectory, setChatDirectory] = useState([]);
+  const [chatGroupsByClient, setChatGroupsByClient] = useState({});
+  const [chatGroupsLoaded, setChatGroupsLoaded] = useState(false);
+  const [chatGroupIdentityId, setChatGroupIdentityId] = useState("");
   const [incomingCall, setIncomingCall] = useState(null);
   const [incomingCallToJoin, setIncomingCallToJoin] = useState(null);
   const [nativePushReady, setNativePushReady] = useState(false);
@@ -2128,6 +2131,10 @@ function App() {
         };
   const currentRoleMeta = getRoleMeta(currentUserProfile?.role);
   const currentVerificationMeta = getVerificationMeta(currentUserProfile);
+  const canManageChatMembers = ["manager", "super_admin"].includes(
+    currentUserProfile?.role,
+  );
+  const canLeaveChatGroup = currentUserProfile?.role === "super_admin";
   const profileBlocked = Boolean(
     currentUserProfile && currentUserProfile.isActive === false,
   );
@@ -2525,6 +2532,55 @@ function App() {
     return set;
   }, [chatHidden, currentUserProfile, authEmail]);
 
+  const currentChatGroupClientIds = useMemo(() => {
+    const memberId = String(
+      chatGroupIdentityId || currentUserProfile?.id || authEmail || "",
+    );
+    const result = new Set();
+    if (!memberId) return result;
+    Object.values(chatGroupsByClient).forEach((group) => {
+      if ((group?.memberIds || []).map(String).includes(memberId)) {
+        result.add(String(group.clientId));
+      }
+    });
+    return result;
+  }, [
+    chatGroupsByClient,
+    chatGroupIdentityId,
+    currentUserProfile?.id,
+    authEmail,
+  ]);
+
+  // Managers y superadmins conservan una vista de supervisión de todos los
+  // grupos. Los demás roles solo ven los grupos a los que pertenecen.
+  const chatClients = useMemo(() => {
+    if (!chatGroupsLoaded || canManageChatMembers) return clients;
+    return clients.filter((client) =>
+      currentChatGroupClientIds.has(String(client.id)),
+    );
+  }, [
+    clients,
+    chatGroupsLoaded,
+    canManageChatMembers,
+    currentChatGroupClientIds,
+  ]);
+
+  useEffect(() => {
+    if (
+      !chatGroupsLoaded ||
+      canManageChatMembers ||
+      !selectedChatClient?.id ||
+      currentChatGroupClientIds.has(String(selectedChatClient.id))
+    )
+      return;
+    setSelectedChatClient(null);
+  }, [
+    chatGroupsLoaded,
+    canManageChatMembers,
+    currentChatGroupClientIds,
+    selectedChatClient?.id,
+  ]);
+
   // No leídos por cliente + total (excluye los mensajes propios y el hilo que
   // está abierto en este momento, que se considera leído al instante).
   const chatUnread = useMemo(() => {
@@ -2535,6 +2591,12 @@ function App() {
     let total = 0;
     clientChats.forEach((message) => {
       if (!message.clientId || !message.createdAt) return;
+      if (
+        chatGroupsLoaded &&
+        !canManageChatMembers &&
+        !currentChatGroupClientIds.has(String(message.clientId))
+      )
+        return;
       if (myId && String(message.authorId || "") === myId) return;
       if (message.deleted || chatHiddenIds.has(String(message.id))) return;
       if (openClientId && String(message.clientId) === openClientId) return;
@@ -2552,6 +2614,9 @@ function App() {
     currentUserProfile,
     view,
     selectedChatClient,
+    chatGroupsLoaded,
+    canManageChatMembers,
+    currentChatGroupClientIds,
   ]);
 
   const appUserById = new Map(appUsers.map((item) => [item.id, item]));
@@ -5886,11 +5951,9 @@ function App() {
     handleNavigate(viewByType[taskRef.taskType] || "account-room");
   };
 
-  // Personas mencionables en el chat: TODOS los usuarios de la plataforma. El
-  // chat es para comunicarse con todo el equipo, no solo con los asignados al
-  // cliente. Se usa el directorio del servidor (accesible a cualquier rol,
-  // incluidos editores/viewers); si aún no cargó, se arma un fallback local con
-  // lo que haya en memoria (usuarios + managers + editores).
+  // Directorio completo de personas. ClientChatView lo cruza con la membresía
+  // del grupo activo para que menciones y llamadas nunca muestren a todo el
+  // equipo indiscriminadamente.
   const chatMentionables = (() => {
     if (chatDirectory.length > 0) return chatDirectory;
     const seenEmail = new Set();
@@ -5918,21 +5981,69 @@ function App() {
     return result.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   })();
 
-  // Carga el directorio de personas para @menciones (accesible a todos los roles).
+  // El servidor deriva la membresía inicial del historial y del manager del
+  // cliente. Una vez administrada, devuelve la lista explícita guardada.
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setChatDirectory([]);
+      setChatGroupsByClient({});
+      setChatGroupsLoaded(false);
+      setChatGroupIdentityId("");
+      return;
+    }
     let cancelled = false;
-    apiFetch("/api/directory")
+    const loadGroups = () => apiFetch("/api/chat-groups")
       .then((payload) => {
-        if (!cancelled && Array.isArray(payload?.people)) {
-          setChatDirectory(payload.people);
-        }
+        if (cancelled) return;
+        if (Array.isArray(payload?.people)) setChatDirectory(payload.people);
+        const nextGroups = {};
+        (Array.isArray(payload?.groups) ? payload.groups : []).forEach(
+          (group) => {
+            if (group?.clientId) nextGroups[String(group.clientId)] = group;
+          },
+        );
+        setChatGroupsByClient(nextGroups);
+        setChatGroupIdentityId(String(payload?.currentUserId || ""));
+        setChatGroupsLoaded(true);
       })
-      .catch((error) => console.warn("[chat:directory]", error.message));
+      .catch((error) => {
+        if (!cancelled) console.warn("[chat:groups]", error.message);
+      });
+    loadGroups();
+    const intervalId =
+      view === "chat" ? window.setInterval(loadGroups, 120000) : null;
+    window.addEventListener("focus", loadGroups);
     return () => {
       cancelled = true;
+      if (intervalId) window.clearInterval(intervalId);
+      window.removeEventListener("focus", loadGroups);
     };
-  }, [user]);
+  }, [user, clientChats.length, view]);
+
+  const updateChatGroupMembers = async (clientId, memberIds) => {
+    if (!clientId || !canManageChatMembers) return null;
+    try {
+      const payload = await apiFetch(
+        `/api/chat-groups/${encodeURIComponent(clientId)}/members`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ memberIds }),
+        },
+      );
+      if (payload?.group) {
+        setChatGroupsByClient((current) => ({
+          ...current,
+          [String(clientId)]: payload.group,
+        }));
+      }
+      showToast("Integrantes del grupo actualizados.", "success");
+      return payload?.group || null;
+    } catch (error) {
+      console.warn("[chat:group-members]", error.message);
+      showToast(error.message || "No se pudo actualizar el grupo.", "error");
+      throw error;
+    }
+  };
 
   // Mientras el chat de un cliente está abierto, mantenerlo marcado como leído.
   useEffect(() => {
@@ -6956,15 +7067,21 @@ function App() {
                 })
               }
               chatUnread={chatUnread.byClient?.[selectedClient.id] || 0}
-              onOpenChat={() => {
-                openClientChat(selectedClient);
-                handleNavigate("chat");
-              }}
+              onOpenChat={
+                !chatGroupsLoaded ||
+                canManageChatMembers ||
+                currentChatGroupClientIds.has(String(selectedClient.id))
+                  ? () => {
+                      openClientChat(selectedClient);
+                      handleNavigate("chat");
+                    }
+                  : null
+              }
             />
           )}
           {view === "chat" && (
             <ClientChatView
-              clients={clients}
+              clients={chatClients}
               clientChats={clientChats}
               chatUnread={chatUnread}
               chatMuteMap={chatMuteMap}
@@ -6992,6 +7109,14 @@ function App() {
                 "moderate_client_chat",
               )}
               mentionables={chatMentionables}
+              groupsByClient={chatGroupsByClient}
+              groupsLoaded={chatGroupsLoaded}
+              currentGroupMemberId={
+                chatGroupIdentityId || currentUserProfile?.id || ""
+              }
+              canManageMembers={canManageChatMembers}
+              canLeaveGroup={canLeaveChatGroup}
+              onUpdateMembers={updateChatGroupMembers}
               accountTasks={accountTasks}
               editingTasks={editingTasks}
               managementTasks={managementTasks}
@@ -13252,6 +13377,12 @@ const ClientChatView = ({
   currentUserProfile,
   canModerate = false,
   mentionables = [],
+  groupsByClient = {},
+  groupsLoaded = false,
+  currentGroupMemberId = "",
+  canManageMembers = false,
+  canLeaveGroup = false,
+  onUpdateMembers,
   accountTasks = [],
   editingTasks = [],
   managementTasks = [],
@@ -13273,6 +13404,10 @@ const ClientChatView = ({
   const [callError, setCallError] = useState("");
   const [muteMenuOpen, setMuteMenuOpen] = useState(false);
   const [muteClock, setMuteClock] = useState(() => Date.now());
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberDraftIds, setMemberDraftIds] = useState([]);
+  const [savingMembers, setSavingMembers] = useState(false);
   const callContainerRef = useRef(null);
   const jitsiApiRef = useRef(null);
   const [text, setText] = useState("");
@@ -13323,6 +13458,7 @@ const ClientChatView = ({
 
   useEffect(() => {
     setMuteMenuOpen(false);
+    setMembersOpen(false);
   }, [activeClient?.id]);
 
   useEffect(() => {
@@ -13438,8 +13574,22 @@ const ClientChatView = ({
       ]
     : [];
 
+  const activeGroup = activeClient
+    ? groupsByClient[String(activeClient.id)] || {
+        clientId: String(activeClient.id),
+        memberIds: [],
+        source: "history",
+      }
+    : null;
+  const activeGroupMemberIds = (activeGroup?.memberIds || []).map(String);
+  const activeGroupMemberSet = new Set(activeGroupMemberIds);
+  const activeGroupMembers = mentionables.filter((person) =>
+    activeGroupMemberSet.has(String(person.id)),
+  );
+  const scopedMentionables = groupsLoaded ? activeGroupMembers : [];
+
   const mentionSuggestions = mentionOpen
-    ? mentionables
+    ? scopedMentionables
         .filter((person) => {
           const q = mentionQuery.toLowerCase();
           if (!q) return true;
@@ -13450,6 +13600,25 @@ const ClientChatView = ({
         })
         .slice(0, 30)
     : [];
+
+  const openMembers = () => {
+    setMemberDraftIds(activeGroupMemberIds);
+    setMemberSearch("");
+    setMembersOpen(true);
+  };
+
+  const saveMembers = async () => {
+    if (!activeClient?.id || !onUpdateMembers || savingMembers) return;
+    setSavingMembers(true);
+    try {
+      await onUpdateMembers(activeClient.id, memberDraftIds);
+      setMembersOpen(false);
+    } catch {
+      // El contenedor ya muestra el mensaje devuelto por el servidor.
+    } finally {
+      setSavingMembers(false);
+    }
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -14107,11 +14276,23 @@ const ClientChatView = ({
                 <p className="chat-header-status">
                   {messages.length} mensaje{messages.length === 1 ? "" : "s"} en
                   el historial
+                  {groupsLoaded
+                    ? ` · ${activeGroupMembers.length} integrante${activeGroupMembers.length === 1 ? "" : "s"}`
+                    : ""}
                   {activeClientMuted
                     ? ` · Silenciado ${formatChatMuteUntil(activeMuteUntil)}`
                     : ""}
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={openMembers}
+                aria-label="Ver integrantes del grupo"
+                title="Integrantes del grupo"
+                className="chat-header-button shrink-0"
+              >
+                <Icon name="Users" size={19} />
+              </button>
               <div className="relative shrink-0">
                 <button
                   type="button"
@@ -15246,6 +15427,205 @@ const ClientChatView = ({
         </div>
       )}
 
+      {/* Integrantes reales del grupo y administración por rol. */}
+      {membersOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[85] flex items-center justify-center bg-black/50 p-4"
+            onClick={() => !savingMembers && setMembersOpen(false)}
+          >
+            <div
+              className="flex max-h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-4 dark:border-white/10">
+                <div>
+                  <h3 className="text-base font-black text-slate-800 dark:text-slate-100">
+                    Integrantes del grupo
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {activeGroup?.source === "managed"
+                      ? "Lista administrada por el equipo."
+                      : "Lista inicial detectada del historial del chat."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMembersOpen(false)}
+                  aria-label="Cerrar"
+                  disabled={savingMembers}
+                  className="text-slate-400 hover:text-slate-600 disabled:opacity-40 dark:hover:text-slate-200"
+                >
+                  <Icon name="X" size={18} />
+                </button>
+              </div>
+
+              <div className="custom-scroll flex-1 overflow-y-auto p-3">
+                <p className="mb-2 px-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
+                  En este grupo · {memberDraftIds.length}
+                </p>
+                <div className="space-y-1">
+                  {mentionables
+                    .filter((person) =>
+                      memberDraftIds.map(String).includes(String(person.id)),
+                    )
+                    .map((person) => {
+                      const isSelf =
+                        String(person.id) === String(currentGroupMemberId);
+                      const canRemove =
+                        canManageMembers && (!isSelf || canLeaveGroup);
+                      return (
+                        <div
+                          key={person.id}
+                          className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/60"
+                        >
+                          <span
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white"
+                            style={{
+                              backgroundColor: chatAvatarColor(
+                                person.id || person.name,
+                              ),
+                            }}
+                          >
+                            {(person.name || "U").slice(0, 2).toUpperCase()}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-bold text-slate-700 dark:text-slate-100">
+                              {person.name || person.email}
+                              {isSelf ? " (tú)" : ""}
+                            </p>
+                            {person.email && (
+                              <p className="truncate text-[11px] text-slate-400">
+                                {person.email}
+                              </p>
+                            )}
+                          </div>
+                          {canManageMembers && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                canRemove &&
+                                setMemberDraftIds((current) =>
+                                  current.filter(
+                                    (id) => String(id) !== String(person.id),
+                                  ),
+                                )
+                              }
+                              disabled={!canRemove || savingMembers}
+                              title={
+                                !canRemove && isSelf
+                                  ? "Los managers no pueden salir por sí mismos"
+                                  : isSelf
+                                    ? "Salir del grupo"
+                                    : "Quitar del grupo"
+                              }
+                              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-35 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                            >
+                              <Icon name={isSelf ? "LogOut" : "UserX"} size={16} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  {memberDraftIds.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400 dark:border-white/10">
+                      Este grupo no tiene integrantes.
+                    </div>
+                  )}
+                </div>
+
+                {canManageMembers && (
+                  <div className="mt-5 border-t border-slate-100 pt-4 dark:border-white/10">
+                    <p className="mb-2 px-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
+                      Agregar personas
+                    </p>
+                    <div className="relative mb-2">
+                      <Icon
+                        name="Search"
+                        size={15}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+                      <input
+                        value={memberSearch}
+                        onChange={(event) => setMemberSearch(event.target.value)}
+                        placeholder="Buscar en el equipo..."
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      {mentionables
+                        .filter(
+                          (person) =>
+                            !memberDraftIds
+                              .map(String)
+                              .includes(String(person.id)) &&
+                            (!memberSearch.trim() ||
+                              (person.name || "")
+                                .toLowerCase()
+                                .includes(memberSearch.trim().toLowerCase()) ||
+                              (person.email || "")
+                                .toLowerCase()
+                                .includes(memberSearch.trim().toLowerCase())),
+                        )
+                        .slice(0, 20)
+                        .map((person) => (
+                          <button
+                            key={person.id}
+                            type="button"
+                            onClick={() =>
+                              setMemberDraftIds((current) => [
+                                ...current,
+                                person.id,
+                              ])
+                            }
+                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60"
+                          >
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-500 text-[10px] font-black text-white">
+                              {(person.name || "U").slice(0, 2).toUpperCase()}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700 dark:text-slate-100">
+                              {person.name || person.email}
+                            </span>
+                            <Icon
+                              name="UserPlus"
+                              size={16}
+                              className="text-blue-600 dark:text-blue-400"
+                            />
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 p-3 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setMembersOpen(false)}
+                  disabled={savingMembers}
+                  className="rounded-lg px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700"
+                >
+                  {canManageMembers ? "Cancelar" : "Cerrar"}
+                </button>
+                {canManageMembers && (
+                  <button
+                    type="button"
+                    onClick={saveMembers}
+                    disabled={savingMembers}
+                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {savingMembers && (
+                      <Icon name="Loader2" size={15} className="animate-spin" />
+                    )}
+                    Guardar integrantes
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
       {/* Selector de participantes para la llamada */}
       {callPicker &&
         createPortal(
@@ -15286,7 +15666,7 @@ const ClientChatView = ({
               />
             </div>
             <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scroll">
-              {mentionables
+              {scopedMentionables
                 .filter(
                   (person) =>
                     String(person.id) !== String(currentUserId) &&

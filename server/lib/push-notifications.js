@@ -2,6 +2,7 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { env } from '../config/env.js';
 import { getFirebaseAdminApp } from './firebase-admin.js';
 import { deleteRecord, listRecords } from './records.js';
+import { buildChatGroups } from './chat-groups.js';
 
 const PUSH_TOKEN_COLLECTION = 'push_tokens';
 const CHAT_MUTE_COLLECTION = 'chat_mutes';
@@ -59,7 +60,7 @@ export const buildClientChatPush = ({
 export const sendClientChatPush = async ({ message, clientName = 'Cliente' }) => {
     if (!message?.id || !message?.clientId) return { sent: 0, skipped: true };
 
-    const [tokens, chatMutes] = await Promise.all([
+    const [tokens, chatMutes, clients, messages, membershipRecords, users, managers, editors] = await Promise.all([
         listRecords({
             collectionName: PUSH_TOKEN_COLLECTION,
             sortBy: 'updatedAt',
@@ -69,8 +70,24 @@ export const sendClientChatPush = async ({ message, clientName = 'Cliente' }) =>
             collectionName: CHAT_MUTE_COLLECTION,
             sortBy: 'updatedAt',
             sortDirection: 'desc'
-        })
+        }),
+        listRecords({ collectionName: 'clients' }),
+        listRecords({ collectionName: 'client_chats' }),
+        listRecords({ collectionName: 'chat_group_memberships' }),
+        listRecords({ collectionName: 'users' }),
+        listRecords({ collectionName: 'managers' }),
+        listRecords({ collectionName: 'editors' })
     ]);
+    const chatGroups = buildChatGroups({
+        clients,
+        messages,
+        membershipRecords,
+        users,
+        managers,
+        editors
+    });
+    const group = chatGroups.groups.find((item) => String(item.clientId) === String(message.clientId));
+    const memberIds = new Set((group?.memberIds || []).map(String));
     const authorId = String(message.authorId || '');
     const mentionedIds = new Set((message.mentionedIds || []).map(String));
     const isCall = Boolean(message.call?.roomId && !message.call?.ended);
@@ -79,6 +96,7 @@ export const sendClientChatPush = async ({ message, clientName = 'Cliente' }) =>
         .map((mute) => `${String(mute.userId || '')}__${String(mute.clientId || '')}`));
     const recipients = tokens.filter((entry) => {
         if (!entry?.token || String(entry.userId || '') === authorId) return false;
+        if (!memberIds.has(String(entry.userId || ''))) return false;
         if (!isCall && activeMuteKeys.has(
             `${String(entry.userId || '')}__${String(message.clientId || '')}`
         )) return false;

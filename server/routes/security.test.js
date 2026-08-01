@@ -42,6 +42,8 @@ let server;
 let baseUrl;
 let viewerToken;
 let operationsToken;
+let managerToken;
+let superAdminToken;
 
 const createToken = (userId) => signPayload({
     sub: userId,
@@ -90,9 +92,40 @@ before(async () => {
         }
     });
     await createRecord({
+        collectionName: 'users',
+        recordId: 'manager',
+        payload: {
+            name: 'Manager Test',
+            email: 'manager@example.test',
+            role: 'manager',
+            isActive: true
+        }
+    });
+    await createRecord({
+        collectionName: 'users',
+        recordId: 'super-admin',
+        payload: {
+            name: 'Super Admin Test',
+            email: 'super@example.test',
+            role: 'super_admin',
+            isActive: true
+        }
+    });
+    await createRecord({
         collectionName: 'clients',
         recordId: 'client-1',
         payload: { name: 'Cliente de prueba' }
+    });
+    await createRecord({
+        collectionName: 'client_chats',
+        recordId: 'message-1',
+        payload: {
+            clientId: 'client-1',
+            text: 'Mensaje historico',
+            authorId: 'viewer',
+            authorEmail: 'viewer@example.test',
+            authorName: 'Viewer Test'
+        }
     });
 
     const stamp = nowIso();
@@ -107,6 +140,8 @@ before(async () => {
 
     viewerToken = createToken('viewer');
     operationsToken = createToken('operations');
+    managerToken = createToken('manager');
+    superAdminToken = createToken('super-admin');
 });
 
 after(async () => {
@@ -168,6 +203,63 @@ test('management tasks reject an empty title', async () => {
     });
     assert.equal(response.status, 400);
     assert.equal(response.payload?.error?.code, 'management_tasks/title-required');
+});
+
+test('chat groups derive members and enforce manager and superadmin rules', async () => {
+    const initial = await request('/api/chat-groups', { token: viewerToken });
+    assert.equal(initial.status, 200);
+    assert.deepEqual(
+        initial.payload?.groups?.find((group) => group.clientId === 'client-1')?.memberIds,
+        ['viewer']
+    );
+
+    assert.equal((await request('/api/chat-groups/client-1/members', {
+        token: viewerToken,
+        method: 'PUT',
+        body: { memberIds: ['viewer'] }
+    })).status, 403);
+
+    assert.equal((await request('/api/chat-groups/client-1/members', {
+        token: managerToken,
+        method: 'PUT',
+        body: { memberIds: ['viewer', 'manager'] }
+    })).status, 200);
+
+    const managerLeaves = await request('/api/chat-groups/client-1/members', {
+        token: managerToken,
+        method: 'PUT',
+        body: { memberIds: ['viewer'] }
+    });
+    assert.equal(managerLeaves.status, 403);
+    assert.equal(managerLeaves.payload?.error?.code, 'chat-groups/manager-cannot-leave');
+
+    assert.equal((await request('/api/chat-groups/client-1/members', {
+        token: superAdminToken,
+        method: 'PUT',
+        body: { memberIds: ['viewer', 'manager', 'super-admin'] }
+    })).status, 200);
+    assert.equal((await request('/api/chat-groups/client-1/members', {
+        token: superAdminToken,
+        method: 'PUT',
+        body: { memberIds: ['viewer', 'manager'] }
+    })).status, 200);
+
+    assert.equal((await request('/api/chat-groups/client-1/members', {
+        token: managerToken,
+        method: 'PUT',
+        body: { memberIds: ['manager'] }
+    })).status, 200);
+    assert.deepEqual(
+        (await request('/api/collections/client_chats', { token: viewerToken })).payload?.records,
+        []
+    );
+    const removedMemberSend = await request('/api/collections/client_chats', {
+        token: viewerToken,
+        method: 'POST',
+        body: { data: { clientId: 'client-1', text: 'No permitido' } }
+    });
+    assert.equal(removedMemberSend.status, 403);
+    assert.equal(removedMemberSend.payload?.error?.code, 'chat-groups/membership-required');
 });
 
 test('notifications require a session and a known active recipient', async () => {

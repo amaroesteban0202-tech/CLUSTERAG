@@ -14,6 +14,7 @@ import callsRoutes from './routes/calls.js';
 import pushRoutes from './routes/push.js';
 import { getRequestOrigin, isLocalOrigin } from './lib/request-origin.js';
 import reportsRouter from './routes/reports.js';
+import chatGroupRoutes from './routes/chat-groups.js';
 
 export const createApp = async () => {
     await migrateDatabase();
@@ -95,6 +96,7 @@ export const createApp = async () => {
     app.use('/api/notifications', notificationRoutes);
     app.use('/api/directory', directoryRoutes);
     app.use('/api/calls', callsRoutes);
+    app.use('/api/chat-groups', chatGroupRoutes);
     app.use('/api/push', pushRoutes);
     app.use('/api/reports', reportsRouter);
 
