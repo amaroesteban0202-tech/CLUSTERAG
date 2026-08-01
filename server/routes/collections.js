@@ -141,8 +141,10 @@ const ensureCollectionReadPermission = (req) => {
     return ensureCollectionPermission(req, 'read');
 };
 
-const loadChatGroupAccess = async (userRecord, messages = null) => {
-    if (canManageChatGroups(userRecord)) return { canAccessAll: true, clientIds: new Set() };
+const loadChatGroupAccess = async (userRecord, messages = null, allowOversight = true) => {
+    if (allowOversight && canManageChatGroups(userRecord)) {
+        return { canAccessAll: true, clientIds: new Set() };
+    }
     const [clients, allMessages, membershipRecords, users, managers, editors] = await Promise.all([
         listRecords({ collectionName: 'clients' }),
         messages ? Promise.resolve(messages) : listRecords({ collectionName: 'client_chats' }),
@@ -172,8 +174,8 @@ const loadChatGroupAccess = async (userRecord, messages = null) => {
     };
 };
 
-const ensureChatClientAccess = async (userRecord, clientId) => {
-    const access = await loadChatGroupAccess(userRecord);
+const ensureChatClientAccess = async (userRecord, clientId, { allowOversight = false } = {}) => {
+    const access = await loadChatGroupAccess(userRecord, null, allowOversight);
     if (access.canAccessAll || access.clientIds.has(String(clientId || ''))) return;
     throw createHttpError(403, 'No perteneces a este grupo.', 'chat-groups/membership-required');
 };
@@ -340,7 +342,7 @@ router.get('/:collectionName/:recordId', asyncHandler(async (req, res) => {
         throw createHttpError(404, 'El documento no existe.', 'document/not-found');
     }
     if (collectionName === 'client_chats') {
-        await ensureChatClientAccess(userRecord, record.clientId);
+        await ensureChatClientAccess(userRecord, record.clientId, { allowOversight: true });
     }
     res.json({ record });
 }));

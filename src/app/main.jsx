@@ -2551,36 +2551,6 @@ function App() {
     authEmail,
   ]);
 
-  // Managers y superadmins conservan una vista de supervisión de todos los
-  // grupos. Los demás roles solo ven los grupos a los que pertenecen.
-  const chatClients = useMemo(() => {
-    if (!chatGroupsLoaded || canManageChatMembers) return clients;
-    return clients.filter((client) =>
-      currentChatGroupClientIds.has(String(client.id)),
-    );
-  }, [
-    clients,
-    chatGroupsLoaded,
-    canManageChatMembers,
-    currentChatGroupClientIds,
-  ]);
-
-  useEffect(() => {
-    if (
-      !chatGroupsLoaded ||
-      canManageChatMembers ||
-      !selectedChatClient?.id ||
-      currentChatGroupClientIds.has(String(selectedChatClient.id))
-    )
-      return;
-    setSelectedChatClient(null);
-  }, [
-    chatGroupsLoaded,
-    canManageChatMembers,
-    currentChatGroupClientIds,
-    selectedChatClient?.id,
-  ]);
-
   // No leídos por cliente + total (excluye los mensajes propios y el hilo que
   // está abierto en este momento, que se considera leído al instante).
   const chatUnread = useMemo(() => {
@@ -2593,7 +2563,6 @@ function App() {
       if (!message.clientId || !message.createdAt) return;
       if (
         chatGroupsLoaded &&
-        !canManageChatMembers &&
         !currentChatGroupClientIds.has(String(message.clientId))
       )
         return;
@@ -2615,7 +2584,6 @@ function App() {
     view,
     selectedChatClient,
     chatGroupsLoaded,
-    canManageChatMembers,
     currentChatGroupClientIds,
   ]);
 
@@ -3288,7 +3256,16 @@ function App() {
   }, [user, view]);
 
   useEffect(() => {
-    if (!db || !user || !usersLoaded || hasSeededManagementDirectory) return;
+    if (
+      !db ||
+      !user ||
+      !authEmail ||
+      currentUserProfile?.isAnonymous ||
+      profileBlocked ||
+      !usersLoaded ||
+      hasSeededManagementDirectory
+    )
+      return;
     const existingKeys = new Set(
       appUsers
         .map((item) => item.managementKey || getManagementDirectoryKey(item))
@@ -3322,7 +3299,16 @@ function App() {
         ),
       ),
     ).finally(() => setHasSeededManagementDirectory(true));
-  }, [db, user, usersLoaded, appUsers, hasSeededManagementDirectory]);
+  }, [
+    db,
+    user,
+    authEmail,
+    currentUserProfile?.isAnonymous,
+    profileBlocked,
+    usersLoaded,
+    appUsers,
+    hasSeededManagementDirectory,
+  ]);
 
   useEffect(() => {
     if (!db || !user || !usersLoaded || hasRecoveredManagerDirectory) return;
@@ -5984,7 +5970,7 @@ function App() {
   // El servidor deriva la membresía inicial del historial y del manager del
   // cliente. Una vez administrada, devuelve la lista explícita guardada.
   useEffect(() => {
-    if (!user) {
+    if (!user || !authEmail || currentUserProfile?.isAnonymous || profileBlocked) {
       setChatDirectory([]);
       setChatGroupsByClient({});
       setChatGroupsLoaded(false);
@@ -6018,7 +6004,14 @@ function App() {
       if (intervalId) window.clearInterval(intervalId);
       window.removeEventListener("focus", loadGroups);
     };
-  }, [user, clientChats.length, view]);
+  }, [
+    user,
+    authEmail,
+    currentUserProfile?.isAnonymous,
+    profileBlocked,
+    clientChats.length,
+    view,
+  ]);
 
   const updateChatGroupMembers = async (clientId, memberIds) => {
     if (!clientId || !canManageChatMembers) return null;
@@ -7081,7 +7074,7 @@ function App() {
           )}
           {view === "chat" && (
             <ClientChatView
-              clients={chatClients}
+              clients={clients}
               clientChats={clientChats}
               chatUnread={chatUnread}
               chatMuteMap={chatMuteMap}
@@ -13391,6 +13384,7 @@ const ClientChatView = ({
   onIncomingCallJoined,
 }) => {
   const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [menuFor, setMenuFor] = useState(null);
   const [reactionPickerFor, setReactionPickerFor] = useState(null);
@@ -13520,8 +13514,15 @@ const ClientChatView = ({
     return count > 0 ? `${count} archivo${count === 1 ? "" : "s"}` : "…";
   };
 
+  const membershipIdentity = String(
+    currentGroupMemberId || currentUserProfile?.id || "",
+  );
+  const belongsToChatGroup = (clientId) =>
+    (groupsByClient[String(clientId)]?.memberIds || [])
+      .map(String)
+      .includes(membershipIdentity);
   const term = search.trim().toLowerCase();
-  const sortedClients = [...clients]
+  const matchingClients = [...clients]
     .filter((client) => !term || (client.name || "").toLowerCase().includes(term))
     .sort((a, b) => {
       const aTime = lastMsgByClient[a.id]?.createdAt || "";
@@ -13529,6 +13530,19 @@ const ClientChatView = ({
       if (aTime !== bTime) return aTime > bTime ? -1 : 1;
       return (a.name || "").localeCompare(b.name || "");
     });
+  const activeClients = groupsLoaded
+    ? matchingClients.filter((client) => belongsToChatGroup(client.id))
+    : matchingClients;
+  const activeClientCount = groupsLoaded
+    ? clients.filter((client) => belongsToChatGroup(client.id)).length
+    : clients.length;
+  const archivedClients = groupsLoaded
+    ? matchingClients.filter((client) => !belongsToChatGroup(client.id))
+    : [];
+  const archivedClientCount = groupsLoaded
+    ? clients.filter((client) => !belongsToChatGroup(client.id)).length
+    : 0;
+  const sortedClients = showArchived ? archivedClients : activeClients;
 
   const messages = activeClient
     ? clientChats
@@ -13583,6 +13597,9 @@ const ClientChatView = ({
     : null;
   const activeGroupMemberIds = (activeGroup?.memberIds || []).map(String);
   const activeGroupMemberSet = new Set(activeGroupMemberIds);
+  const isActiveGroupMember = activeGroupMemberSet.has(membershipIdentity);
+  const canInteractWithActiveGroup =
+    !groupsLoaded || isActiveGroupMember;
   const activeGroupMembers = mentionables.filter((person) =>
     activeGroupMemberSet.has(String(person.id)),
   );
@@ -14111,15 +14128,36 @@ const ClientChatView = ({
         className={`chat-list-pane ${activeClient ? "hidden md:flex" : "flex"} min-h-0 w-full shrink-0 flex-col md:w-[21rem] lg:w-[23rem]`}
       >
         <div className="chat-list-header">
-          <div className="mb-4 flex items-center gap-3">
+          <div className="chat-inbox-heading flex items-center gap-3">
+            {showArchived && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowArchived(false);
+                  setSearch("");
+                  onSelectClient(null);
+                }}
+                aria-label="Volver a chats activos"
+                className="chat-header-button chat-archive-back shrink-0"
+              >
+                <Icon name="ChevronLeft" size={19} />
+              </button>
+            )}
             <span className="chat-section-icon">
-              <Icon name="MessageSquare" size={19} />
+              <Icon name={showArchived ? "Inbox" : "MessageSquare"} size={19} />
             </span>
             <div className="min-w-0">
-              <h2 className="chat-list-title">Conversaciones</h2>
-              <p className="chat-list-subtitle">Chat interno del equipo</p>
+              <p className="chat-list-kicker">Cluster / equipo</p>
+              <h2 className="chat-list-title">
+                {showArchived ? "Archivados" : "Mensajes"}
+              </h2>
+              <p className="chat-list-subtitle">
+                {showArchived
+                  ? `${archivedClientCount} fuera de tu bandeja principal`
+                  : `${activeClientCount} grupo${activeClientCount === 1 ? "" : "s"} activo${activeClientCount === 1 ? "" : "s"}`}
+              </p>
             </div>
-            {chatUnread.total > 0 && (
+            {!showArchived && chatUnread.total > 0 && (
               <span
                 className="chat-total-unread"
                 aria-label={`${chatUnread.total} mensajes sin leer`}
@@ -14128,7 +14166,7 @@ const ClientChatView = ({
               </span>
             )}
           </div>
-          <div className="chat-search relative">
+          <div className="chat-search relative mt-5">
             <Icon
               name="Search"
               size={16}
@@ -14138,19 +14176,58 @@ const ClientChatView = ({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               aria-label="Buscar conversación"
-              placeholder="Buscar conversación"
+              placeholder={
+                showArchived ? "Buscar en archivados" : "Buscar un grupo"
+              }
               className="chat-search-input w-full pl-10 pr-4"
             />
           </div>
         </div>
         <div className="chat-list-scroll custom-scroll flex-1 min-h-0 overflow-y-auto">
+          {!showArchived && archivedClientCount > 0 && !term && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowArchived(true);
+                onSelectClient(null);
+              }}
+              className="chat-archive-link flex w-full items-center gap-3 text-left"
+            >
+              <span className="chat-archive-icon">
+                <Icon name="Inbox" size={18} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <strong>Archivados</strong>
+                <small>Grupos en los que no participas</small>
+              </span>
+              <span className="chat-archive-count">{archivedClientCount}</span>
+              <Icon name="ChevronRight" size={15} className="chat-archive-chevron" />
+            </button>
+          )}
+          {showArchived && !term && (
+            <div className="chat-archive-note">
+              <Icon name="Inbox" size={15} />
+              <p>
+                Estos grupos quedan aquí como referencia y no aparecen entre tus
+                conversaciones activas.
+              </p>
+            </div>
+          )}
           {sortedClients.length === 0 && (
             <div className="chat-empty-state">
               <span className="chat-empty-icon">
-                <Icon name="Search" size={21} />
+                <Icon name={showArchived ? "Inbox" : "Search"} size={21} />
               </span>
-              <p>No encontramos conversaciones</p>
-              <span>Prueba con otro nombre de cliente.</span>
+              <p>
+                {showArchived ? "No hay grupos archivados" : "Tu bandeja está al día"}
+              </p>
+              <span>
+                {term
+                  ? "Prueba con otro nombre."
+                  : showArchived
+                    ? "Los grupos que abandones aparecerán aquí."
+                    : "Los grupos activos aparecerán en este espacio."}
+              </span>
             </div>
           )}
           {sortedClients.map((client) => {
@@ -14166,22 +14243,25 @@ const ClientChatView = ({
                 key={client.id}
                 onClick={() => onSelectClient(client)}
                 aria-current={isActive ? "page" : undefined}
-                className={`chat-list-item flex w-full items-center gap-3 text-left ${isActive ? "is-active" : ""}`}
+                className={`chat-list-item flex w-full items-center gap-3 text-left ${isActive ? "is-active" : ""} ${showArchived ? "is-archived" : ""}`}
               >
-                {client.photo ? (
-                  <img
-                    src={client.photo}
-                    alt={client.name}
-                    className="chat-list-avatar shrink-0 object-cover"
-                  />
-                ) : (
-                  <div
-                    className="chat-list-avatar flex shrink-0 items-center justify-center text-xs font-black text-white"
-                    style={{ backgroundColor: chatAvatarColor(client.name || client.id) }}
-                  >
-                    {(client.name || "C").slice(0, 2).toUpperCase()}
-                  </div>
-                )}
+                <span className="chat-list-avatar-wrap relative shrink-0">
+                  {client.photo ? (
+                    <img
+                      src={client.photo}
+                      alt={client.name}
+                      className="chat-list-avatar object-cover"
+                    />
+                  ) : (
+                    <span
+                      className="chat-list-avatar flex items-center justify-center text-xs font-black text-white"
+                      style={{ backgroundColor: chatAvatarColor(client.name || client.id) }}
+                    >
+                      {(client.name || "C").slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                  {!showArchived && <span className="chat-presence-dot" />}
+                </span>
                 <div className="chat-list-copy min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p
@@ -14236,14 +14316,22 @@ const ClientChatView = ({
       >
         {!activeClient ? (
           <div className="chat-welcome flex flex-1 flex-col items-center justify-center p-8 text-center">
-            <span className="chat-welcome-icon">
-              <Icon name="MessageSquare" size={32} />
-            </span>
-            <h3>Tu centro de conversaciones</h3>
+            <div className="chat-welcome-orbit" aria-hidden="true">
+              <span className="chat-welcome-icon">
+                <Icon name="MessageSquare" size={31} />
+              </span>
+            </div>
+            <p className="chat-welcome-kicker">Mensajería interna</p>
+            <h3>Las conversaciones que mueven el trabajo.</h3>
             <p>
-              Selecciona un cliente para revisar mensajes, archivos, llamadas y
-              tareas enlazadas.
+              Elige un grupo activo para continuar donde quedó el equipo, o
+              consulta Archivados cuando necesites una referencia.
             </p>
+            <div className="chat-welcome-capabilities" aria-hidden="true">
+              <span><Icon name="Paperclip" size={14} /> Archivos</span>
+              <span><Icon name="VideoCamera" size={14} /> Llamadas</span>
+              <span><Icon name="ClipboardList" size={14} /> Tareas</span>
+            </div>
           </div>
         ) : (
           <>
@@ -14274,8 +14362,11 @@ const ClientChatView = ({
                   {activeClient.name || "Cliente"}
                 </p>
                 <p className="chat-header-status">
-                  {messages.length} mensaje{messages.length === 1 ? "" : "s"} en
-                  el historial
+                  <span
+                    className={`chat-group-state-dot ${isActiveGroupMember ? "is-active" : "is-archived"}`}
+                  />
+                  {isActiveGroupMember ? "Grupo activo" : "Archivado"}
+                  {` · ${messages.length} mensaje${messages.length === 1 ? "" : "s"}`}
                   {groupsLoaded
                     ? ` · ${activeGroupMembers.length} integrante${activeGroupMembers.length === 1 ? "" : "s"}`
                     : ""}
@@ -14289,9 +14380,23 @@ const ClientChatView = ({
                 onClick={openMembers}
                 aria-label="Ver integrantes del grupo"
                 title="Integrantes del grupo"
-                className="chat-header-button shrink-0"
+                className="chat-members-button shrink-0"
               >
-                <Icon name="Users" size={19} />
+                <span className="chat-member-stack" aria-hidden="true">
+                  {activeGroupMembers.slice(0, 3).map((person) => (
+                    <span
+                      key={person.id}
+                      style={{
+                        backgroundColor: chatAvatarColor(person.id || person.name),
+                      }}
+                    >
+                      {(person.name || "U").slice(0, 1).toUpperCase()}
+                    </span>
+                  ))}
+                </span>
+                <span className="chat-members-count">
+                  {activeGroupMembers.length || 0}
+                </span>
               </button>
               <div className="relative shrink-0">
                 <button
@@ -14377,7 +14482,8 @@ const ClientChatView = ({
                   setCallSearch("");
                   setCallPicker({ mode: "start" });
                 }}
-                className="chat-call-button flex shrink-0 items-center gap-2"
+                disabled={!canInteractWithActiveGroup}
+                className="chat-call-button flex shrink-0 items-center gap-2 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Icon name="VideoCamera" size={18} />
                 <span className="hidden sm:inline">Nueva llamada</span>
@@ -14794,7 +14900,8 @@ const ClientChatView = ({
             </div>
 
             {/* Composer de mensajería */}
-            <div className="chat-composer-shell shrink-0">
+            {canInteractWithActiveGroup ? (
+              <div className="chat-composer-shell shrink-0">
               {replyingTo && (
                 <div className="chat-reply-bar mb-2 flex items-center gap-2">
                   <Icon
@@ -15314,8 +15421,22 @@ const ClientChatView = ({
                     </>
                   )}
                 </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="chat-archived-notice shrink-0">
+                <span className="chat-archived-notice-icon">
+                  <Icon name="Inbox" size={18} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <strong>Este grupo está archivado</strong>
+                  <p>
+                    Ya no formas parte del grupo. Puedes consultar su referencia,
+                    pero no enviar mensajes ni iniciar llamadas.
+                  </p>
+                </div>
+              </div>
+            )}
           </>
         )}
       </section>
@@ -15323,11 +15444,11 @@ const ClientChatView = ({
       {/* Popup de confirmación de borrado (estilo WhatsApp) */}
       {deleteTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="chat-dialog-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={() => setDeleteTarget(null)}
         >
           <div
-            className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-800"
+            className="chat-dialog-panel w-full max-w-xs p-5"
             onClick={(event) => event.stopPropagation()}
           >
             <h3 className="text-base font-black text-slate-800 dark:text-slate-100">
@@ -15369,11 +15490,11 @@ const ClientChatView = ({
       {/* Reenviar a otro cliente */}
       {forwardTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="chat-dialog-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={() => setForwardTarget(null)}
         >
           <div
-            className="flex max-h-[70vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800"
+            className="chat-dialog-panel flex max-h-[70vh] w-full max-w-sm flex-col overflow-hidden"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-white/10">
@@ -15400,10 +15521,11 @@ const ClientChatView = ({
               {clients
                 .filter(
                   (client) =>
-                    !forwardSearch.trim() ||
-                    (client.name || "")
-                      .toLowerCase()
-                      .includes(forwardSearch.trim().toLowerCase()),
+                    (!groupsLoaded || belongsToChatGroup(client.id)) &&
+                    (!forwardSearch.trim() ||
+                      (client.name || "")
+                        .toLowerCase()
+                        .includes(forwardSearch.trim().toLowerCase())),
                 )
                 .map((client) => (
                   <button
@@ -15431,14 +15553,14 @@ const ClientChatView = ({
       {membersOpen &&
         createPortal(
           <div
-            className="fixed inset-0 z-[85] flex items-center justify-center bg-black/50 p-4"
+            className="chat-members-overlay fixed inset-0 z-[85] flex items-center justify-center bg-black/50 p-4"
             onClick={() => !savingMembers && setMembersOpen(false)}
           >
             <div
-              className="flex max-h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800"
+              className="chat-members-panel flex max-h-[82vh] w-full max-w-md flex-col overflow-hidden"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-4 dark:border-white/10">
+              <div className="chat-members-panel-header flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-base font-black text-slate-800 dark:text-slate-100">
                     Integrantes del grupo
@@ -15460,7 +15582,7 @@ const ClientChatView = ({
                 </button>
               </div>
 
-              <div className="custom-scroll flex-1 overflow-y-auto p-3">
+              <div className="chat-members-panel-body custom-scroll flex-1 overflow-y-auto">
                 <p className="mb-2 px-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
                   En este grupo · {memberDraftIds.length}
                 </p>
@@ -15477,10 +15599,10 @@ const ClientChatView = ({
                       return (
                         <div
                           key={person.id}
-                          className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/60"
+                          className="chat-member-row flex items-center gap-3"
                         >
                           <span
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white"
+                            className="chat-member-avatar flex h-9 w-9 shrink-0 items-center justify-center text-[11px] font-black text-white"
                             style={{
                               backgroundColor: chatAvatarColor(
                                 person.id || person.name,
@@ -15535,7 +15657,7 @@ const ClientChatView = ({
                 </div>
 
                 {canManageMembers && (
-                  <div className="mt-5 border-t border-slate-100 pt-4 dark:border-white/10">
+                  <div className="chat-member-add-section mt-5 pt-4">
                     <p className="mb-2 px-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
                       Agregar personas
                     </p>
@@ -15549,7 +15671,7 @@ const ClientChatView = ({
                         value={memberSearch}
                         onChange={(event) => setMemberSearch(event.target.value)}
                         placeholder="Buscar en el equipo..."
-                        className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                        className="chat-member-search w-full py-2 pl-9 pr-3 text-sm outline-none"
                       />
                     </div>
                     <div className="space-y-1">
@@ -15578,9 +15700,9 @@ const ClientChatView = ({
                                 person.id,
                               ])
                             }
-                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60"
+                            className="chat-member-candidate flex w-full items-center gap-3 text-left"
                           >
-                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-500 text-[10px] font-black text-white">
+                            <span className="chat-member-avatar flex h-8 w-8 shrink-0 items-center justify-center bg-slate-500 text-[10px] font-black text-white">
                               {(person.name || "U").slice(0, 2).toUpperCase()}
                             </span>
                             <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700 dark:text-slate-100">
@@ -15598,12 +15720,12 @@ const ClientChatView = ({
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-2 border-t border-slate-100 p-3 dark:border-white/10">
+              <div className="chat-members-panel-footer flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setMembersOpen(false)}
                   disabled={savingMembers}
-                  className="rounded-lg px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700"
+                  className="chat-member-secondary-action px-4 py-2 text-sm font-bold disabled:opacity-40"
                 >
                   {canManageMembers ? "Cancelar" : "Cerrar"}
                 </button>
@@ -15612,7 +15734,7 @@ const ClientChatView = ({
                     type="button"
                     onClick={saveMembers}
                     disabled={savingMembers}
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                    className="chat-member-primary-action inline-flex items-center gap-2 px-4 py-2 text-sm font-bold disabled:opacity-50"
                   >
                     {savingMembers && (
                       <Icon name="Loader2" size={15} className="animate-spin" />
@@ -15630,11 +15752,11 @@ const ClientChatView = ({
       {callPicker &&
         createPortal(
           <div
-            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4"
+            className="chat-dialog-overlay fixed inset-0 z-[80] flex items-center justify-center p-4"
             onClick={() => setCallPicker(null)}
           >
           <div
-            className="flex max-h-[75vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800"
+            className="chat-dialog-panel flex max-h-[75vh] w-full max-w-sm flex-col overflow-hidden"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-white/10">

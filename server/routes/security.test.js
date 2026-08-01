@@ -260,6 +260,18 @@ test('chat groups derive members and enforce manager and superadmin rules', asyn
     });
     assert.equal(removedMemberSend.status, 403);
     assert.equal(removedMemberSend.payload?.error?.code, 'chat-groups/membership-required');
+
+    const archivedAdminSend = await request('/api/collections/client_chats', {
+        token: superAdminToken,
+        method: 'POST',
+        body: { data: { clientId: 'client-1', text: 'Tampoco permitido' } }
+    });
+    assert.equal(archivedAdminSend.status, 403);
+    assert.equal((await request('/api/collections/client_chats', {
+        token: managerToken,
+        method: 'POST',
+        body: { data: { clientId: 'client-1', text: 'Mensaje del integrante' } }
+    })).status, 201);
 });
 
 test('notifications require a session and a known active recipient', async () => {
