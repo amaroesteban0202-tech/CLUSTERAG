@@ -5959,7 +5959,76 @@ function App() {
         {
           events,
           accountTasks,
-          editingTasks
+          editingTasks,
+          managementTasks,
+          clients,
+          managers: accountTaskAssignees,
+          editors: editingTaskAssignees,
+          managementUsers,
+          currentUserProfile,
+          canCreateAccountTasks: userHasPermission(
+            currentUserProfile,
+            "create_account_tasks"
+          ),
+          canCreateEditingTasks: userHasPermission(
+            currentUserProfile,
+            "create_editing_tasks"
+          ),
+          canCreateManagementTasks: userHasPermission(
+            currentUserProfile,
+            "create_management_tasks"
+          ),
+          canManageAccountTasks: userHasPermission(
+            currentUserProfile,
+            "manage_account_tasks"
+          ),
+          canManageEditingTasks: userHasPermission(
+            currentUserProfile,
+            "manage_editing_tasks"
+          ),
+          canManageManagementTasks: userHasPermission(
+            currentUserProfile,
+            "manage_management_tasks"
+          ),
+          onAddAccountTask: (dateStr) => setModalConfig({
+            isOpen: true,
+            type: "accountTask",
+            data: {
+              date: dateStr,
+              contextId: defaultAccountAssigneeId
+            }
+          }),
+          onAddEditingTask: (dateStr) => setModalConfig({
+            isOpen: true,
+            type: "editingTask",
+            data: {
+              date: dateStr,
+              contextId: defaultEditingAssigneeId
+            }
+          }),
+          onAddManagementTask: (dateStr) => setModalConfig({
+            isOpen: true,
+            type: "managementTask",
+            data: {
+              date: dateStr,
+              contextId: defaultManagementAssigneeId
+            }
+          }),
+          onChangeAccountTaskStatus: changeAccountTaskStatus,
+          onChangeEditingTaskStatus: changeEditingTaskStatus,
+          onChangeManagementTaskStatus: changeManagementTaskStatus,
+          onLoadHistory: handleLoadTaskHistory,
+          historyLoaded: taskHistoryLoaded,
+          historyLoading: isLoadingTaskHistory,
+          onTaskClick: (task) => {
+            const type = task._taskType || "editingTask";
+            if (!["accountTask", "editingTask", "managementTask"].includes(type)) return;
+            setTaskDetailConfig({
+              isOpen: true,
+              task,
+              type
+            });
+          }
         }
       ),
       view === "production" && /* @__PURE__ */ React.createElement(
@@ -5967,7 +6036,76 @@ function App() {
         {
           events,
           accountTasks,
-          editingTasks
+          editingTasks,
+          managementTasks,
+          clients,
+          managers: accountTaskAssignees,
+          editors: editingTaskAssignees,
+          managementUsers,
+          currentUserProfile,
+          canCreateAccountTasks: userHasPermission(
+            currentUserProfile,
+            "create_account_tasks"
+          ),
+          canCreateEditingTasks: userHasPermission(
+            currentUserProfile,
+            "create_editing_tasks"
+          ),
+          canCreateManagementTasks: userHasPermission(
+            currentUserProfile,
+            "create_management_tasks"
+          ),
+          canManageAccountTasks: userHasPermission(
+            currentUserProfile,
+            "manage_account_tasks"
+          ),
+          canManageEditingTasks: userHasPermission(
+            currentUserProfile,
+            "manage_editing_tasks"
+          ),
+          canManageManagementTasks: userHasPermission(
+            currentUserProfile,
+            "manage_management_tasks"
+          ),
+          onAddAccountTask: (dateStr) => setModalConfig({
+            isOpen: true,
+            type: "accountTask",
+            data: {
+              date: dateStr,
+              contextId: defaultAccountAssigneeId
+            }
+          }),
+          onAddEditingTask: (dateStr) => setModalConfig({
+            isOpen: true,
+            type: "editingTask",
+            data: {
+              date: dateStr,
+              contextId: defaultEditingAssigneeId
+            }
+          }),
+          onAddManagementTask: (dateStr) => setModalConfig({
+            isOpen: true,
+            type: "managementTask",
+            data: {
+              date: dateStr,
+              contextId: defaultManagementAssigneeId
+            }
+          }),
+          onChangeAccountTaskStatus: changeAccountTaskStatus,
+          onChangeEditingTaskStatus: changeEditingTaskStatus,
+          onChangeManagementTaskStatus: changeManagementTaskStatus,
+          onLoadHistory: handleLoadTaskHistory,
+          historyLoaded: taskHistoryLoaded,
+          historyLoading: isLoadingTaskHistory,
+          onTaskClick: (task) => {
+            const type = task._taskType || "editingTask";
+            if (!["accountTask", "editingTask", "managementTask"].includes(type)) return;
+            setTaskDetailConfig({
+              isOpen: true,
+              task,
+              type
+            });
+          }
         }
       ),
       view === "reports" && /* @__PURE__ */ React.createElement(
@@ -14851,42 +14989,6 @@ var ReportStatCard = ({ label, value, color, icon, sub }) => /* @__PURE__ */ Rea
   },
   value
 ), sub && /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-500" }, sub));
-var AccentStatCard = ({ label, value, icon, sub, tone = "indigo" }) => {
-  const toneClasses = {
-    amber: {
-      shell: "bg-amber-50 dark:bg-amber-500/20 border-amber-200 dark:border-amber-500/20",
-      icon: "text-amber-600 dark:text-amber-300",
-      value: "text-amber-700 dark:text-amber-300"
-    },
-    emerald: {
-      shell: "bg-emerald-50 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/20",
-      icon: "text-emerald-600 dark:text-emerald-300",
-      value: "text-emerald-700 dark:text-emerald-300"
-    },
-    indigo: {
-      shell: "bg-indigo-50 dark:bg-indigo-500/20 border-indigo-200 dark:border-indigo-500/20",
-      icon: "text-indigo-600 dark:text-indigo-300",
-      value: "text-indigo-700 dark:text-indigo-300"
-    },
-    rose: {
-      shell: "bg-rose-50 dark:bg-rose-500/20 border-rose-200 dark:border-rose-500/20",
-      icon: "text-rose-600 dark:text-rose-300",
-      value: "text-rose-700 dark:text-rose-300"
-    },
-    cyan: {
-      shell: "bg-cyan-50 dark:bg-cyan-500/20 border-cyan-200 dark:border-cyan-500/20",
-      icon: "text-cyan-600 dark:text-cyan-300",
-      value: "text-cyan-700 dark:text-cyan-300"
-    },
-    slate: {
-      shell: "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700",
-      icon: "text-slate-600 dark:text-slate-300",
-      value: "text-slate-700 dark:text-slate-200"
-    }
-  };
-  const classes = toneClasses[tone] || toneClasses.indigo;
-  return /* @__PURE__ */ React.createElement("div", { className: `rounded-2xl border p-5 ${classes.shell}` }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between gap-3" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400" }, label), /* @__PURE__ */ React.createElement("div", { className: `rounded-xl bg-white/70 p-2 dark:bg-slate-900/70 ${classes.icon}` }, /* @__PURE__ */ React.createElement(Icon, { name: icon, size: 16 }))), /* @__PURE__ */ React.createElement("p", { className: `mt-4 text-3xl font-black ${classes.value}` }, value), sub && /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-xs text-slate-500 dark:text-slate-400" }, sub));
-};
 var getModuleStatusMeta = (value = "", kind = "production") => {
   const normalized = String(value || "").trim().toLowerCase();
   const base = {
@@ -14914,80 +15016,487 @@ var getModuleStatusMeta = (value = "", kind = "production") => {
   }
   return { label: normalized || "Programado", tone: "slate" };
 };
-var PodcastView = ({ events = [], accountTasks = [], editingTasks = [] }) => {
+var ModuleTaskBoardView = ({
+  kind = "production",
+  title,
+  eyebrow,
+  description,
+  events = [],
+  accountTasks = [],
+  editingTasks = [],
+  managementTasks = [],
+  clients = [],
+  managers = [],
+  editors = [],
+  managementUsers = [],
+  currentUserProfile,
+  onAddEditingTask,
+  onAddManagementTask,
+  onAddAccountTask,
+  onChangeAccountTaskStatus,
+  onChangeEditingTaskStatus,
+  onChangeManagementTaskStatus,
+  onTaskClick,
+  onLoadHistory,
+  historyLoaded = false,
+  historyLoading = false,
+  canCreateAccountTasks = false,
+  canCreateEditingTasks = false,
+  canCreateManagementTasks = false,
+  canManageAccountTasks = false,
+  canManageEditingTasks = false,
+  canManageManagementTasks = false
+}) => {
+  const {
+    currentDate,
+    setCurrentDate,
+    filterMode,
+    setFilterMode,
+    ownershipFilter,
+    setOwnershipFilter
+  } = useTaskRoomState(`cluster_${kind}_room_state`, {
+    preferMine: Boolean(
+      currentUserProfile?.linkedEditorId || currentUserProfile?.linkedManagerId || currentUserProfile?.id
+    )
+  });
   const todayStr = getHondurasTodayStr();
   const now = /* @__PURE__ */ new Date();
-  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const [fromDate, setFromDate] = useState(firstOfMonth);
-  const [toDate, setToDate] = useState(todayStr);
+  const currentMonthPeriod = getRankingMonthPeriod(todayStr);
   const [searchTerm, setSearchTerm] = useState("");
-  const inRange = (dateStr) => {
-    if (!dateStr) return false;
-    return compareDateOnlyStrings(dateStr, fromDate) >= 0 && compareDateOnlyStrings(dateStr, toDate) <= 0;
-  };
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [draggedTaskId, setDraggedTaskId] = useState(null);
+  const [showTeam, setShowTeam] = useState(false);
+  const accountStatusOptions = [
+    { id: "por_disenar", title: "Por Dise\xF1ar" },
+    { id: "aprobacion_interna", title: "Aprobaci\xF3n Interna" },
+    { id: "aprobado_internamente", title: "Aprobado Interno" },
+    { id: "publicado", title: "Publicado" }
+  ];
+  const editingStatusOptions = [
+    { id: "editar", title: "Por Editar" },
+    { id: "en_edicion", title: "En Edici\xF3n" },
+    { id: "revision_interna", title: "En Revisi\xF3n" },
+    { id: "aprobado", title: "Aprobado" },
+    { id: "publicado", title: "Publicado" }
+  ];
+  const managementStatusOptions = [
+    { id: "pendiente", title: "Pendiente" },
+    { id: "en_proceso", title: "En Proceso" },
+    { id: "en_espera", title: "En Espera" },
+    { id: "cerrado", title: "Cerrado" }
+  ];
   const normalizedSearch = String(searchTerm || "").trim().toLowerCase();
-  const items = [...events, ...accountTasks, ...editingTasks].filter((item) => {
+  const allItems = [
+    ...events.map((item) => ({ ...item, _taskType: "event" })),
+    ...accountTasks.map((item) => ({ ...item, _taskType: "accountTask" })),
+    ...editingTasks.map((item) => ({ ...item, _taskType: "editingTask" })),
+    ...managementTasks.map((item) => ({ ...item, _taskType: "managementTask" }))
+  ];
+  const profileContextIds = [
+    currentUserProfile?.linkedEditorId,
+    currentUserProfile?.linkedManagerId,
+    currentUserProfile?.id
+  ].filter(Boolean);
+  const isTaskClosed = (task) => {
+    if (task._taskType === "editingTask") {
+      return normalizeEditingWorkflowStatus(task.status) === "publicado";
+    }
+    if (task._taskType === "managementTask") {
+      return String(task.status || "").toLowerCase() === "cerrado";
+    }
+    if (task._taskType === "accountTask") {
+      return String(task.status || "").toLowerCase() === "publicado";
+    }
+    return false;
+  };
+  const moduleItems = allItems.filter((item) => {
     const haystack = `${item.title || item.name || ""} ${item.note || item.description || ""}`.toLowerCase();
     const type = String(item.type || "").toLowerCase();
-    const matchesKind = type === "podcast" || /podcast|episodio|episode|audio/i.test(haystack);
+    const matchesKind = kind === "podcast" ? type === "podcast" || /podcast|episodio|episode|audio/i.test(haystack) : type === "production" || /producción|production|grabación|shoot|post|montaje/i.test(haystack);
     if (!matchesKind) return false;
     const itemDate = normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || "");
     if (!itemDate) return false;
-    return inRange(itemDate) && (normalizedSearch.length === 0 || haystack.includes(normalizedSearch));
+    if (normalizedSearch && !haystack.includes(normalizedSearch)) return false;
+    if (ownershipFilter === "mine" && !isTaskAssignedToProfile(item, currentUserProfile, profileContextIds))
+      return false;
+    if (filterMode === "date")
+      return compareDateOnlyStrings(itemDate, currentDate) === 0;
+    if (filterMode === "overdue")
+      return compareDateOnlyStrings(itemDate, todayStr) < 0 && !isTaskClosed(item);
+    if (filterMode === "history") return true;
+    return isDateWithinPeriod(itemDate, currentMonthPeriod);
   }).map((item) => ({
     ...item,
     itemDate: normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || ""),
     status: item.status || "programado",
-    owner: item.assignee || item.owner || item.manager || item.editor || "",
-    summary: item.note || item.description || "Sin detalle",
+    summary: item.notes || item.note || item.description || "Sin detalle",
     title: item.title || item.name || "Sin t\xEDtulo"
   }));
-  const totalItems = items.length;
-  const inProgress = items.filter((item) => !["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
-  const published = items.filter((item) => ["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
-  const pending = items.filter((item) => ["programado", "pendiente"].includes(String(item.status || "").toLowerCase())).length;
-  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Contenido"), /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Podcast"), /* @__PURE__ */ React.createElement("p", { className: "mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400" }, "Seguimiento visual de episodios, grabaciones y publicaciones que ya est\xE1n registradas en el sistema.")), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-3" }, /* @__PURE__ */ React.createElement(SearchBar, { searchTerm, setSearchTerm, placeholder: "Buscar podcast" }), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Desde"), /* @__PURE__ */ React.createElement("input", { type: "date", value: fromDate, onChange: (e) => setFromDate(e.target.value), className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" })), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Hasta"), /* @__PURE__ */ React.createElement("input", { type: "date", value: toDate, onChange: (e) => setToDate(e.target.value), className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" })))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 gap-4 md:grid-cols-4" }, /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Total", value: totalItems, icon: "Microphone", tone: "rose", sub: "episodios y tareas" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "En curso", value: inProgress, icon: "Play", tone: "amber", sub: "grabaci\xF3n o edici\xF3n" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Publicados", value: published, icon: "CheckCircle2", tone: "emerald", sub: "listos para salir" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Pendientes", value: pending, icon: "Clock", tone: "slate", sub: "por programar" })), /* @__PURE__ */ React.createElement("div", { className: "overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900" }, items.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 dark:text-slate-400" }, "A\xFAn no hay contenido de podcast en este rango de fechas.") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[780px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Episodio"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Fecha"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Estado"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Responsable"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Detalle"))), /* @__PURE__ */ React.createElement("tbody", null, items.map((item, index) => {
-    const statusMeta = getModuleStatusMeta(item.status, "podcast");
-    return /* @__PURE__ */ React.createElement("tr", { key: `${item.id || item.title}-${index}`, className: `border-b border-slate-50 dark:border-slate-800/60 ${index % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : ""}` }, /* @__PURE__ */ React.createElement("td", { className: "p-4 font-bold text-slate-800 dark:text-white" }, item.title), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm font-semibold text-slate-600 dark:text-slate-300" }, item.itemDate), /* @__PURE__ */ React.createElement("td", { className: "p-4" }, /* @__PURE__ */ React.createElement("span", { className: `inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${statusMeta.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300" : statusMeta.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300" : statusMeta.tone === "indigo" ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}` }, statusMeta.label)), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm text-slate-600 dark:text-slate-300" }, item.owner || "Sin asignar"), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm text-slate-500 dark:text-slate-400" }, item.summary));
-  }))))));
-};
-var ProductionView = ({ events = [], accountTasks = [], editingTasks = [] }) => {
-  const todayStr = getHondurasTodayStr();
-  const now = /* @__PURE__ */ new Date();
-  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const [fromDate, setFromDate] = useState(firstOfMonth);
-  const [toDate, setToDate] = useState(todayStr);
-  const [searchTerm, setSearchTerm] = useState("");
-  const inRange = (dateStr) => {
-    if (!dateStr) return false;
-    return compareDateOnlyStrings(dateStr, fromDate) >= 0 && compareDateOnlyStrings(dateStr, toDate) <= 0;
+  const taskItems = moduleItems.filter((item) => item._taskType !== "event");
+  const totalItems = taskItems.length;
+  const pending = taskItems.filter((task) => {
+    const status = String(task.status || "").toLowerCase();
+    if (task._taskType === "editingTask") return normalizeEditingWorkflowStatus(status) === "editar";
+    if (task._taskType === "managementTask") return status === "pendiente";
+    if (task._taskType === "accountTask") return status === "por_disenar";
+    return false;
+  }).length;
+  const inProcess = taskItems.filter((task) => {
+    const status = String(task.status || "").toLowerCase();
+    if (task._taskType === "editingTask") return normalizeEditingWorkflowStatus(status) === "en_edicion";
+    if (task._taskType === "managementTask") return status === "en_proceso";
+    if (task._taskType === "accountTask") return status === "aprobacion_interna";
+    return false;
+  }).length;
+  const inWaiting = taskItems.filter((task) => {
+    const status = String(task.status || "").toLowerCase();
+    if (task._taskType === "editingTask") return normalizeEditingWorkflowStatus(status) === "revision_interna";
+    if (task._taskType === "managementTask") return status === "en_espera";
+    if (task._taskType === "accountTask") return status === "aprobado_internamente";
+    return false;
+  }).length;
+  const closed = taskItems.filter(isTaskClosed).length;
+  const getTaskStage = (task) => {
+    const status = String(task.status || "").toLowerCase();
+    if (task._taskType === "editingTask") {
+      const normalized = normalizeEditingWorkflowStatus(status);
+      if (normalized === "publicado") return "ready";
+      if (["aprobado", "en_edicion", "revision_interna"].includes(normalized))
+        return "production";
+      return "start";
+    }
+    if (task._taskType === "managementTask") {
+      if (status === "cerrado") return "ready";
+      if (["en_proceso", "en_espera"].includes(status)) return "production";
+      return "start";
+    }
+    if (task._taskType === "accountTask") {
+      if (status === "publicado") return "ready";
+      if (["aprobado_internamente", "aprobacion_interna"].includes(status))
+        return "production";
+      return "start";
+    }
+    return "start";
   };
-  const normalizedSearch = String(searchTerm || "").trim().toLowerCase();
-  const items = [...events, ...accountTasks, ...editingTasks].filter((item) => {
-    const haystack = `${item.title || item.name || ""} ${item.note || item.description || ""}`.toLowerCase();
-    const type = String(item.type || "").toLowerCase();
-    const matchesKind = type === "production" || /producción|production|grabación|shoot|post|montaje/i.test(haystack);
-    if (!matchesKind) return false;
-    const itemDate = normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || "");
-    if (!itemDate) return false;
-    return inRange(itemDate) && (normalizedSearch.length === 0 || haystack.includes(normalizedSearch));
-  }).map((item) => ({
-    ...item,
-    itemDate: normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || ""),
-    status: item.status || "programado",
-    owner: item.assignee || item.owner || item.manager || item.editor || "",
-    summary: item.note || item.description || "Sin detalle",
-    title: item.title || item.name || "Sin t\xEDtulo"
-  }));
-  const totalItems = items.length;
-  const inProgress = items.filter((item) => !["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
-  const published = items.filter((item) => ["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
-  const pending = items.filter((item) => ["programado", "pendiente"].includes(String(item.status || "").toLowerCase())).length;
-  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Producci\xF3n"), /* @__PURE__ */ React.createElement("p", { className: "mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400" }, "Vista consolidada de entregas, grabaciones y fases de postproducci\xF3n para mantener el control del flujo.")), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-3" }, /* @__PURE__ */ React.createElement(SearchBar, { searchTerm, setSearchTerm, placeholder: "Buscar producci\xF3n" }), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Desde"), /* @__PURE__ */ React.createElement("input", { type: "date", value: fromDate, onChange: (e) => setFromDate(e.target.value), className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" })), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Hasta"), /* @__PURE__ */ React.createElement("input", { type: "date", value: toDate, onChange: (e) => setToDate(e.target.value), className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" })))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 gap-4 md:grid-cols-4" }, /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Total", value: totalItems, icon: "MonitorPlay", tone: "cyan", sub: "items de producci\xF3n" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "En curso", value: inProgress, icon: "Play", tone: "amber", sub: "grabaci\xF3n o post" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Publicados", value: published, icon: "CheckCircle2", tone: "emerald", sub: "cerrados y publicados" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Pendientes", value: pending, icon: "Clock", tone: "slate", sub: "por iniciar" })), /* @__PURE__ */ React.createElement("div", { className: "overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900" }, items.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 dark:text-slate-400" }, "No hay elementos de producci\xF3n en este rango todav\xEDa.") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[780px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Elemento"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Fecha"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Estado"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Responsable"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Detalle"))), /* @__PURE__ */ React.createElement("tbody", null, items.map((item, index) => {
-    const statusMeta = getModuleStatusMeta(item.status, "production");
-    return /* @__PURE__ */ React.createElement("tr", { key: `${item.id || item.title}-${index}`, className: `border-b border-slate-50 dark:border-slate-800/60 ${index % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : ""}` }, /* @__PURE__ */ React.createElement("td", { className: "p-4 font-bold text-slate-800 dark:text-white" }, item.title), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm font-semibold text-slate-600 dark:text-slate-300" }, item.itemDate), /* @__PURE__ */ React.createElement("td", { className: "p-4" }, /* @__PURE__ */ React.createElement("span", { className: `inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${statusMeta.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300" : statusMeta.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300" : statusMeta.tone === "indigo" ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}` }, statusMeta.label)), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm text-slate-600 dark:text-slate-300" }, item.owner || "Sin asignar"), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm text-slate-500 dark:text-slate-400" }, item.summary));
-  }))))));
+  const getTargetStatus = (task, stageId) => {
+    if (task._taskType === "editingTask") {
+      if (stageId === "start") return "editar";
+      if (stageId === "production") return "en_edicion";
+      if (stageId === "ready") return "publicado";
+    }
+    if (task._taskType === "managementTask") {
+      if (stageId === "start") return "pendiente";
+      if (stageId === "production") return "en_proceso";
+      if (stageId === "ready") return "cerrado";
+    }
+    if (task._taskType === "accountTask") {
+      if (stageId === "start") return "por_disenar";
+      if (stageId === "production") return "aprobacion_interna";
+      if (stageId === "ready") return "publicado";
+    }
+    return null;
+  };
+  const canManageTask = (task) => {
+    if (task._taskType === "editingTask") return canManageEditingTasks;
+    if (task._taskType === "managementTask") return canManageManagementTasks;
+    if (task._taskType === "accountTask") return canManageAccountTasks;
+    return false;
+  };
+  const applyTaskStatus = (task, nextStatus) => {
+    if (!nextStatus) return;
+    if (task._taskType === "editingTask") onChangeEditingTaskStatus?.(task, nextStatus);
+    if (task._taskType === "managementTask") onChangeManagementTaskStatus?.(task, nextStatus);
+    if (task._taskType === "accountTask") onChangeAccountTaskStatus?.(task, nextStatus);
+  };
+  const handleDragStart = (event, task) => {
+    if (!canManageTask(task)) return;
+    setDraggedTaskId(task.id);
+    event.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragEnd = () => setDraggedTaskId(null);
+  const handleDragOver = (event) => {
+    event.preventDefault();
+    event.currentTarget.classList.add("drag-over");
+  };
+  const handleDragLeave = (event) => {
+    event.currentTarget.classList.remove("drag-over");
+  };
+  const handleDrop = (event, stageId) => {
+    event.preventDefault();
+    event.currentTarget.classList.remove("drag-over");
+    if (!draggedTaskId) return;
+    const task = taskItems.find((item) => item.id === draggedTaskId);
+    if (!task || !canManageTask(task)) return;
+    const targetStatus = getTargetStatus(task, stageId);
+    if (!targetStatus) return;
+    if (targetStatus !== String(task.status || "").toLowerCase()) {
+      applyTaskStatus(task, targetStatus);
+    }
+  };
+  const getTaskAssignee = (task) => {
+    if (task._taskType === "editingTask") {
+      return buildAssignee(editors.find((item) => item.id === task.contextId));
+    }
+    if (task._taskType === "managementTask") {
+      return buildAssignee(managementUsers.find((item) => item.id === task.contextId));
+    }
+    if (task._taskType === "accountTask") {
+      return buildAssignee(managers.find((item) => item.id === task.contextId));
+    }
+    return null;
+  };
+  const getTaskTypeBadge = (task) => {
+    if (task._taskType === "editingTask") return { label: "Edici\xF3n", tone: "amber" };
+    if (task._taskType === "managementTask") return { label: "Gesti\xF3n", tone: "violet" };
+    if (task._taskType === "accountTask") return { label: "Accounts", tone: "indigo" };
+    return { label: "Tarea", tone: "slate" };
+  };
+  const getStatusControl = (task) => {
+    if (task._taskType === "accountTask" && canManageAccountTasks) {
+      return {
+        value: task.status,
+        options: accountStatusOptions,
+        onChange: (nextStatus) => onChangeAccountTaskStatus?.(task, nextStatus)
+      };
+    }
+    if (task._taskType === "editingTask" && canManageEditingTasks) {
+      return {
+        value: normalizeEditingWorkflowStatus(task.status),
+        options: editingStatusOptions,
+        onChange: (nextStatus) => onChangeEditingTaskStatus?.(task, nextStatus)
+      };
+    }
+    if (task._taskType === "managementTask" && canManageManagementTasks) {
+      return {
+        value: task.status,
+        options: managementStatusOptions,
+        onChange: (nextStatus) => onChangeManagementTaskStatus?.(task, nextStatus)
+      };
+    }
+    return null;
+  };
+  const groupedTasks = {
+    start: taskItems.filter((task) => getTaskStage(task) === "start"),
+    production: taskItems.filter((task) => getTaskStage(task) === "production"),
+    ready: taskItems.filter((task) => getTaskStage(task) === "ready")
+  };
+  const selectedTask = taskItems.find((task) => task.id === selectedTaskId) || null;
+  const selectedStatus = selectedTask ? {
+    title: (getStatusControl(selectedTask)?.options || []).find(
+      (option) => option.id === getStatusControl(selectedTask)?.value
+    )?.title || getModuleStatusMeta(selectedTask.status, kind).label
+  } : null;
+  const selectedClient = selectedTask ? clients.find((item) => item.id === selectedTask.clientId) : null;
+  const groups = [
+    {
+      id: "start",
+      title: "Por iniciar",
+      subtitle: "Tareas pendientes",
+      color: "slate",
+      stages: [{ id: "start", title: "Por iniciar", color: "slate", tasks: groupedTasks.start }]
+    },
+    {
+      id: "production",
+      title: "En producci\xF3n",
+      subtitle: "Producci\xF3n activa",
+      color: "amber",
+      stages: [{ id: "production", title: "En producci\xF3n", color: "amber", tasks: groupedTasks.production }]
+    },
+    {
+      id: "ready",
+      title: "Listas",
+      subtitle: "Publicadas o cerradas",
+      color: "emerald",
+      stages: [{ id: "ready", title: "Listas", color: "emerald", tasks: groupedTasks.ready, collapsible: true, collapsedLimit: 3 }]
+    }
+  ];
+  const teamMembers = [
+    ...managers.map((person) => ({
+      id: `m-${person.id}`,
+      name: person.name,
+      email: person.email || person.authEmail || "",
+      color: person.color,
+      photo: person.photo
+    })),
+    ...editors.map((person) => ({
+      id: `e-${person.id}`,
+      name: person.name,
+      email: person.email || person.authEmail || "",
+      color: person.color,
+      photo: person.photo
+    })),
+    ...managementUsers.map((person) => ({
+      id: `u-${person.id}`,
+      name: person.name,
+      email: person.email || person.authEmail || "",
+      color: person.color,
+      photo: person.photo
+    }))
+  ];
+  const uniqueTeamMembers = [...new Map(teamMembers.map((member) => [member.id, member])).values()].filter((member) => member.name);
+  const membersWithAlert = uniqueTeamMembers.filter(
+    (member) => !normalizeEmail(member.email)
+  );
+  const handleAddTask = (dateStr) => {
+    const nextDate = normalizeDateOnlyString(dateStr) || todayStr;
+    setCurrentDate(nextDate);
+    setFilterMode("date");
+    if (canCreateEditingTasks) {
+      onAddEditingTask?.(nextDate);
+      return;
+    }
+    if (canCreateManagementTasks) {
+      onAddManagementTask?.(nextDate);
+      return;
+    }
+    if (canCreateAccountTasks) {
+      onAddAccountTask?.(nextDate);
+    }
+  };
+  const renderTask = (task) => {
+    const statusMeta = getModuleStatusMeta(task.status, kind);
+    const typeBadge = getTaskTypeBadge(task);
+    return /* @__PURE__ */ React.createElement(
+      KanbanCard,
+      {
+        key: `${task._taskType}-${task.id}`,
+        onClick: () => setSelectedTaskId(task.id),
+        selected: selectedTaskId === task.id,
+        draggable: canManageTask(task),
+        onDragStart: (event) => handleDragStart(event, task),
+        onDragEnd: handleDragEnd,
+        accentTone: statusMeta.tone,
+        client: clients.find((item) => item.id === task.clientId)?.name,
+        title: task.title,
+        notes: task.summary,
+        badges: [
+          typeBadge,
+          { label: statusMeta.label, tone: statusMeta.tone }
+        ],
+        due: { label: formatShortDate(task.itemDate || task.date), tone: "slate" },
+        assignee: getTaskAssignee(task),
+        statusControl: getStatusControl(task)
+      }
+    );
+  };
+  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement(
+    DateHeader,
+    {
+      currentDate,
+      setCurrentDate,
+      filterMode,
+      setFilterMode,
+      ownershipFilter,
+      setOwnershipFilter,
+      title,
+      onAdd: handleAddTask,
+      btnColor: kind === "podcast" ? "rose" : "cyan",
+      btnIcon: kind === "podcast" ? "Microphone" : "MonitorPlay",
+      searchTerm,
+      setSearchTerm,
+      onLoadHistory,
+      historyLoaded,
+      historyLoading,
+      taskCount: taskItems.length
+    }
+  ), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-500 dark:text-slate-400" }, description), (canCreateEditingTasks || canCreateManagementTasks || canCreateAccountTasks) && /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-2" }, canCreateEditingTasks && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => onAddEditingTask?.(normalizeDateOnlyString(currentDate) || todayStr),
+      className: "inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-black uppercase tracking-[0.14em] text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20"
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 13 }),
+    "Agregar tarea de edici\xF3n"
+  ), canCreateManagementTasks && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => onAddManagementTask?.(normalizeDateOnlyString(currentDate) || todayStr),
+      className: "inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-xs font-black uppercase tracking-[0.14em] text-violet-700 transition-colors hover:bg-violet-100 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20"
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 13 }),
+    "Agregar tarea de gesti\xF3n"
+  ), canCreateAccountTasks && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => onAddAccountTask?.(normalizeDateOnlyString(currentDate) || todayStr),
+      className: "inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-xs font-black uppercase tracking-[0.14em] text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20"
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 13 }),
+    "Agregar tarea de accounts"
+  )), /* @__PURE__ */ React.createElement("div", { className: "surface-subtle grid grid-cols-2 gap-2 rounded-xl border border-[var(--border)] p-2 dark:border-white/10 md:grid-cols-4" }, /* @__PURE__ */ React.createElement(ReportStatCard, { label: "Pendiente", value: pending, color: "slate", icon: "Circle" }), /* @__PURE__ */ React.createElement(ReportStatCard, { label: "En Proceso", value: inProcess, color: "violet", icon: "Zap" }), /* @__PURE__ */ React.createElement(ReportStatCard, { label: "En Espera", value: inWaiting, color: "amber", icon: "PauseCircle" }), /* @__PURE__ */ React.createElement(ReportStatCard, { label: "Cerrado", value: closed, color: "emerald", icon: "CheckCircle2" })), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setShowTeam((value) => !value),
+      className: "surface flex w-full items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50"
+    },
+    /* @__PURE__ */ React.createElement("div", { className: "flex -space-x-2 shrink-0" }, uniqueTeamMembers.slice(0, 4).map((member) => /* @__PURE__ */ React.createElement(PersonAvatar, { key: member.id, person: member, size: 28, className: "border-2 border-white dark:border-slate-900" })), uniqueTeamMembers.length > 4 && /* @__PURE__ */ React.createElement("div", { className: "w-7 h-7 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center text-[9px] font-black bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300" }, "+", uniqueTeamMembers.length - 4)),
+    /* @__PURE__ */ React.createElement("div", { className: "text-left" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black text-slate-700 dark:text-slate-200" }, "Equipo"), membersWithAlert.length > 0 ? /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-amber-500" }, membersWithAlert.length, " sin email \u2014 ver detalles") : /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-emerald-500" }, "Todos con email")),
+    /* @__PURE__ */ React.createElement(
+      Icon,
+      {
+        name: showTeam ? "ChevronUp" : "ChevronDown",
+        size: 14,
+        className: "text-slate-500 ml-1"
+      }
+    )
+  ), showTeam && /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 fade-in" }, uniqueTeamMembers.map((member) => {
+    const hasAlert = !normalizeEmail(member.email);
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        key: member.id,
+        className: `flex items-center gap-3 p-3 rounded-xl border ${hasAlert ? "border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/5" : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"}`
+      },
+      /* @__PURE__ */ React.createElement(PersonAvatar, { person: member, size: 34 }),
+      /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-bold text-slate-700 dark:text-slate-100 truncate" }, member.name), /* @__PURE__ */ React.createElement("p", { className: `text-xs ${hasAlert ? "text-amber-600 dark:text-amber-300" : "text-slate-500 dark:text-slate-400"} truncate` }, member.email || "Sin email"))
+    );
+  })), /* @__PURE__ */ React.createElement(
+    TaskRoomWorkspace,
+    {
+      groups,
+      onAdd: () => handleAddTask(currentDate || todayStr),
+      canAdd: canCreateEditingTasks || canCreateManagementTasks || canCreateAccountTasks,
+      renderTask,
+      onDragOver: handleDragOver,
+      onDragLeave: handleDragLeave,
+      onDrop: handleDrop,
+      inspector: selectedTask ? /* @__PURE__ */ React.createElement(
+        TaskRoomInspector,
+        {
+          task: selectedTask,
+          client: selectedClient?.name,
+          assignee: getTaskAssignee(selectedTask),
+          status: selectedStatus,
+          onClose: () => setSelectedTaskId(null),
+          onOpenFull: () => onTaskClick?.(selectedTask)
+        }
+      ) : null
+    }
+  ));
 };
+var PodcastView = (props) => /* @__PURE__ */ React.createElement(
+  ModuleTaskBoardView,
+  {
+    kind: "podcast",
+    eyebrow: "Contenido",
+    title: "Podcast",
+    description: "Seguimiento visual de episodios y tareas del flujo de podcast en formato de tablero.",
+    ...props
+  }
+);
+var ProductionView = (props) => /* @__PURE__ */ React.createElement(
+  ModuleTaskBoardView,
+  {
+    kind: "production",
+    eyebrow: "Operaci\xF3n",
+    title: "Producci\xF3n",
+    description: "Vista de tablero para controlar tareas de producci\xF3n y postproducci\xF3n de izquierda a derecha.",
+    ...props
+  }
+);
 var ReportsView = ({
   accountTasks,
   editingTasks,
