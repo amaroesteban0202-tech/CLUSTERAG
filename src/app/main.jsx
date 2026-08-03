@@ -6305,6 +6305,36 @@ function App() {
     if (!eventItem?.id || !newStatus) return;
     await updateEvent(eventItem.id, { status: newStatus });
   };
+  const handleAddPodcastTask = useCallback(
+    (dateStr) => {
+      const nextDate = normalizeDateOnlyString(dateStr) || getHondurasTodayStr();
+      setModalConfig({
+        isOpen: true,
+        type: "editingTask",
+        data: {
+          date: nextDate,
+          contextId: defaultEditingAssigneeId,
+        },
+      });
+    },
+    [defaultEditingAssigneeId],
+  );
+  const handleAddProductionTask = useCallback((dateStr) => {
+    const nextDate = normalizeDateOnlyString(dateStr) || getHondurasTodayStr();
+    setModalConfig({
+      isOpen: true,
+      type: "event",
+      data: { date: nextDate, type: "production" },
+    });
+  }, []);
+  const canCreatePodcastTasks = userHasPermission(
+    currentUserProfile,
+    "create_editing_tasks",
+  );
+  const canCreateProductionTasks = userHasPermission(
+    currentUserProfile,
+    "create_calendar_events",
+  );
 
   const addUserRecord = async (data) => {
     const email = normalizeEmail(data.email);
@@ -7527,6 +7557,8 @@ function App() {
               managers={accountTaskAssignees}
               editors={editingTaskAssignees}
               currentUserProfile={currentUserProfile}
+              onAddTask={handleAddPodcastTask}
+              canCreateTask={canCreatePodcastTasks}
               onTaskClick={openTaskDetail}
               onChangeAccountStatus={changeAccountTaskStatus}
               onChangeEditingStatus={changeEditingTaskStatus}
@@ -7541,6 +7573,8 @@ function App() {
               managers={accountTaskAssignees}
               editors={editingTaskAssignees}
               currentUserProfile={currentUserProfile}
+              onAddTask={handleAddProductionTask}
+              canCreateTask={canCreateProductionTasks}
               onTaskClick={openTaskDetail}
               onChangeAccountStatus={changeAccountTaskStatus}
               onChangeEditingStatus={changeEditingTaskStatus}
@@ -19957,6 +19991,7 @@ const UnifiedModuleKanbanView = ({
   moduleEyebrow,
   moduleDescription,
   searchPlaceholder,
+  addButtonLabel = "Nueva Tarea",
   statIcon,
   statTone,
   events = [],
@@ -19965,6 +20000,8 @@ const UnifiedModuleKanbanView = ({
   managers = [],
   editors = [],
   currentUserProfile = null,
+  onAddTask,
+  canCreateTask = false,
   onTaskClick,
   onChangeAccountStatus,
   onChangeEditingStatus,
@@ -20195,6 +20232,17 @@ const UnifiedModuleKanbanView = ({
   const inProgressCount = filteredByLane.production.length;
   const readyCount = filteredByLane.ready.length;
   const startCount = filteredByLane.start.length;
+  const canShowAddButton = Boolean(onAddTask) && canCreateTask;
+  const addDate =
+    filterMode === "date"
+      ? currentDate
+      : filterMode === "history"
+        ? todayStr
+        : todayStr;
+  const handleAddTask = useCallback(() => {
+    const nextDate = normalizeDateOnlyString(addDate) || todayStr;
+    onAddTask?.(nextDate);
+  }, [addDate, onAddTask, todayStr]);
 
   return (
     <div className="task-room min-h-0 flex flex-col gap-3 fade-in">
@@ -20215,6 +20263,16 @@ const UnifiedModuleKanbanView = ({
               setSearchTerm={setSearchTerm}
               placeholder={searchPlaceholder}
             />
+            {canShowAddButton && (
+              <button
+                type="button"
+                onClick={handleAddTask}
+                className="bg-[#c5f82a] text-black font-bold rounded-xl px-4 py-2.5 flex items-center gap-2 hover:opacity-90 transition-opacity shrink-0"
+              >
+                <Icon name="Plus" size={16} />
+                {addButtonLabel}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setShowTeam((value) => !value)}
@@ -20515,6 +20573,8 @@ const PodcastView = ({
   managers = [],
   editors = [],
   currentUserProfile = null,
+  onAddTask,
+  canCreateTask = false,
   onTaskClick,
   onChangeAccountStatus,
   onChangeEditingStatus,
@@ -20534,6 +20594,9 @@ const PodcastView = ({
     managers={managers}
     editors={editors}
     currentUserProfile={currentUserProfile}
+    onAddTask={onAddTask}
+    canCreateTask={canCreateTask}
+    addButtonLabel="Nueva Tarea"
     onTaskClick={onTaskClick}
     onChangeAccountStatus={onChangeAccountStatus}
     onChangeEditingStatus={onChangeEditingStatus}
@@ -20548,6 +20611,8 @@ const ProductionView = ({
   managers = [],
   editors = [],
   currentUserProfile = null,
+  onAddTask,
+  canCreateTask = false,
   onTaskClick,
   onChangeAccountStatus,
   onChangeEditingStatus,
@@ -20567,6 +20632,9 @@ const ProductionView = ({
     managers={managers}
     editors={editors}
     currentUserProfile={currentUserProfile}
+    onAddTask={onAddTask}
+    canCreateTask={canCreateTask}
+    addButtonLabel="Nueva Tarea"
     onTaskClick={onTaskClick}
     onChangeAccountStatus={onChangeAccountStatus}
     onChangeEditingStatus={onChangeEditingStatus}
