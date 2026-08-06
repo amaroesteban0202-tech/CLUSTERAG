@@ -148,12 +148,16 @@ export const sendManagementTaskReminderEmail = async (context = {}) => {
     });
 };
 
-export const sendDailyReportEmail = async ({ to, subject, editorPdf, accountPdf, generatedAt }) => {
+export const sendDailyReportEmail = async ({ to, subject, editorPdf, accountPdf, generatedAt, periodLabel = '' }) => {
+    const periodLine = periodLabel
+        ? `<p style="margin:0 0 12px;color:#475569;">Periodo: <strong>${escapeHtml(periodLabel)}</strong></p>`
+        : '';
     const html = `
         <div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:24px;background:#f8fafc;">
             <div style="background:#fff;border-radius:16px;padding:24px;border:1px solid #e2e8f0;">
                 <h2 style="margin:0 0 8px;color:#0f172a;">Resumen diario de Editores y Community Managers</h2>
-                <p style="margin:0 0 16px;color:#475569;">Se adjuntan dos PDFs separados con el resumen del día generado el ${generatedAt}.</p>
+                ${periodLine}
+                <p style="margin:0 0 16px;color:#475569;">Se adjuntan dos PDFs con el rendimiento del periodo (solo tareas <strong>creadas</strong> entre 6:00 AM y 6:00 AM Honduras, y su estado actual), generado el ${escapeHtml(generatedAt)}.</p>
                 <p style="margin:0;color:#64748b;font-size:13px;">Este correo fue generado automáticamente por Cluster OS.</p>
             </div>
         </div>

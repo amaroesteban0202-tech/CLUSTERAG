@@ -4,20 +4,9 @@ import { sendDailyReportEmail } from './email.js';
 import { nowIso } from './time.js';
 
 const HONDURAS_TIMEZONE = 'America/Tegucigalpa';
-
-const getDateLabel = (dateValue) => {
-    if (!dateValue) return 'Sin fecha';
-    try {
-        return new Date(dateValue).toLocaleDateString('es-HN', {
-            timeZone: HONDURAS_TIMEZONE,
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
-    } catch {
-        return String(dateValue);
-    }
-};
+const HONDURAS_OFFSET = '-06:00';
+const DAY_MS = 24 * 60 * 60 * 1000;
+const REPORT_CUTOFF_HOUR = 6;
 
 const getLastActivityLabel = (record = {}) => {
     const raw = record?.updatedAt || record?.createdAt || record?.lastSeenAt || '';
@@ -59,17 +48,6 @@ const getHondurasDateParts = (value = Date.now()) => {
     };
 };
 
-const normalizeTaskDayKey = (value = '') => {
-    if (typeof value !== 'string') return '';
-    const trimmed = value.trim();
-    if (!trimmed) return '';
-    const directMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (directMatch) return directMatch[1];
-    const parsed = Date.parse(trimmed);
-    if (!Number.isFinite(parsed)) return '';
-    return getReportDayKey(parsed);
-};
-
 const getTaskOwnerKeys = (task = {}) => {
     const keys = new Set();
     if (Array.isArray(task.assignees)) {
@@ -88,6 +66,46 @@ const getReportDayKey = (now = Date.now()) => {
     return `${year}-${month}-${day}`;
 };
 
+const formatWindowInstant = (ms) => {
+    try {
+        return new Date(ms).toLocaleString('es-HN', {
+            timeZone: HONDURAS_TIMEZONE,
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch {
+        return String(ms);
+    }
+};
+
+/**
+ * Ventana de reporte: [6:00 AM, 6:00 AM siguiente) en hora Honduras.
+ * Al enviarse el 7 ago a las 6:00 AM, cubre 6 ago 06:00 → 7 ago 06:00.
+ */
+export const getDailyReportWindow = (now = Date.now()) => {
+    const { year, month, day } = getHondurasDateParts(now);
+    const todayKey = `${year}-${month}-${day}`;
+    const todayCutoffMs = Date.parse(`${todayKey}T${String(REPORT_CUTOFF_HOUR).padStart(2, '0')}:00:00${HONDURAS_OFFSET}`);
+    const endMs = now < todayCutoffMs ? todayCutoffMs - DAY_MS : todayCutoffMs;
+    const startMs = endMs - DAY_MS;
+    return {
+        startMs,
+        endMs,
+        labelDayKey: getReportDayKey(startMs),
+        periodLabel: `${formatWindowInstant(startMs)} – ${formatWindowInstant(endMs)} (Honduras)`
+    };
+};
+
+const isCreatedInReportWindow = (createdAt, window) => {
+    if (!createdAt || typeof createdAt !== 'string') return false;
+    const createdMs = Date.parse(createdAt);
+    if (!Number.isFinite(createdMs)) return false;
+    return createdMs >= window.startMs && createdMs < window.endMs;
+};
+
 export const shouldSendDailyRoleReport = (date = new Date()) => {
     const weekday = getHondurasDateParts(date).weekday;
     return weekday !== 'Sun';
@@ -97,12 +115,10 @@ export const summarizeRolePerformance = ({ people = [], tasks = [], collectionNa
     const taskMap = new Map();
     const peopleList = Array.isArray(people) ? people : [];
     const taskList = Array.isArray(tasks) ? tasks : [];
-
-    const reportDayKey = getReportDayKey(now);
+    const window = getDailyReportWindow(now);
 
     for (const task of taskList) {
-        const taskDate = normalizeTaskDayKey(task?.date);
-        if (taskDate !== reportDayKey) continue;
+        if (!isCreatedInReportWindow(task?.createdAt || '', window)) continue;
 
         const ownerKeys = getTaskOwnerKeys(task);
         if (ownerKeys.length === 0) continue;
@@ -118,23 +134,14 @@ export const summarizeRolePerformance = ({ people = [], tasks = [], collectionNa
         [person.id, person.userId].filter(Boolean).forEach((ownerKey) => {
             const ownerTasks = taskMap.get(ownerKey) || [];
             ownerTasks.forEach((task) => {
-                const dedupeKey = task.id || `${task.contextId || ''}-${task.date || ''}-${task.title || ''}`;
+                const dedupeKey = task.id || `${task.contextId || ''}-${task.createdAt || ''}-${task.title || ''}`;
                 if (!perPersonTaskMap.has(dedupeKey)) perPersonTaskMap.set(dedupeKey, task);
             });
         });
         const perPersonTasks = [...perPersonTaskMap.values()];
-        const assigned = perPersonTasks.length;
+        const created = perPersonTasks.length;
         const approved = perPersonTasks.filter((task) => closedStatuses.has(String(task.status || '').toLowerCase())).length;
-        const pending = assigned - approved;
-        const overdue = perPersonTasks.filter((task) => {
-            const dateValue = task?.date;
-            if (!dateValue) return false;
-            const normalizedStatus = String(task.status || '').toLowerCase();
-            if (closedStatuses.has(normalizedStatus)) return false;
-            const dueMs = Date.parse(`${dateValue}T18:00:00-06:00`);
-            if (!Number.isFinite(dueMs)) return false;
-            return dueMs < now;
-        }).length;
+        const inProgress = created - approved;
 
         const lastActivity = perPersonTasks.reduce((latest, task) => {
             const candidate = task?.updatedAt || task?.createdAt || '';
@@ -151,26 +158,24 @@ export const summarizeRolePerformance = ({ people = [], tasks = [], collectionNa
             email: person.email || '',
             role: normalizeRoleName(person.role || ''),
             collectionName,
-            assigned,
+            created,
             approved,
-            pending,
-            overdue,
+            inProgress,
             lastActivity,
             lastActivityLabel: getLastActivityLabel({ updatedAt: lastActivity })
         };
     });
 
     const totals = peopleSummary.reduce((acc, person) => ({
-        assigned: acc.assigned + person.assigned,
+        created: acc.created + person.created,
         approved: acc.approved + person.approved,
-        pending: acc.pending + person.pending,
-        overdue: acc.overdue + person.overdue
-    }), { assigned: 0, approved: 0, pending: 0, overdue: 0 });
+        inProgress: acc.inProgress + person.inProgress
+    }), { created: 0, approved: 0, inProgress: 0 });
 
-    return { collectionName, people: peopleSummary, totals };
+    return { collectionName, people: peopleSummary, totals, window };
 };
 
-const buildPdfBuffer = async ({ title, people, totals, generatedAt }) => {
+const buildPdfBuffer = async ({ title, people, totals, generatedAt, periodLabel }) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
     const chunks = [];
     doc.on('data', (chunk) => chunks.push(chunk));
@@ -179,15 +184,19 @@ const buildPdfBuffer = async ({ title, people, totals, generatedAt }) => {
         doc.fontSize(18).fillColor('#0f172a').text(title, { align: 'left' });
         doc.moveDown(0.5);
         doc.fontSize(10).fillColor('#475569').text(`Generado: ${generatedAt}`, { align: 'left' });
+        doc.moveDown(0.3);
+        doc.fontSize(10).fillColor('#64748b').text(`Periodo: ${periodLabel}`, { align: 'left' });
+        doc.moveDown(0.2);
+        doc.fontSize(10).fillColor('#64748b').text('Tareas creadas en el periodo y su estado actual', { align: 'left' });
         doc.moveDown(1);
         doc.fontSize(12).fillColor('#0f172a').text('Resumen por persona');
         doc.moveDown(0.4);
     };
 
     const rowHeight = 20;
-    const colWidths = [140, 64, 64, 64, 64, 95];
+    const colWidths = [150, 70, 70, 80, 110];
     const xStart = 40;
-    const headers = ['Persona', 'Asignadas', 'Aprobadas', 'Pendientes', 'Vencidas', 'Última actividad'];
+    const headers = ['Persona', 'Creadas', 'Aprobadas', 'En proceso', 'Última actividad'];
 
     const drawTableHeader = (topY) => {
         doc.fontSize(9).fillColor('#334155');
@@ -214,10 +223,9 @@ const buildPdfBuffer = async ({ title, people, totals, generatedAt }) => {
 
         const values = [
             person.name,
-            String(person.assigned),
+            String(person.created),
             String(person.approved),
-            String(person.pending),
-            String(person.overdue),
+            String(person.inProgress),
             person.lastActivityLabel
         ];
 
@@ -230,7 +238,7 @@ const buildPdfBuffer = async ({ title, people, totals, generatedAt }) => {
 
     doc.moveDown(1.5);
     doc.fontSize(11).fillColor('#0f172a').text('Totales');
-    doc.fontSize(10).fillColor('#475569').text(`Personas: ${people.length} | Asignadas: ${totals.assigned} | Aprobadas: ${totals.approved} | Pendientes: ${totals.pending} | Vencidas: ${totals.overdue}`);
+    doc.fontSize(10).fillColor('#475569').text(`Personas: ${people.length} | Creadas: ${totals.created} | Aprobadas: ${totals.approved} | En proceso: ${totals.inProgress}`);
 
     doc.end();
     await new Promise((resolve, reject) => {
@@ -241,8 +249,14 @@ const buildPdfBuffer = async ({ title, people, totals, generatedAt }) => {
     return Buffer.concat(chunks);
 };
 
-export const buildDailyRoleReportPdf = async ({ title, people = [], totals = {}, generatedAt = nowIso() }) => {
-    return buildPdfBuffer({ title, people, totals, generatedAt });
+export const buildDailyRoleReportPdf = async ({
+    title,
+    people = [],
+    totals = {},
+    generatedAt = nowIso(),
+    periodLabel = ''
+}) => {
+    return buildPdfBuffer({ title, people, totals, generatedAt, periodLabel });
 };
 
 const getCollectionPeople = async ({ collectionName }) => {
@@ -285,18 +299,22 @@ export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' 
         now
     });
 
+    const periodLabel = editorsSummary.window?.periodLabel || getDailyReportWindow(now).periodLabel;
+
     const editorPdf = await buildDailyRoleReportPdf({
         title: 'Resumen diario de Editores',
         people: editorsSummary.people,
         totals: editorsSummary.totals,
-        generatedAt
+        generatedAt,
+        periodLabel
     });
 
     const communityManagerPdf = await buildDailyRoleReportPdf({
         title: 'Resumen diario de Community Managers',
         people: communityManagersSummary.people,
         totals: communityManagersSummary.totals,
-        generatedAt
+        generatedAt,
+        periodLabel
     });
 
     await sendDailyReportEmail({
@@ -304,13 +322,15 @@ export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' 
         subject: 'Resumen diario de Editores y Community Managers',
         editorPdf,
         accountPdf: communityManagerPdf,
-        generatedAt
+        generatedAt,
+        periodLabel
     });
 
     return {
         ok: true,
         to,
         generatedAt,
+        periodLabel,
         editors: editorsSummary.totals,
         communityManagers: communityManagersSummary.totals
     };

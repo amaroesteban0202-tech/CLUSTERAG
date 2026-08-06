@@ -8,7 +8,7 @@
     },
     {
       "path": "/api/cron/daily-role-reports",
-      "schedule": "0 0 * * *"
+      "schedule": "0 12 * * *"
     }
   ],
   "functions": {
