@@ -174,3 +174,37 @@ export const sendDailyReportEmail = async ({ to, subject, editorPdf, accountPdf,
         logLabel: 'daily-report'
     });
 };
+
+export const sendWeeklyModuleReportEmail = async ({
+    to,
+    subject,
+    podcastPdf,
+    productionPdf,
+    generatedAt,
+    periodLabel = ''
+}) => {
+    const periodLine = periodLabel
+        ? `<p style="margin:0 0 12px;color:#475569;">Periodo: <strong>${escapeHtml(periodLabel)}</strong></p>`
+        : '';
+    const html = `
+        <div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:24px;background:#f8fafc;">
+            <div style="background:#fff;border-radius:16px;padding:24px;border:1px solid #e2e8f0;">
+                <h2 style="margin:0 0 8px;color:#0f172a;">Resumen semanal de Podcast y Producción</h2>
+                ${periodLine}
+                <p style="margin:0 0 16px;color:#475569;">Se adjuntan dos PDFs con las tareas <strong>creadas y finalizadas</strong> (columna listo) entre lunes 6:00 AM y sábado 12:00 mediodía Honduras, generado el ${escapeHtml(generatedAt)}.</p>
+                <p style="margin:0;color:#64748b;font-size:13px;">Este correo fue generado automáticamente por Cluster OS.</p>
+            </div>
+        </div>
+    `;
+
+    return sendEmail({
+        to,
+        subject,
+        html,
+        attachments: [
+            ...(podcastPdf ? [createAttachmentBuffer(podcastPdf, 'resumen-podcast.pdf')] : []),
+            ...(productionPdf ? [createAttachmentBuffer(productionPdf, 'resumen-produccion.pdf')] : [])
+        ],
+        logLabel: 'weekly-module-report'
+    });
+};

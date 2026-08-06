@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { asyncHandler, createHttpError } from '../lib/http.js';
 import { processManagementTaskReminders } from '../lib/management-notifications.js';
 import { sendDailyRoleReports } from '../lib/daily-reports.js';
+import { sendWeeklyModuleReports } from '../lib/weekly-module-reports.js';
 
 const router = express.Router();
 
@@ -24,6 +25,8 @@ const authorize = (req) => {
     }
 };
 
+const dailyReportRecipient = () => process.env.DAILY_REPORT_EMAIL || 'info@cluster.marketing';
+
 router.get('/management-task-reminders', asyncHandler(async (req, res) => {
     authorize(req);
     const report = await processManagementTaskReminders();
@@ -40,7 +43,7 @@ router.post('/management-task-reminders', asyncHandler(async (req, res) => {
 router.get('/daily-role-reports', asyncHandler(async (req, res) => {
     authorize(req);
     const report = await sendDailyRoleReports({
-        to: process.env.DAILY_REPORT_EMAIL || 'info@cluster.marketing'
+        to: dailyReportRecipient()
     });
     res.json({ ok: true, report });
 }));
@@ -48,7 +51,23 @@ router.get('/daily-role-reports', asyncHandler(async (req, res) => {
 router.post('/daily-role-reports', asyncHandler(async (req, res) => {
     authorize(req);
     const report = await sendDailyRoleReports({
-        to: process.env.DAILY_REPORT_EMAIL || 'info@cluster.marketing'
+        to: dailyReportRecipient()
+    });
+    res.json({ ok: true, report });
+}));
+
+router.get('/weekly-module-reports', asyncHandler(async (req, res) => {
+    authorize(req);
+    const report = await sendWeeklyModuleReports({
+        to: dailyReportRecipient()
+    });
+    res.json({ ok: true, report });
+}));
+
+router.post('/weekly-module-reports', asyncHandler(async (req, res) => {
+    authorize(req);
+    const report = await sendWeeklyModuleReports({
+        to: dailyReportRecipient()
     });
     res.json({ ok: true, report });
 }));
