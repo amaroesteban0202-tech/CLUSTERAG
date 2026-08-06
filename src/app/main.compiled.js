@@ -1,5 +1,5 @@
 // src/app/main.jsx
-import React, { useState, useEffect, useRef, useId, useMemo } from "react";
+import React, { useState, useEffect, useRef, useId, useMemo, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
@@ -2436,6 +2436,7 @@ function App() {
   useEffect(() => {
     if (!db || !user || !authEmail || currentUserProfile?.isAnonymous || profileBlocked || !usersLoaded || hasSeededManagementDirectory)
       return;
+    if (!userHasPermission(currentUserProfile, "manage_users")) return;
     const existingKeys = new Set(
       appUsers.map((item) => item.managementKey || getManagementDirectoryKey(item)).filter(Boolean)
     );
@@ -2472,6 +2473,7 @@ function App() {
     user,
     authEmail,
     currentUserProfile?.isAnonymous,
+    currentUserProfile?.role,
     profileBlocked,
     usersLoaded,
     appUsers,
@@ -2651,6 +2653,7 @@ function App() {
       (item) => !normalizeEmail(item.email) && normalizeNameKey(item.name) === normalizeNameKey(user.displayName || authEmail)
     );
     const existing = existingByUid || existingByEmail || matchByName;
+    if (existing && !userHasPermission(existing, "manage_users")) return;
     const targetId = existing?.id || `auth_${user.uid || normalizeNameKey(authEmail).replace(/[^a-z0-9]+/g, "_")}`;
     const isForcedSuperAdmin = SUPER_ADMIN_EMAILS.includes(authEmail);
     const existingRole = existing?.role || "viewer";
@@ -3588,6 +3591,24 @@ function App() {
     });
   };
   const handleEventClick = (event, type) => setEventAction({ isOpen: true, event, type });
+  const openTaskDetail = useCallback((task, fallbackType = "editingTask") => {
+    const resolvedType = task?._taskType || fallbackType;
+    if (!["accountTask", "editingTask", "managementTask"].includes(resolvedType))
+      return;
+    setTaskDetailConfig({ isOpen: true, task, type: resolvedType });
+  }, []);
+  const handleAccountTaskClick = useCallback(
+    (task) => openTaskDetail(task, "accountTask"),
+    [openTaskDetail]
+  );
+  const handleEditingTaskClick = useCallback(
+    (task) => openTaskDetail(task, "editingTask"),
+    [openTaskDetail]
+  );
+  const handleManagementTaskClick = useCallback(
+    (task) => openTaskDetail(task, "managementTask"),
+    [openTaskDetail]
+  );
   const triggerConfetti = () => {
     if (window.confetti) {
       const theme = getComputedStyle(document.documentElement);
@@ -4600,7 +4621,7 @@ function App() {
       (item) => item.id === taskRef.taskId
     );
     if (task) {
-      setTaskDetailConfig({ isOpen: true, task, type: taskRef.taskType });
+      openTaskDetail(task, taskRef.taskType);
       return;
     }
     const viewByType = {
@@ -4909,6 +4930,40 @@ function App() {
       afterSuccess: closeModal
     });
   };
+  const changeModuleEventStatus = async (eventItem, newStatus) => {
+    if (!eventItem?.id || !newStatus) return;
+    await updateEvent(eventItem.id, { status: newStatus });
+  };
+  const handleAddPodcastTask = useCallback(
+    (dateStr) => {
+      const nextDate = normalizeDateOnlyString(dateStr) || getHondurasTodayStr();
+      setModalConfig({
+        isOpen: true,
+        type: "editingTask",
+        data: {
+          date: nextDate,
+          contextId: defaultEditingAssigneeId
+        }
+      });
+    },
+    [defaultEditingAssigneeId]
+  );
+  const handleAddProductionTask = useCallback((dateStr) => {
+    const nextDate = normalizeDateOnlyString(dateStr) || getHondurasTodayStr();
+    setModalConfig({
+      isOpen: true,
+      type: "event",
+      data: { date: nextDate, type: "production" }
+    });
+  }, []);
+  const canCreatePodcastTasks = userHasPermission(
+    currentUserProfile,
+    "create_editing_tasks"
+  );
+  const canCreateProductionTasks = userHasPermission(
+    currentUserProfile,
+    "create_calendar_events"
+  );
   const addUserRecord = async (data) => {
     const email = normalizeEmail(data.email);
     const requestedRole = data.role || "viewer";
@@ -5517,11 +5572,7 @@ function App() {
           currentUserProfile,
           onSignIn: handleGoogleSignIn,
           onNavigate: handleNavigate,
-          onOpenTask: (task, type) => setTaskDetailConfig({
-            isOpen: true,
-            task,
-            type
-          })
+          onOpenTask: openTaskDetail
         }
       )),
       view === "clients" && /* @__PURE__ */ React.createElement(
@@ -5753,11 +5804,7 @@ function App() {
             id,
             title: "Tarea"
           }),
-          onTaskClick: (t) => setTaskDetailConfig({
-            isOpen: true,
-            task: t,
-            type: "accountTask"
-          }),
+          onTaskClick: handleAccountTaskClick,
           onLoadHistory: handleLoadTaskHistory,
           historyLoaded: taskHistoryLoaded,
           historyLoading: isLoadingTaskHistory,
@@ -5792,11 +5839,7 @@ function App() {
             id,
             title: "Tarea"
           }),
-          onTaskClick: (t) => setTaskDetailConfig({
-            isOpen: true,
-            task: t,
-            type: "editingTask"
-          }),
+          onTaskClick: handleEditingTaskClick,
           onLoadHistory: handleLoadTaskHistory,
           historyLoaded: taskHistoryLoaded,
           historyLoading: isLoadingTaskHistory
@@ -5830,11 +5873,7 @@ function App() {
             id,
             title: "Tarea de gestion"
           }),
-          onTaskClick: (t) => setTaskDetailConfig({
-            isOpen: true,
-            task: t,
-            type: "managementTask"
-          }),
+          onTaskClick: handleManagementTaskClick,
           onLoadHistory: handleLoadTaskHistory,
           historyLoaded: taskHistoryLoaded,
           historyLoading: isLoadingTaskHistory
@@ -5959,7 +5998,16 @@ function App() {
         {
           events,
           accountTasks,
-          editingTasks
+          editingTasks,
+          managers: accountTaskAssignees,
+          editors: editingTaskAssignees,
+          currentUserProfile,
+          onAddTask: handleAddPodcastTask,
+          canCreateTask: canCreatePodcastTasks,
+          onTaskClick: openTaskDetail,
+          onChangeAccountStatus: changeAccountTaskStatus,
+          onChangeEditingStatus: changeEditingTaskStatus,
+          onChangeEventStatus: changeModuleEventStatus
         }
       ),
       view === "production" && /* @__PURE__ */ React.createElement(
@@ -5967,7 +6015,16 @@ function App() {
         {
           events,
           accountTasks,
-          editingTasks
+          editingTasks,
+          managers: accountTaskAssignees,
+          editors: editingTaskAssignees,
+          currentUserProfile,
+          onAddTask: handleAddProductionTask,
+          canCreateTask: canCreateProductionTasks,
+          onTaskClick: openTaskDetail,
+          onChangeAccountStatus: changeAccountTaskStatus,
+          onChangeEditingStatus: changeEditingTaskStatus,
+          onChangeEventStatus: changeModuleEventStatus
         }
       ),
       view === "reports" && /* @__PURE__ */ React.createElement(
@@ -14914,80 +14971,622 @@ var getModuleStatusMeta = (value = "", kind = "production") => {
   }
   return { label: normalized || "Programado", tone: "slate" };
 };
-var PodcastView = ({ events = [], accountTasks = [], editingTasks = [] }) => {
-  const todayStr = getHondurasTodayStr();
-  const now = /* @__PURE__ */ new Date();
-  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const [fromDate, setFromDate] = useState(firstOfMonth);
-  const [toDate, setToDate] = useState(todayStr);
-  const [searchTerm, setSearchTerm] = useState("");
-  const inRange = (dateStr) => {
-    if (!dateStr) return false;
-    return compareDateOnlyStrings(dateStr, fromDate) >= 0 && compareDateOnlyStrings(dateStr, toDate) <= 0;
-  };
-  const normalizedSearch = String(searchTerm || "").trim().toLowerCase();
-  const items = [...events, ...accountTasks, ...editingTasks].filter((item) => {
-    const haystack = `${item.title || item.name || ""} ${item.note || item.description || ""}`.toLowerCase();
-    const type = String(item.type || "").toLowerCase();
-    const matchesKind = type === "podcast" || /podcast|episodio|episode|audio/i.test(haystack);
-    if (!matchesKind) return false;
-    const itemDate = normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || "");
-    if (!itemDate) return false;
-    return inRange(itemDate) && (normalizedSearch.length === 0 || haystack.includes(normalizedSearch));
-  }).map((item) => ({
-    ...item,
-    itemDate: normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || ""),
-    status: item.status || "programado",
-    owner: item.assignee || item.owner || item.manager || item.editor || "",
-    summary: item.note || item.description || "Sin detalle",
-    title: item.title || item.name || "Sin t\xEDtulo"
-  }));
-  const totalItems = items.length;
-  const inProgress = items.filter((item) => !["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
-  const published = items.filter((item) => ["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
-  const pending = items.filter((item) => ["programado", "pendiente"].includes(String(item.status || "").toLowerCase())).length;
-  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Contenido"), /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Podcast"), /* @__PURE__ */ React.createElement("p", { className: "mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400" }, "Seguimiento visual de episodios, grabaciones y publicaciones que ya est\xE1n registradas en el sistema.")), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-3" }, /* @__PURE__ */ React.createElement(SearchBar, { searchTerm, setSearchTerm, placeholder: "Buscar podcast" }), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Desde"), /* @__PURE__ */ React.createElement("input", { type: "date", value: fromDate, onChange: (e) => setFromDate(e.target.value), className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" })), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Hasta"), /* @__PURE__ */ React.createElement("input", { type: "date", value: toDate, onChange: (e) => setToDate(e.target.value), className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" })))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 gap-4 md:grid-cols-4" }, /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Total", value: totalItems, icon: "Microphone", tone: "rose", sub: "episodios y tareas" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "En curso", value: inProgress, icon: "Play", tone: "amber", sub: "grabaci\xF3n o edici\xF3n" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Publicados", value: published, icon: "CheckCircle2", tone: "emerald", sub: "listos para salir" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Pendientes", value: pending, icon: "Clock", tone: "slate", sub: "por programar" })), /* @__PURE__ */ React.createElement("div", { className: "overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900" }, items.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 dark:text-slate-400" }, "A\xFAn no hay contenido de podcast en este rango de fechas.") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[780px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Episodio"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Fecha"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Estado"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Responsable"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Detalle"))), /* @__PURE__ */ React.createElement("tbody", null, items.map((item, index) => {
-    const statusMeta = getModuleStatusMeta(item.status, "podcast");
-    return /* @__PURE__ */ React.createElement("tr", { key: `${item.id || item.title}-${index}`, className: `border-b border-slate-50 dark:border-slate-800/60 ${index % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : ""}` }, /* @__PURE__ */ React.createElement("td", { className: "p-4 font-bold text-slate-800 dark:text-white" }, item.title), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm font-semibold text-slate-600 dark:text-slate-300" }, item.itemDate), /* @__PURE__ */ React.createElement("td", { className: "p-4" }, /* @__PURE__ */ React.createElement("span", { className: `inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${statusMeta.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300" : statusMeta.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300" : statusMeta.tone === "indigo" ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}` }, statusMeta.label)), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm text-slate-600 dark:text-slate-300" }, item.owner || "Sin asignar"), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm text-slate-500 dark:text-slate-400" }, item.summary));
-  }))))));
+var MODULE_ACCOUNT_STATUS_OPTIONS = [
+  { id: "por_disenar", label: "Por Dise\xF1ar" },
+  { id: "aprobacion_interna", label: "Aprobaci\xF3n Interna" },
+  { id: "aprobado_internamente", label: "Aprobado Interno" },
+  { id: "publicado", label: "Publicado" }
+];
+var MODULE_EVENT_STATUS_OPTIONS = [
+  { id: "programado", label: "Programado" },
+  { id: "en_produccion", label: "En producci\xF3n" },
+  { id: "post_produccion", label: "Postproducci\xF3n" },
+  { id: "revision", label: "Revisi\xF3n" },
+  { id: "aprobado", label: "Aprobado" },
+  { id: "publicado", label: "Publicado" },
+  { id: "cerrado", label: "Cerrado" }
+];
+var getModuleLaneByStatus = (taskType, statusValue = "") => {
+  const normalizedStatus = String(statusValue || "").trim().toLowerCase();
+  if (taskType === "accountTask") {
+    if (normalizedStatus === "por_disenar" || normalizedStatus === "pendiente")
+      return "start";
+    if (["aprobacion_interna", "en_proceso", "en_espera"].includes(normalizedStatus))
+      return "production";
+    return "ready";
+  }
+  if (taskType === "editingTask") {
+    const normalizedEditing = normalizeEditingWorkflowStatus(normalizedStatus);
+    if (normalizedEditing === "editar") return "start";
+    if (["en_edicion", "revision_interna"].includes(normalizedEditing))
+      return "production";
+    return "ready";
+  }
+  if (["programado", "pendiente"].includes(normalizedStatus)) return "start";
+  if ([
+    "grabando",
+    "en_produccion",
+    "editando",
+    "post_produccion",
+    "revision",
+    "en_proceso",
+    "en_espera"
+  ].includes(normalizedStatus)) {
+    return "production";
+  }
+  return "ready";
 };
-var ProductionView = ({ events = [], accountTasks = [], editingTasks = [] }) => {
-  const todayStr = getHondurasTodayStr();
-  const now = /* @__PURE__ */ new Date();
-  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const [fromDate, setFromDate] = useState(firstOfMonth);
-  const [toDate, setToDate] = useState(todayStr);
-  const [searchTerm, setSearchTerm] = useState("");
-  const inRange = (dateStr) => {
-    if (!dateStr) return false;
-    return compareDateOnlyStrings(dateStr, fromDate) >= 0 && compareDateOnlyStrings(dateStr, toDate) <= 0;
+var getModuleDropStatus = (taskType, laneId, currentStatus = "") => {
+  const maps = {
+    accountTask: {
+      start: "por_disenar",
+      production: "aprobacion_interna",
+      ready: "aprobado_internamente"
+    },
+    editingTask: { start: "editar", production: "en_edicion", ready: "aprobado" },
+    event: { start: "programado", production: "en_produccion", ready: "publicado" }
   };
-  const normalizedSearch = String(searchTerm || "").trim().toLowerCase();
-  const items = [...events, ...accountTasks, ...editingTasks].filter((item) => {
-    const haystack = `${item.title || item.name || ""} ${item.note || item.description || ""}`.toLowerCase();
-    const type = String(item.type || "").toLowerCase();
-    const matchesKind = type === "production" || /producción|production|grabación|shoot|post|montaje/i.test(haystack);
-    if (!matchesKind) return false;
-    const itemDate = normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || "");
-    if (!itemDate) return false;
-    return inRange(itemDate) && (normalizedSearch.length === 0 || haystack.includes(normalizedSearch));
-  }).map((item) => ({
-    ...item,
-    itemDate: normalizeDateOnlyString(item.date || item.createdAt || item.updatedAt || ""),
-    status: item.status || "programado",
-    owner: item.assignee || item.owner || item.manager || item.editor || "",
-    summary: item.note || item.description || "Sin detalle",
-    title: item.title || item.name || "Sin t\xEDtulo"
-  }));
-  const totalItems = items.length;
-  const inProgress = items.filter((item) => !["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
-  const published = items.filter((item) => ["publicado", "cerrado"].includes(String(item.status || "").toLowerCase())).length;
-  const pending = items.filter((item) => ["programado", "pendiente"].includes(String(item.status || "").toLowerCase())).length;
-  return /* @__PURE__ */ React.createElement("div", { className: "space-y-6 fade-in" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, "Operaci\xF3n"), /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-white" }, "Producci\xF3n"), /* @__PURE__ */ React.createElement("p", { className: "mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400" }, "Vista consolidada de entregas, grabaciones y fases de postproducci\xF3n para mantener el control del flujo.")), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-3" }, /* @__PURE__ */ React.createElement(SearchBar, { searchTerm, setSearchTerm, placeholder: "Buscar producci\xF3n" }), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Desde"), /* @__PURE__ */ React.createElement("input", { type: "date", value: fromDate, onChange: (e) => setFromDate(e.target.value), className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" })), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5" }, /* @__PURE__ */ React.createElement("span", { className: "text-xs font-black text-slate-500 uppercase" }, "Hasta"), /* @__PURE__ */ React.createElement("input", { type: "date", value: toDate, onChange: (e) => setToDate(e.target.value), className: "text-sm font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none" })))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 gap-4 md:grid-cols-4" }, /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Total", value: totalItems, icon: "MonitorPlay", tone: "cyan", sub: "items de producci\xF3n" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "En curso", value: inProgress, icon: "Play", tone: "amber", sub: "grabaci\xF3n o post" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Publicados", value: published, icon: "CheckCircle2", tone: "emerald", sub: "cerrados y publicados" }), /* @__PURE__ */ React.createElement(AccentStatCard, { label: "Pendientes", value: pending, icon: "Clock", tone: "slate", sub: "por iniciar" })), /* @__PURE__ */ React.createElement("div", { className: "overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900" }, items.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "p-16 text-center text-slate-500 dark:text-slate-400" }, "No hay elementos de producci\xF3n en este rango todav\xEDa.") : /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full min-w-[780px]" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950" }, /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Elemento"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Fecha"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Estado"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Responsable"), /* @__PURE__ */ React.createElement("th", { className: "p-4 text-left text-xs font-black uppercase tracking-[0.2em] text-slate-500" }, "Detalle"))), /* @__PURE__ */ React.createElement("tbody", null, items.map((item, index) => {
-    const statusMeta = getModuleStatusMeta(item.status, "production");
-    return /* @__PURE__ */ React.createElement("tr", { key: `${item.id || item.title}-${index}`, className: `border-b border-slate-50 dark:border-slate-800/60 ${index % 2 !== 0 ? "bg-slate-50/50 dark:bg-slate-950/30" : ""}` }, /* @__PURE__ */ React.createElement("td", { className: "p-4 font-bold text-slate-800 dark:text-white" }, item.title), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm font-semibold text-slate-600 dark:text-slate-300" }, item.itemDate), /* @__PURE__ */ React.createElement("td", { className: "p-4" }, /* @__PURE__ */ React.createElement("span", { className: `inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${statusMeta.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300" : statusMeta.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300" : statusMeta.tone === "indigo" ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}` }, statusMeta.label)), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm text-slate-600 dark:text-slate-300" }, item.owner || "Sin asignar"), /* @__PURE__ */ React.createElement("td", { className: "p-4 text-sm text-slate-500 dark:text-slate-400" }, item.summary));
-  }))))));
+  const laneMap = maps[taskType] || maps.event;
+  const nextStatus = laneMap[laneId] || "";
+  if (!nextStatus) return "";
+  if (laneId === "ready" && ["publicado", "cerrado"].includes(String(currentStatus || "").toLowerCase())) {
+    return currentStatus;
+  }
+  return nextStatus;
 };
+var getModuleStatusOptions = (taskType) => {
+  if (taskType === "accountTask") return MODULE_ACCOUNT_STATUS_OPTIONS;
+  if (taskType === "editingTask") return EDITING_STATUS_OPTIONS;
+  return MODULE_EVENT_STATUS_OPTIONS;
+};
+var UnifiedModuleKanbanView = ({
+  moduleKey,
+  moduleTitle,
+  moduleEyebrow,
+  moduleDescription,
+  searchPlaceholder,
+  addButtonLabel = "Nueva Tarea",
+  statIcon,
+  statTone,
+  events = [],
+  accountTasks = [],
+  editingTasks = [],
+  managers = [],
+  editors = [],
+  currentUserProfile = null,
+  onAddTask,
+  canCreateTask = false,
+  onTaskClick,
+  onChangeAccountStatus,
+  onChangeEditingStatus,
+  onChangeEventStatus
+}) => {
+  const {
+    currentDate,
+    setCurrentDate,
+    filterMode,
+    setFilterMode,
+    ownershipFilter,
+    setOwnershipFilter
+  } = useTaskRoomState(`cluster_${moduleKey}_kanban_state`, {
+    preferMine: Boolean(currentUserProfile?.linkedManagerId || currentUserProfile?.linkedEditorId)
+  });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedTeamId, setSelectedTeamId] = useState("all");
+  const [showTeam, setShowTeam] = useState(false);
+  const [draggedItemKey, setDraggedItemKey] = useState("");
+  const todayStr = getHondurasTodayStr();
+  const monthPeriod = getRankingMonthPeriod(todayStr);
+  const managerById = useMemo(
+    () => new Map((managers || []).map((manager) => [manager.id, manager])),
+    [managers]
+  );
+  const editorById = useMemo(
+    () => new Map((editors || []).map((editor) => [editor.id, editor])),
+    [editors]
+  );
+  const teamMembers = useMemo(() => {
+    const seen = /* @__PURE__ */ new Set();
+    const rows = [];
+    [...managers || [], ...editors || []].forEach((person) => {
+      const personId = String(person?.id || "").trim();
+      if (!personId || seen.has(personId)) return;
+      seen.add(personId);
+      rows.push(person);
+    });
+    return rows;
+  }, [managers, editors]);
+  const normalizedSearch = String(searchTerm || "").trim().toLowerCase();
+  const sourceItems = useMemo(() => {
+    const allRows = [
+      ...(events || []).map((item) => ({ ...item, _taskType: "event" })),
+      ...(accountTasks || []).map((item) => ({ ...item, _taskType: "accountTask" })),
+      ...(editingTasks || []).map((item) => ({ ...item, _taskType: "editingTask" }))
+    ];
+    return allRows.map((item) => {
+      const title = item.title || item.name || "Sin t\xEDtulo";
+      const notes = item.notes || item.note || item.description || "Sin detalle";
+      const haystack = `${title} ${notes}`.toLowerCase();
+      const itemType = String(item.type || "").toLowerCase();
+      const isPodcast = itemType === "podcast" || /podcast|episodio|episode|audio/i.test(haystack);
+      const isProduction = itemType === "production" || /producción|production|grabación|shoot|post|montaje/i.test(haystack);
+      if (moduleKey === "podcast" && !isPodcast) return null;
+      if (moduleKey === "production" && !isProduction) return null;
+      const dateStr = normalizeDateOnlyString(
+        item.date || item.createdAt || item.updatedAt || ""
+      );
+      if (!dateStr) return null;
+      const normalizedStatus = item._taskType === "editingTask" ? normalizeEditingWorkflowStatus(item.status || "editar") : String(item.status || "programado").toLowerCase();
+      const assigneePerson = item._taskType === "accountTask" ? managerById.get(item.contextId) : item._taskType === "editingTask" ? editorById.get(item.contextId) : managerById.get(item.contextId) || editorById.get(item.contextId);
+      return {
+        ...item,
+        _key: `${item._taskType}:${item.id || `${title}-${dateStr}`}`,
+        _title: title,
+        _notes: notes,
+        _date: dateStr,
+        _status: normalizedStatus,
+        _lane: getModuleLaneByStatus(item._taskType, normalizedStatus),
+        _assignee: assigneePerson,
+        _ownerText: item.assignee || item.owner || item.manager || item.editor || assigneePerson?.name || ""
+      };
+    }).filter(Boolean);
+  }, [
+    moduleKey,
+    events,
+    accountTasks,
+    editingTasks,
+    managerById,
+    editorById
+  ]);
+  const isMineByProfile = (item) => {
+    const linkedContextIds = [
+      currentUserProfile?.id,
+      currentUserProfile?.linkedManagerId,
+      currentUserProfile?.linkedEditorId
+    ].filter(Boolean);
+    if (item._taskType === "event") {
+      return linkedContextIds.includes(item.contextId) || linkedContextIds.includes(item.assigneeUserId);
+    }
+    return isTaskAssignedToProfile(item, currentUserProfile, linkedContextIds);
+  };
+  const filteredItems = sourceItems.filter((item) => {
+    if (normalizedSearch && !`${item._title} ${item._notes}`.toLowerCase().includes(normalizedSearch)) {
+      return false;
+    }
+    if (ownershipFilter === "mine" && !isMineByProfile(item)) return false;
+    if (selectedTeamId !== "all") {
+      const matchesTeam = String(item.contextId || "") === String(selectedTeamId) || String(item.assigneeUserId || "") === String(selectedTeamId);
+      if (!matchesTeam) return false;
+    }
+    if (filterMode === "date") {
+      return compareDateOnlyStrings(item._date, currentDate) === 0;
+    }
+    if (filterMode === "overdue") {
+      return isDateBeforeDateString(item._date, todayStr) && !["publicado", "cerrado"].includes(item._status);
+    }
+    if (filterMode === "history") return true;
+    return isDateWithinPeriod(item._date, monthPeriod);
+  });
+  const filteredByLane = {
+    start: filteredItems.filter((item) => item._lane === "start"),
+    production: filteredItems.filter((item) => item._lane === "production"),
+    ready: filteredItems.filter((item) => item._lane === "ready")
+  };
+  const itemByKey = useMemo(
+    () => new Map(sourceItems.map((item) => [item._key, item])),
+    [sourceItems]
+  );
+  const teamWithoutEmailCount = teamMembers.filter(
+    (member) => !normalizeEmail(member?.email)
+  ).length;
+  const handleStatusChange = async (item, newStatus) => {
+    if (!item || !newStatus || newStatus === item._status) return;
+    if (item._taskType === "accountTask") {
+      await onChangeAccountStatus?.(item, newStatus);
+      return;
+    }
+    if (item._taskType === "editingTask") {
+      await onChangeEditingStatus?.(item, newStatus);
+      return;
+    }
+    await onChangeEventStatus?.(item, newStatus);
+  };
+  const handleDropLane = async (event, laneId) => {
+    event.preventDefault();
+    event.currentTarget.classList.remove("drag-over");
+    if (!draggedItemKey) return;
+    const draggedItem = itemByKey.get(draggedItemKey);
+    if (!draggedItem) return;
+    const nextStatus = getModuleDropStatus(
+      draggedItem._taskType,
+      laneId,
+      draggedItem._status
+    );
+    if (!nextStatus || nextStatus === draggedItem._status) return;
+    await handleStatusChange(draggedItem, nextStatus);
+  };
+  const moduleGroups = [
+    {
+      id: "start",
+      title: "Por iniciar",
+      subtitle: "Pendientes de comenzar",
+      color: "slate",
+      stages: [
+        {
+          id: "start",
+          title: "Pendientes",
+          color: "slate",
+          tasks: filteredByLane.start
+        }
+      ]
+    },
+    {
+      id: "production",
+      title: "En producci\xF3n",
+      subtitle: "En curso, edici\xF3n o revisi\xF3n",
+      color: moduleKey === "podcast" ? "rose" : "cyan",
+      stages: [
+        {
+          id: "production",
+          title: "En curso",
+          color: moduleKey === "podcast" ? "rose" : "cyan",
+          tasks: filteredByLane.production
+        }
+      ]
+    },
+    {
+      id: "ready",
+      title: "Listas",
+      subtitle: "Aprobadas y publicadas/cerradas",
+      color: "emerald",
+      stages: [
+        {
+          id: "ready",
+          title: "Finalizadas",
+          color: "emerald",
+          tasks: filteredByLane.ready
+        }
+      ]
+    }
+  ];
+  const totalItems = filteredItems.length;
+  const inProgressCount = filteredByLane.production.length;
+  const readyCount = filteredByLane.ready.length;
+  const startCount = filteredByLane.start.length;
+  const canShowAddButton = Boolean(onAddTask) && canCreateTask;
+  const addDate = filterMode === "date" ? currentDate : filterMode === "history" ? todayStr : todayStr;
+  const handleAddTask = useCallback(() => {
+    const nextDate = normalizeDateOnlyString(addDate) || todayStr;
+    onAddTask?.(nextDate);
+  }, [addDate, onAddTask, todayStr]);
+  return /* @__PURE__ */ React.createElement("div", { className: "task-room min-h-0 flex flex-col gap-3 fade-in" }, /* @__PURE__ */ React.createElement("header", { className: "task-room-header shrink-0 border-b border-[var(--border)] pb-3 dark:border-white/10" }, /* @__PURE__ */ React.createElement("div", { className: "mb-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between" }, /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "eyebrow" }, moduleEyebrow), /* @__PURE__ */ React.createElement("h2", { className: "editorial-title truncate text-[clamp(1.75rem,3vw,2.5rem)] leading-none text-[var(--text)] dark:text-[var(--text)]" }, moduleTitle), /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-slate-500 dark:text-slate-400" }, moduleDescription)), /* @__PURE__ */ React.createElement("div", { className: "flex w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center lg:w-auto" }, /* @__PURE__ */ React.createElement(
+    SearchBar,
+    {
+      searchTerm,
+      setSearchTerm,
+      placeholder: searchPlaceholder
+    }
+  ), canShowAddButton && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: handleAddTask,
+      className: "bg-[#c5f82a] text-black font-bold rounded-xl px-4 py-2.5 flex items-center gap-2 hover:opacity-90 transition-opacity shrink-0"
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "Plus", size: 16 }),
+    addButtonLabel
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => setShowTeam((value) => !value),
+      className: "surface flex shrink-0 items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50"
+    },
+    /* @__PURE__ */ React.createElement("div", { className: "flex -space-x-2 shrink-0" }, teamMembers.slice(0, 4).map((member) => /* @__PURE__ */ React.createElement(
+      PersonAvatar,
+      {
+        key: member.id,
+        person: member,
+        size: 28,
+        className: "border-2 border-white dark:border-slate-900"
+      }
+    )), teamMembers.length > 4 && /* @__PURE__ */ React.createElement("div", { className: "w-7 h-7 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center text-[9px] font-black bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300" }, "+", teamMembers.length - 4)),
+    /* @__PURE__ */ React.createElement("div", { className: "text-left" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-black text-slate-700 dark:text-slate-200" }, "Equipo"), teamWithoutEmailCount > 0 ? /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-amber-500" }, teamWithoutEmailCount, " sin email") : /* @__PURE__ */ React.createElement("p", { className: "text-[10px] font-bold text-emerald-500" }, "Todos con email")),
+    /* @__PURE__ */ React.createElement(
+      Icon,
+      {
+        name: showTeam ? "ChevronUp" : "ChevronDown",
+        size: 14,
+        className: "text-slate-500 ml-1"
+      }
+    )
+  ))), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap items-center gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "flex max-w-full overflow-x-auto rounded-lg bg-[var(--surface-muted)] p-1 kanban-mobile-scroll dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setFilterMode("date"),
+      className: `shrink-0 min-h-9 px-3 py-2 text-[12px] font-medium rounded-lg transition-colors flex items-center gap-1.5 ${filterMode === "date" ? "bg-white text-[var(--text)] shadow-sm dark:bg-[var(--surface-muted)] dark:text-[var(--text)]" : "text-slate-500 dark:text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/5 dark:hover:text-slate-200"}`
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "CalendarDays", size: 14 }),
+    "D\xEDa espec\xEDfico"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setFilterMode("overdue"),
+      className: `shrink-0 min-h-9 px-3 py-2 text-[12px] font-medium rounded-lg transition-colors flex items-center gap-1.5 ${filterMode === "overdue" ? "bg-[var(--status-red-bg)] text-[var(--status-red-text)] dark:bg-red-500/15 dark:text-red-300" : "text-slate-500 dark:text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/5 dark:hover:text-slate-200"}`
+    },
+    "Atrasadas ",
+    /* @__PURE__ */ React.createElement(Icon, { name: "Flame", size: 14 })
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setFilterMode("all"),
+      className: `shrink-0 min-h-9 px-3 py-2 text-[12px] font-medium rounded-lg transition-colors flex items-center gap-1.5 ${filterMode === "all" ? "bg-white text-[var(--text)] shadow-sm dark:bg-[var(--surface-muted)] dark:text-[var(--text)]" : "text-slate-500 dark:text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/5 dark:hover:text-slate-200"}`
+    },
+    "Este mes"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setFilterMode("history"),
+      className: `shrink-0 min-h-9 px-3 py-2 text-[12px] font-medium rounded-lg transition-colors flex items-center gap-1.5 ${filterMode === "history" ? "bg-white text-[var(--text)] shadow-sm dark:bg-[var(--surface-muted)] dark:text-[var(--text)]" : "text-slate-500 dark:text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/5 dark:hover:text-slate-200"}`
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "Clock", size: 14 }),
+    "Hist\xF3rico"
+  )), /* @__PURE__ */ React.createElement("div", { className: "flex max-w-full overflow-x-auto rounded-lg bg-[var(--surface-muted)] p-1 kanban-mobile-scroll dark:bg-[var(--surface-raised)]" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setOwnershipFilter("all"),
+      className: `shrink-0 min-h-9 px-3 py-2 text-[12px] font-medium rounded-lg transition-colors flex items-center gap-1.5 ${ownershipFilter === "all" ? "bg-white text-[var(--text)] shadow-sm dark:bg-[var(--surface-muted)] dark:text-[var(--text)]" : "text-slate-500 dark:text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/5 dark:hover:text-slate-200"}`
+    },
+    "Todo el equipo"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setOwnershipFilter("mine"),
+      className: `shrink-0 min-h-9 px-3 py-2 text-[12px] font-medium rounded-lg transition-colors flex items-center gap-1.5 ${ownershipFilter === "mine" ? "bg-white text-[var(--text)] shadow-sm dark:bg-[var(--surface-muted)] dark:text-[var(--text)]" : "text-slate-500 dark:text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/5 dark:hover:text-slate-200"}`
+    },
+    /* @__PURE__ */ React.createElement(Icon, { name: "User", size: 14 }),
+    "Asignadas a m\xED"
+  )), filterMode === "date" && /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: currentDate,
+      onChange: (event) => setCurrentDate(event.target.value),
+      className: "min-h-10 rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-600 outline-none focus:border-[var(--focus)] dark:border-white/10 dark:bg-[var(--surface-raised)] dark:text-slate-300"
+    }
+  ), currentDate === todayStr && /* @__PURE__ */ React.createElement("span", { className: "text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 font-bold px-2 py-1 rounded-full shrink-0" }, "Hoy")))), showTeam && /* @__PURE__ */ React.createElement("div", { className: "bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 fade-in" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => setSelectedTeamId("all"),
+      className: `flex items-center gap-3 p-3 rounded-xl border text-left ${selectedTeamId === "all" ? "border-violet-300 dark:border-violet-500/40 bg-violet-50/70 dark:bg-violet-500/10" : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"}`
+    },
+    /* @__PURE__ */ React.createElement("div", { className: "w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black text-white bg-violet-500 shrink-0" }, "EQ"),
+    /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "font-bold text-slate-800 dark:text-white text-sm truncate" }, "Todo el equipo"), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] text-slate-500 dark:text-slate-400" }, "Sin filtro por persona"))
+  ), teamMembers.map((member) => {
+    const isActive = String(selectedTeamId) === String(member.id);
+    return /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: member.id,
+        type: "button",
+        onClick: () => setSelectedTeamId(member.id),
+        className: `flex items-center gap-3 p-3 rounded-xl border text-left ${isActive ? "border-violet-300 dark:border-violet-500/40 bg-violet-50/70 dark:bg-violet-500/10" : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"}`
+      },
+      /* @__PURE__ */ React.createElement(PersonAvatar, { person: member, size: 36 }),
+      /* @__PURE__ */ React.createElement("div", { className: "min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "font-bold text-slate-800 dark:text-white text-sm truncate" }, member.name), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] truncate text-slate-500 dark:text-slate-400" }, member.email || "Sin correo asignado"))
+    );
+  })), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 gap-4 md:grid-cols-4" }, /* @__PURE__ */ React.createElement(
+    AccentStatCard,
+    {
+      label: "Total",
+      value: totalItems,
+      icon: statIcon,
+      tone: statTone,
+      sub: "tareas filtradas"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    AccentStatCard,
+    {
+      label: "Por iniciar",
+      value: startCount,
+      icon: "Clock",
+      tone: "slate",
+      sub: "pendientes"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    AccentStatCard,
+    {
+      label: "En producci\xF3n",
+      value: inProgressCount,
+      icon: "Play",
+      tone: "amber",
+      sub: "en curso"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    AccentStatCard,
+    {
+      label: "Listas",
+      value: readyCount,
+      icon: "CheckCircle2",
+      tone: "emerald",
+      sub: "aprobadas o cerradas"
+    }
+  )), /* @__PURE__ */ React.createElement(
+    TaskRoomWorkspace,
+    {
+      groups: moduleGroups,
+      canAdd: false,
+      renderTask: (task, stage) => {
+        const statusMeta = getModuleStatusMeta(task._status, moduleKey);
+        const statusOptions = getModuleStatusOptions(task._taskType);
+        const laneStatus = stage?.id || task._lane;
+        const isOverdue = isDateBeforeDateString(task._date, todayStr) && !["publicado", "cerrado"].includes(task._status);
+        const accentTone = statusMeta.tone === "rose" ? "red" : statusMeta.tone === "cyan" ? "blue" : statusMeta.tone;
+        const assigneeMeta = task._assignee || task._ownerText ? buildAssignee(
+          task._assignee || {
+            name: task._ownerText || "Sin asignar",
+            color: "slate"
+          }
+        ) : null;
+        return /* @__PURE__ */ React.createElement(
+          KanbanCard,
+          {
+            key: task._key,
+            onClick: () => {
+              if (["accountTask", "editingTask", "managementTask"].includes(task._taskType)) {
+                onTaskClick?.(task, task._taskType);
+              }
+            },
+            draggable: true,
+            onDragStart: (event) => {
+              setDraggedItemKey(task._key);
+              event.dataTransfer.effectAllowed = "move";
+              setTimeout(() => event.currentTarget.classList.add("drag-source-hidden"), 0);
+            },
+            onDragEnd: (event) => {
+              event.currentTarget.classList.remove("drag-source-hidden");
+              setDraggedItemKey("");
+            },
+            accentTone,
+            isOverdue,
+            client: task.clientName || task.client || "",
+            title: task._title,
+            notes: task._notes,
+            badges: [
+              { label: statusMeta.label, tone: statusMeta.tone },
+              {
+                label: task._taskType === "accountTask" ? "Account" : task._taskType === "editingTask" ? "Edici\xF3n" : "Evento",
+                tone: "slate"
+              }
+            ],
+            due: {
+              label: formatShortDate(task._date) + (isOverdue ? " \xB7 atrasada" : ""),
+              tone: isOverdue ? "red" : "slate"
+            },
+            assignee: assigneeMeta,
+            statusControl: {
+              value: task._status,
+              options: statusOptions,
+              onChange: (status) => handleStatusChange(task, status)
+            },
+            menuItems: [
+              laneStatus !== "start" && {
+                key: "move-start",
+                label: "Mover a Por iniciar",
+                icon: "ChevronLeft",
+                onClick: () => handleStatusChange(
+                  task,
+                  getModuleDropStatus(task._taskType, "start", task._status)
+                )
+              },
+              laneStatus !== "production" && {
+                key: "move-production",
+                label: "Mover a En producci\xF3n",
+                icon: "ArrowRight",
+                onClick: () => handleStatusChange(
+                  task,
+                  getModuleDropStatus(task._taskType, "production", task._status)
+                )
+              },
+              laneStatus !== "ready" && {
+                key: "move-ready",
+                label: "Mover a Listas",
+                icon: "Check",
+                onClick: () => handleStatusChange(
+                  task,
+                  getModuleDropStatus(task._taskType, "ready", task._status)
+                )
+              }
+            ].filter(Boolean)
+          }
+        );
+      },
+      onDragOver: (event) => {
+        event.preventDefault();
+        event.currentTarget.classList.add("drag-over");
+      },
+      onDragLeave: (event) => event.currentTarget.classList.remove("drag-over"),
+      onDrop: handleDropLane
+    }
+  ));
+};
+var PodcastView = ({
+  events = [],
+  accountTasks = [],
+  editingTasks = [],
+  managers = [],
+  editors = [],
+  currentUserProfile = null,
+  onAddTask,
+  canCreateTask = false,
+  onTaskClick,
+  onChangeAccountStatus,
+  onChangeEditingStatus,
+  onChangeEventStatus
+}) => /* @__PURE__ */ React.createElement(
+  UnifiedModuleKanbanView,
+  {
+    moduleKey: "podcast",
+    moduleTitle: "Podcast",
+    moduleEyebrow: "Contenido",
+    moduleDescription: "Seguimiento visual de episodios, grabaciones y publicaciones con el mismo flujo operativo de las salas principales.",
+    searchPlaceholder: "Buscar podcast...",
+    statIcon: "Microphone",
+    statTone: "rose",
+    events,
+    accountTasks,
+    editingTasks,
+    managers,
+    editors,
+    currentUserProfile,
+    onAddTask,
+    canCreateTask,
+    addButtonLabel: "Nueva Tarea",
+    onTaskClick,
+    onChangeAccountStatus,
+    onChangeEditingStatus,
+    onChangeEventStatus
+  }
+);
+var ProductionView = ({
+  events = [],
+  accountTasks = [],
+  editingTasks = [],
+  managers = [],
+  editors = [],
+  currentUserProfile = null,
+  onAddTask,
+  canCreateTask = false,
+  onTaskClick,
+  onChangeAccountStatus,
+  onChangeEditingStatus,
+  onChangeEventStatus
+}) => /* @__PURE__ */ React.createElement(
+  UnifiedModuleKanbanView,
+  {
+    moduleKey: "production",
+    moduleTitle: "Producci\xF3n",
+    moduleEyebrow: "Operaci\xF3n",
+    moduleDescription: "Vista consolidada del pipeline de producci\xF3n para detectar cuellos de botella y cerrar entregas con rapidez.",
+    searchPlaceholder: "Buscar production...",
+    statIcon: "MonitorPlay",
+    statTone: "cyan",
+    events,
+    accountTasks,
+    editingTasks,
+    managers,
+    editors,
+    currentUserProfile,
+    onAddTask,
+    canCreateTask,
+    addButtonLabel: "Nueva Tarea",
+    onTaskClick,
+    onChangeAccountStatus,
+    onChangeEditingStatus,
+    onChangeEventStatus
+  }
+);
 var ReportsView = ({
   accountTasks,
   editingTasks,

@@ -155,6 +155,21 @@ test('business collections require an authenticated session', async () => {
     assert.equal((await request('/api/collections/clients', { token: viewerToken })).status, 200);
 });
 
+test('users collection is readable but scoped to the caller without view_users', async () => {
+    const own = await request('/api/collections/users', { token: managerToken });
+    assert.equal(own.status, 200);
+    assert.deepEqual(own.payload.records.map((record) => record.id), ['manager']);
+    assert.equal(own.payload.records[0].role, 'manager');
+
+    const all = await request('/api/collections/users', { token: operationsToken });
+    assert.equal(all.status, 200);
+    assert.ok(all.payload.records.length > 1);
+
+    assert.equal((await request('/api/collections/users/manager', { token: managerToken })).status, 200);
+    assert.equal((await request('/api/collections/users/viewer', { token: managerToken })).status, 403);
+    assert.equal((await request('/api/collections/users')).status, 401);
+});
+
 test('POST cannot overwrite an existing record through a conflicting id', async () => {
     await createRecord({
         collectionName: 'management_tasks',

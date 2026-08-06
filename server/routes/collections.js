@@ -30,7 +30,11 @@ const AUTHENTICATED_READ_COLLECTIONS = new Set([
     'editors',
     'account_tasks',
     'editing',
-    'management_tasks'
+    'management_tasks',
+    // `users` es lectura autenticada pero acotada: sin view_users cada quien
+    // solo recibe su propio registro. El cliente lo necesita para conocer su
+    // rol real; devolver 403 lo dejaba sin perfil y lo degradaba a viewer.
+    'users'
 ]);
 
 const ensureCollectionPermission = (req, action) => {
@@ -55,6 +59,9 @@ const PROFILE_SELF_FIELDS = new Set([
     'themeMode',
     'updatedAt'
 ]);
+
+// Sin view_users la coleccion `users` se recorta al propio registro.
+const mustScopeUsersToSelf = (userRecord) => !hasPermission(userRecord, 'view_users');
 
 const canUpdateOwnUser = (userRecord, existing = null) => {
     if (!existing) return false;
@@ -302,6 +309,13 @@ router.get('/_sync', asyncHandler(async (req, res) => {
         collections,
         limitCount: 500
     });
+    if (collections.includes('users') && mustScopeUsersToSelf(userRecord)) {
+        result.changes = result.changes.filter((change) => (
+            change.collectionName !== 'users'
+            || !change.record
+            || canUpdateOwnUser(userRecord, change.record)
+        ));
+    }
     if (collections.includes('client_chats') && !canManageChatGroups(userRecord)) {
         const access = await loadChatGroupAccess(userRecord);
         result.changes = result.changes.filter((change) => (
@@ -332,6 +346,10 @@ router.get('/:collectionName', asyncHandler(async (req, res) => {
         if (req.query.limit) records = records.slice(0, Number(req.query.limit));
     }
 
+    if (collectionName === 'users' && mustScopeUsersToSelf(userRecord)) {
+        records = records.filter((record) => canUpdateOwnUser(userRecord, record));
+    }
+
     res.json({ records });
 }));
 
@@ -343,6 +361,9 @@ router.get('/:collectionName/:recordId', asyncHandler(async (req, res) => {
     }
     if (collectionName === 'client_chats') {
         await ensureChatClientAccess(userRecord, record.clientId, { allowOversight: true });
+    }
+    if (collectionName === 'users' && mustScopeUsersToSelf(userRecord) && !canUpdateOwnUser(userRecord, record)) {
+        throw createHttpError(403, 'No tienes permisos para esta accion.', 'auth/insufficient-permission');
     }
     res.json({ record });
 }));

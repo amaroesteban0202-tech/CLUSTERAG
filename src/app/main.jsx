@@ -3266,6 +3266,9 @@ function App() {
       hasSeededManagementDirectory
     )
       return;
+    // Sin manage_users la lista de usuarios llega acotada al propio registro:
+    // "faltarian" todos los demas y cada intento seria un 403 inutil.
+    if (!userHasPermission(currentUserProfile, "manage_users")) return;
     const existingKeys = new Set(
       appUsers
         .map((item) => item.managementKey || getManagementDirectoryKey(item))
@@ -3304,6 +3307,7 @@ function App() {
     user,
     authEmail,
     currentUserProfile?.isAnonymous,
+    currentUserProfile?.role,
     profileBlocked,
     usersLoaded,
     appUsers,
@@ -3543,6 +3547,11 @@ function App() {
           normalizeNameKey(user.displayName || authEmail),
     );
     const existing = existingByUid || existingByEmail || matchByName;
+    // El backend ya sincroniza el perfil en cada login (ensureAuthUserRecord) y
+    // descarta rol/authUid/verificacion/vinculos si quien escribe no administra
+    // usuarios. Reintentarlos en cada snapshot dejaba este efecto escribiendo en
+    // bucle (cientos de miles de writes al dia por persona).
+    if (existing && !userHasPermission(existing, "manage_users")) return;
     const targetId =
       existing?.id ||
       `auth_${user.uid || normalizeNameKey(authEmail).replace(/[^a-z0-9]+/g, "_")}`;
