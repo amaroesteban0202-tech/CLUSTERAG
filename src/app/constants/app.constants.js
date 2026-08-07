@@ -107,6 +107,7 @@ export const ROLE_DEFINITIONS = {
             'view_general_calendar',
             'view_calendar',
             'create_calendar_events',
+            'manage_calendar',
             'view_client_chat',
             'send_client_chat'
         ]
@@ -132,6 +133,7 @@ export const ROLE_DEFINITIONS = {
             'view_general_calendar',
             'view_calendar',
             'create_calendar_events',
+            'manage_calendar',
             'view_client_chat',
             'send_client_chat'
         ]
@@ -153,6 +155,7 @@ export const ROLE_DEFINITIONS = {
             'view_general_calendar',
             'view_calendar',
             'create_calendar_events',
+            'manage_calendar',
             'view_client_chat',
             'send_client_chat'
         ]

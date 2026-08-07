@@ -43,6 +43,7 @@ let baseUrl;
 let viewerToken;
 let operationsToken;
 let managerToken;
+let editorToken;
 let superAdminToken;
 
 const createToken = (userId) => signPayload({
@@ -112,9 +113,29 @@ before(async () => {
         }
     });
     await createRecord({
+        collectionName: 'users',
+        recordId: 'editor',
+        payload: {
+            name: 'Editor Test',
+            email: 'editor@example.test',
+            role: 'editor',
+            isActive: true
+        }
+    });
+    await createRecord({
         collectionName: 'clients',
         recordId: 'client-1',
         payload: { name: 'Cliente de prueba' }
+    });
+    await createRecord({
+        collectionName: 'events',
+        recordId: 'event-production-1',
+        payload: {
+            title: 'Produccion de prueba',
+            type: 'production',
+            date: '2026-08-06',
+            status: 'programado'
+        }
     });
     await createRecord({
         collectionName: 'client_chats',
@@ -141,6 +162,7 @@ before(async () => {
     viewerToken = createToken('viewer');
     operationsToken = createToken('operations');
     managerToken = createToken('manager');
+    editorToken = createToken('editor');
     superAdminToken = createToken('super-admin');
 });
 
@@ -153,6 +175,35 @@ after(async () => {
 test('business collections require an authenticated session', async () => {
     assert.equal((await request('/api/collections/clients')).status, 401);
     assert.equal((await request('/api/collections/clients', { token: viewerToken })).status, 200);
+});
+
+test('quien puede crear eventos tambien puede moverlos en Produccion', async () => {
+    // Las tarjetas de Produccion/Podcast son eventos: crear sin poder actualizar
+    // dejaba al equipo con tarjetas inmovibles.
+    for (const token of [editorToken, managerToken, operationsToken]) {
+        assert.equal((await request('/api/collections/events', {
+            token,
+            method: 'POST',
+            body: { data: { title: 'Rodaje', type: 'production', date: '2026-08-06', status: 'programado' } }
+        })).status, 201);
+        assert.equal((await request('/api/collections/events/event-production-1', {
+            token,
+            method: 'PATCH',
+            body: { data: { status: 'publicado' } }
+        })).status, 200);
+    }
+
+    // El viewer sigue solo mirando: no crea ni mueve eventos.
+    assert.equal((await request('/api/collections/events', {
+        token: viewerToken,
+        method: 'POST',
+        body: { data: { title: 'Rodaje', type: 'production', date: '2026-08-06' } }
+    })).status, 403);
+    assert.equal((await request('/api/collections/events/event-production-1', {
+        token: viewerToken,
+        method: 'PATCH',
+        body: { data: { status: 'publicado' } }
+    })).status, 403);
 });
 
 test('users collection is readable but scoped to the caller without view_users', async () => {
