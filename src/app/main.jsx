@@ -2590,6 +2590,10 @@ function App() {
   const appUserById = new Map(appUsers.map((item) => [item.id, item]));
   const managementMemberCandidates = [
     ...appUsers.filter((item) => item.isActive !== false),
+    // `users` se entrega acotado al perfil propio para roles sin view_users.
+    // El directorio del chat contiene los ids reales y el perfil publico minimo
+    // del equipo, de modo que esas personas tambien puedan recibir tareas.
+    ...chatDirectory,
     ...managers.map((item) => {
       const linkedUser = item.userId ? appUserById.get(item.userId) : null;
       return {
