@@ -1,33 +1,37 @@
 import { db } from './knex.js';
 
 const MIGRATION_LOCK_ID = 1_248_711_903;
+const MIGRATION_LOCK_TIMEOUT_MS = 5_000;
+const MIGRATION_IDLE_TRANSACTION_TIMEOUT_MS = 10_000;
 
 const withMigrationLock = async (callback) => {
-    if (db.client.config.client !== 'pg') return callback();
+    if (db.client.config.client !== 'pg') return callback(db);
 
-    const connection = await db.client.acquireConnection();
-    try {
-        await db.raw('SELECT pg_advisory_lock(?)', [MIGRATION_LOCK_ID]).connection(connection);
-        return await callback();
-    } finally {
-        try {
-            await db.raw('SELECT pg_advisory_unlock(?)', [MIGRATION_LOCK_ID]).connection(connection);
-        } finally {
-            await db.client.releaseConnection(connection);
-        }
-    }
+    // Los candados de sesion (pg_advisory_lock) pueden sobrevivir a una
+    // invocacion serverless cuando PgBouncer conserva la conexion del backend.
+    // El candado transaccional se libera por PostgreSQL al cerrar la transaccion,
+    // incluso si Vercel interrumpe la funcion. Los limites evitan volver a caer
+    // en FUNCTION_INVOCATION_TIMEOUT si otra instancia esta migrando.
+    return db.transaction(async (trx) => {
+        await trx.raw(`SET LOCAL lock_timeout = '${MIGRATION_LOCK_TIMEOUT_MS}ms'`);
+        await trx.raw(
+            `SET LOCAL idle_in_transaction_session_timeout = '${MIGRATION_IDLE_TRANSACTION_TIMEOUT_MS}ms'`
+        );
+        await trx.raw('SELECT pg_advisory_xact_lock(?)', [MIGRATION_LOCK_ID]);
+        return callback(trx);
+    });
 };
 
-const ensureSchemaMigrationsTable = async () => {
-    if (await db.schema.hasTable('schema_migrations')) return;
-    await db.schema.createTable('schema_migrations', (table) => {
+const ensureSchemaMigrationsTable = async (database) => {
+    if (await database.schema.hasTable('schema_migrations')) return;
+    await database.schema.createTable('schema_migrations', (table) => {
         table.string('version', 120).primary();
         table.string('applied_at', 40).notNullable();
     });
 };
 
-const markMigration = async (version) => {
-    await db('schema_migrations')
+const markMigration = async (database, version) => {
+    await database('schema_migrations')
         .insert({
             version,
             applied_at: new Date().toISOString()
@@ -36,18 +40,18 @@ const markMigration = async (version) => {
         .ignore();
 };
 
-const runMigration = async (version, migration) => {
-    const applied = await db('schema_migrations').where({ version }).first();
+const runMigration = async (database, version, migration) => {
+    const applied = await database('schema_migrations').where({ version }).first();
     if (applied) return;
     const completed = await migration();
     if (completed === false) return;
-    await markMigration(version);
+    await markMigration(database, version);
 };
 
-const ensureAppRecordsTable = async () => {
-    const exists = await db.schema.hasTable('app_records');
+const ensureAppRecordsTable = async (database) => {
+    const exists = await database.schema.hasTable('app_records');
     if (!exists) {
-        await db.schema.createTable('app_records', (table) => {
+        await database.schema.createTable('app_records', (table) => {
             table.increments('id').primary();
             table.string('collection_name', 120).notNullable();
             table.string('record_id', 120).notNullable();
@@ -73,18 +77,18 @@ const ensureAppRecordsTable = async () => {
     }
 
     const addColumn = async (name, build) => {
-        if (await db.schema.hasColumn('app_records', name)) return;
-        await db.schema.table('app_records', build);
+        if (await database.schema.hasColumn('app_records', name)) return;
+        await database.schema.table('app_records', build);
     };
 
     await addColumn('date_index', (table) => table.string('date_index', 20).nullable());
     await addColumn('status_index', (table) => table.string('status_index', 80).nullable());
 };
 
-const ensureRecordChangesTable = async () => {
-    if (await db.schema.hasTable('record_changes')) return;
+const ensureRecordChangesTable = async (database) => {
+    if (await database.schema.hasTable('record_changes')) return;
 
-    await db.schema.createTable('record_changes', (table) => {
+    await database.schema.createTable('record_changes', (table) => {
         table.bigIncrements('id').primary();
         table.string('collection_name', 120).notNullable();
         table.string('record_id', 120).notNullable();
@@ -94,11 +98,11 @@ const ensureRecordChangesTable = async () => {
     });
 };
 
-const ensureAuthSessionsTable = async () => {
-    const exists = await db.schema.hasTable('auth_sessions');
+const ensureAuthSessionsTable = async (database) => {
+    const exists = await database.schema.hasTable('auth_sessions');
     if (exists) return;
 
-    await db.schema.createTable('auth_sessions', (table) => {
+    await database.schema.createTable('auth_sessions', (table) => {
         table.string('session_id', 140).primary();
         table.string('user_record_id', 120).notNullable();
         table.string('provider', 120).notNullable().defaultTo('password');
@@ -112,10 +116,10 @@ const ensureAuthSessionsTable = async () => {
     });
 };
 
-const ensureOauthStatesTable = async () => {
-    const exists = await db.schema.hasTable('auth_oauth_states');
+const ensureOauthStatesTable = async (database) => {
+    const exists = await database.schema.hasTable('auth_oauth_states');
     if (!exists) {
-        await db.schema.createTable('auth_oauth_states', (table) => {
+        await database.schema.createTable('auth_oauth_states', (table) => {
             table.string('state', 140).primary();
             table.boolean('popup').notNullable().defaultTo(false);
             table.text('redirect_after').nullable();
@@ -126,22 +130,22 @@ const ensureOauthStatesTable = async () => {
         return;
     }
 
-    if (!await db.schema.hasColumn('auth_oauth_states', 'result_token')) {
-        await db.schema.table('auth_oauth_states', (table) => {
+    if (!await database.schema.hasColumn('auth_oauth_states', 'result_token')) {
+        await database.schema.table('auth_oauth_states', (table) => {
             table.text('result_token').nullable();
         });
     }
 };
 
-const ensureIdentityUniqueIndexes = async () => {
-    const duplicateEmail = await db('app_records')
+const ensureIdentityUniqueIndexes = async (database) => {
+    const duplicateEmail = await database('app_records')
         .select('email_index')
         .where({ collection_name: 'users' })
         .whereNotNull('email_index')
         .groupBy('email_index')
         .havingRaw('COUNT(*) > 1')
         .first();
-    const duplicateAuthUid = await db('app_records')
+    const duplicateAuthUid = await database('app_records')
         .select('auth_uid_index')
         .where({ collection_name: 'users' })
         .whereNotNull('auth_uid_index')
@@ -154,14 +158,14 @@ const ensureIdentityUniqueIndexes = async () => {
         return false;
     }
 
-    const client = db.client.config.client;
+    const client = database.client.config.client;
     if (client === 'pg') {
-        await db.raw(`
+        await database.raw(`
             CREATE UNIQUE INDEX IF NOT EXISTS app_records_users_email_unique
             ON app_records (email_index)
             WHERE collection_name = 'users' AND email_index IS NOT NULL
         `);
-        await db.raw(`
+        await database.raw(`
             CREATE UNIQUE INDEX IF NOT EXISTS app_records_users_auth_uid_unique
             ON app_records (auth_uid_index)
             WHERE collection_name = 'users' AND auth_uid_index IS NOT NULL AND auth_uid_index <> ''
@@ -169,12 +173,12 @@ const ensureIdentityUniqueIndexes = async () => {
         return true;
     }
     if (client === 'sqlite3') {
-        await db.raw(`
+        await database.raw(`
             CREATE UNIQUE INDEX IF NOT EXISTS app_records_users_email_unique
             ON app_records (email_index)
             WHERE collection_name = 'users' AND email_index IS NOT NULL
         `);
-        await db.raw(`
+        await database.raw(`
             CREATE UNIQUE INDEX IF NOT EXISTS app_records_users_auth_uid_unique
             ON app_records (auth_uid_index)
             WHERE collection_name = 'users' AND auth_uid_index IS NOT NULL AND auth_uid_index <> ''
@@ -185,12 +189,12 @@ const ensureIdentityUniqueIndexes = async () => {
 };
 
 export const migrateDatabase = async () => {
-    await withMigrationLock(async () => {
-        await ensureSchemaMigrationsTable();
-        await runMigration('001_app_records', ensureAppRecordsTable);
-        await runMigration('002_record_changes', ensureRecordChangesTable);
-        await runMigration('003_auth_sessions', ensureAuthSessionsTable);
-        await runMigration('004_oauth_result_token', ensureOauthStatesTable);
-        await runMigration('005_unique_user_identity', ensureIdentityUniqueIndexes);
+    await withMigrationLock(async (database) => {
+        await ensureSchemaMigrationsTable(database);
+        await runMigration(database, '001_app_records', () => ensureAppRecordsTable(database));
+        await runMigration(database, '002_record_changes', () => ensureRecordChangesTable(database));
+        await runMigration(database, '003_auth_sessions', () => ensureAuthSessionsTable(database));
+        await runMigration(database, '004_oauth_result_token', () => ensureOauthStatesTable(database));
+        await runMigration(database, '005_unique_user_identity', () => ensureIdentityUniqueIndexes(database));
     });
 };
