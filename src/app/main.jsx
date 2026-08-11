@@ -1929,6 +1929,9 @@ function App() {
   const [hasBackfilledIdentityLinks, setHasBackfilledIdentityLinks] =
     useState(false);
   const [usersLoaded, setUsersLoaded] = useState(false);
+  // Un fallo de la API (504 por arranque en frio, red caida) no es "no hay
+  // datos". Sin esta bandera la app se dibujaba vacia y sin avisar de nada.
+  const [dataLoadFailed, setDataLoadFailed] = useState(false);
   const isReconcilingUsersRef = useRef(false);
   const isBackfillingIdentityLinksRef = useRef(false);
   const isFlushingPendingTaskStatusesRef = useRef(false);
@@ -2969,7 +2972,10 @@ function App() {
 
   useEffect(() => {
     if (!user || !db) return;
-    const errHandler = (err) => console.error("Error de Firestore:", err);
+    const errHandler = (err) => {
+      console.error("Error de Firestore:", err);
+      setDataLoadFailed(true);
+    };
 
     const unsubs = [
       onSnapshot(
@@ -3074,6 +3080,7 @@ function App() {
             })),
           );
           setUsersLoaded(true);
+          setDataLoadFailed(false);
         },
         errHandler,
       ),
@@ -4802,7 +4809,10 @@ function App() {
   const isAdminConfigVisible = ["super_admin", "operations"].includes(
     currentUserProfile?.role,
   );
+  // "Espacio recien creado" solo si la API contesto. Si no cargo, esta pantalla
+  // decia "Prepara ClusterAG para operar" a un equipo con datos de meses.
   const isFirstTimeWorkspace =
+    usersLoaded &&
     clients.length === 0 &&
     accountTasks.length === 0 &&
     editingTasks.length === 0 &&
@@ -4812,7 +4822,14 @@ function App() {
       ? "Cuenta inactiva"
       : !authEmail
         ? "Sin sesión iniciada"
-        : currentRoleMeta.label;
+        : // Mientras el perfil no se resuelve el rol es un marcador de posicion,
+          // no un hecho: mostrarlo hacia que un fallo de red pareciera una
+          // degradacion de permisos.
+          !usersLoaded
+          ? dataLoadFailed
+            ? "Sin conexión con el servidor"
+            : "Cargando perfil…"
+          : currentRoleMeta.label;
 
   let allActivities = [
     ...events.map((e) => ({

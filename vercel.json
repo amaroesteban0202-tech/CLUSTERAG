@@ -17,16 +17,20 @@
   ],
   "functions": {
     "api/health.js": {
-      "includeFiles": "server/**"
+      "includeFiles": "server/**",
+      "maxDuration": 30
     },
     "api/auth-entry.js": {
-      "includeFiles": "server/**"
+      "includeFiles": "server/**",
+      "maxDuration": 30
     },
     "api/collections-entry.js": {
-      "includeFiles": "server/**"
+      "includeFiles": "server/**",
+      "maxDuration": 30
     },
     "api/cron-entry.js": {
-      "includeFiles": "server/**"
+      "includeFiles": "server/**",
+      "maxDuration": 60
     }
   },
   "rewrites": [

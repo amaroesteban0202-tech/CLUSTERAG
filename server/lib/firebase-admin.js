@@ -108,6 +108,13 @@ export const verifyFirebaseIdToken = async (idToken = '') => {
         return await getAuth(app).verifyIdToken(normalizedToken);
     } catch (error) {
         adminError = error;
+        // Se registra aqui y no solo al fallar el respaldo: cuando Identity
+        // Toolkit valida bien, el login funciona y el fallo de Admin quedaba
+        // invisible. Sin esto no hay forma de saber por que Admin no verifica.
+        console.warn('[auth:firebase-admin-fallback]', {
+            code: String(error?.code || ''),
+            message: String(error?.message || '')
+        });
     }
 
     try {

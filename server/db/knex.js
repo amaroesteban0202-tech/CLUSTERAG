@@ -15,13 +15,26 @@ if (env.databaseClient === 'sqlite3') {
     }
 }
 
+// Los tiempos de espera importan en serverless: si Neon tarda en despertar o el
+// pooler esta saturado, el default de knex (acquireConnectionTimeout 60s) deja
+// la peticion colgada hasta que Vercel mata la funcion con
+// FUNCTION_INVOCATION_TIMEOUT (504). Un 504 no lleva cuerpo JSON, asi que el
+// cliente no puede distinguirlo de "no hay datos" y dibuja la app vacia. Con
+// 8s falla dentro del limite de la funcion y devuelve un error de verdad.
+const CONNECTION_TIMEOUT_MS = 8000;
+
 const config = env.databaseClient === 'pg'
     ? {
         client: 'pg',
-        connection: env.databaseUrl,
+        connection: {
+            connectionString: env.databaseUrl,
+            connectionTimeoutMillis: CONNECTION_TIMEOUT_MS
+        },
+        acquireConnectionTimeout: CONNECTION_TIMEOUT_MS,
         pool: {
             min: 0,
-            max: 2
+            max: 2,
+            acquireTimeoutMillis: CONNECTION_TIMEOUT_MS
         }
     }
     : {
