@@ -7573,6 +7573,7 @@ function App() {
               onAddTask={handleAddPodcastTask}
               canCreateTask={canCreatePodcastTasks}
               onTaskClick={openTaskDetail}
+              onEventClick={(item) => handleEventClick(item, "event")}
               onChangeAccountStatus={changeAccountTaskStatus}
               onChangeEditingStatus={changeEditingTaskStatus}
               onChangeEventStatus={changeModuleEventStatus}
@@ -7589,6 +7590,7 @@ function App() {
               onAddTask={handleAddProductionTask}
               canCreateTask={canCreateProductionTasks}
               onTaskClick={openTaskDetail}
+              onEventClick={(item) => handleEventClick(item, "event")}
               onChangeAccountStatus={changeAccountTaskStatus}
               onChangeEditingStatus={changeEditingTaskStatus}
               onChangeEventStatus={changeModuleEventStatus}
@@ -19139,6 +19141,7 @@ const Modal = ({
       if (type === "event")
         actions.updateEvent(data.id, {
           title: buildEventTitle(fd.title, fd.time),
+          date: fd.date || data.date || "",
         });
       if (type === "accountTask")
         actions.updateAccountTask(data.id, {
@@ -19435,6 +19438,17 @@ const Modal = ({
                   required
                   autoFocus
                 />
+                {/* Al crear, el dia lo fija el calendario; al editar es la unica
+                    forma de reprogramar la produccion a otra fecha. */}
+                {isEdit && (
+                  <Input
+                    name="date"
+                    type="date"
+                    label="Fecha"
+                    defaultValue={data?.date || ""}
+                    required
+                  />
+                )}
                 <Input
                   name="time"
                   type="time"
@@ -20016,6 +20030,7 @@ const UnifiedModuleKanbanView = ({
   onAddTask,
   canCreateTask = false,
   onTaskClick,
+  onEventClick,
   onChangeAccountStatus,
   onChangeEditingStatus,
   onChangeEventStatus,
@@ -20492,6 +20507,10 @@ const UnifiedModuleKanbanView = ({
             <KanbanCard
               key={task._key}
               onClick={() => {
+                if (task._taskType === "event") {
+                  onEventClick?.(task);
+                  return;
+                }
                 if (["accountTask", "editingTask", "managementTask"].includes(task._taskType)) {
                   onTaskClick?.(task, task._taskType);
                 }
@@ -20589,6 +20608,7 @@ const PodcastView = ({
   onAddTask,
   canCreateTask = false,
   onTaskClick,
+  onEventClick,
   onChangeAccountStatus,
   onChangeEditingStatus,
   onChangeEventStatus,
@@ -20611,6 +20631,7 @@ const PodcastView = ({
     canCreateTask={canCreateTask}
     addButtonLabel="Nueva Tarea"
     onTaskClick={onTaskClick}
+    onEventClick={onEventClick}
     onChangeAccountStatus={onChangeAccountStatus}
     onChangeEditingStatus={onChangeEditingStatus}
     onChangeEventStatus={onChangeEventStatus}
@@ -20627,6 +20648,7 @@ const ProductionView = ({
   onAddTask,
   canCreateTask = false,
   onTaskClick,
+  onEventClick,
   onChangeAccountStatus,
   onChangeEditingStatus,
   onChangeEventStatus,
@@ -20649,6 +20671,7 @@ const ProductionView = ({
     canCreateTask={canCreateTask}
     addButtonLabel="Nueva Tarea"
     onTaskClick={onTaskClick}
+    onEventClick={onEventClick}
     onChangeAccountStatus={onChangeAccountStatus}
     onChangeEditingStatus={onChangeEditingStatus}
     onChangeEventStatus={onChangeEventStatus}

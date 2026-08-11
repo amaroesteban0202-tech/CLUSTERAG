@@ -6009,6 +6009,7 @@ function App() {
           onAddTask: handleAddPodcastTask,
           canCreateTask: canCreatePodcastTasks,
           onTaskClick: openTaskDetail,
+          onEventClick: (item) => handleEventClick(item, "event"),
           onChangeAccountStatus: changeAccountTaskStatus,
           onChangeEditingStatus: changeEditingTaskStatus,
           onChangeEventStatus: changeModuleEventStatus
@@ -6026,6 +6027,7 @@ function App() {
           onAddTask: handleAddProductionTask,
           canCreateTask: canCreateProductionTasks,
           onTaskClick: openTaskDetail,
+          onEventClick: (item) => handleEventClick(item, "event"),
           onChangeAccountStatus: changeAccountTaskStatus,
           onChangeEditingStatus: changeEditingTaskStatus,
           onChangeEventStatus: changeModuleEventStatus
@@ -14298,7 +14300,8 @@ var Modal = ({
         });
       if (type === "event")
         actions.updateEvent(data.id, {
-          title: buildEventTitle(fd.title, fd.time)
+          title: buildEventTitle(fd.title, fd.time),
+          date: fd.date || data.date || ""
         });
       if (type === "accountTask")
         actions.updateAccountTask(data.id, {
@@ -14571,6 +14574,15 @@ var Modal = ({
           defaultValue: eventDefaultTitle,
           required: true,
           autoFocus: true
+        }
+      ), isEdit && /* @__PURE__ */ React.createElement(
+        Input,
+        {
+          name: "date",
+          type: "date",
+          label: "Fecha",
+          defaultValue: data?.date || "",
+          required: true
         }
       ), /* @__PURE__ */ React.createElement(
         Input,
@@ -15061,6 +15073,7 @@ var UnifiedModuleKanbanView = ({
   onAddTask,
   canCreateTask = false,
   onTaskClick,
+  onEventClick,
   onChangeAccountStatus,
   onChangeEditingStatus,
   onChangeEventStatus
@@ -15438,6 +15451,10 @@ var UnifiedModuleKanbanView = ({
           {
             key: task._key,
             onClick: () => {
+              if (task._taskType === "event") {
+                onEventClick?.(task);
+                return;
+              }
               if (["accountTask", "editingTask", "managementTask"].includes(task._taskType)) {
                 onTaskClick?.(task, task._taskType);
               }
@@ -15525,6 +15542,7 @@ var PodcastView = ({
   onAddTask,
   canCreateTask = false,
   onTaskClick,
+  onEventClick,
   onChangeAccountStatus,
   onChangeEditingStatus,
   onChangeEventStatus
@@ -15548,6 +15566,7 @@ var PodcastView = ({
     canCreateTask,
     addButtonLabel: "Nueva Tarea",
     onTaskClick,
+    onEventClick,
     onChangeAccountStatus,
     onChangeEditingStatus,
     onChangeEventStatus
@@ -15563,6 +15582,7 @@ var ProductionView = ({
   onAddTask,
   canCreateTask = false,
   onTaskClick,
+  onEventClick,
   onChangeAccountStatus,
   onChangeEditingStatus,
   onChangeEventStatus
@@ -15586,6 +15606,7 @@ var ProductionView = ({
     canCreateTask,
     addButtonLabel: "Nueva Tarea",
     onTaskClick,
+    onEventClick,
     onChangeAccountStatus,
     onChangeEditingStatus,
     onChangeEventStatus
