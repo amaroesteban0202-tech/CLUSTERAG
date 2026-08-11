@@ -168,6 +168,10 @@ router.post('/firebase/session', asyncHandler(async (req, res) => {
     try {
         decodedToken = await verifyFirebaseIdToken(idToken);
     } catch (error) {
+        console.warn('[auth:firebase-token]', {
+            code: String(error?.code || ''),
+            adminCode: String(error?.adminCode || '')
+        });
         throw createHttpError(401, 'El token de Firebase no es valido.', 'auth/invalid-id-token');
     }
 

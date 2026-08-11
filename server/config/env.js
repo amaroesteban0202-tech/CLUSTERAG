@@ -72,6 +72,11 @@ const normalizePem = (raw = '') => {
 };
 
 const defaultFirebaseProjectId = process.env.FIREBASE_PROJECT_ID || 'cluster-41f73';
+// La API key web de Firebase es un identificador publico del proyecto (tambien
+// se entrega en app-config.js). Mantener el mismo valor por defecto permite que
+// el backend valide tokens via Identity Toolkit cuando Firebase Admin no tiene
+// credenciales de servicio disponibles en un runtime serverless.
+const defaultFirebaseApiKey = process.env.FIREBASE_API_KEY || 'AIzaSyBAnY2ihWlow17H-TjUKgueWpw2MqYpzUc';
 const databaseUrl = process.env.DATABASE_URL
     || process.env.POSTGRES_URL
     || process.env.POSTGRES_PRISMA_URL
@@ -128,7 +133,7 @@ export const env = {
         callbackUrl: process.env.GOOGLE_CALLBACK_URL || ''
     },
     firebase: {
-        apiKey: process.env.FIREBASE_API_KEY || '',
+        apiKey: defaultFirebaseApiKey,
         authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${defaultFirebaseProjectId}.firebaseapp.com`,
         projectId: defaultFirebaseProjectId,
         storageBucket: process.env.FIREBASE_STORAGE_BUCKET || `${defaultFirebaseProjectId}.appspot.com`,
