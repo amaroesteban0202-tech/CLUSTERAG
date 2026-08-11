@@ -26,6 +26,7 @@ export const buildChatDirectory = ({ users = [], managers = [], editors = [] } =
         const recordId = String(record?.id || '').trim();
         const email = normalizeEmail(record?.email);
         const name = String(record?.name || email || '').trim();
+        const canReceiveCallsOutsideGroups = canManageChatGroups(record);
         if (!recordId && !email) return;
 
         let person = record?.userId
@@ -34,10 +35,16 @@ export const buildChatDirectory = ({ users = [], managers = [], editors = [] } =
         if (!person && email) person = personByEmail.get(email);
         if (!person) {
             const id = recordId || email;
-            person = { id, name: name || email, email };
+            person = {
+                id,
+                name: name || email,
+                email,
+                canReceiveCallsOutsideGroups
+            };
             people.push(person);
             if (email) personByEmail.set(email, person);
         }
+        if (canReceiveCallsOutsideGroups) person.canReceiveCallsOutsideGroups = true;
         if (recordId) personById.set(recordId, person);
         if (record?.linkedManagerId) personById.set(String(record.linkedManagerId), person);
         if (record?.linkedEditorId) personById.set(String(record.linkedEditorId), person);

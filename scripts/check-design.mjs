@@ -5,20 +5,22 @@ import process from "node:process";
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const app = read("src/app/main.jsx");
+const boot = read("src/app/boot.js");
 const css = read("src/styles/main.css");
 const html = read("index.html");
 const tailwind = read("tailwind.config.cjs");
 const collectionRoutes = read("server/routes/collections.js");
+const packageJson = JSON.parse(read("package.json"));
 
 const checks = [
-  ["Phosphor icons", app.includes("@phosphor-icons/react") && html.includes("@phosphor-icons/react")],
+  ["Phosphor icons", app.includes("@phosphor-icons/react") && Boolean(packageJson.dependencies?.["@phosphor-icons/react"])],
   ["Newsreader editorial type", css.includes('font-family: "Newsreader"') && html.includes("Newsreader")],
   ["botanical light palette", css.includes("--canvas: #f4f6f1") && css.includes("--primary: #5e7415")],
   ["forest dark palette", css.includes("--canvas: #0e120f") && css.includes("--primary: #c3e15b")],
   ["five user palettes", ["botanical", "ocean", "plum", "cobalt", "sand"].every((palette) => app.includes(`id: "${palette}"`))],
   ["palette CSS themes", ["ocean", "plum", "cobalt", "sand"].every((palette) => css.includes(`data-palette="${palette}"`))],
-  ["palette preference starts before render", html.includes("cluster_palette") && html.includes("dataset.palette")],
-  ["legacy clay preference migrates", html.includes("storedPalette === 'clay' ? 'cobalt'") && app.includes('clay: "cobalt"')],
+  ["palette preference starts before render", html.includes("/src/app/boot.js") && boot.includes("cluster_palette") && boot.includes("dataset.palette")],
+  ["legacy clay preference migrates", boot.includes("storedPalette === 'clay' ? 'cobalt'") && app.includes('clay: "cobalt"')],
   ["profile preference is persisted", collectionRoutes.includes("'themePalette'") && collectionRoutes.includes("'themeMode'")],
   ["semantic surfaces", css.includes("--surface-raised") && css.includes("--border-strong") && css.includes("--primary-soft")],
   ["semantic status colors", css.includes("--status-red-bg") && css.includes("--status-blue-bg") && css.includes("--status-green-bg") && css.includes("--status-yellow-bg")],
@@ -52,7 +54,7 @@ const checks = [
   ["animated vector login", app.includes("LoginVectorArtwork") && app.includes("login-vector-orbit") && css.includes("@keyframes loginNodeFloat")],
   ["login respects reduced motion", css.includes("prefers-reduced-motion") && css.includes("animation-duration: 0.01ms")],
   ["login prioritizes form on mobile", app.includes("login-form-panel order-1") && app.includes("login-art-panel order-2")],
-  ["theme choice survives reloads", app.includes('localStorage.setItem("cluster_theme", isDark ? "dark" : "light")') && html.includes("2026-07-performance-focus")],
+  ["theme choice survives reloads", app.includes('localStorage.setItem("cluster_theme", isDark ? "dark" : "light")') && boot.includes("2026-07-performance-focus")],
   ["company logo asset", fs.existsSync(path.join(root, "src/app/assets/cluster-symbol.webp")) && app.includes("cluster-symbol.webp")],
   ["two-font system", css.includes('font-family: Arial, sans-serif') && css.includes('font-family: "Newsreader"') && !/SF Mono|Geist Mono|Consolas/.test(css)],
   ["no gradient source styles", !/\b(?:linear|radial)-gradient\b|\bbg-gradient-/i.test(`${app}\n${css}`)],

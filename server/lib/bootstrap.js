@@ -5,15 +5,7 @@ import { normalizeEmail, normalizeNameKey, slugifyKey } from './text.js';
 
 const buildManagementRecordId = (name = '') => `management_${slugifyKey(name) || 'member'}`;
 
-const FORCED_MANAGEMENT_ROLES_BY_EMAIL = {
-    'estebanantonio02@gmail.com': 'operations',
-    'marialaguna2117@gmail.com': 'operations'
-};
-
-const getSeedManagementRole = (member = {}) => {
-    const forcedRole = FORCED_MANAGEMENT_ROLES_BY_EMAIL[normalizeEmail(member.email)];
-    return forcedRole || member.role || 'management';
-};
+const getSeedManagementRole = (member = {}) => member.role || 'management';
 
 const buildVerificationState = (verified = false) => verified
     ? {
@@ -28,6 +20,24 @@ const buildVerificationState = (verified = false) => verified
         requestedAt: nowIso(),
         lastError: ''
     };
+
+const valuesMatch = (existing = {}, desired = {}) => Object.entries(desired).every(
+    ([key, value]) => JSON.stringify(existing?.[key]) === JSON.stringify(value)
+);
+
+const upsertBootstrapUser = async ({ existing, recordId, payload, stamp }) => {
+    if (existing && valuesMatch(existing, payload)) return existing;
+    return upsertRecord({
+        collectionName: 'users',
+        recordId: existing?.id || recordId,
+        merge: true,
+        payload: {
+            ...payload,
+            createdAt: existing?.createdAt || stamp,
+            updatedAt: stamp
+        }
+    });
+};
 
 export const resolveBootstrapRole = (email = '') => {
     const normalizedEmail = normalizeEmail(email);
@@ -57,14 +67,17 @@ export const ensureBootstrapData = async () => {
         const email = normalizeEmail(member.email);
         const managementKey = normalizeNameKey(member.name);
         const existing = await findFirstRecordByEmail({ collectionName: 'users', email });
-        await upsertRecord({
-            collectionName: 'users',
-            recordId: existing?.id || buildManagementRecordId(member.name),
-            merge: true,
+        const role = env.seedSuperAdminEmails.includes(email)
+            ? 'super_admin'
+            : getSeedManagementRole(member);
+        await upsertBootstrapUser({
+            existing,
+            recordId: buildManagementRecordId(member.name),
+            stamp,
             payload: {
                 name: member.name,
                 email,
-                role: getSeedManagementRole(member),
+                role,
                 managementKey,
                 isActive: true,
                 seeded: true,
@@ -72,9 +85,7 @@ export const ensureBootstrapData = async () => {
                 linkedManagerId: existing?.linkedManagerId || '',
                 linkedEditorId: existing?.linkedEditorId || '',
                 emailVerified: existing?.emailVerified === true,
-                emailVerification: existing?.emailVerification || buildVerificationState(false),
-                createdAt: existing?.createdAt || stamp,
-                updatedAt: stamp
+                emailVerification: existing?.emailVerification || buildVerificationState(false)
             }
         });
     }
@@ -83,10 +94,10 @@ export const ensureBootstrapData = async () => {
         const normalizedEmail = normalizeEmail(email);
         if (!normalizedEmail) continue;
         const existing = await findFirstRecordByEmail({ collectionName: 'users', email: normalizedEmail });
-        await upsertRecord({
-            collectionName: 'users',
-            recordId: existing?.id || `seed_${slugifyKey(normalizedEmail)}`,
-            merge: true,
+        await upsertBootstrapUser({
+            existing,
+            recordId: `seed_${slugifyKey(normalizedEmail)}`,
+            stamp,
             payload: {
                 name: existing?.name || normalizedEmail.split('@')[0],
                 email: normalizedEmail,
@@ -98,9 +109,7 @@ export const ensureBootstrapData = async () => {
                 linkedEditorId: existing?.linkedEditorId || '',
                 managementKey: existing?.managementKey || '',
                 emailVerified: existing?.emailVerified === true,
-                emailVerification: existing?.emailVerification || buildVerificationState(false),
-                createdAt: existing?.createdAt || stamp,
-                updatedAt: stamp
+                emailVerification: existing?.emailVerification || buildVerificationState(false)
             }
         });
     }

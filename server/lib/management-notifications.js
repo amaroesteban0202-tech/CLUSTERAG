@@ -1,6 +1,6 @@
 import { db } from '../db/knex.js';
 import { env } from '../config/env.js';
-import { listRecords, upsertRecord, getRecord } from './records.js';
+import { listRecords, upsertRecord } from './records.js';
 import { nowIso } from './time.js';
 import { sendManagementTaskReminderEmail } from './email.js';
 
@@ -58,10 +58,10 @@ const normalizeAssignee = (record = null) => (
     record?.email ? { id: record.id, name: record.name || '', email: record.email } : null
 );
 
-const resolveAssignee = async (task, config) => {
+const resolveAssignee = (task, config, recordsByCollection) => {
     const directUserId = task.assigneeUserId || '';
     if (directUserId) {
-        const fromUsers = await getRecord({ collectionName: 'users', recordId: directUserId });
+        const fromUsers = recordsByCollection.users.get(String(directUserId));
         const assignee = normalizeAssignee(fromUsers);
         if (assignee) return assignee;
     }
@@ -69,13 +69,13 @@ const resolveAssignee = async (task, config) => {
     const contextId = task.contextId || '';
     if (!contextId) return null;
 
-    const fromContext = await getRecord({ collectionName: config.contextCollection, recordId: contextId });
+    const fromContext = recordsByCollection[config.contextCollection].get(String(contextId));
     const contextAssignee = normalizeAssignee(fromContext);
     if (contextAssignee) return contextAssignee;
 
     const linkedUserId = fromContext?.userId || '';
     if (linkedUserId) {
-        const fromLinkedUser = await getRecord({ collectionName: 'users', recordId: linkedUserId });
+        const fromLinkedUser = recordsByCollection.users.get(String(linkedUserId));
         const linkedAssignee = normalizeAssignee(fromLinkedUser);
         if (linkedAssignee) return linkedAssignee;
     }
@@ -83,7 +83,7 @@ const resolveAssignee = async (task, config) => {
     // Compatibilidad para datos antiguos con contextId apuntando a otra coleccion.
     for (const collectionName of ['users', 'managers', 'editors']) {
         if (collectionName === config.contextCollection) continue;
-        const fallbackRecord = await getRecord({ collectionName, recordId: contextId });
+        const fallbackRecord = recordsByCollection[collectionName].get(String(contextId));
         const fallbackAssignee = normalizeAssignee(fallbackRecord);
         if (fallbackAssignee) return fallbackAssignee;
     }
@@ -91,9 +91,9 @@ const resolveAssignee = async (task, config) => {
     return null;
 };
 
-const resolveClientName = async (task) => {
+const resolveClientName = (task, clientsById) => {
     if (!task.clientId) return '';
-    const client = await getRecord({ collectionName: 'clients', recordId: task.clientId });
+    const client = clientsById.get(String(task.clientId));
     return client?.name || '';
 };
 
@@ -147,8 +147,18 @@ export const processManagementTaskReminders = async () => {
 
     const now = Date.now();
 
-    for (const config of TASK_CONFIGS) {
-        const tasks = await listRecords({ collectionName: config.collectionName });
+    const directoryCollections = ['users', 'managers', 'editors', 'clients'];
+    const [directoryLists, taskLists] = await Promise.all([
+        Promise.all(directoryCollections.map((collectionName) => listRecords({ collectionName }))),
+        Promise.all(TASK_CONFIGS.map((config) => listRecords({ collectionName: config.collectionName })))
+    ]);
+    const recordsByCollection = Object.fromEntries(directoryCollections.map((collectionName, index) => [
+        collectionName,
+        new Map(directoryLists[index].map((record) => [String(record.id), record]))
+    ]));
+
+    for (const [configIndex, config] of TASK_CONFIGS.entries()) {
+        const tasks = taskLists[configIndex];
         report.byCollection[config.collectionName] = { checked: tasks.length, remindersSent: 0, overdueSent: 0, nagsSent: 0 };
 
         for (const task of tasks) {
@@ -171,7 +181,7 @@ export const processManagementTaskReminders = async () => {
 
             let assignee = null;
             try {
-                assignee = await resolveAssignee(task, config);
+                assignee = resolveAssignee(task, config, recordsByCollection);
             } catch (error) {
                 report.errors.push({ collectionName: config.collectionName, taskId: task.id, step: 'resolveAssignee', message: error.message });
                 continue;
@@ -182,7 +192,7 @@ export const processManagementTaskReminders = async () => {
                 continue;
             }
 
-            const clientName = await resolveClientName(task);
+            const clientName = resolveClientName(task, recordsByCollection.clients);
             const taskUrl = buildTaskUrl(task);
             const dueHuman = formatHonduras(due.ms);
             const msUntilDue = due.ms - now;

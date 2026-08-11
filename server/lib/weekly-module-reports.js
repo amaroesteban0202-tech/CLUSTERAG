@@ -349,7 +349,9 @@ export const buildWeeklyModuleReportPdf = async ({
     periodLabel = ''
 }) => buildPdfBuffer({ title, people, totals, generatedAt, periodLabel });
 
-export const sendWeeklyModuleReports = async ({ to = 'info@cluster.marketing' } = {}) => {
+export const sendWeeklyModuleReports = async ({ to = '' } = {}) => {
+    const recipient = String(to || '').trim();
+    if (!recipient) throw new Error('Falta el destinatario del reporte semanal.');
     const now = Date.now();
     if (!shouldSendWeeklyModuleReport(new Date(now))) {
         return {
@@ -357,7 +359,7 @@ export const sendWeeklyModuleReports = async ({ to = 'info@cluster.marketing' } 
             skipped: true,
             reason: 'no-sabado',
             generatedAt: nowIso(),
-            to
+            to: recipient
         };
     }
 
@@ -408,7 +410,7 @@ export const sendWeeklyModuleReports = async ({ to = 'info@cluster.marketing' } 
     });
 
     await sendWeeklyModuleReportEmail({
-        to,
+        to: recipient,
         subject: 'Resumen semanal de Podcast y Producción',
         podcastPdf,
         productionPdf,
@@ -418,7 +420,7 @@ export const sendWeeklyModuleReports = async ({ to = 'info@cluster.marketing' } 
 
     return {
         ok: true,
-        to,
+        to: recipient,
         generatedAt,
         periodLabel,
         podcast: podcastSummary.totals,

@@ -4,11 +4,13 @@ import { asyncHandler, createHttpError } from '../lib/http.js';
 import { processManagementTaskReminders } from '../lib/management-notifications.js';
 import { sendDailyRoleReports } from '../lib/daily-reports.js';
 import { sendWeeklyModuleReports } from '../lib/weekly-module-reports.js';
+import { safeEqual } from '../lib/crypto.js';
+import { withCronLock } from '../lib/cron-lock.js';
 
 const router = express.Router();
 
 const authorize = (req) => {
-    const secret = process.env.CRON_SECRET || '';
+    const secret = env.cronSecret;
     // Vercel Cron automaticamente envia Authorization: Bearer ${CRON_SECRET}
     // cuando la variable CRON_SECRET existe en el proyecto.
     if (!secret) {
@@ -20,56 +22,38 @@ const authorize = (req) => {
     }
     const header = String(req.headers.authorization || '');
     const expected = `Bearer ${secret}`;
-    if (header !== expected) {
+    if (!safeEqual(header, expected)) {
         throw createHttpError(401, 'No autorizado.', 'cron/unauthorized');
     }
 };
 
-const dailyReportRecipient = () => process.env.DAILY_REPORT_EMAIL || 'info@cluster.marketing';
+const dailyReportRecipient = () => {
+    const recipient = String(env.dailyReportEmail || '').trim();
+    if (!recipient) {
+        throw createHttpError(503, 'DAILY_REPORT_EMAIL no configurado.', 'cron/missing-recipient');
+    }
+    return recipient;
+};
 
-router.get('/management-task-reminders', asyncHandler(async (req, res) => {
+const jobHandler = (lockName, run) => asyncHandler(async (req, res) => {
     authorize(req);
-    const report = await processManagementTaskReminders();
+    const report = await withCronLock(lockName, run);
     res.json({ ok: true, report });
+});
+
+const managementTaskReminders = jobHandler(
+    'management-task-reminders',
+    processManagementTaskReminders
+);
+const dailyRoleReports = jobHandler('daily-role-reports', () => sendDailyRoleReports({
+    to: dailyReportRecipient()
+}));
+const weeklyModuleReports = jobHandler('weekly-module-reports', () => sendWeeklyModuleReports({
+    to: dailyReportRecipient()
 }));
 
-// Permitir POST tambien (por si se invoca manualmente con curl)
-router.post('/management-task-reminders', asyncHandler(async (req, res) => {
-    authorize(req);
-    const report = await processManagementTaskReminders();
-    res.json({ ok: true, report });
-}));
-
-router.get('/daily-role-reports', asyncHandler(async (req, res) => {
-    authorize(req);
-    const report = await sendDailyRoleReports({
-        to: dailyReportRecipient()
-    });
-    res.json({ ok: true, report });
-}));
-
-router.post('/daily-role-reports', asyncHandler(async (req, res) => {
-    authorize(req);
-    const report = await sendDailyRoleReports({
-        to: dailyReportRecipient()
-    });
-    res.json({ ok: true, report });
-}));
-
-router.get('/weekly-module-reports', asyncHandler(async (req, res) => {
-    authorize(req);
-    const report = await sendWeeklyModuleReports({
-        to: dailyReportRecipient()
-    });
-    res.json({ ok: true, report });
-}));
-
-router.post('/weekly-module-reports', asyncHandler(async (req, res) => {
-    authorize(req);
-    const report = await sendWeeklyModuleReports({
-        to: dailyReportRecipient()
-    });
-    res.json({ ok: true, report });
-}));
+router.route('/management-task-reminders').get(managementTaskReminders).post(managementTaskReminders);
+router.route('/daily-role-reports').get(dailyRoleReports).post(dailyRoleReports);
+router.route('/weekly-module-reports').get(weeklyModuleReports).post(weeklyModuleReports);
 
 export default router;

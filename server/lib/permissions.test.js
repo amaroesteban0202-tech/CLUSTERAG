@@ -11,8 +11,8 @@ const TASK_CREATE_PERMISSIONS = [
   "create_management_tasks",
 ];
 
-test("every active organization role can create tasks in every task room", () => {
-  for (const role of Object.keys(ROLE_DEFINITIONS)) {
+test("operational roles can create tasks while viewer remains read-only", () => {
+  for (const role of Object.keys(ROLE_DEFINITIONS).filter((item) => item !== "viewer")) {
     for (const permission of TASK_CREATE_PERMISSIONS) {
       assert.equal(
         hasPermission({ role, isActive: true }, permission),
@@ -20,6 +20,9 @@ test("every active organization role can create tasks in every task room", () =>
         `${role} must include ${permission}`,
       );
     }
+  }
+  for (const permission of TASK_CREATE_PERMISSIONS) {
+    assert.equal(hasPermission({ role: "viewer", isActive: true }, permission), false);
   }
 });
 
@@ -31,9 +34,7 @@ test("inactive organization users cannot create tasks", () => {
   }
 });
 
-test("the frontend cannot force extra super administrators", () => {
-  assert.deepEqual(
-    [...SUPER_ADMIN_EMAILS].sort(),
-    [...DEFAULT_SUPER_ADMIN_EMAILS].sort(),
-  );
+test("no privileged identities are shipped in application source", () => {
+  assert.deepEqual(SUPER_ADMIN_EMAILS, []);
+  assert.deepEqual(DEFAULT_SUPER_ADMIN_EMAILS, []);
 });

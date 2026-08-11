@@ -1,4 +1,5 @@
 import { env } from '../config/env.js';
+import { createHttpError } from './http.js';
 import { findFirstRecordByAuthUid, findFirstRecordByEmail, upsertRecord } from './records.js';
 import { nowIso } from './time.js';
 import { normalizeEmail, normalizeNameKey, slugifyKey } from './text.js';
@@ -49,8 +50,25 @@ export const ensureAuthUserRecord = async ({
         ? await findFirstRecordByAuthUid({ collectionName: 'users', authUid })
         : null;
     const existingByEmail = await findFirstRecordByEmail({ collectionName: 'users', email: normalizedEmail });
+    if (existingByAuthUid && normalizeEmail(existingByAuthUid.email) !== normalizedEmail) {
+        throw createHttpError(409, 'La identidad ya esta vinculada a otro correo.', 'auth/identity-conflict');
+    }
+    if (existingByAuthUid && existingByEmail && existingByAuthUid.id !== existingByEmail.id) {
+        throw createHttpError(409, 'El correo y la identidad pertenecen a cuentas distintas.', 'auth/identity-conflict');
+    }
     const existing = existingByAuthUid || existingByEmail;
     const bootstrap = resolveBootstrapRole(normalizedEmail);
+    const isBootstrapUser = bootstrap.role !== 'viewer';
+    if (!existing && !isBootstrapUser) {
+        throw createHttpError(
+            403,
+            'La cuenta no ha sido invitada por un administrador.',
+            'auth/invitation-required'
+        );
+    }
+    if (existing?.isActive === false) {
+        throw createHttpError(403, 'La cuenta esta inactiva.', 'auth/user-disabled');
+    }
     const role = chooseHighestRole(existing?.role || 'viewer', bootstrap.role);
     const managementMember = env.seedManagementTeam.find((item) => normalizeEmail(item.email) === normalizedEmail);
     const nextName = existing?.name || name || managementMember?.name || normalizedEmail.split('@')[0];

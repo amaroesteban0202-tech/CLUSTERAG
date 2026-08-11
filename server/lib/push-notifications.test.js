@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildClientChatPush, isChatMuteActive } from './push-notifications.js';
+import {
+    buildClientChatPush,
+    canReceiveClientChatPush,
+    isChatMuteActive
+} from './push-notifications.js';
 
 test('buildClientChatPush creates a message notification', () => {
     const push = buildClientChatPush({
@@ -66,4 +70,28 @@ test('isChatMuteActive supports timed and permanent chat mutes', () => {
         isChatMuteActive({ mutedUntil: '2026-07-27T11:00:00.000Z' }, now),
         false
     );
+});
+
+test('una llamada puede llegar a supervisores aunque no pertenezcan al grupo', () => {
+    const base = {
+        authorId: 'author-user',
+        memberIds: new Set(['member-user']),
+        mentionedIds: new Set(['admin-user']),
+        outsideGroupCallRecipientIds: new Set(['admin-user']),
+        isCall: true
+    };
+
+    assert.equal(canReceiveClientChatPush({
+        ...base,
+        recipientId: 'admin-user'
+    }), true);
+    assert.equal(canReceiveClientChatPush({
+        ...base,
+        recipientId: 'other-user'
+    }), false);
+    assert.equal(canReceiveClientChatPush({
+        ...base,
+        recipientId: 'admin-user',
+        mentionedIds: new Set()
+    }), false);
 });

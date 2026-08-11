@@ -91,3 +91,30 @@ test('solo el superadmin puede salir por si mismo', () => {
         nextMemberIds: []
     }), 'forbidden');
 });
+
+test('marca managers y superadmins como disponibles para llamadas fuera del grupo', () => {
+    const result = buildChatGroups({
+        clients: [{ id: 'client-1' }],
+        users: [
+            { id: 'admin-user', name: 'Admin', role: 'super_admin', isActive: true },
+            { id: 'manager-user', name: 'Manager', role: 'manager', isActive: true },
+            { id: 'editor-user', name: 'Editor', role: 'editor', isActive: true }
+        ]
+    });
+
+    assert.equal(
+        result.people.find((person) => person.id === 'admin-user')
+            ?.canReceiveCallsOutsideGroups,
+        true
+    );
+    assert.equal(
+        result.people.find((person) => person.id === 'manager-user')
+            ?.canReceiveCallsOutsideGroups,
+        true
+    );
+    assert.equal(
+        result.people.find((person) => person.id === 'editor-user')
+            ?.canReceiveCallsOutsideGroups,
+        false
+    );
+});

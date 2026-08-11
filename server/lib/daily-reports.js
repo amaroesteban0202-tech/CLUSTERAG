@@ -264,7 +264,9 @@ const getCollectionPeople = async ({ collectionName }) => {
     return records;
 };
 
-export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' } = {}) => {
+export const sendDailyRoleReports = async ({ to = '' } = {}) => {
+    const recipient = String(to || '').trim();
+    if (!recipient) throw new Error('Falta el destinatario del reporte diario.');
     const now = Date.now();
     if (!shouldSendDailyRoleReport(new Date(now))) {
         return {
@@ -272,7 +274,7 @@ export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' 
             skipped: true,
             reason: 'domingo',
             generatedAt: nowIso(),
-            to
+            to: recipient
         };
     }
 
@@ -318,7 +320,7 @@ export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' 
     });
 
     await sendDailyReportEmail({
-        to,
+        to: recipient,
         subject: 'Resumen diario de Editores y Community Managers',
         editorPdf,
         accountPdf: communityManagerPdf,
@@ -328,7 +330,7 @@ export const sendDailyRoleReports = async ({ to = 'arangojuanjoseweb@gmail.com' 
 
     return {
         ok: true,
-        to,
+        to: recipient,
         generatedAt,
         periodLabel,
         editors: editorsSummary.totals,

@@ -105,16 +105,7 @@ export const ROLE_DEFINITIONS = {
     viewer: {
         label: 'Viewer',
         permissions: [
-            'view_dashboard',
-            'view_account_room',
-            'create_account_tasks',
-            'view_editions_room',
-            'create_editing_tasks',
-            'manage_editing_tasks',
-            'view_management_room',
-            'create_management_tasks',
-            'view_client_chat',
-            'send_client_chat'
+            'view_dashboard'
         ]
     }
 };
@@ -173,9 +164,9 @@ export const COLLECTION_PERMISSIONS = {
     },
     audit_logs: {
         read: 'view_audit_logs',
-        create: 'view_dashboard',
-        update: 'manage_users',
-        delete: 'manage_users'
+        create: null,
+        update: null,
+        delete: null
     },
     ranking_settings: {
         read: 'view_dashboard',

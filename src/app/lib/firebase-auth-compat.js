@@ -3,40 +3,20 @@ import {
     getApp as getFirebaseClientApp,
     getApps as getFirebaseClientApps,
     initializeApp as initializeFirebaseClientApp
-} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+} from 'firebase/app';
 import {
     getAuth as getFirebaseClientAuth,
     sendSignInLinkToEmail as sendFirebaseSignInLinkToEmail,
     signInWithEmailLink as signInWithFirebaseEmailLink,
     signOut as signOutFirebaseClient
-} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+} from 'firebase/auth';
 
 const listeners = new Set();
 let authSingleton = null;
 const EMAIL_LINK_STORAGE_KEY = 'cluster_email_link_for_sign_in';
 const NATIVE_GOOGLE_STATE_STORAGE_KEY = 'cluster_native_google_state';
-const BACKEND_AUTH_TOKEN_STORAGE_KEY = 'cluster_backend_auth_token';
 
 let firebaseEmailAuth = null;
-
-const readBackendAuthToken = () => {
-    if (typeof window === 'undefined') return '';
-    return window.localStorage.getItem(BACKEND_AUTH_TOKEN_STORAGE_KEY) || '';
-};
-
-const writeBackendAuthToken = (token = '') => {
-    if (typeof window === 'undefined') return;
-    if (!token) {
-        window.localStorage.removeItem(BACKEND_AUTH_TOKEN_STORAGE_KEY);
-        return;
-    }
-    window.localStorage.setItem(BACKEND_AUTH_TOKEN_STORAGE_KEY, token);
-};
-
-const persistAuthPayload = (payload = {}) => {
-    if (payload?.authToken) writeBackendAuthToken(payload.authToken);
-    return payload;
-};
 
 const getFirebaseClientConfig = () => {
     if (typeof window === 'undefined') return null;
@@ -72,7 +52,7 @@ const exchangeFirebaseSession = async ({ idToken, email = '' }) => {
         method: 'POST',
         body: JSON.stringify({ idToken, email })
     });
-    return persistAuthPayload(payload);
+    return payload;
 };
 
 const normalizeUser = (user = null) => {
@@ -131,24 +111,6 @@ class BackendAuth {
                 }
             } catch (error) {
                 void error;
-            }
-        }
-
-        if (!payload?.user) {
-            const backendAuthToken = readBackendAuthToken();
-            if (backendAuthToken) {
-                try {
-                    payload = persistAuthPayload(await apiFetch('/api/auth/token/exchange', {
-                        method: 'POST',
-                        body: JSON.stringify({ token: backendAuthToken })
-                    }));
-                } catch (error) {
-                    if (error.status === 400 || error.status === 401 || error.status === 403) {
-                        writeBackendAuthToken('');
-                    } else {
-                        throw error;
-                    }
-                }
             }
         }
 
@@ -245,7 +207,7 @@ export const signInWithPopup = async (auth, provider) => {
     if (isNativeShell) {
         const payload = await apiFetch('/api/auth/google/native/start');
         if (payload?.state) {
-            window.localStorage.setItem(NATIVE_GOOGLE_STATE_STORAGE_KEY, payload.state);
+            window.sessionStorage.setItem(NATIVE_GOOGLE_STATE_STORAGE_KEY, payload.state);
         }
         window.location.href = payload?.authUrl || buildApiUrl('/api/auth/google/start?redirect=clusteragency%3A%2F%2Fauth%2Fgoogle');
         return { user: null, pendingRedirect: true };
@@ -297,7 +259,7 @@ export const signInWithPopup = async (auth, provider) => {
 
 export const completeGoogleRedirectIfNeeded = async (auth) => {
     const pendingState = typeof window !== 'undefined'
-        ? window.localStorage.getItem(NATIVE_GOOGLE_STATE_STORAGE_KEY) || ''
+        ? window.sessionStorage.getItem(NATIVE_GOOGLE_STATE_STORAGE_KEY) || ''
         : '';
 
     if (pendingState) {
@@ -305,7 +267,7 @@ export const completeGoogleRedirectIfNeeded = async (auth) => {
             const payload = await apiFetch(`/api/auth/google/native/result?state=${encodeURIComponent(pendingState)}`);
             if (payload?.token) {
                 await signInWithCustomToken(auth, payload.token);
-                window.localStorage.removeItem(NATIVE_GOOGLE_STATE_STORAGE_KEY);
+                window.sessionStorage.removeItem(NATIVE_GOOGLE_STATE_STORAGE_KEY);
                 return Boolean(auth.currentUser?.email);
             }
             if (payload?.pending) return false;
@@ -323,7 +285,6 @@ export const signInWithCustomToken = async (auth, token) => {
         method: 'POST',
         body: JSON.stringify({ token })
     });
-    persistAuthPayload(payload);
     auth.setCurrentUser(payload?.user || null);
     return { user: auth.currentUser };
 };
@@ -338,6 +299,5 @@ export const signOut = async (auth) => {
     } catch (error) {
         void error;
     }
-    writeBackendAuthToken('');
     auth.setCurrentUser(null);
 };

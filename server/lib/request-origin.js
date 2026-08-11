@@ -7,9 +7,6 @@ const LOCAL_HOSTNAMES = new Set([
 ]);
 
 export const getRequestOrigin = (req) => {
-    const explicitOrigin = String(req.get?.('origin') || '').trim();
-    if (explicitOrigin) return explicitOrigin.replace(/\/+$/, '');
-
     const host = String(req.get?.('host') || '').trim();
     if (!host) return '';
 

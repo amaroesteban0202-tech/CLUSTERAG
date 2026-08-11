@@ -28,6 +28,24 @@ export const isChatMuteActive = (mute, now = Date.now()) => {
     return Number.isFinite(untilMs) && untilMs > now;
 };
 
+export const canReceiveClientChatPush = ({
+    recipientId = '',
+    authorId = '',
+    memberIds = new Set(),
+    mentionedIds = new Set(),
+    outsideGroupCallRecipientIds = new Set(),
+    isCall = false
+} = {}) => {
+    const id = String(recipientId || '');
+    if (!id || id === String(authorId || '')) return false;
+    const isMentioned = mentionedIds.has(id);
+    if (isCall) {
+        return isMentioned
+            && (memberIds.has(id) || outsideGroupCallRecipientIds.has(id));
+    }
+    return memberIds.has(id);
+};
+
 export const buildClientChatPush = ({
     message = {},
     clientName = 'Cliente',
@@ -91,16 +109,25 @@ export const sendClientChatPush = async ({ message, clientName = 'Cliente' }) =>
     const authorId = String(message.authorId || '');
     const mentionedIds = new Set((message.mentionedIds || []).map(String));
     const isCall = Boolean(message.call?.roomId && !message.call?.ended);
+    const outsideGroupCallRecipientIds = new Set(chatGroups.people
+        .filter((person) => person.canReceiveCallsOutsideGroups)
+        .map((person) => String(person.id)));
     const activeMuteKeys = new Set(chatMutes
         .filter((mute) => isChatMuteActive(mute))
         .map((mute) => `${String(mute.userId || '')}__${String(mute.clientId || '')}`));
     const recipients = tokens.filter((entry) => {
-        if (!entry?.token || String(entry.userId || '') === authorId) return false;
-        if (!memberIds.has(String(entry.userId || ''))) return false;
+        if (!entry?.token || !canReceiveClientChatPush({
+            recipientId: entry.userId,
+            authorId,
+            memberIds,
+            mentionedIds,
+            outsideGroupCallRecipientIds,
+            isCall
+        })) return false;
         if (!isCall && activeMuteKeys.has(
             `${String(entry.userId || '')}__${String(message.clientId || '')}`
         )) return false;
-        return !isCall || mentionedIds.has(String(entry.userId || ''));
+        return true;
     });
     if (recipients.length === 0) return { sent: 0, skipped: true };
 

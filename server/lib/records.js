@@ -3,6 +3,7 @@ import { createRecordId } from './crypto.js';
 import { createHttpError } from './http.js';
 import { nowIso } from './time.js';
 import { normalizeEmail } from './text.js';
+import { isDeepStrictEqual } from 'node:util';
 
 const TASK_COLLECTIONS = new Set(['account_tasks', 'editing', 'management_tasks']);
 // Colecciones cuyos adjuntos (base64) se recortan en los listados para no
@@ -189,6 +190,14 @@ export const upsertRecord = async ({ collectionName, recordId = createRecordId()
             updatedAt: payload?.updatedAt || stamp
         });
 
+    const existingComparable = { ...existing };
+    const nextComparable = { ...nextPayload };
+    delete existingComparable.updatedAt;
+    delete nextComparable.updatedAt;
+    if (isDeepStrictEqual(existingComparable, nextComparable)) {
+        return existing;
+    }
+
     await getClient(trx)('app_records')
         .where({ collection_name: collectionName, record_id: recordId })
         .update({
@@ -203,10 +212,12 @@ export const upsertRecord = async ({ collectionName, recordId = createRecordId()
 };
 
 export const deleteRecord = async ({ collectionName, recordId, trx }) => {
-    await getClient(trx)('app_records')
+    const deleted = await getClient(trx)('app_records')
         .where({ collection_name: collectionName, record_id: recordId })
         .delete();
+    if (!deleted) return false;
     await trackRecordChange({ collectionName, recordId, action: 'delete', trx });
+    return true;
 };
 
 export const getLatestRecordChangeId = async ({ trx } = {}) => {

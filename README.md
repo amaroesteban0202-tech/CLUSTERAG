@@ -1,43 +1,45 @@
-# ClusterAG sin Firebase
+# ClusterAG
 
-Este repo ahora incluye una base de backend propia para sacar autenticacion y datos de Firebase sin reescribir toda la UI de una sola vez.
-
-## Stack
-
-- Frontend estatico actual
-- Backend Express en `server/`
-- Persistencia SQL con `sqlite3` por defecto y `mysql2` para despliegue
-- Sesiones por cookie HTTP-only
-- Magic links por SMTP
-- Capa cliente compatible con los imports actuales de Firebase
+Aplicacion web y movil con frontend React, API Express y persistencia SQL. PostgreSQL es la base de produccion; SQLite se conserva para desarrollo local y pruebas. Firebase se usa solo para autenticacion por enlace/correo y notificaciones push, nunca como base de datos de la aplicacion.
 
 ## Arranque local
 
-1. Copia `.env.example` a `.env`
-2. Ejecuta `npm install`
-3. Ejecuta `npm run dev`
-4. Abre `http://127.0.0.1:3000`
+1. Copia `.env.example` a `.env` y completa los valores locales.
+2. Ejecuta `npm install`.
+3. Ejecuta `npm run dev`.
+4. Abre `http://127.0.0.1:3000`.
 
-Si no configuras SMTP, los magic links se imprimen en consola para desarrollo.
+La base local se crea en `.tmp/clusterag.sqlite`. El proyecto no copia ni restaura automaticamente una base semilla.
 
-## Variables clave
+## Configuracion de produccion
 
-- `DATABASE_CLIENT=sqlite3` para local rapido
-- `DATABASE_CLIENT=mysql2` para MySQL en hosting propio
-- `APP_BASE_URL` debe apuntar a la URL real del backend
-- `SESSION_SECRET` debe cambiarse antes de produccion
-- `SMTP_*` habilita envio real de magic links
-- `GOOGLE_*` habilita login con Google
+- Define `DATABASE_CLIENT=pg` y una `DATABASE_URL` de PostgreSQL.
+- Usa valores aleatorios de al menos 32 caracteres para `SESSION_SECRET` y `CRON_SECRET`. El servidor rechaza el arranque inseguro en produccion.
+- Configura `APP_BASE_URL` y `GOOGLE_CALLBACK_URL` con el dominio real.
+- Declara los usuarios iniciales mediante `SEED_SUPER_ADMIN_EMAILS`, `SEED_MANAGEMENT_TEAM_JSON` y `SEED_EDITOR_TEAM_JSON`; no hay identidades privilegiadas dentro del codigo.
+- Ejecuta el bootstrap solo de forma deliberada con `RUN_BOOTSTRAP_ON_START=true`. En Vercel permanece desactivado por defecto.
+- Completa `FIREBASE_*` para autenticacion por correo y push, y `SMTP_*` para reportes/notificaciones por email.
+
+El acceso es por invitacion: una identidad de Google o Firebase que no exista previamente en `users` ni en la configuracion de bootstrap es rechazada.
+
+## Comandos
+
+- `npm test`: pruebas del backend y controles de seguridad.
+- `npm run build`: genera CSS, bundle JavaScript y el directorio `public/`.
+- `npm run check:design`: valida invariantes visuales y dependencias del frontend.
+- `npm run check:kpi`: valida calculos KPI y ranking.
+- `npm run check:polling`: valida la sincronizacion adaptativa.
+- `npm run db:cleanup:dry-run`: calcula la limpieza segura del historial sin modificar datos.
+
+La limpieza real del historial exige `--apply --backup-confirmed`. No se debe ejecutar contra produccion sin una copia verificada.
 
 ## Arquitectura
 
-- `server/routes/auth.js`: sesiones, magic links, Google OAuth y custom tokens
-- `server/routes/collections.js`: CRUD generico para las colecciones actuales
-- `src/app/lib/firebase-*-compat.js`: reemplazo local del SDK de Firebase
-- `src/app/config/firebase.js`: ahora apunta al backend propio
+- `server/routes/auth.js`: OAuth, intercambio nativo de un solo uso y sesiones opacas revocables.
+- `server/routes/collections.js`: autorizacion, validacion, integridad referencial y mutaciones SQL.
+- `server/lib/audit.js`: auditoria inmutable generada por el servidor.
+- `server/db/migrate.js`: migraciones versionadas y serializadas en PostgreSQL.
+- `src/app/lib/firebase-*-compat.js`: adaptadores del frontend hacia la API y Firebase Auth.
+- `src/app/main.jsx`: interfaz principal; las reparaciones automaticas de datos estan desactivadas.
 
-## Estado de migracion
-
-- Firebase sale del runtime del frontend
-- El modelo de datos actual sigue funcionando como colecciones genericas
-- La siguiente fase recomendable es mover la auditoria y las reconciliaciones del frontend al backend
+Firestore y Firebase Hosting no exponen datos: las reglas deniegan todo y el backend sirve unicamente `public/`.

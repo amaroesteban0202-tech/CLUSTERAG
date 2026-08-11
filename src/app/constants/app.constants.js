@@ -163,38 +163,15 @@ export const ROLE_DEFINITIONS = {
     viewer: {
         label: 'Viewer',
         color: 'slate',
-        permissions: [
-            'view_dashboard',
-            'view_account_room',
-            'create_account_tasks',
-            'view_editions_room',
-            'create_editing_tasks',
-            'manage_editing_tasks',
-            'view_management_room',
-            'create_management_tasks',
-            'view_client_chat',
-            'send_client_chat'
-        ]
+        permissions: ['view_dashboard']
     }
 };
 
-export const SUPER_ADMIN_EMAILS = [
-    'maycolljaramillo01@gmail.com'
-];
-
-export const DEFAULT_MANAGEMENT_TEAM = [
-    { name: 'Aiskel', email: 'aiskel.wuerman82@gmail.com' },
-    { name: 'Maycoll', email: 'maycolljaramillo01@gmail.com', role: 'super_admin' },
-    { name: 'Esteban', email: 'estebanantonio02@gmail.com', role: 'operations' },
-    { name: 'Maria', email: 'marialaguna2117@gmail.com' },
-    { name: 'Orlando', email: 'info@cluster.marketing' }
-];
-
-// Editores pre-autorizados: al iniciar sesion con estos correos,
-// el sistema les asigna automaticamente el rol 'editor'.
-export const DEFAULT_EDITORS_TEAM = [
-    { name: 'Maria Galicia', email: 'marialaguna2117@gmail.com', color: 'c22' }
-];
+// Las identidades y autorizaciones pertenecen al backend/base de datos. Nunca
+// deben publicarse ni concederse desde el bundle del navegador.
+export const SUPER_ADMIN_EMAILS = [];
+export const DEFAULT_MANAGEMENT_TEAM = [];
+export const DEFAULT_EDITORS_TEAM = [];
 
 export const EDITING_HIERARCHY_OPTIONS = [
     { id: 'p1', label: 'P1 Critico', color: 'red' },

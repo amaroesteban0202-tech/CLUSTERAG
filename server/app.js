@@ -15,17 +15,38 @@ import pushRoutes from './routes/push.js';
 import { getRequestOrigin, isLocalOrigin } from './lib/request-origin.js';
 import reportsRouter from './routes/reports.js';
 import chatGroupRoutes from './routes/chat-groups.js';
+import { applySecurityHeaders, isTrustedRequestOrigin, requireTrustedOrigin } from './lib/security.js';
+import { rateLimit } from './lib/rate-limit.js';
 
 export const createApp = async () => {
     await migrateDatabase();
-    try {
-        await ensureBootstrapData();
-    } catch (error) {
-        console.error('Bootstrap no disponible durante el arranque:', error?.message || error);
+    if (
+        env.isProduction
+        && (
+            env.sessionSecret === 'change-me-before-production'
+            || env.sessionSecret.length < 32
+        )
+    ) {
+        throw new Error('SESSION_SECRET debe ser aleatorio y tener al menos 32 caracteres en produccion.');
+    }
+    if (
+        env.isProduction
+        && (env.cronSecret.length < 32 || env.cronSecret.startsWith('change-me'))
+    ) {
+        throw new Error('CRON_SECRET debe ser aleatorio y tener al menos 32 caracteres en produccion.');
+    }
+    if (env.runBootstrapOnStart) {
+        try {
+            await ensureBootstrapData();
+        } catch (error) {
+            console.error('Bootstrap no disponible durante el arranque:', error?.message || error);
+        }
     }
 
     const app = express();
     app.disable('x-powered-by');
+    app.set('trust proxy', 1);
+    app.use(applySecurityHeaders);
 
     const allowedCorsOrigins = new Set([
         env.appBaseUrl,
@@ -36,9 +57,7 @@ export const createApp = async () => {
 
     app.use((req, res, next) => {
         const origin = req.get('origin');
-        const requestOrigin = getRequestOrigin(req);
-        const allowLocalDevOrigin = !env.isProduction && isLocalOrigin(origin) && isLocalOrigin(requestOrigin);
-        if (origin && (allowedCorsOrigins.has(origin) || allowLocalDevOrigin)) {
+        if (origin && (allowedCorsOrigins.has(origin) || isTrustedRequestOrigin(req, origin))) {
             res.set('Access-Control-Allow-Origin', origin);
             res.set('Access-Control-Allow-Credentials', 'true');
             res.set('Vary', 'Origin');
@@ -52,8 +71,11 @@ export const createApp = async () => {
         next();
     });
 
-    // Un archivo de 8 MB ocupa cerca de 10.7 MB al codificarse como base64.
-    app.use(express.json({ limit: '12mb' }));
+    app.use(requireTrustedOrigin);
+    // Limita por IP antes de leer/parsear cuerpos potencialmente costosos.
+    app.use('/api', rateLimit({ windowMs: 60_000, max: 600, keyPrefix: 'api-global' }));
+    // Los adjuntos embebidos se limitan a 3 MB (aprox. 4 MB en base64).
+    app.use(express.json({ limit: '6mb' }));
     app.use(cookieParser());
     app.use(attachSession);
 
@@ -90,39 +112,18 @@ export const createApp = async () => {
         ].join('\n'));
     });
 
-    app.use('/api/auth', authRoutes);
-    app.use('/api/collections', collectionRoutes);
+    app.use('/api/auth', rateLimit({ windowMs: 15 * 60_000, max: 60, keyPrefix: 'auth' }), authRoutes);
+    app.use('/api/collections', rateLimit({ windowMs: 60_000, max: 300, keyPrefix: 'collections' }), collectionRoutes);
     app.use('/api/cron', cronRoutes);
-    app.use('/api/notifications', notificationRoutes);
+    app.use('/api/notifications', rateLimit({ windowMs: 10 * 60_000, max: 30, keyPrefix: 'notifications' }), notificationRoutes);
     app.use('/api/directory', directoryRoutes);
-    app.use('/api/calls', callsRoutes);
+    app.use('/api/calls', rateLimit({ windowMs: 10 * 60_000, max: 30, keyPrefix: 'calls' }), callsRoutes);
     app.use('/api/chat-groups', chatGroupRoutes);
-    app.use('/api/push', pushRoutes);
+    app.use('/api/push', rateLimit({ windowMs: 10 * 60_000, max: 30, keyPrefix: 'push' }), pushRoutes);
     app.use('/api/reports', reportsRouter);
 
-    const blockedStaticPrefixes = [
-        '/server/',
-        '/functions/',
-        '/scripts/',
-        '/node_modules/',
-        '/package.json',
-        '/package-lock.json',
-        '/firebase.json',
-        '/firestore.rules',
-        '/firestore.indexes.json',
-        '/.git',
-        '/.env'
-    ];
-
-    app.use((req, res, next) => {
-        if (blockedStaticPrefixes.some((prefix) => req.path === prefix || req.path.startsWith(prefix))) {
-            res.status(404).end();
-            return;
-        }
-        next();
-    });
-
-    app.use(express.static(env.rootDir, {
+    const publicDir = path.join(env.rootDir, 'public');
+    app.use(express.static(publicDir, {
         extensions: ['html']
     }));
 
@@ -131,7 +132,7 @@ export const createApp = async () => {
             next();
             return;
         }
-        res.sendFile(path.join(env.rootDir, 'index.html'));
+        res.sendFile(path.join(publicDir, 'index.html'));
     });
 
     app.use((error, _req, res, _next) => {

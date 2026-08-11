@@ -3,28 +3,18 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "functions": [
-    {
-      "source": "functions"
-    }
-  ],
   "hosting": {
-    "public": ".",
+    "public": "public",
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**",
-      "functions/**"
+      "**/node_modules/**"
     ]
   },
   "emulators": {
     "firestore": {
       "host": "127.0.0.1",
       "port": 8787
-    },
-    "functions": {
-      "host": "127.0.0.1",
-      "port": 5001
     },
     "hosting": {
       "host": "127.0.0.1",

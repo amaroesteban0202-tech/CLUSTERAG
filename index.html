@@ -5,59 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cluster Agency OS</title>
     <link rel="icon" type="image/webp" href="/src/app/assets/cluster-symbol.webp">
-    <script>
-        (() => {
-            const version = '2026-07-performance-focus';
-            const versionKey = 'cluster_theme_default_version';
-            const themeKey = 'cluster_theme';
-            const paletteKey = 'cluster_palette';
-            if (!localStorage.getItem(themeKey)) {
-                localStorage.setItem(themeKey, 'dark');
-            }
-            localStorage.setItem(versionKey, version);
-            const storedPalette = localStorage.getItem(paletteKey);
-            const palette =
-                storedPalette === 'clay' ? 'cobalt' : storedPalette || 'botanical';
-            localStorage.setItem(paletteKey, palette);
-            document.documentElement.dataset.palette = palette;
-            document.documentElement.classList.toggle(
-                'dark',
-                localStorage.getItem(themeKey) !== 'light'
-            );
-        })();
-    </script>
+    <script src="/src/app/boot.js?v=20260811-security"></script>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="/src/styles/tailwind.generated.css?v=20260801-chat-inbox">
     <link rel="stylesheet" href="/src/styles/main.css?v=20260801-chat-inbox">
 
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
     <script src="/app-config.js?v=20260525-local-api"></script>
-    <script>
-        window.__cluster_app_id = 'cluster-agency-pro-mobile-v7';
-        window.__cluster_firebase_config = window.__cluster_firebase_config || null;
-        window.__cluster_firebase_web_push_vapid_key =
-            window.__cluster_firebase_web_push_vapid_key || '';
-    </script>
-
-    <script type="importmap">
-    {
-        "imports": {
-            "react": "https://esm.sh/react@18.2.0",
-            "react-dom": "https://esm.sh/react-dom@18.2.0",
-            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-            "@phosphor-icons/react": "https://esm.sh/@phosphor-icons/react@2.1.10?external=react",
-            "@capacitor/core": "https://esm.sh/@capacitor/core@8.3.1",
-            "@capacitor/app": "https://esm.sh/@capacitor/app@8.1.0",
-            "@capacitor/local-notifications": "https://esm.sh/@capacitor/local-notifications@8.2.1?external=@capacitor/core",
-            "@capacitor/push-notifications": "https://esm.sh/@capacitor/push-notifications@8.1.2?external=@capacitor/core",
-            "firebase/app": "/src/app/lib/firebase-app-compat.js",
-            "firebase/auth": "/src/app/lib/firebase-auth-compat.js?v=20260525-local-api",
-            "firebase/firestore": "/src/app/lib/firebase-firestore-compat.js?v=20260726-chat-stickers"
-        }
-    }
-    </script>
 </head>
 <body class="app-body">
     <div id="root"></div>

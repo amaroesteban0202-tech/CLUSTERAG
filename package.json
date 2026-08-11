@@ -8,11 +8,12 @@
   "scripts": {
     "build": "npm run build:css && npm run build:js && node scripts/prepare-public.mjs",
     "build:css": "tailwindcss -c tailwind.config.cjs -i ./src/styles/tailwind.input.css -o ./src/styles/tailwind.generated.css --minify",
-    "build:js": "esbuild src/app/main.jsx --bundle --outfile=src/app/main.compiled.js --format=esm --external:react --external:react-dom --external:react-dom/client --external:@phosphor-icons/react --external:@capacitor/core --external:@capacitor/app --external:@capacitor/local-notifications --external:@capacitor/push-notifications --external:firebase/auth --external:firebase/firestore --external:/src/app/config/firebase.js --external:/src/app/constants/app.constants.js --external:/src/app/utils/date.js --external:/src/app/utils/kpi.js --legal-comments=none",
+    "build:js": "esbuild src/app/main.jsx --bundle --minify --target=es2020 --outfile=src/app/main.compiled.js --format=esm --legal-comments=none",
     "check:design": "node scripts/check-design.mjs",
     "check:kpi": "node scripts/check-kpi.mjs",
     "check:polling": "node scripts/check-polling.mjs",
     "test": "node --test \"server/**/*.test.js\"",
+    "db:cleanup:dry-run": "node scripts/cleanup-record-changes.mjs",
     "dev": "node server/index.js",
     "start": "node server/index.js",
     "mobile:sync": "npm run build && cap sync",
@@ -20,15 +21,19 @@
     "mobile:ios": "npm run mobile:sync && cap open ios"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "canvas-confetti": "^1.9.2",
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "firebase": "^12.17.1",
     "firebase-admin": "^14.2.0",
     "knex": "^3.1.0",
-    "mysql2": "^3.14.1",
     "nodemailer": "^9.0.3",
     "pdfkit": "^0.19.1",
     "pg": "^8.22.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "sqlite3": "^6.0.1"
   },
   "devDependencies": {
@@ -43,6 +48,7 @@
     "tailwindcss": "^3.4.19"
   },
   "overrides": {
-    "brace-expansion": "^5.0.8"
+    "brace-expansion": "^5.0.9",
+    "uuid": "^11.1.1"
   }
 }

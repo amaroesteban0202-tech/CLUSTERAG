@@ -78,7 +78,7 @@ const databaseUrl = process.env.DATABASE_URL
     || process.env.POSTGRES_URL_NON_POOLING
     || process.env.DATABASE_URL_UNPOOLED
     || '';
-const databaseClient = ['pg', 'mysql2'].includes(process.env.DATABASE_CLIENT)
+const databaseClient = process.env.DATABASE_CLIENT === 'pg'
     ? process.env.DATABASE_CLIENT
     : databaseUrl
         ? 'pg'
@@ -103,17 +103,14 @@ export const env = {
     databaseClient,
     databaseUrl,
     sqliteFilename: resolveSqliteFilename(process.env.SQLITE_FILENAME || defaultSqliteFilename),
-    mysql: {
-        host: process.env.MYSQL_HOST || '127.0.0.1',
-        port: parseNumber(process.env.MYSQL_PORT, 3306),
-        database: process.env.MYSQL_DATABASE || 'clusterag',
-        user: process.env.MYSQL_USER || 'root',
-        password: process.env.MYSQL_PASSWORD || ''
-    },
     sessionCookieName: process.env.SESSION_COOKIE_NAME || 'cluster_session',
     sessionSecret: process.env.SESSION_SECRET || 'change-me-before-production',
-    sessionTtlHours: parseNumber(process.env.SESSION_TTL_HOURS, 720),
+    sessionTtlHours: parseNumber(process.env.SESSION_TTL_HOURS, 24),
     magicLinkTtlMinutes: parseNumber(process.env.MAGIC_LINK_TTL_MINUTES, 30),
+    cronSecret: process.env.CRON_SECRET || '',
+    dailyReportEmail: process.env.DAILY_REPORT_EMAIL || '',
+    runBootstrapOnStart: parseBoolean(process.env.RUN_BOOTSTRAP_ON_START, !isVercelRuntime),
+    sqliteSeedOnEmpty: parseBoolean(process.env.SQLITE_SEED_ON_EMPTY, false),
     seedSuperAdminEmails: parseCsv(process.env.SEED_SUPER_ADMIN_EMAILS, DEFAULT_SUPER_ADMIN_EMAILS),
     seedManagementTeam: parseJson(process.env.SEED_MANAGEMENT_TEAM_JSON, DEFAULT_MANAGEMENT_TEAM),
     seedEditorsTeam: parseJson(process.env.SEED_EDITOR_TEAM_JSON, DEFAULT_EDITORS_TEAM),

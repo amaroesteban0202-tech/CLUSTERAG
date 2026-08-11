@@ -4,17 +4,57 @@ import { env } from '../config/env.js';
 import { asyncHandler, createHttpError } from '../lib/http.js';
 import { hasPermission } from '../lib/permissions.js';
 import { requireAuthenticatedUser } from '../lib/sessions.js';
+import { getRecord, listRecords } from '../lib/records.js';
+import { buildChatGroups, canManageChatGroups } from '../lib/chat-groups.js';
 
 const router = Router();
 
 const b64url = (input) => Buffer.from(input).toString('base64url');
 
-// Firma un JWT RS256 para Jitsi as a Service (8x8). La sala se autoriza como "*"
-// (cualquier sala del app) y el rol de moderador se otorga a quien inicia.
 router.post('/jaas-token', asyncHandler(async (req, res) => {
     const userRecord = requireAuthenticatedUser(req);
     if (!hasPermission(userRecord, 'view_client_chat')) {
         throw createHttpError(403, 'No tienes permisos para llamadas.', 'auth/insufficient-permission');
+    }
+    const messageId = String(req.body?.messageId || '').trim();
+    const clientId = String(req.body?.clientId || '').trim();
+    const roomId = String(req.body?.roomId || '').trim();
+    if (!messageId || !clientId || !/^[A-Za-z0-9_-]{3,120}$/.test(roomId)) {
+        throw createHttpError(400, 'La llamada no incluye una sala valida.', 'jaas/invalid-room');
+    }
+
+    const message = await getRecord({ collectionName: 'client_chats', recordId: messageId });
+    if (
+        !message
+        || String(message.clientId || '') !== clientId
+        || String(message.call?.roomId || '') !== roomId
+        || message.call?.ended === true
+    ) {
+        throw createHttpError(403, 'La llamada ya no esta disponible.', 'jaas/call-unavailable');
+    }
+
+    if (!canManageChatGroups(userRecord)) {
+        const [clients, messages, memberships, users, managers, editors] = await Promise.all([
+            listRecords({ collectionName: 'clients' }),
+            listRecords({ collectionName: 'client_chats' }),
+            listRecords({ collectionName: 'chat_group_memberships' }),
+            listRecords({ collectionName: 'users' }),
+            listRecords({ collectionName: 'managers' }),
+            listRecords({ collectionName: 'editors' })
+        ]);
+        const context = buildChatGroups({
+            clients,
+            messages,
+            membershipRecords: memberships,
+            users,
+            managers,
+            editors
+        });
+        const actorId = context.resolvePersonId(userRecord);
+        const group = context.groups.find((item) => String(item.clientId) === clientId);
+        if (!group?.memberIds?.map(String).includes(String(actorId))) {
+            throw createHttpError(403, 'No perteneces a esta llamada.', 'chat-groups/membership-required');
+        }
     }
 
     const { appId, kid, privateKey } = env.jaas;
@@ -30,15 +70,15 @@ router.post('/jaas-token', asyncHandler(async (req, res) => {
         sub: appId,
         iat: now - 10,
         nbf: now - 10,
-        exp: now + 3 * 60 * 60,
-        room: '*',
+        exp: now + 15 * 60,
+        room: roomId,
         context: {
             user: {
                 id: String(userRecord.id || ''),
-                name: String(req.body?.name || userRecord.name || 'Usuario'),
-                email: String(req.body?.email || userRecord.email || ''),
+                name: String(userRecord.name || 'Usuario'),
+                email: String(userRecord.email || ''),
                 avatar: '',
-                moderator: req.body?.moderator === true,
+                moderator: String(message.authorId || '') === String(userRecord.id || ''),
                 'hidden-from-recorder': false
             },
             features: {

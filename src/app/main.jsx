@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useId, useMemo, useCallback } from "react";
 import { createRoot } from "react-dom/client";
+import confetti from "canvas-confetti";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { LocalNotifications } from "@capacitor/local-notifications";
@@ -93,7 +94,6 @@ import {
 import {
   signInAnonymously,
   onAuthStateChanged,
-  signInWithCustomToken,
   GoogleAuthProvider,
   isSignInWithEmailLink,
   sendSignInLinkToEmail,
@@ -101,7 +101,7 @@ import {
   signInWithPopup,
   completeGoogleRedirectIfNeeded,
   signOut as firebaseSignOut,
-} from "firebase/auth";
+} from "./lib/firebase-auth-compat.js";
 import {
   collection,
   doc,
@@ -117,8 +117,8 @@ import {
   getDocs,
   getDoc,
   loadAllTaskHistory,
-} from "firebase/firestore";
-import { auth, db, appId } from "/src/app/config/firebase.js";
+} from "./lib/firebase-firestore-compat.js";
+import { auth, db, appId } from "./config/firebase.js";
 import {
   TAILWIND_SAFELIST,
   MONTH_NAMES,
@@ -131,7 +131,7 @@ import {
   DEFAULT_MANAGEMENT_TEAM,
   DEFAULT_EDITORS_TEAM,
   EDITING_HIERARCHY_OPTIONS,
-} from "/src/app/constants/app.constants.js";
+} from "./constants/app.constants.js";
 import {
   compareDateOnlyStrings,
   getDateOnlyDiffDays,
@@ -139,7 +139,7 @@ import {
   isDateBeforeDateString,
   normalizeDateOnlyString,
   resolveStoredTaskRoomDate,
-} from "/src/app/utils/date.js";
+} from "./utils/date.js";
 import {
   KPI_MIN_TASKS,
   buildManagerKpiStats,
@@ -148,7 +148,7 @@ import {
   isWorkflowCompleted,
   normalizeEditingWorkflowStatus,
   rankPendingEditingTasks,
-} from "/src/app/utils/kpi.js";
+} from "./utils/kpi.js";
 import { apiFetch } from "./lib/backend-api.js";
 import {
   getCallRoomAlias,
@@ -158,7 +158,7 @@ import {
 import { registerFirebaseWebPush } from "./lib/firebase-web-push.js";
 import { createPortal } from "react-dom";
 
-const EMBEDDED_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
+const EMBEDDED_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
 const CHAT_MUTE_FOREVER = "forever";
 const CHAT_MUTE_DURATION_MS = {
   "8h": 8 * 60 * 60 * 1000,
@@ -390,8 +390,6 @@ const AgencyLogo = ({ className }) => {
 const GOOGLE_PROVIDER = auth ? new GoogleAuthProvider() : null;
 if (GOOGLE_PROVIDER)
   GOOGLE_PROVIDER.setCustomParameters({ prompt: "select_account" });
-const NATIVE_GOOGLE_TOKEN_STORAGE_KEY = "cluster_native_google_token";
-
 const VIEW_PERMISSIONS = {
   dashboard: "view_dashboard",
   clients: "view_clients",
@@ -1904,6 +1902,8 @@ const normalizeThemePalette = (value) =>
     : THEME_PALETTE_ALIASES[value] || "botanical";
 
 // --- APP PRINCIPAL ---
+const AUTOMATIC_DATA_REPAIR_ENABLED = false;
+
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1934,8 +1934,6 @@ function App() {
   const isFlushingPendingTaskStatusesRef = useRef(false);
   const lastReconciledDuplicateSignatureRef = useRef("");
   const lastIdentityLinkSyncSignatureRef = useRef("");
-  const nativeGoogleTokensSeenRef = useRef(new Set());
-
   const [clients, setClients] = useState([]);
   const [events, setEvents] = useState([]);
   const [managers, setManagers] = useState([]);
@@ -2066,23 +2064,11 @@ function App() {
           (item) => normalizeEmail(item.email) === authEmail,
         )
       : null;
-  const pendingRole = !authEmail
-    ? "viewer"
-    : pendingManagementMember
-      ? pendingManagementMember.role || "management"
-      : pendingMatchedManager
-        ? "manager"
-        : pendingMatchedEditor || pendingPreAuthorizedEditor
-          ? "editor"
-          : "viewer";
+  const pendingRole = "viewer";
   const effectiveResolvedAuthProfile = resolvedAuthProfile
     ? {
         ...resolvedAuthProfile,
-        role:
-          getUserRolePriority(pendingRole) >
-          getUserRolePriority(resolvedAuthProfile.role)
-            ? pendingRole
-            : resolvedAuthProfile.role,
+        role: resolvedAuthProfile.role || "viewer",
         managementKey:
           resolvedAuthProfile.managementKey ||
           pendingManagementMember?.directoryKey ||
@@ -2881,21 +2867,6 @@ function App() {
         }
         if (auth.currentUser) return;
 
-        if (
-          typeof __initial_auth_token !== "undefined" &&
-          __initial_auth_token
-        ) {
-          try {
-            await signInWithCustomToken(auth, __initial_auth_token);
-            return;
-          } catch (tokenError) {
-            console.error(
-              "No se pudo iniciar sesion con token inicial:",
-              tokenError,
-            );
-          }
-        }
-
         if (!auth.currentUser) await signInAnonymously(auth);
       } catch (error) {
         console.error("Error de Autenticación:", error);
@@ -2932,33 +2903,18 @@ function App() {
   useEffect(() => {
     if (!auth) return;
 
-    const extractNativeGoogleToken = (url = "") => {
-      if (!url || !String(url).startsWith("clusteragency://auth/google"))
-        return "";
-      try {
-        const target = new URL(url);
-        return target.searchParams.get("token") || "";
-      } catch {
-        return "";
-      }
-    };
-
-    const consumeNativeGoogleToken = async (token = "") => {
-      if (!token) return false;
-      if (nativeGoogleTokensSeenRef.current.has(token)) return false;
-      nativeGoogleTokensSeenRef.current.add(token);
-      window.localStorage.removeItem(NATIVE_GOOGLE_TOKEN_STORAGE_KEY);
+    const completeNativeGoogleRedirect = async () => {
+      const wasSignedIn = Boolean(auth.currentUser?.email);
       try {
         setIsSigningIn(true);
-        await signInWithCustomToken(auth, token);
-        if (!auth.currentUser?.email) {
-          throw new Error("Google no devolvio un usuario autenticado.");
+        const completed = await completeGoogleRedirectIfNeeded(auth);
+        if (completed && !wasSignedIn) {
+          setUser(auth.currentUser);
+          setView("dashboard");
+          localStorage.setItem("cluster_os_view", "dashboard");
+          showToast("Sesion iniciada con Google");
         }
-        setUser(auth.currentUser);
-        setView("dashboard");
-        localStorage.setItem("cluster_os_view", "dashboard");
-        showToast("Sesion iniciada con Google");
-        return true;
+        return completed;
       } catch (error) {
         console.error(
           "No se pudo completar el retorno nativo de Google:",
@@ -2971,26 +2927,13 @@ function App() {
       }
     };
 
-    const consumeAppUrl = async (url = "") => {
-      const token = extractNativeGoogleToken(url);
-      if (!token) return false;
-      if (nativeGoogleTokensSeenRef.current.has(token)) return false;
-      window.localStorage.setItem(NATIVE_GOOGLE_TOKEN_STORAGE_KEY, token);
-      return consumeNativeGoogleToken(token);
-    };
-
-    const consumeStoredToken = async () => {
-      const storedToken =
-        window.localStorage.getItem(NATIVE_GOOGLE_TOKEN_STORAGE_KEY) || "";
-      if (!storedToken) return false;
-      return consumeNativeGoogleToken(storedToken);
-    };
-
     let appUrlHandle = null;
     let resumeHandle = null;
 
     CapacitorApp.addListener("appUrlOpen", ({ url }) => {
-      consumeAppUrl(url).catch(() => {});
+      if (String(url || "").startsWith("clusteragency://auth/google")) {
+        completeNativeGoogleRedirect().catch(() => {});
+      }
     })
       .then((handle) => {
         appUrlHandle = handle;
@@ -3001,35 +2944,17 @@ function App() {
 
     CapacitorApp.getLaunchUrl()
       .then((result) => {
-        consumeAppUrl(result?.url || "").catch(() => {});
+        if (String(result?.url || "").startsWith("clusteragency://auth/google")) {
+          completeNativeGoogleRedirect().catch(() => {});
+        }
       })
       .catch(() => {});
 
-    consumeStoredToken().catch(() => {});
-
     CapacitorApp.addListener("resume", () => {
-      consumeStoredToken().catch(() => {});
-      CapacitorApp.getLaunchUrl()
-        .then((result) => {
-          consumeAppUrl(result?.url || "").catch(() => {});
-        })
-        .catch(() => {});
       // Al volver el foco (en web, "resume" se dispara al cambiar de pestaña),
       // NO redirigir a Inicio si el usuario ya estaba autenticado. Solo tratamos
       // esto como un inicio de sesión nuevo cuando antes no había sesión.
-      const wasSignedIn = Boolean(auth.currentUser?.email);
-      completeGoogleRedirectIfNeeded(auth)
-        .then((completed) => {
-          if (completed && !wasSignedIn) {
-            setUser(auth.currentUser);
-            setView("dashboard");
-            localStorage.setItem("cluster_os_view", "dashboard");
-            setIsSigningIn(false);
-          }
-        })
-        .catch(() => {
-          setIsSigningIn(false);
-        });
+      completeNativeGoogleRedirect().catch(() => {});
     })
       .then((handle) => {
         resumeHandle = handle;
@@ -3260,6 +3185,7 @@ function App() {
   }, [user, view]);
 
   useEffect(() => {
+    if (!AUTOMATIC_DATA_REPAIR_ENABLED) return;
     if (
       !db ||
       !user ||
@@ -3319,6 +3245,7 @@ function App() {
   ]);
 
   useEffect(() => {
+    if (!AUTOMATIC_DATA_REPAIR_ENABLED) return;
     if (!db || !user || !usersLoaded || hasRecoveredManagerDirectory) return;
     if (!userHasPermission(currentUserProfile, "manage_managers")) return;
 
@@ -3507,6 +3434,7 @@ function App() {
   ]);
 
   useEffect(() => {
+    if (!AUTOMATIC_DATA_REPAIR_ENABLED) return;
     if (!db || !user || !usersLoaded) return;
     const pendingManagementBackfill = appUsers
       .filter((item) => item.role === "management")
@@ -3537,6 +3465,7 @@ function App() {
   }, [db, user, usersLoaded, appUsers]);
 
   useEffect(() => {
+    if (!AUTOMATIC_DATA_REPAIR_ENABLED) return;
     if (!db || !user || !authEmail || !usersLoaded) return;
     const existingByUid = appUsers.find(
       (item) => item.authUid && item.authUid === user.uid,
@@ -3972,36 +3901,9 @@ function App() {
   const closeDelete = () =>
     setDeleteConfirm({ isOpen: false, type: null, id: null, title: "" });
 
-  const auditAction = async ({
-    action,
-    entityType,
-    entityId = "",
-    description = "",
-    status = "success",
-    changes = null,
-  }) => {
-    if (!db || !user) return;
-    try {
-      await addDoc(dataCollection("audit_logs"), {
-        action,
-        entityType,
-        entityId,
-        description,
-        status,
-        changes,
-        createdAt: nowIso(),
-        view,
-        actor: {
-          uid: user.uid || "",
-          email: authEmail || "",
-          name: currentUserProfile?.name || user.displayName || "Invitado",
-          role: currentUserProfile?.role || "viewer",
-        },
-      });
-    } catch (error) {
-      console.error("No se pudo registrar auditoria:", error);
-    }
-  };
+  // Las mutaciones se auditan en el servidor con la identidad de la sesion.
+  // Se conserva esta funcion como compatibilidad para los call sites de UI.
+  const auditAction = async () => {};
 
   const ensurePermission = async (permission, description) => {
     if (profileBlocked) {
@@ -4178,6 +4080,8 @@ function App() {
   };
 
   const reconcileUserDirectory = async ({ silent = false } = {}) => {
+    if (!AUTOMATIC_DATA_REPAIR_ENABLED)
+      return { changed: false, removedCount: 0, signature: "" };
     if (!db) return { changed: false, removedCount: 0, signature: "" };
 
     const [
@@ -4428,6 +4332,13 @@ function App() {
     editorId = "",
     silent = true,
   }) => {
+    if (!AUTOMATIC_DATA_REPAIR_ENABLED)
+      return {
+        changed: false,
+        migratedAccountTasks: 0,
+        migratedEditingTasks: 0,
+        linkedClients: 0,
+      };
     const normalizedEmail = normalizeEmail(email);
     if (!db || !normalizedEmail)
       return {
@@ -4634,6 +4545,7 @@ function App() {
     .join("|");
 
   useEffect(() => {
+    if (!AUTOMATIC_DATA_REPAIR_ENABLED) return;
     if (!db || !user || !usersLoaded || !duplicateUserSignature) return;
     if (
       isReconcilingUsersRef.current ||
@@ -4667,6 +4579,7 @@ function App() {
   }, [db, user, usersLoaded, duplicateUserSignature]);
 
   useEffect(() => {
+    if (!AUTOMATIC_DATA_REPAIR_ENABLED) return;
     if (
       !db ||
       !usersLoaded ||
@@ -4709,6 +4622,7 @@ function App() {
   ]);
 
   useEffect(() => {
+    if (!AUTOMATIC_DATA_REPAIR_ENABLED) return;
     if (
       !db ||
       !usersLoaded ||
@@ -4788,9 +4702,9 @@ function App() {
     [openTaskDetail],
   );
   const triggerConfetti = () => {
-    if (window.confetti) {
+    if (confetti) {
       const theme = getComputedStyle(document.documentElement);
-      window.confetti({
+      confetti({
         particleCount: 150,
         spread: 80,
         origin: { y: 0.6 },
@@ -5521,6 +5435,7 @@ function App() {
       text,
       authorName: senderName,
       authorId: currentUserProfile?.id || "",
+      mentionedIds,
       createdAt: nowIso(),
     };
     await updateDoc(dataDoc(col, task.id), {
@@ -5543,6 +5458,7 @@ function App() {
           senderName,
           taskTitle: task.title,
           taskType: type,
+          taskId: task.id,
           comment: text,
         });
       }
@@ -5626,6 +5542,8 @@ function App() {
                 senderName,
                 clientName,
                 comment: trimmed,
+                clientId,
+                messageId: createdMessage.id,
               },
         );
       }
@@ -6228,7 +6146,7 @@ function App() {
     const col = colMap[type];
     if (!col || !file) return;
     if (file.size > EMBEDDED_UPLOAD_MAX_BYTES) {
-      alert("El archivo es demasiado grande (máx. 8 MB)");
+      alert("El archivo es demasiado grande (máx. 3 MB)");
       return;
     }
     const base64 = await new Promise((resolve, reject) => {
@@ -6258,7 +6176,7 @@ function App() {
       0,
     );
     if (currentSize + file.size > EMBEDDED_UPLOAD_MAX_BYTES) {
-      alert("Los adjuntos de la tarea no pueden superar 8 MB en total.");
+      alert("Los adjuntos de la tarea no pueden superar 3 MB en total.");
       return;
     }
     await updateDoc(dataDoc(col, task.id), {
@@ -13663,6 +13581,13 @@ const ClientChatView = ({
     activeGroupMemberSet.has(String(person.id)),
   );
   const scopedMentionables = groupsLoaded ? activeGroupMembers : [];
+  const callMentionables = groupsLoaded
+    ? mentionables.filter(
+        (person) =>
+          activeGroupMemberSet.has(String(person.id)) ||
+          person.canReceiveCallsOutsideGroups === true,
+      )
+    : [];
 
   const mentionSuggestions = mentionOpen
     ? scopedMentionables
@@ -13759,9 +13684,9 @@ const ClientChatView = ({
         const tok = await apiFetch("/api/calls/jaas-token", {
           method: "POST",
           body: JSON.stringify({
-            name: currentUserProfile?.name || "Usuario",
-            email: currentUserProfile?.email || "",
-            moderator: !!activeCall.isHost,
+            roomId: activeCall.roomId,
+            messageId: activeCall.messageId,
+            clientId: activeClient?.id || "",
           }),
         });
         if (disposed || !tok?.jwt || !tok?.appId) return;
@@ -13855,7 +13780,7 @@ const ClientChatView = ({
     try {
       for (const file of files) {
         if (pendingSize + file.size > EMBEDDED_UPLOAD_MAX_BYTES) {
-          alert("Los archivos pendientes no pueden superar 8 MB en total.");
+          alert("Los archivos pendientes no pueden superar 3 MB en total.");
           continue;
         }
         const data = await chatFileToBase64(file);
@@ -13944,7 +13869,7 @@ const ClientChatView = ({
           return;
         }
         if (blob.size > EMBEDDED_UPLOAD_MAX_BYTES) {
-          alert("La nota de voz supera el máximo de 8 MB.");
+          alert("La nota de voz supera el máximo de 3 MB.");
           sendRecordingRef.current = false;
           recordSecondsRef.current = 0;
           recordContextRef.current = null;
@@ -14081,7 +14006,7 @@ const ClientChatView = ({
     }
   };
 
-  const STICKER_MAX = 2 * 1024 * 1024; // 2 MB por sticker (biblioteca compartida)
+  const STICKER_MAX = 512 * 1024;
   const handleStickerUpload = async (fileList) => {
     const file = (fileList || [])[0];
     if (!file) return;
@@ -14090,14 +14015,13 @@ const ClientChatView = ({
       "image/gif",
       "image/png",
       "image/jpeg",
-      "image/svg+xml",
     ];
     if (!okTypes.includes(file.type)) {
       alert("Usa una imagen webp, gif, png o jpg.");
       return;
     }
     if (file.size > STICKER_MAX) {
-      alert("El sticker supera el máximo de 2 MB.");
+      alert("El sticker supera el máximo de 512 KB.");
       return;
     }
     setUploadingSticker(true);
@@ -15352,7 +15276,7 @@ const ClientChatView = ({
                             <input
                               ref={stickerInputRef}
                               type="file"
-                              accept="image/webp,image/gif,image/png,image/jpeg,image/svg+xml"
+                              accept="image/webp,image/gif,image/png,image/jpeg"
                               className="hidden"
                               onChange={(event) =>
                                 handleStickerUpload(event.target.files)
@@ -15847,10 +15771,10 @@ const ClientChatView = ({
               />
             </div>
             <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scroll">
-              {scopedMentionables
+              {callMentionables
                 .filter(
                   (person) =>
-                    String(person.id) !== String(currentUserId) &&
+                    String(person.id) !== membershipIdentity &&
                     (!callSearch.trim() ||
                       (person.name || "")
                         .toLowerCase()
@@ -17884,6 +17808,7 @@ const TaskDetailModal = ({
                                     currentUserProfile?.name || "Alguien",
                                   taskTitle: task.title,
                                   taskType: type,
+                                  taskId: task.id,
                                 });
                             }
                           }}
@@ -20280,7 +20205,7 @@ const UnifiedModuleKanbanView = ({
               <button
                 type="button"
                 onClick={handleAddTask}
-                className="bg-[#c5f82a] text-black font-bold rounded-xl px-4 py-2.5 flex items-center gap-2 hover:opacity-90 transition-opacity shrink-0"
+                className="bg-[var(--primary)] text-[var(--primary-contrast)] font-bold rounded-xl px-4 py-2.5 flex items-center gap-2 hover:opacity-90 transition-opacity shrink-0"
               >
                 <Icon name="Plus" size={16} />
                 {addButtonLabel}

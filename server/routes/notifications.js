@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { env } from '../config/env.js';
 import { escapeHtml, sendEmail } from '../lib/email.js';
 import { asyncHandler, createHttpError } from '../lib/http.js';
-import { findFirstRecordByEmail } from '../lib/records.js';
+import { findFirstRecordByEmail, getRecord } from '../lib/records.js';
+import { getCollectionPermission, hasPermission } from '../lib/permissions.js';
 import { getRequestOrigin } from '../lib/request-origin.js';
 import { requireAuthenticatedUser } from '../lib/sessions.js';
 import { normalizeEmail } from '../lib/text.js';
@@ -11,6 +12,11 @@ const router = Router();
 
 const NOTIFICATION_TYPES = new Set(['assigned', 'mention', 'chat_mention', 'call_invite']);
 const RECIPIENT_COLLECTIONS = ['users', 'managers', 'editors'];
+const TASK_COLLECTION_BY_TYPE = {
+    accountTask: 'account_tasks',
+    editingTask: 'editing',
+    managementTask: 'management_tasks'
+};
 
 const findRecipient = async (email) => {
     const matches = await Promise.all(RECIPIENT_COLLECTIONS.map((collectionName) => (
@@ -119,6 +125,53 @@ router.post('/send', asyncHandler(async (req, res) => {
     const recipient = await findRecipient(to);
     if (!recipient || recipient.isActive === false) {
         throw createHttpError(400, 'El destinatario no pertenece al equipo activo.', 'notifications/invalid-recipient');
+    }
+
+    if (type === 'chat_mention' || type === 'call_invite') {
+        if (!hasPermission(actor, 'send_client_chat')) {
+            throw createHttpError(403, 'No tienes permisos para notificar desde el chat.', 'auth/insufficient-permission');
+        }
+        const messageId = String(req.body?.messageId || '').trim();
+        const message = messageId
+            ? await getRecord({ collectionName: 'client_chats', recordId: messageId })
+            : null;
+        const isAuthoredByActor = String(message?.authorId || '') === String(actor.id || '');
+        const includesRecipient = (message?.mentionedIds || []).map(String).includes(String(recipient.id));
+        const hasMatchingClient = String(message?.clientId || '') === String(req.body?.clientId || '');
+        const hasMatchingCall = type !== 'call_invite'
+            || String(message?.call?.roomId || '') === String(req.body?.roomId || '');
+        if (!message || !isAuthoredByActor || !includesRecipient || !hasMatchingClient || !hasMatchingCall) {
+            throw createHttpError(403, 'La notificacion no corresponde a un mensaje valido.', 'notifications/resource-mismatch');
+        }
+    } else {
+        const collectionName = TASK_COLLECTION_BY_TYPE[String(req.body?.taskType || '')];
+        const taskId = String(req.body?.taskId || '').trim();
+        const readPermission = collectionName ? getCollectionPermission(collectionName, 'read') : null;
+        const task = collectionName && taskId
+            ? await getRecord({ collectionName, recordId: taskId })
+            : null;
+        if (!task || !readPermission || !hasPermission(actor, readPermission)) {
+            throw createHttpError(403, 'La notificacion no corresponde a una tarea accesible.', 'notifications/resource-mismatch');
+        }
+        if (type === 'assigned') {
+            const assigneeIds = [
+                ...(Array.isArray(task.assignees) ? task.assignees : []),
+                task.contextId,
+                task.assigneeUserId
+            ].filter(Boolean).map(String);
+            if (!assigneeIds.includes(String(recipient.id))) {
+                throw createHttpError(403, 'El destinatario no esta asignado a esta tarea.', 'notifications/resource-mismatch');
+            }
+        }
+        if (type === 'mention') {
+            const comments = Array.isArray(task.comments) ? task.comments : [];
+            const comment = comments.at(-1);
+            const isAuthoredByActor = String(comment?.authorId || '') === String(actor.id || '');
+            const includesRecipient = (comment?.mentionedIds || []).map(String).includes(String(recipient.id));
+            if (!isAuthoredByActor || !includesRecipient) {
+                throw createHttpError(403, 'La mencion no corresponde al comentario guardado.', 'notifications/resource-mismatch');
+            }
+        }
     }
 
     const appUrl = env.appBaseUrl || getRequestOrigin(req);
