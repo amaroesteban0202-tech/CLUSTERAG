@@ -214,70 +214,41 @@ const validateUserMutation = async ({ existing = null, payload, recordId = '' })
     }
 };
 
-const requireReference = async ({ collectionName, recordId, field, trx }) => {
-    if (!recordId) return;
-    const record = await getRecord({ collectionName, recordId: String(recordId), trx });
-    if (!record) {
-        throw createHttpError(400, `La referencia ${field} no existe.`, 'document/invalid-reference');
-    }
-};
+// El responsable de una tarea puede vivir en cualquiera de los tres
+// directorios: el selector de la UI mezcla managers/editors con el resto de
+// usuarios de la app, asi que exigir una sola coleccion dejaba sin poder
+// agendar a quien no estuviera en el directorio de esa sala.
+const PEOPLE_COLLECTIONS = ['users', 'managers', 'editors'];
 
 const validateReferences = async ({ collectionName, existing = null, payload, trx }) => {
     const record = { ...(existing || {}), ...(payload || {}) };
+    // Solo se valida lo que esta escritura cambia. Una referencia heredada y ya
+    // rota (datos viejos) no puede bloquear editar la tarea ni moverla de
+    // columna; al crear no hay `existing` y se valida todo.
+    const requireReference = async (field, collections) => {
+        if (existing && String(record[field] ?? '') === String(existing[field] ?? '')) return;
+        const recordId = String(record[field] || '');
+        if (!recordId) return;
+        for (const name of collections) {
+            if (await getRecord({ collectionName: name, recordId, trx })) return;
+        }
+        throw createHttpError(400, `La referencia ${field} no existe.`, 'document/invalid-reference');
+    };
+
     if (TASK_COLLECTIONS.has(collectionName)) {
-        await requireReference({
-            collectionName: 'clients',
-            recordId: record.clientId,
-            field: 'clientId',
-            trx
-        });
-        const contextCollection = collectionName === 'account_tasks'
-            ? 'managers'
-            : collectionName === 'editing'
-                ? 'editors'
-                : 'users';
-        await requireReference({
-            collectionName: contextCollection,
-            recordId: record.contextId,
-            field: 'contextId',
-            trx
-        });
-        await requireReference({
-            collectionName: 'users',
-            recordId: record.assigneeUserId,
-            field: 'assigneeUserId',
-            trx
-        });
+        await requireReference('clientId', ['clients']);
+        await requireReference('contextId', PEOPLE_COLLECTIONS);
+        await requireReference('assigneeUserId', PEOPLE_COLLECTIONS);
     }
     if (collectionName === 'clients') {
-        await requireReference({
-            collectionName: 'managers',
-            recordId: record.managerId,
-            field: 'managerId',
-            trx
-        });
+        await requireReference('managerId', ['managers']);
     }
     if (collectionName === 'managers' || collectionName === 'editors') {
-        await requireReference({
-            collectionName: 'users',
-            recordId: record.userId,
-            field: 'userId',
-            trx
-        });
+        await requireReference('userId', ['users']);
     }
     if (collectionName === 'users') {
-        await requireReference({
-            collectionName: 'managers',
-            recordId: record.linkedManagerId,
-            field: 'linkedManagerId',
-            trx
-        });
-        await requireReference({
-            collectionName: 'editors',
-            recordId: record.linkedEditorId,
-            field: 'linkedEditorId',
-            trx
-        });
+        await requireReference('linkedManagerId', ['managers']);
+        await requireReference('linkedEditorId', ['editors']);
     }
     if (['chat_hidden', 'chat_reactions', 'chat_pins'].includes(collectionName)) {
         const message = record.messageId

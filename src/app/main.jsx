@@ -2685,13 +2685,21 @@ function App() {
     currentUserProfile,
     editingTaskAssignees,
   );
-  const defaultManagementAssigneeId =
-    currentManagementAssignee?.id &&
-    !["anonymous", "pending-user"].includes(currentManagementAssignee.id)
-      ? currentManagementAssignee.id
+  // `anonymous` y `pending-user` son ids de marcador del perfil sin resolver:
+  // si llegan al formulario se guardan como responsable inexistente.
+  const resolveDefaultAssigneeId = (assignee) =>
+    assignee?.id && !["anonymous", "pending-user"].includes(assignee.id)
+      ? assignee.id
       : "";
-  const defaultAccountAssigneeId = currentAccountAssignee?.id || "";
-  const defaultEditingAssigneeId = currentEditingAssignee?.id || "";
+  const defaultManagementAssigneeId = resolveDefaultAssigneeId(
+    currentManagementAssignee,
+  );
+  const defaultAccountAssigneeId = resolveDefaultAssigneeId(
+    currentAccountAssignee,
+  );
+  const defaultEditingAssigneeId = resolveDefaultAssigneeId(
+    currentEditingAssignee,
+  );
   const privilegedUsers = appUsers.filter(
     (item) =>
       item.isActive !== false &&
