@@ -58,13 +58,15 @@ export const sendEmail = async ({
     return { mode: 'smtp' };
 };
 
-const buildManagementTaskEmail = ({
+export const buildManagementTaskEmail = ({
     variant,
     label,
     overdueHours,
     taskTypeLabel = 'tarea',
     roomLabel = 'Cluster OS',
     doneLabel = 'completada',
+    recipientRole = 'assignee',
+    recipientName,
     assigneeName,
     assignedByName,
     taskTitle,
@@ -73,9 +75,11 @@ const buildManagementTaskEmail = ({
     dueHuman,
     taskUrl
 }) => {
+    const isAssigner = recipientRole === 'assigner';
     const safeTitle = escapeHtml(taskTitle);
     const safeName = escapeHtml(assigneeName || '');
     const safeAssignedBy = escapeHtml(assignedByName || '');
+    const safeRecipient = escapeHtml(recipientName || (isAssigner ? assignedByName : assigneeName) || '');
     const safeClient = clientName ? escapeHtml(clientName) : '';
     const safeNotes = taskNotes ? escapeHtml(taskNotes) : '';
     const safeDue = escapeHtml(dueHuman || '');
@@ -89,15 +93,32 @@ const buildManagementTaskEmail = ({
     let accent = '#7c3aed';
 
     if (variant === 'upcoming') {
-        subject = `[Cluster OS] Tarea proxima a vencer (${label}): ${taskTitle}`;
-        heading = `Tu tarea esta por vencer en ${escapeHtml(label)}`;
-        lead = `Hola${safeName ? ` ${safeName}` : ''}, tenes una ${escapeHtml(taskTypeLabel)}${safeAssignedBy ? ` asignada por <strong>${safeAssignedBy}</strong>` : ''} que vence en <strong>${escapeHtml(label)}</strong>.`;
+        if (isAssigner) {
+            subject = `[Cluster OS] Tarea que asignaste proxima a vencer (${label}): ${taskTitle}`;
+            heading = `Una tarea que asignaste vence en ${escapeHtml(label)}`;
+            lead = `Hola${safeRecipient ? ` ${safeRecipient}` : ''}, la ${escapeHtml(taskTypeLabel)} que asignaste${safeName ? ` a <strong>${safeName}</strong>` : ''} vence en <strong>${escapeHtml(label)}</strong>.`;
+        } else {
+            subject = `[Cluster OS] Tarea proxima a vencer (${label}): ${taskTitle}`;
+            heading = `Tu tarea esta por vencer en ${escapeHtml(label)}`;
+            lead = `Hola${safeName ? ` ${safeName}` : ''}, tenes una ${escapeHtml(taskTypeLabel)}${safeAssignedBy ? ` asignada por <strong>${safeAssignedBy}</strong>` : ''} que vence en <strong>${escapeHtml(label)}</strong>.`;
+        }
         accent = '#f59e0b';
     } else if (variant === 'overdue') {
-        subject = `[Cluster OS] Tarea VENCIDA: ${taskTitle}`;
-        heading = 'Tu tarea acaba de vencer';
-        lead = `Hola${safeName ? ` ${safeName}` : ''}, la siguiente ${escapeHtml(taskTypeLabel)}${safeAssignedBy ? ` asignada por <strong>${safeAssignedBy}</strong>` : ''} ya paso su fecha limite y sigue pendiente.`;
+        if (isAssigner) {
+            subject = `[Cluster OS] Tarea que asignaste VENCIDA: ${taskTitle}`;
+            heading = 'Una tarea que asignaste acaba de vencer';
+            lead = `Hola${safeRecipient ? ` ${safeRecipient}` : ''}, la ${escapeHtml(taskTypeLabel)} que asignaste${safeName ? ` a <strong>${safeName}</strong>` : ''} ya paso su fecha limite y sigue pendiente.`;
+        } else {
+            subject = `[Cluster OS] Tarea VENCIDA: ${taskTitle}`;
+            heading = 'Tu tarea acaba de vencer';
+            lead = `Hola${safeName ? ` ${safeName}` : ''}, la siguiente ${escapeHtml(taskTypeLabel)}${safeAssignedBy ? ` asignada por <strong>${safeAssignedBy}</strong>` : ''} ya paso su fecha limite y sigue pendiente.`;
+        }
         accent = '#dc2626';
+    } else if (isAssigner) {
+        subject = `[Cluster OS] Tarea que asignaste vencida hace ${overdueHours || 0}h: ${taskTitle}`;
+        heading = `Recordatorio: sigue vencida hace ${overdueHours || 0}h`;
+        lead = `Hola${safeRecipient ? ` ${safeRecipient}` : ''}, la ${escapeHtml(taskTypeLabel)} que asignaste${safeName ? ` a <strong>${safeName}</strong>` : ''} todavia sigue pendiente. Te enviaremos un aviso cada 24 h hasta que se marque como ${escapeHtml(doneLabel)}.`;
+        accent = '#b91c1c';
     } else {
         subject = `[Cluster OS] Tarea vencida hace ${overdueHours || 0}h: ${taskTitle}`;
         heading = `Recordatorio: sigue vencida hace ${overdueHours || 0}h`;
@@ -108,7 +129,8 @@ const buildManagementTaskEmail = ({
     const rows = [
         ['Tarea', `<strong>${safeTitle}</strong>`],
         ['Fecha limite', safeDue],
-        ...(safeAssignedBy ? [['Asignada por', safeAssignedBy]] : []),
+        ...(safeName ? [['Asignada a', safeName]] : []),
+        ...(!isAssigner && safeAssignedBy ? [['Asignada por', safeAssignedBy]] : []),
         ...(safeClient ? [['Cliente', safeClient]] : []),
         ...(safeNotes ? [['Notas', safeNotes.replace(/\n/g, '<br>')]] : [])
     ];
@@ -117,6 +139,10 @@ const buildManagementTaskEmail = ({
         `<tr><td style="padding:6px 12px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.08em;">${k}</td>`
         + `<td style="padding:6px 12px;color:#0f172a;font-size:14px;">${v}</td></tr>`
     )).join('');
+
+    const footer = isAssigner
+        ? `Este correo fue generado automaticamente. Cuando la tarea se mueva a <em>${escapeHtml(doneLabel)}</em> dejaran de llegar recordatorios.`
+        : `Este correo fue generado automaticamente. Si ya completaste la tarea, abrila en Cluster OS y movela a <em>${escapeHtml(doneLabel)}</em> para dejar de recibir recordatorios.`;
 
     const html = `
         <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;">
@@ -129,7 +155,7 @@ const buildManagementTaskEmail = ({
                     <p style="margin:0 0 16px;color:#334155;font-size:14px;line-height:1.5;">${lead}</p>
                     <table style="width:100%;border-collapse:collapse;background:#f8fafc;border-radius:12px;">${tableRows}</table>
                     ${link}
-                    <p style="margin:16px 0 0;color:#94a3b8;font-size:12px;">Este correo fue generado automaticamente. Si ya completaste la tarea, abrila en Cluster OS y movela a <em>${escapeHtml(doneLabel)}</em> para dejar de recibir recordatorios.</p>
+                    <p style="margin:16px 0 0;color:#94a3b8;font-size:12px;">${footer}</p>
                 </div>
             </div>
         </div>

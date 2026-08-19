@@ -1,0 +1,18 @@
+export {
+  getFirestore,
+  initializeFirestore,
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  orderBy,
+  limit,
+  writeBatch,
+  setDoc,
+  getDocs,
+  getDoc,
+  loadAllTaskHistory,
+} from "./firebase-firestore-compat.js";

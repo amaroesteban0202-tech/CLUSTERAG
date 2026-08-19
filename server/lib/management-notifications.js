@@ -2,7 +2,9 @@ import { db } from '../db/knex.js';
 import { env } from '../config/env.js';
 import { listRecords, upsertRecord } from './records.js';
 import { nowIso } from './time.js';
+import { normalizeEmail } from './text.js';
 import { sendManagementTaskReminderEmail } from './email.js';
+import { sendTaskReminderPush } from './push-notifications.js';
 
 // Honduras no aplica DST, siempre UTC-6.
 const HONDURAS_OFFSET = '-06:00';
@@ -54,15 +56,38 @@ export const computeDueAt = (task = {}, config = TASK_CONFIGS[0]) => {
     return Number.isFinite(ms) ? { iso, ms } : null;
 };
 
-const normalizeAssignee = (record = null) => (
-    record?.email ? { id: record.id, name: record.name || '', email: record.email } : null
+const normalizePerson = (record = null) => (
+    record?.email ? { id: record.id, name: record.name || '', email: normalizeEmail(record.email) } : null
 );
 
-const resolveAssignee = (task, config, recordsByCollection) => {
+const findPersonById = (recordId, recordsByCollection) => {
+    const id = String(recordId || '');
+    if (!id) return null;
+    for (const collectionName of ['users', 'managers', 'editors']) {
+        const person = normalizePerson(recordsByCollection[collectionName].get(id));
+        if (person) return person;
+    }
+    return null;
+};
+
+const findPersonByEmail = (email, recordsByCollection) => {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return null;
+    for (const collectionName of ['users', 'managers', 'editors']) {
+        for (const record of recordsByCollection[collectionName].values()) {
+            if (normalizeEmail(record.email) === normalized) {
+                return normalizePerson(record);
+            }
+        }
+    }
+    return null;
+};
+
+export const resolveAssignee = (task, config, recordsByCollection) => {
     const directUserId = task.assigneeUserId || '';
     if (directUserId) {
         const fromUsers = recordsByCollection.users.get(String(directUserId));
-        const assignee = normalizeAssignee(fromUsers);
+        const assignee = normalizePerson(fromUsers);
         if (assignee) return assignee;
     }
 
@@ -70,25 +95,58 @@ const resolveAssignee = (task, config, recordsByCollection) => {
     if (!contextId) return null;
 
     const fromContext = recordsByCollection[config.contextCollection].get(String(contextId));
-    const contextAssignee = normalizeAssignee(fromContext);
+    const contextAssignee = normalizePerson(fromContext);
     if (contextAssignee) return contextAssignee;
 
     const linkedUserId = fromContext?.userId || '';
     if (linkedUserId) {
         const fromLinkedUser = recordsByCollection.users.get(String(linkedUserId));
-        const linkedAssignee = normalizeAssignee(fromLinkedUser);
+        const linkedAssignee = normalizePerson(fromLinkedUser);
         if (linkedAssignee) return linkedAssignee;
     }
 
-    // Compatibilidad para datos antiguos con contextId apuntando a otra coleccion.
     for (const collectionName of ['users', 'managers', 'editors']) {
         if (collectionName === config.contextCollection) continue;
         const fallbackRecord = recordsByCollection[collectionName].get(String(contextId));
-        const fallbackAssignee = normalizeAssignee(fallbackRecord);
+        const fallbackAssignee = normalizePerson(fallbackRecord);
         if (fallbackAssignee) return fallbackAssignee;
     }
 
     return null;
+};
+
+export const resolveAssigner = (task, recordsByCollection) => {
+    const byId = findPersonById(task.assignedByUserId, recordsByCollection);
+    if (byId) return byId;
+
+    const byEmail = findPersonByEmail(task.assignedByEmail, recordsByCollection);
+    if (byEmail) return byEmail;
+
+    const email = normalizeEmail(task.assignedByEmail);
+    if (!email) return null;
+    return {
+        id: String(task.assignedByUserId || ''),
+        name: String(task.assignedByName || '').trim(),
+        email
+    };
+};
+
+export const buildReminderRecipients = ({ assignee = null, assigner = null } = {}) => {
+    const recipients = [];
+    const seen = new Set();
+    const push = (person, role) => {
+        const email = normalizeEmail(person?.email);
+        if (!email || seen.has(email)) return;
+        seen.add(email);
+        recipients.push({
+            email,
+            name: person.name || '',
+            role
+        });
+    };
+    push(assignee, 'assignee');
+    push(assigner, 'assigner');
+    return recipients;
 };
 
 const resolveClientName = (task, clientsById) => {
@@ -126,10 +184,38 @@ const updateTaskFlags = async (task, patch) => {
     });
 };
 
-// Umbrales (en horas antes de vencer)
 const REMINDER_STAGES = [
     { key: 'reminder8hSentAt', hours: 8, label: '8 horas' }
 ];
+
+const sendReminderToRecipients = async ({
+    recipients,
+    baseContext,
+    extras,
+    taskId = '',
+    collectionName = ''
+}) => {
+    for (const recipient of recipients) {
+        await sendManagementTaskReminderEmail({
+            ...baseContext,
+            ...extras,
+            to: recipient.email,
+            recipientRole: recipient.role,
+            recipientName: recipient.name
+        });
+    }
+    await sendTaskReminderPush({
+        recipients,
+        variant: extras.variant,
+        label: extras.label,
+        overdueHours: extras.overdueHours,
+        taskTitle: baseContext.taskTitle,
+        taskTypeLabel: baseContext.taskTypeLabel,
+        clientName: baseContext.clientName,
+        taskId,
+        collectionName
+    });
+};
 
 export const processManagementTaskReminders = async () => {
     const report = {
@@ -180,14 +266,17 @@ export const processManagementTaskReminders = async () => {
             }
 
             let assignee = null;
+            let assigner = null;
             try {
                 assignee = resolveAssignee(task, config, recordsByCollection);
+                assigner = resolveAssigner(task, recordsByCollection);
             } catch (error) {
-                report.errors.push({ collectionName: config.collectionName, taskId: task.id, step: 'resolveAssignee', message: error.message });
+                report.errors.push({ collectionName: config.collectionName, taskId: task.id, step: 'resolveRecipients', message: error.message });
                 continue;
             }
 
-            if (!assignee?.email) {
+            const recipients = buildReminderRecipients({ assignee, assigner });
+            if (recipients.length === 0) {
                 report.skippedNoEmail += 1;
                 continue;
             }
@@ -198,9 +287,8 @@ export const processManagementTaskReminders = async () => {
             const msUntilDue = due.ms - now;
 
             const baseContext = {
-                to: assignee.email,
-                assigneeName: assignee.name,
-                assignedByName: task.assignedByName || '',
+                assigneeName: assignee?.name || '',
+                assignedByName: assigner?.name || task.assignedByName || '',
                 taskTypeLabel: config.taskTypeLabel,
                 roomLabel: config.roomLabel,
                 doneLabel: config.doneLabel,
@@ -216,10 +304,12 @@ export const processManagementTaskReminders = async () => {
                     for (const stage of REMINDER_STAGES) {
                         const hoursLeft = msUntilDue / HOUR_MS;
                         if (hoursLeft <= stage.hours && !task[stage.key]) {
-                            await sendManagementTaskReminderEmail({
-                                ...baseContext,
-                                variant: 'upcoming',
-                                label: stage.label
+                            await sendReminderToRecipients({
+                                recipients,
+                                baseContext,
+                                extras: { variant: 'upcoming', label: stage.label },
+                                taskId: task.id,
+                                collectionName: config.collectionName
                             });
                             await updateTaskFlags({ ...task, collectionName: config.collectionName }, { [stage.key]: nowIso() });
                             task[stage.key] = nowIso();
@@ -230,10 +320,15 @@ export const processManagementTaskReminders = async () => {
                 } else {
                     const overdueMs = -msUntilDue;
                     if (!task.overdueSentAt) {
-                        await sendManagementTaskReminderEmail({
-                            ...baseContext,
-                            variant: 'overdue',
-                            overdueHours: Math.floor(overdueMs / HOUR_MS)
+                        await sendReminderToRecipients({
+                            recipients,
+                            baseContext,
+                            extras: {
+                                variant: 'overdue',
+                                overdueHours: Math.floor(overdueMs / HOUR_MS)
+                            },
+                            taskId: task.id,
+                            collectionName: config.collectionName
                         });
                         const stamp = nowIso();
                         await updateTaskFlags({ ...task, collectionName: config.collectionName }, { overdueSentAt: stamp, lastOverdueNagAt: stamp });
@@ -244,10 +339,15 @@ export const processManagementTaskReminders = async () => {
                             ? Date.parse(task.lastOverdueNagAt)
                             : Date.parse(task.overdueSentAt);
                         if (Number.isFinite(lastNag) && (now - lastNag) >= DAY_MS) {
-                            await sendManagementTaskReminderEmail({
-                                ...baseContext,
-                                variant: 'overdue-nag',
-                                overdueHours: Math.floor(overdueMs / HOUR_MS)
+                            await sendReminderToRecipients({
+                                recipients,
+                                baseContext,
+                                extras: {
+                                    variant: 'overdue-nag',
+                                    overdueHours: Math.floor(overdueMs / HOUR_MS)
+                                },
+                                taskId: task.id,
+                                collectionName: config.collectionName
                             });
                             await updateTaskFlags({ ...task, collectionName: config.collectionName }, { lastOverdueNagAt: nowIso() });
                             report.nagsSent += 1;
@@ -264,5 +364,4 @@ export const processManagementTaskReminders = async () => {
     return report;
 };
 
-// util para debug manual
 export const _internals = { db };

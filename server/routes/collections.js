@@ -542,12 +542,36 @@ const prepareCollectionPayload = ({ collectionName, payload, existing = null, ac
         if (!title) {
             throw createHttpError(400, 'El titulo de la tarea es obligatorio.', 'task/title-required');
         }
-        return {
+        const nextPayload = {
             ...safePayload,
             title,
             createdAt: existing?.createdAt || safePayload.createdAt || stamp,
             updatedAt: stamp
         };
+        const nextContextId = String(
+            Object.hasOwn(nextPayload, 'contextId') ? nextPayload.contextId : existing?.contextId || ''
+        ).trim();
+        const nextAssigneeUserId = String(
+            Object.hasOwn(nextPayload, 'assigneeUserId')
+                ? nextPayload.assigneeUserId
+                : existing?.assigneeUserId || ''
+        ).trim();
+        const assigneeChanged = Boolean(existing) && (
+            nextContextId !== String(existing.contextId || '').trim()
+            || nextAssigneeUserId !== String(existing.assigneeUserId || '').trim()
+        );
+        if (isCreate || assigneeChanged) {
+            nextPayload.assignedByUserId = actor?.id || '';
+            nextPayload.assignedByName = String(actor?.name || '').trim()
+                || String(actor?.email || '').trim()
+                || 'Sistema';
+            nextPayload.assignedByEmail = normalizeEmail(actor?.email);
+        } else {
+            nextPayload.assignedByUserId = existing?.assignedByUserId || '';
+            nextPayload.assignedByName = existing?.assignedByName || '';
+            nextPayload.assignedByEmail = existing?.assignedByEmail || '';
+        }
+        return nextPayload;
     }
     if (collectionName === 'clients') {
         const name = String(safePayload.name ?? existing?.name ?? '').trim();

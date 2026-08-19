@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { getFirebaseAdminApp } from './firebase-admin.js';
 import { deleteRecord, listRecords } from './records.js';
 import { buildChatGroups } from './chat-groups.js';
+import { normalizeEmail } from './text.js';
 
 const PUSH_TOKEN_COLLECTION = 'push_tokens';
 const CHAT_MUTE_COLLECTION = 'chat_mutes';
@@ -218,5 +219,191 @@ export const sendClientChatPush = async ({ message, clientName = 'Cliente' }) =>
     } catch (error) {
         console.warn('[push]', error?.message || error);
         return { sent: 0, failed: recipients.length };
+    }
+};
+
+export const buildTaskReminderPush = ({
+    variant = 'upcoming',
+    taskTitle = '(sin titulo)',
+    taskTypeLabel = 'tarea',
+    overdueHours = 0,
+    recipientRole = 'assignee',
+    clientName = '',
+    taskId = '',
+    collectionName = '',
+    label = ''
+} = {}) => {
+    const isAssigner = recipientRole === 'assigner';
+    const typeLabel = String(taskTypeLabel || 'tarea');
+    const hours = Number(overdueHours) || 0;
+    const stageLabel = String(label || '8 horas');
+    let title = '';
+    let body = '';
+
+    if (variant === 'upcoming') {
+        title = isAssigner
+            ? `Tarea que asignaste proxima a vencer (${stageLabel})`
+            : `Tarea proxima a vencer (${stageLabel})`;
+        body = `${typeLabel}: ${taskTitle}`;
+    } else if (variant === 'overdue') {
+        title = isAssigner
+            ? 'Tarea que asignaste vencida'
+            : 'Tarea vencida';
+        body = `${typeLabel}: ${taskTitle}`;
+    } else {
+        title = isAssigner
+            ? `Tarea que asignaste vencida hace ${hours}h`
+            : `Tarea vencida hace ${hours}h`;
+        body = `${typeLabel}: ${taskTitle}`;
+    }
+
+    if (clientName) body = `${body} · ${clientName}`;
+
+    return {
+        title,
+        body,
+        data: {
+            type: 'task-reminder',
+            variant: String(variant || ''),
+            taskId: String(taskId || ''),
+            collectionName: String(collectionName || ''),
+            clientName: String(clientName || ''),
+            recipientRole: String(recipientRole || 'assignee'),
+            overdueHours: String(hours)
+        },
+        channelId: 'cluster-messages'
+    };
+};
+
+export const sendTaskReminderPush = async ({
+    recipients = [],
+    variant,
+    taskTitle,
+    taskTypeLabel,
+    overdueHours,
+    clientName,
+    taskId,
+    collectionName,
+    label
+} = {}) => {
+    if (!Array.isArray(recipients) || recipients.length === 0) {
+        return { sent: 0, failed: 0, skipped: true };
+    }
+
+    try {
+        const [tokens, users] = await Promise.all([
+            listRecords({
+                collectionName: PUSH_TOKEN_COLLECTION,
+                sortBy: 'updatedAt',
+                sortDirection: 'desc'
+            }),
+            listRecords({ collectionName: 'users' })
+        ]);
+
+        const userIdByEmail = new Map();
+        for (const user of users) {
+            const email = normalizeEmail(user?.email);
+            if (!email || !user?.id) continue;
+            if (!userIdByEmail.has(email)) userIdByEmail.set(email, String(user.id));
+        }
+
+        const recipientUserIdsByRole = new Map();
+        for (const recipient of recipients) {
+            const email = normalizeEmail(recipient?.email);
+            const userId = email ? userIdByEmail.get(email) : null;
+            if (!userId) continue;
+            const role = recipient.role === 'assigner' ? 'assigner' : 'assignee';
+            if (!recipientUserIdsByRole.has(role)) recipientUserIdsByRole.set(role, new Set());
+            recipientUserIdsByRole.get(role).add(userId);
+        }
+
+        if (recipientUserIdsByRole.size === 0) {
+            return { sent: 0, failed: 0, skipped: true };
+        }
+
+        const messaging = getMessaging(getFirebaseAdminApp());
+        let sent = 0;
+        let failed = 0;
+
+        for (const [role, userIds] of recipientUserIdsByRole.entries()) {
+            const roleTokens = tokens.filter((entry) => (
+                entry?.token && userIds.has(String(entry.userId || ''))
+            ));
+            if (roleTokens.length === 0) continue;
+
+            const push = buildTaskReminderPush({
+                variant,
+                taskTitle,
+                taskTypeLabel,
+                overdueHours,
+                recipientRole: role,
+                clientName,
+                taskId,
+                collectionName,
+                label
+            });
+            const deliveryGroups = [
+                {
+                    isWeb: true,
+                    recipients: roleTokens.filter((entry) =>
+                        String(entry.platform || '').toLowerCase() === 'web')
+                },
+                {
+                    isWeb: false,
+                    recipients: roleTokens.filter((entry) =>
+                        String(entry.platform || '').toLowerCase() !== 'web')
+                }
+            ].filter((delivery) => delivery.recipients.length > 0);
+
+            for (const delivery of deliveryGroups) {
+                const response = await messaging.sendEachForMulticast(delivery.isWeb
+                    ? {
+                        tokens: delivery.recipients.map((entry) => entry.token),
+                        data: {
+                            ...push.data,
+                            title: push.title,
+                            body: push.body,
+                            link: String(env.appBaseUrl || '')
+                        },
+                        webpush: { headers: { Urgency: 'high' } }
+                    }
+                    : {
+                        tokens: delivery.recipients.map((entry) => entry.token),
+                        notification: { title: push.title, body: push.body },
+                        data: push.data,
+                        android: {
+                            priority: 'high',
+                            notification: {
+                                channelId: push.channelId,
+                                sound: 'default'
+                            }
+                        },
+                        apns: {
+                            headers: { 'apns-priority': '10' },
+                            payload: {
+                                aps: {
+                                    sound: 'default',
+                                    category: 'CLUSTER_MESSAGE'
+                                }
+                            }
+                        }
+                    });
+                sent += response.successCount;
+                failed += response.failureCount;
+                await Promise.all(response.responses.map(async (result, index) => {
+                    if (result.success || !INVALID_TOKEN_CODES.has(result.error?.code)) return;
+                    await deleteRecord({
+                        collectionName: PUSH_TOKEN_COLLECTION,
+                        recordId: delivery.recipients[index].id
+                    });
+                }));
+            }
+        }
+
+        if (sent === 0 && failed === 0) return { sent: 0, failed: 0, skipped: true };
+        return { sent, failed, skipped: false };
+    } catch (error) {
+        console.warn('[push:task-reminder]', error?.message || error);
+        return { sent: 0, failed: recipients.length, skipped: false };
     }
 };

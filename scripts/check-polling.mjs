@@ -3,12 +3,19 @@ import { _pollingInternals } from '../src/app/lib/firebase-firestore-compat.js';
 
 const {
     isPollingAllowed,
-    mergeEntryChanges
+    mergeEntryChanges,
+    DEFAULT_POLL_MS,
+    IDLE_AFTER_MS,
+    LIVE_IDLE_AFTER_MS,
+    MIN_POLL_MS
 } = _pollingInternals;
 
 assert.equal(isPollingAllowed({ visibilityState: 'visible', lastActivity: 0, now: 100, idleAfter: 200 }), true);
 assert.equal(isPollingAllowed({ visibilityState: 'hidden', lastActivity: 0, now: 100, idleAfter: 200 }), false);
 assert.equal(isPollingAllowed({ visibilityState: 'visible', lastActivity: 0, now: 200, idleAfter: 200 }), false);
+assert.ok(DEFAULT_POLL_MS <= 30_000);
+assert.ok(DEFAULT_POLL_MS >= MIN_POLL_MS);
+assert.ok(LIVE_IDLE_AFTER_MS >= IDLE_AFTER_MS);
 
 const auditRef = {
     __kind: 'query',

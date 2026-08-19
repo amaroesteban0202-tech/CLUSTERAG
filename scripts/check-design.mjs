@@ -4,7 +4,29 @@ import process from "node:process";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
-const app = read("src/app/main.jsx");
+
+const walk = (dir, exts = new Set([".js", ".jsx"])) => {
+  const entries = fs.readdirSync(path.join(root, dir), { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const rel = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...walk(rel, exts));
+      continue;
+    }
+    if (exts.has(path.extname(entry.name))) files.push(rel);
+  }
+  return files;
+};
+
+const appSources = [
+  "src/app/main.jsx",
+  ...walk("src/app/components"),
+  ...walk("src/app/hooks"),
+  ...walk("src/app/utils"),
+  ...walk("src/app/constants"),
+];
+const app = appSources.map(read).join("\n");
 const boot = read("src/app/boot.js");
 const css = read("src/styles/main.css");
 const html = read("index.html");

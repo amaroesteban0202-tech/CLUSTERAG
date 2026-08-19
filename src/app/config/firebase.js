@@ -1,6 +1,6 @@
 import { getApp, getApps, initializeApp } from '../lib/firebase-app-compat.js';
 import { browserLocalPersistence, getAuth, setPersistence } from '../lib/firebase-auth-compat.js';
-import { getFirestore, initializeFirestore } from '../lib/firebase-firestore-compat.js';
+import { getFirestore, initializeFirestore } from '../lib/data-store.js';
 
 const firebaseConfig = typeof window !== 'undefined'
     ? (window.__cluster_firebase_config || null)

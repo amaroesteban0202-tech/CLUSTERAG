@@ -1,8 +1,10 @@
 import { apiFetch } from './backend-api.js?v=20260525-local-api';
 
 const registry = new Map();
-const DEFAULT_POLL_MS = 120000;
-const IDLE_AFTER_MS = 240000;
+const DEFAULT_POLL_MS = 15_000;
+const IDLE_AFTER_MS = 10 * 60_000;
+const LIVE_IDLE_AFTER_MS = 30 * 60_000;
+const MIN_POLL_MS = 5_000;
 const TASK_COLLECTIONS = new Set(['account_tasks', 'editing', 'management_tasks']);
 const STATIC_COLLECTIONS = new Set(['clients', 'events', 'managers', 'editors', 'users', 'client_chats', 'chat_reads', 'chat_mutes', 'chat_hidden', 'chat_reactions', 'chat_pins', 'chat_stickers']);
 const CLOSED_STATUS_BY_COLLECTION = {
@@ -199,14 +201,20 @@ const getLiveCollections = () => {
     return collectionName && hasCollectionListeners(collectionName) ? [collectionName] : [];
 };
 
-const shouldPollNow = () => typeof document !== 'undefined' && isPollingAllowed({
-    visibilityState: document.visibilityState,
-    lastActivity: lastActivityAt
-});
+const shouldPollNow = () => {
+    if (typeof document === 'undefined') return false;
+    const view = typeof window !== 'undefined' ? window.__cluster_active_view || '' : '';
+    const idleAfter = LIVE_COLLECTION_BY_VIEW[view] ? LIVE_IDLE_AFTER_MS : IDLE_AFTER_MS;
+    return isPollingAllowed({
+        visibilityState: document.visibilityState,
+        lastActivity: lastActivityAt,
+        idleAfter
+    });
+};
 
 const getPollMs = () => {
     const configured = Number(typeof window !== 'undefined' ? window.__cluster_poll_ms : DEFAULT_POLL_MS);
-    return Number.isFinite(configured) && configured >= 10000 ? configured : DEFAULT_POLL_MS;
+    return Number.isFinite(configured) && configured >= MIN_POLL_MS ? configured : DEFAULT_POLL_MS;
 };
 
 const applyServerChanges = (changes) => {
@@ -328,7 +336,7 @@ if (typeof document !== 'undefined') {
         lastFocusRefreshAt = now;
         syncCollections([...STATIC_COLLECTIONS].filter(hasCollectionListeners)).catch(() => {});
     };
-    ['pointerdown', 'keydown', 'touchstart'].forEach((eventName) => {
+    ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach((eventName) => {
         window.addEventListener(eventName, markActivity, { passive: true });
     });
     window.addEventListener('focus', () => {
@@ -513,4 +521,11 @@ export const writeBatch = () => {
 };
 
 // ponytail: exported only for the smallest runnable check; keep production logic and its check identical.
-export const _pollingInternals = { isPollingAllowed, mergeEntryChanges };
+export const _pollingInternals = {
+    isPollingAllowed,
+    mergeEntryChanges,
+    DEFAULT_POLL_MS,
+    IDLE_AFTER_MS,
+    LIVE_IDLE_AFTER_MS,
+    MIN_POLL_MS
+};

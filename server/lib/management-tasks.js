@@ -79,10 +79,14 @@ export const prepareManagementTaskPayload = ({
     const notificationsDisabled = Boolean(existing) && existing.notificationsEnabled !== false && nextPayload.notificationsEnabled === false;
     const notificationsReenabled = Boolean(existing) && existing.notificationsEnabled === false && nextPayload.notificationsEnabled !== false;
 
-    if (isCreate || assigneeChanged || !normalizeText(existing?.assignedByName)) {
-        nextPayload.assignedByUserId = actor?.id || existing?.assignedByUserId || '';
+    if (isCreate || assigneeChanged) {
+        nextPayload.assignedByUserId = actor?.id || '';
         nextPayload.assignedByName = resolveAssignerName(actor);
         nextPayload.assignedByEmail = normalizeText(actor?.email);
+    } else if (existing) {
+        nextPayload.assignedByUserId = existing.assignedByUserId || '';
+        nextPayload.assignedByName = existing.assignedByName || '';
+        nextPayload.assignedByEmail = existing.assignedByEmail || '';
     }
 
     if (dueChanged || assigneeChanged || reopened || notificationsDisabled || notificationsReenabled) {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
     buildClientChatPush,
+    buildTaskReminderPush,
     canReceiveClientChatPush,
     isChatMuteActive
 } from './push-notifications.js';
@@ -94,4 +95,74 @@ test('una llamada puede llegar a supervisores aunque no pertenezcan al grupo', (
         recipientId: 'admin-user',
         mentionedIds: new Set()
     }), false);
+});
+
+test('buildTaskReminderPush overdue assignee', () => {
+    const push = buildTaskReminderPush({
+        variant: 'overdue',
+        taskTitle: 'Entrega semanal',
+        taskTypeLabel: 'tarea de account',
+        recipientRole: 'assignee',
+        clientName: 'ACOSTA',
+        taskId: 'task-1',
+        collectionName: 'account_tasks'
+    });
+
+    assert.equal(push.title, 'Tarea vencida');
+    assert.equal(push.body, 'tarea de account: Entrega semanal · ACOSTA');
+    assert.equal(push.data.type, 'task-reminder');
+    assert.equal(push.data.variant, 'overdue');
+    assert.equal(push.data.taskId, 'task-1');
+    assert.equal(push.data.collectionName, 'account_tasks');
+    assert.equal(push.data.recipientRole, 'assignee');
+    assert.equal(push.channelId, 'cluster-messages');
+});
+
+test('buildTaskReminderPush overdue assigner', () => {
+    const push = buildTaskReminderPush({
+        variant: 'overdue',
+        taskTitle: 'Entrega semanal',
+        taskTypeLabel: 'tarea de account',
+        recipientRole: 'assigner',
+        taskId: 'task-2',
+        collectionName: 'account_tasks'
+    });
+
+    assert.equal(push.title, 'Tarea que asignaste vencida');
+    assert.equal(push.body, 'tarea de account: Entrega semanal');
+    assert.equal(push.data.recipientRole, 'assigner');
+});
+
+test('buildTaskReminderPush upcoming', () => {
+    const push = buildTaskReminderPush({
+        variant: 'upcoming',
+        label: '8 horas',
+        taskTitle: 'Revisar brief',
+        taskTypeLabel: 'tarea de gestion',
+        recipientRole: 'assignee',
+        taskId: 'task-3',
+        collectionName: 'management_tasks'
+    });
+
+    assert.equal(push.title, 'Tarea proxima a vencer (8 horas)');
+    assert.equal(push.body, 'tarea de gestion: Revisar brief');
+    assert.equal(push.data.variant, 'upcoming');
+});
+
+test('buildTaskReminderPush nag', () => {
+    const push = buildTaskReminderPush({
+        variant: 'overdue-nag',
+        overdueHours: 26,
+        taskTitle: 'Corte final',
+        taskTypeLabel: 'tarea de edicion',
+        recipientRole: 'assignee',
+        clientName: 'WILL AND CO.',
+        taskId: 'task-4',
+        collectionName: 'editing'
+    });
+
+    assert.equal(push.title, 'Tarea vencida hace 26h');
+    assert.equal(push.body, 'tarea de edicion: Corte final · WILL AND CO.');
+    assert.equal(push.data.variant, 'overdue-nag');
+    assert.equal(push.data.overdueHours, '26');
 });

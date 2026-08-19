@@ -1,7 +1,6 @@
 # ClusterAG — Plan de mejoras UI/UX
 
-> Documento generado a partir de auditoría técnica y visual completa del sistema.  
-> Fecha: Mayo 2026 · Versión 1.0
+Fecha: Mayo 2026 · Versión 1.0
 
 ---
 
@@ -626,39 +625,39 @@ La paleta más alejada de lo actual. Tonos cálidos (stone/zinc) con un acento r
 
 ### Fase 1 — Accesibilidad base (1–2 días de trabajo)
 
-- [ ] Reemplazar `text-slate-400` por `text-slate-500` en light mode (búsqueda y reemplazo global en `main.jsx`)
-- [ ] Añadir `aria-label` a todos los botones de solo icono (dark mode, logout, hamburger, cerrar modal)
-- [ ] Vincular `label` con `id` en el componente `Input`
-- [ ] Añadir `aria-live="polite"` al contenedor de toasts
-- [ ] Añadir `role="dialog"` y `aria-modal="true"` a todos los modales
+- [x] Reemplazar `text-slate-400` por `text-slate-500` en light mode (vía `--text-faint` → `#657067` en `:root`; remapeo CSS de `text-slate-400`)
+- [x] Añadir `aria-label` a todos los botones de solo icono (dark mode, logout, hamburger, cerrar modal)
+- [x] Vincular `label` con `id` en el componente `Input`
+- [x] Añadir `aria-live="polite"` al contenedor de toasts (`aria-live` assertive/polite en `Toast.jsx`)
+- [x] Añadir `role="dialog"` y `aria-modal="true"` a todos los modales (vía `useDialogA11y`)
 
 ### Fase 2 — Usabilidad (3–5 días de trabajo)
 
-- [ ] Implementar componente `ConfirmDeleteModal` para acciones destructivas
-- [ ] Reemplazar spinner global por skeleton loaders en kanban y listas
-- [ ] Separar filtros de Sala de Accounts en grupos (tiempo / asignación)
-- [ ] Añadir componente `Breadcrumb` en vistas de detalle
-- [ ] Añadir `focus trap` a modales (se puede usar la librería `focus-trap-react`)
-- [ ] Reemplazar texto "VIEWER · SIN CORREO" por mensajes comprensibles
+- [x] Implementar componente `ConfirmDeleteModal` para acciones destructivas (`DeleteConfirmModal`)
+- [x] Reemplazar spinner global por skeleton loaders en kanban y listas (`AppShellSkeleton`)
+- [x] Separar filtros de Sala de Accounts en grupos (tiempo / asignación)
+- [x] Añadir componente `Breadcrumb` en vistas de detalle
+- [x] Añadir `focus trap` a modales (vía `useDialogA11y`)
+- [x] Reemplazar texto "VIEWER · SIN CORREO" por mensajes comprensibles
 
 ### Fase 3 — Mobile (2–3 días de trabajo)
 
-- [ ] Implementar barra de navegación inferior para mobile
-- [ ] Añadir `min-height: 44px` a todos los elementos interactivos
-- [ ] Implementar scroll horizontal con snap en kanban en mobile
+- [x] Implementar barra de navegación inferior para mobile (`MobileBottomNav`)
+- [x] Añadir `min-height: 44px` a todos los elementos interactivos
+- [x] Implementar scroll horizontal con snap en kanban en mobile
 
 ### Fase 4 — IA y onboarding (1 semana)
 
-- [ ] Diseñar pantalla de bienvenida por rol
-- [ ] Reorganizar sidebar según nueva estructura propuesta
-- [ ] Revisar y clarificar etiqueta del botón "Atrás" en tarjetas kanban
+- [x] Diseñar pantalla de bienvenida por rol (`FirstTimeView` contextual + dismiss)
+- [x] Reorganizar sidebar según nueva estructura propuesta (`SidebarNavGroup`)
+- [x] Revisar y clarificar etiqueta del botón "Atrás" en tarjetas kanban (`Volver a {estado}`)
 
 ### Fase 5 — Paleta de color (1 día + revisión)
 
-- [ ] Elegir una de las cuatro paletas propuestas
-- [ ] Crear variables CSS centralizadas en `main.css`
-- [ ] Aplicar en `main.jsx` mediante búsqueda y reemplazo de clases Tailwind
-- [ ] Revisar contraste en dark mode tras el cambio
+- [x] Incorporar paletas A/B/C/D del doc (`violet`, `midnight`, `grove`, `warm`) junto a las existentes
+- [x] Crear variables CSS centralizadas en `main.css`
+- [x] Seleccionables desde Mi Perfil / apariencia (`THEME_PALETTES`)
+- [x] Revisar contraste en dark mode de cada paleta nueva
 
 ---
 
