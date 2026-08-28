@@ -5444,8 +5444,15 @@ function App() {
     }
   };
 
-  const addTaskComment = async (task, type, text, mentionedIds = []) => {
+  const addTaskComment = async (
+    task,
+    type,
+    text,
+    mentionedIds = [],
+    options = {},
+  ) => {
     const colMap = {
+      event: "events",
       accountTask: "account_tasks",
       editingTask: "editing",
       managementTask: "management_tasks",
@@ -5462,9 +5469,15 @@ function App() {
       authorId: currentUserProfile?.id || "",
       mentionedIds,
       createdAt: nowIso(),
+      entryType: options.entryType || "comment",
     };
-    await updateDoc(dataDoc(col, task.id), {
-      comments: [...(task.comments || []), newComment],
+    const taskRef = dataDoc(col, task.id);
+    const currentSnap = await getDoc(taskRef);
+    const currentComments = Array.isArray(currentSnap.data()?.comments)
+      ? currentSnap.data().comments
+      : [];
+    await updateDoc(taskRef, {
+      comments: [...currentComments, newComment],
       updatedAt: nowIso(),
     });
     // Notificaciones de mención
@@ -5488,6 +5501,7 @@ function App() {
         });
       }
     }
+    return newComment;
   };
 
   // Publica un mensaje en el chat interno de un cliente (opcionalmente ligado a
@@ -7537,6 +7551,11 @@ function App() {
               onChangeAccountStatus={changeAccountTaskStatus}
               onChangeEditingStatus={changeEditingTaskStatus}
               onChangeEventStatus={changeModuleEventStatus}
+              onAddTaskLog={(task, type, text) =>
+                addTaskComment(task, type, text, [], {
+                  entryType: "production_log",
+                })
+              }
             />
           )}
           {view === "reports" && (
@@ -10111,6 +10130,7 @@ const KanbanCard = ({
   menuItems = [],
   selected = false,
   statusControl = null,
+  activityAction = null,
 }) => {
   const accent = isOverdue
     ? "border-l-red-500"
@@ -10233,6 +10253,25 @@ const KanbanCard = ({
           </span>
         ) : (
           <span />
+        )}
+        {activityAction && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              activityAction.onClick?.();
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            onTouchStart={(event) => event.stopPropagation()}
+            className={`production-log-trigger ${activityAction.active ? "is-active" : ""}`}
+            aria-label={`Abrir bitácora de ${title}`}
+          >
+            <Icon name="ClipboardList" size={13} />
+            <span>Bitácora</span>
+            <span className="production-log-trigger-count">
+              {activityAction.count || 0}
+            </span>
+          </button>
         )}
         {assignee ? (
           assignee.photo ? (
@@ -10562,6 +10601,169 @@ const TaskRoomInspector = ({
           <Icon name="ExternalLink" size={15} />
         </button>
       </div>
+    </aside>
+  );
+};
+
+const formatProductionLogTimestamp = (value) => {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "Ahora";
+  return new Intl.DateTimeFormat("es-HN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+};
+
+const ProductionLogPanel = ({
+  task,
+  onClose,
+  onOpenFull,
+  onAddEntry,
+  currentUserProfile,
+}) => {
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [optimisticEntries, setOptimisticEntries] = useState([]);
+
+  useEffect(() => {
+    setDraft("");
+    setError("");
+    setOptimisticEntries([]);
+  }, [task?._key]);
+
+  if (!task) return null;
+
+  const storedEntries = Array.isArray(task.comments) ? task.comments : [];
+  const storedIds = new Set(storedEntries.map((entry) => entry.id));
+  const entries = [
+    ...optimisticEntries.filter((entry) => !storedIds.has(entry.id)),
+    ...storedEntries,
+  ].sort(
+    (left, right) =>
+      new Date(right.createdAt || 0).getTime() -
+      new Date(left.createdAt || 0).getTime(),
+  );
+  const responsibleName =
+    task._assignee?.name || task._ownerText || "Sin responsable asignado";
+  const currentAuthor =
+    currentUserProfile?.name || currentUserProfile?.email || "Usuario";
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const text = draft.trim();
+    if (!text || saving || !onAddEntry) return;
+    setSaving(true);
+    setError("");
+    try {
+      const savedEntry = await onAddEntry(task, task._taskType, text);
+      if (savedEntry) {
+        setOptimisticEntries((current) => [savedEntry, ...current]);
+      }
+      setDraft("");
+    } catch (saveError) {
+      console.error("[production-log]", saveError);
+      setError("No pudimos guardar la nota. Revisa tu conexión e intenta de nuevo.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <aside className="production-log-panel" aria-label={`Bitácora de ${task._title}`}>
+      <header className="production-log-panel-header">
+        <div className="min-w-0">
+          <p className="production-log-kicker">
+            <span aria-hidden="true" />
+            Bitácora de producción
+          </p>
+          <h3>{task._title}</h3>
+          <p className="production-log-responsible">
+            <Icon name="User" size={13} />
+            {responsibleName}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="production-log-close"
+          aria-label="Cerrar bitácora"
+        >
+          <Icon name="X" size={18} />
+        </button>
+      </header>
+
+      <form className="production-log-composer" onSubmit={handleSubmit}>
+        <label htmlFor={`production-log-${task.id}`}>
+          Registrar lo que pasó
+        </label>
+        <textarea
+          id={`production-log-${task.id}`}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          maxLength={1600}
+          placeholder="Ej. Se repitió la toma 03 por ruido. El material quedó respaldado y pasó a edición."
+          disabled={saving || !onAddEntry}
+        />
+        <div className="production-log-composer-meta">
+          <span>Como {currentAuthor}</span>
+          <span>{draft.length}/1600</span>
+        </div>
+        {error && (
+          <p className="production-log-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button type="submit" disabled={!draft.trim() || saving || !onAddEntry}>
+          <Icon name={saving ? "Loader2" : "Send"} size={15} className={saving ? "animate-spin" : ""} />
+          {saving ? "Guardando…" : "Agregar a la bitácora"}
+        </button>
+      </form>
+
+      <div className="production-log-timeline custom-scroll" aria-live="polite">
+        <div className="production-log-timeline-heading">
+          <p>Historial</p>
+          <span>{entries.length} {entries.length === 1 ? "nota" : "notas"}</span>
+        </div>
+        {entries.length ? (
+          <div className="production-log-entries">
+            {entries.map((entry) => {
+              const author = entry.authorName || "Equipo";
+              return (
+                <article className="production-log-entry" key={entry.id}>
+                  <span className="production-log-avatar" aria-hidden="true">
+                    {getInitials(author)}
+                  </span>
+                  <div>
+                    <div className="production-log-entry-meta">
+                      <strong>{author}</strong>
+                      <time dateTime={entry.createdAt || undefined}>
+                        {formatProductionLogTimestamp(entry.createdAt)}
+                      </time>
+                    </div>
+                    <p>{entry.text}</p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="production-log-empty">
+            <span><Icon name="ClipboardList" size={22} /></span>
+            <strong>La bitácora está limpia</strong>
+            <p>Registra decisiones, bloqueos, cambios y entregas de esta tarea.</p>
+          </div>
+        )}
+      </div>
+
+      <footer className="production-log-footer">
+        <button type="button" onClick={onOpenFull}>
+          Ver tarea completa
+          <Icon name="ExternalLink" size={14} />
+        </button>
+      </footer>
     </aside>
   );
 };
@@ -19962,6 +20164,168 @@ const getModuleStatusOptions = (taskType) => {
   return MODULE_EVENT_STATUS_OPTIONS;
 };
 
+const ProductionRoomHeader = ({
+  searchTerm,
+  setSearchTerm,
+  searchPlaceholder,
+  onAdd,
+  canAdd,
+  showTeam,
+  setShowTeam,
+  teamMembers,
+  teamWithoutEmailCount,
+  totalItems,
+  startCount,
+  inProgressCount,
+  readyCount,
+  filterMode,
+  setFilterMode,
+  currentDate,
+  setCurrentDate,
+  todayStr,
+  ownershipFilter,
+  setOwnershipFilter,
+}) => {
+  const completionRate = totalItems
+    ? Math.round((readyCount / totalItems) * 100)
+    : 0;
+  const filters = [
+    { id: "date", label: "Día", icon: "CalendarDays" },
+    { id: "overdue", label: "Atrasadas", icon: "Flame" },
+    { id: "all", label: "Este mes", icon: "CalendarRange" },
+    { id: "history", label: "Histórico", icon: "Clock" },
+  ];
+
+  return (
+    <header className="production-room-hero">
+      <div className="production-room-hero-main">
+        <div className="production-room-intro">
+          <p className="production-room-live">
+            <span aria-hidden="true" />
+            Sala operativa
+          </p>
+          <h2>Sala de producción</h2>
+          <p>
+            Prioriza el trabajo, detecta bloqueos y deja constancia de cada cambio
+            en la bitácora de la tarea.
+          </p>
+        </div>
+
+        <div className="production-room-pulse" aria-label="Pulso de producción">
+          <div className="production-room-pulse-heading">
+            <div>
+              <p>Pulso de la sala</p>
+              <strong>{totalItems} tareas visibles</strong>
+            </div>
+            <span>{completionRate}% cerrado</span>
+          </div>
+          <div className="production-room-pulse-track" aria-hidden="true">
+            <span style={{ width: `${completionRate}%` }} />
+          </div>
+          <dl className="production-room-metrics">
+            <div>
+              <dt>En cola</dt>
+              <dd>{startCount}</dd>
+            </div>
+            <div>
+              <dt>En proceso</dt>
+              <dd>{inProgressCount}</dd>
+            </div>
+            <div>
+              <dt>Controladas</dt>
+              <dd>{readyCount}</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      <div className="production-room-toolbar">
+        <div className="production-room-actions">
+          <SearchBar
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            placeholder={searchPlaceholder}
+          />
+          {canAdd && (
+            <button type="button" onClick={onAdd} className="production-room-add">
+              <Icon name="Plus" size={16} />
+              Nueva tarea
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowTeam((value) => !value)}
+            className={`production-room-team-toggle ${showTeam ? "is-active" : ""}`}
+            aria-expanded={showTeam}
+          >
+            <span className="production-room-avatars" aria-hidden="true">
+              {teamMembers.slice(0, 3).map((member) => (
+                <PersonAvatar key={member.id} person={member} size={26} />
+              ))}
+            </span>
+            <span>
+              <strong>Equipo</strong>
+              <small>
+                {teamWithoutEmailCount
+                  ? `${teamWithoutEmailCount} sin correo`
+                  : `${teamMembers.length} disponibles`}
+              </small>
+            </span>
+            <Icon name={showTeam ? "ChevronUp" : "ChevronDown"} size={14} />
+          </button>
+        </div>
+
+        <div className="production-room-filters">
+          <div className="production-room-filter-group" aria-label="Periodo">
+            {filters.map((filter) => (
+              <button
+                type="button"
+                key={filter.id}
+                onClick={() => setFilterMode(filter.id)}
+                className={filterMode === filter.id ? "is-active" : ""}
+                aria-pressed={filterMode === filter.id}
+              >
+                <Icon name={filter.icon} size={14} />
+                {filter.label}
+              </button>
+            ))}
+          </div>
+          <div className="production-room-filter-group" aria-label="Responsable">
+            <button
+              type="button"
+              onClick={() => setOwnershipFilter("all")}
+              className={ownershipFilter === "all" ? "is-active" : ""}
+              aria-pressed={ownershipFilter === "all"}
+            >
+              Todo el equipo
+            </button>
+            <button
+              type="button"
+              onClick={() => setOwnershipFilter("mine")}
+              className={ownershipFilter === "mine" ? "is-active" : ""}
+              aria-pressed={ownershipFilter === "mine"}
+            >
+              <Icon name="User" size={14} />
+              Mis tareas
+            </button>
+          </div>
+          {filterMode === "date" && (
+            <label className="production-room-date">
+              <span className="sr-only">Fecha de producción</span>
+              <input
+                type="date"
+                value={currentDate}
+                onChange={(event) => setCurrentDate(event.target.value)}
+              />
+              {currentDate === todayStr && <span>Hoy</span>}
+            </label>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+};
+
 const UnifiedModuleKanbanView = ({
   moduleKey,
   moduleTitle,
@@ -19984,6 +20348,7 @@ const UnifiedModuleKanbanView = ({
   onChangeAccountStatus,
   onChangeEditingStatus,
   onChangeEventStatus,
+  onAddTaskLog,
 }) => {
   const {
     currentDate,
@@ -19999,6 +20364,7 @@ const UnifiedModuleKanbanView = ({
   const [selectedTeamId, setSelectedTeamId] = useState("all");
   const [showTeam, setShowTeam] = useState(false);
   const [draggedItemKey, setDraggedItemKey] = useState("");
+  const [selectedLogKey, setSelectedLogKey] = useState("");
 
   const todayStr = getHondurasTodayStr();
   const monthPeriod = getRankingMonthPeriod(todayStr);
@@ -20129,6 +20495,8 @@ const UnifiedModuleKanbanView = ({
     () => new Map(sourceItems.map((item) => [item._key, item])),
     [sourceItems],
   );
+  const selectedLogTask =
+    moduleKey === "production" ? itemByKey.get(selectedLogKey) || null : null;
   const teamWithoutEmailCount = teamMembers.filter(
     (member) => !normalizeEmail(member?.email),
   ).length;
@@ -20164,8 +20532,9 @@ const UnifiedModuleKanbanView = ({
   const moduleGroups = [
     {
       id: "start",
-      title: "Por iniciar",
-      subtitle: "Pendientes de comenzar",
+      title: moduleKey === "production" ? "Cola de entrada" : "Por iniciar",
+      subtitle:
+        moduleKey === "production" ? "Priorizar y preparar" : "Pendientes de comenzar",
       color: "slate",
       stages: [
         {
@@ -20178,8 +20547,9 @@ const UnifiedModuleKanbanView = ({
     },
     {
       id: "production",
-      title: "En producción",
-      subtitle: "En curso, edición o revisión",
+      title: moduleKey === "production" ? "En piso" : "En producción",
+      subtitle:
+        moduleKey === "production" ? "Trabajo activo" : "En curso, edición o revisión",
       color: moduleKey === "podcast" ? "rose" : "cyan",
       stages: [
         {
@@ -20192,8 +20562,11 @@ const UnifiedModuleKanbanView = ({
     },
     {
       id: "ready",
-      title: "Listas",
-      subtitle: "Aprobadas y publicadas/cerradas",
+      title: moduleKey === "production" ? "Controlado" : "Listas",
+      subtitle:
+        moduleKey === "production"
+          ? "Listo para entregar"
+          : "Aprobadas y publicadas/cerradas",
       color: "emerald",
       stages: [
         {
@@ -20223,7 +20596,31 @@ const UnifiedModuleKanbanView = ({
   }, [addDate, onAddTask, todayStr]);
 
   return (
-    <div className="task-room min-h-0 flex flex-col gap-3 fade-in">
+    <div className={`task-room min-h-0 flex flex-col gap-3 fade-in ${moduleKey === "production" ? "production-room" : ""}`}>
+      {moduleKey === "production" ? (
+        <ProductionRoomHeader
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          searchPlaceholder={searchPlaceholder}
+          onAdd={handleAddTask}
+          canAdd={canShowAddButton}
+          showTeam={showTeam}
+          setShowTeam={setShowTeam}
+          teamMembers={teamMembers}
+          teamWithoutEmailCount={teamWithoutEmailCount}
+          totalItems={totalItems}
+          startCount={startCount}
+          inProgressCount={inProgressCount}
+          readyCount={readyCount}
+          filterMode={filterMode}
+          setFilterMode={setFilterMode}
+          currentDate={currentDate}
+          setCurrentDate={setCurrentDate}
+          todayStr={todayStr}
+          ownershipFilter={ownershipFilter}
+          setOwnershipFilter={setOwnershipFilter}
+        />
+      ) : (
       <header className="task-room-header shrink-0 border-b border-[var(--border)] pb-3 dark:border-white/10">
         <div className="mb-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
@@ -20353,13 +20750,14 @@ const UnifiedModuleKanbanView = ({
           )}
         </div>
       </header>
+      )}
 
       {showTeam && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 fade-in">
+        <div className="module-team-panel bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 fade-in">
           <button
             type="button"
             onClick={() => setSelectedTeamId("all")}
-            className={`flex items-center gap-3 p-3 rounded-xl border text-left ${selectedTeamId === "all" ? "border-violet-300 dark:border-violet-500/40 bg-violet-50/70 dark:bg-violet-500/10" : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"}`}
+            className={`module-team-member flex items-center gap-3 p-3 rounded-xl border text-left ${selectedTeamId === "all" ? "is-active border-violet-300 dark:border-violet-500/40 bg-violet-50/70 dark:bg-violet-500/10" : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"}`}
           >
             <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black text-white bg-violet-500 shrink-0">
               EQ
@@ -20380,7 +20778,7 @@ const UnifiedModuleKanbanView = ({
                 key={member.id}
                 type="button"
                 onClick={() => setSelectedTeamId(member.id)}
-                className={`flex items-center gap-3 p-3 rounded-xl border text-left ${isActive ? "border-violet-300 dark:border-violet-500/40 bg-violet-50/70 dark:bg-violet-500/10" : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"}`}
+                className={`module-team-member flex items-center gap-3 p-3 rounded-xl border text-left ${isActive ? "is-active border-violet-300 dark:border-violet-500/40 bg-violet-50/70 dark:bg-violet-500/10" : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"}`}
               >
                 <PersonAvatar person={member} size={36} />
                 <div className="min-w-0">
@@ -20397,6 +20795,7 @@ const UnifiedModuleKanbanView = ({
         </div>
       )}
 
+      {moduleKey !== "production" && (
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <AccentStatCard
           label="Total"
@@ -20427,10 +20826,29 @@ const UnifiedModuleKanbanView = ({
           sub="aprobadas o cerradas"
         />
       </div>
+      )}
 
       <TaskRoomWorkspace
         groups={moduleGroups}
         canAdd={false}
+        inspector={
+          selectedLogTask ? (
+            <ProductionLogPanel
+              key={selectedLogTask._key}
+              task={selectedLogTask}
+              currentUserProfile={currentUserProfile}
+              onClose={() => setSelectedLogKey("")}
+              onAddEntry={onAddTaskLog}
+              onOpenFull={() => {
+                if (selectedLogTask._taskType === "event") {
+                  onEventClick?.(selectedLogTask);
+                  return;
+                }
+                onTaskClick?.(selectedLogTask, selectedLogTask._taskType);
+              }}
+            />
+          ) : null
+        }
         renderTask={(task, stage) => {
           const statusMeta = getModuleStatusMeta(task._status, moduleKey);
           const statusOptions = getModuleStatusOptions(task._taskType);
@@ -20497,6 +20915,16 @@ const UnifiedModuleKanbanView = ({
                 tone: isOverdue ? "red" : "slate",
               }}
               assignee={assigneeMeta}
+              selected={selectedLogTask?._key === task._key}
+              activityAction={
+                moduleKey === "production"
+                  ? {
+                      count: Array.isArray(task.comments) ? task.comments.length : 0,
+                      active: selectedLogTask?._key === task._key,
+                      onClick: () => setSelectedLogKey(task._key),
+                    }
+                  : null
+              }
               statusControl={{
                 value: task._status,
                 options: statusOptions,
@@ -20602,13 +21030,14 @@ const ProductionView = ({
   onChangeAccountStatus,
   onChangeEditingStatus,
   onChangeEventStatus,
+  onAddTaskLog,
 }) => (
   <UnifiedModuleKanbanView
     moduleKey="production"
     moduleTitle="Producción"
     moduleEyebrow="Operación"
     moduleDescription="Vista consolidada del pipeline de producción para detectar cuellos de botella y cerrar entregas con rapidez."
-    searchPlaceholder="Buscar production..."
+    searchPlaceholder="Buscar en producción..."
     statIcon="MonitorPlay"
     statTone="cyan"
     events={events}
@@ -20625,6 +21054,7 @@ const ProductionView = ({
     onChangeAccountStatus={onChangeAccountStatus}
     onChangeEditingStatus={onChangeEditingStatus}
     onChangeEventStatus={onChangeEventStatus}
+    onAddTaskLog={onAddTaskLog}
   />
 );
 
