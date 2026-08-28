@@ -10636,6 +10636,14 @@ const ProductionLogPanel = ({
     setOptimisticEntries([]);
   }, [task?._key]);
 
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === "Escape") onClose?.();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
+
   if (!task) return null;
 
   const storedEntries = Array.isArray(task.comments) ? task.comments : [];
@@ -10677,7 +10685,20 @@ const ProductionLogPanel = ({
   };
 
   return (
-    <aside className="production-log-panel" aria-label={`Bitácora de ${task._title}`}>
+    <div
+      className="production-log-overlay"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose?.();
+      }}
+      role="presentation"
+    >
+    <aside
+      className="production-log-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="production-log-title"
+      tabIndex="-1"
+    >
       <header className="production-log-panel-header">
         <div className="production-log-panel-topline">
           <p className="production-log-kicker">
@@ -10694,12 +10715,13 @@ const ProductionLogPanel = ({
               onClick={onClose}
               className="production-log-close"
               aria-label="Cerrar bitácora"
+              autoFocus
             >
               <Icon name="X" size={18} />
             </button>
           </div>
         </div>
-        <h3>{task._title}</h3>
+        <h3 id="production-log-title">{task._title}</h3>
         <div className="production-log-overview">
           <div>
             <Icon name="User" size={14} />
@@ -10828,6 +10850,7 @@ const ProductionLogPanel = ({
         </button>
       </footer>
     </aside>
+    </div>
   );
 };
 
@@ -10841,7 +10864,7 @@ const TaskRoomWorkspace = ({
   onDrop,
   inspector,
 }) => (
-  <div className={`task-room-workspace grid min-h-0 flex-1 gap-3 ${inspector ? "2xl:grid-cols-[minmax(0,1fr)_30rem]" : ""}`}>
+  <div className="task-room-workspace grid min-h-0 flex-1 gap-3">
     <div className="task-room-board flex min-h-0 gap-3 overflow-x-auto pb-4 snap-x snap-mandatory kanban-mobile-scroll lg:grid lg:grid-cols-3 lg:overflow-hidden lg:pb-0">
       {groups.map((group) => {
         const count = group.stages.reduce((total, stage) => total + stage.tasks.length, 0);
