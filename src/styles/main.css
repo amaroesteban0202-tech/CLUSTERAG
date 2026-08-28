@@ -1922,7 +1922,14 @@ textarea:focus-visible,
 
 /* Sala de producción — superficie operativa y bitácora por tarea. */
 .production-room {
+    width: 100%;
+    max-width: none;
     gap: 14px;
+}
+@media (min-width: 768px) {
+    .task-room.production-room {
+        height: 100%;
+    }
 }
 .production-room-hero {
     position: relative;

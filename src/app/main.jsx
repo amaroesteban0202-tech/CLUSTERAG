@@ -7013,6 +7013,8 @@ function App() {
           className={
             view === "chat"
               ? "h-full"
+              : view === "production"
+                ? "h-full min-h-0 w-full p-3 pb-mobile-nav md:p-5 md:pb-5"
               : "p-4 md:p-8 max-w-[1360px] mx-auto min-h-full pb-mobile-nav md:pb-20"
           }
         >
@@ -20875,6 +20877,10 @@ const UnifiedModuleKanbanView = ({
             <KanbanCard
               key={task._key}
               onClick={() => {
+                if (moduleKey === "production") {
+                  setSelectedLogKey(task._key);
+                  return;
+                }
                 if (task._taskType === "event") {
                   onEventClick?.(task);
                   return;
