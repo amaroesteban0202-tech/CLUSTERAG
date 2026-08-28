@@ -2297,271 +2297,525 @@ textarea:focus-visible,
 .production-log-panel {
     position: fixed;
     z-index: 70;
-    inset: 72px 10px 10px;
+    top: 72px;
+    right: 10px;
+    bottom: 10px;
+    left: auto;
     display: flex;
+    width: min(34rem, calc(100vw - 20px));
     min-height: 0;
     flex-direction: column;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 16px;
+    border-radius: 20px;
     background: var(--surface-raised);
-    box-shadow: 0 28px 70px color-mix(in srgb, var(--text) 24%, transparent);
-    animation: productionLogIn 220ms ease-out;
+    box-shadow: 0 32px 90px rgba(var(--shadow-color), 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    animation: productionLogIn 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 @keyframes productionLogIn {
-    from { opacity: 0; transform: translateX(12px); }
+    from { opacity: 0; transform: translateX(18px) scale(0.985); }
     to { opacity: 1; transform: translateX(0); }
 }
 .production-log-panel-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 18px 18px 16px;
+    padding: 20px 22px 18px;
     border-bottom: 1px solid var(--border);
-    background: color-mix(in srgb, var(--surface-subtle) 88%, var(--primary-soft));
+    background: color-mix(in srgb, var(--surface-subtle) 92%, var(--primary-soft));
 }
-.production-log-panel-header .production-log-kicker {
-    margin-bottom: 7px;
-}
-.production-log-panel-header h3 {
-    color: var(--text);
-    font-size: 17px;
-    font-weight: 700;
-    line-height: 1.3;
-    text-wrap: pretty;
-}
-.production-log-responsible {
+.production-log-panel-topline,
+.production-log-panel-actions,
+.production-log-kicker,
+.production-log-status {
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-top: 8px;
-    color: var(--text-muted);
-    font-size: 11px;
+}
+.production-log-panel-topline {
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+.production-log-panel-actions {
+    flex: 0 0 auto;
+    gap: 8px;
+}
+.production-log-kicker {
+    gap: 7px;
+    margin: 0;
+    color: var(--primary);
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.production-log-panel-header h3 {
+    max-width: 22ch;
+    margin: 0;
+    color: var(--text);
+    font-family: var(--font-display);
+    font-size: clamp(1.45rem, 2vw, 1.8rem);
     font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 1.08;
+    text-wrap: pretty;
+}
+.production-log-status {
+    min-height: 27px;
+    gap: 6px;
+    padding: 0 9px;
+    border-radius: 7px;
+    background: var(--surface-muted);
+    color: var(--text-muted);
+    font-size: 9px;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+}
+.production-log-status > span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+.production-log-status.is-amber {
+    background: var(--status-yellow-bg);
+    color: var(--status-yellow-text);
+}
+.production-log-status.is-indigo,
+.production-log-status.is-cyan {
+    background: var(--status-blue-bg);
+    color: var(--status-blue-text);
+}
+.production-log-status.is-emerald {
+    background: var(--status-green-bg);
+    color: var(--status-green-text);
+}
+.production-log-overview {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(5.5rem, 0.8fr) minmax(4.5rem, 0.55fr);
+    margin-top: 17px;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+}
+.production-log-overview > div {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 8px;
+    padding-right: 10px;
+    color: var(--text-muted);
+}
+.production-log-overview > div + div {
+    padding-left: 12px;
+    border-left: 1px solid var(--border);
+}
+.production-log-overview svg {
+    flex: 0 0 auto;
+    color: var(--text-faint);
+}
+.production-log-overview span,
+.production-log-overview small,
+.production-log-overview strong {
+    display: block;
+    min-width: 0;
+}
+.production-log-overview small {
+    color: var(--text-faint);
+    font-size: 8px;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+.production-log-overview strong {
+    overflow: hidden;
+    margin-top: 2px;
+    color: var(--text);
+    font-size: 10px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .production-log-close {
     display: inline-flex;
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    border-radius: 9px;
+    border: 1px solid transparent;
+    border-radius: 8px;
     color: var(--text-muted);
+    transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
 .production-log-close:hover {
+    border-color: var(--border);
     background: var(--surface-muted);
     color: var(--text);
 }
+.production-log-close:active { transform: scale(0.96); }
 .production-log-composer {
-    padding: 16px 18px 18px;
+    padding: 18px 22px 20px;
     border-bottom: 1px solid var(--border);
+    background: var(--surface-raised);
+}
+.production-log-composer-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 11px;
+}
+.production-log-composer-heading > span,
+.production-log-timeline-heading > div > span {
+    display: inline-flex;
+    width: 31px;
+    height: 31px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--primary-soft);
+    color: var(--primary);
 }
 .production-log-composer label {
-    display: block;
-    margin-bottom: 8px;
     color: var(--text);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 750;
+}
+.production-log-composer-heading p {
+    max-width: 54ch;
+    margin: 2px 0 0;
+    color: var(--text-muted);
+    font-size: 9.5px;
+    line-height: 1.45;
+}
+.production-log-editor {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-subtle);
+    transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+.production-log-editor:focus-within {
+    border-color: var(--focus);
+    background: var(--surface-raised);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 14%, transparent);
 }
 .production-log-composer textarea {
     display: block;
     width: 100%;
-    min-height: 96px;
+    min-height: 108px;
+    max-height: 220px;
     resize: vertical;
-    padding: 11px 12px;
-    border: 1px solid var(--border);
-    border-radius: 9px;
+    padding: 13px 14px 9px;
+    border: 0;
+    border-radius: 0;
     outline: 0;
-    background: var(--surface-subtle);
+    background: transparent;
     color: var(--text);
-    font-size: 12px;
-    line-height: 1.55;
-    transition: border-color 180ms ease, box-shadow 180ms ease;
+    font-size: 12.5px;
+    line-height: 1.6;
 }
-.production-log-composer textarea:focus {
-    border-color: var(--focus);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent);
+.production-log-composer textarea::placeholder {
+    color: var(--text-faint);
 }
-.production-log-composer-meta {
+.production-log-editor-footer {
     display: flex;
+    align-items: center;
     justify-content: space-between;
     gap: 10px;
-    margin: 7px 1px 10px;
+    min-height: 45px;
+    padding: 7px 10px;
+    border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
     color: var(--text-muted);
-    font-family: "Manrope", sans-serif;
-    font-size: 9px;
+}
+.production-log-author {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+}
+.production-log-author > span:first-child {
+    display: inline-flex;
+    width: 27px;
+    height: 27px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    background: var(--primary);
+    color: var(--primary-contrast);
+    font-size: 8px;
+    font-weight: 800;
+}
+.production-log-author small,
+.production-log-author strong {
+    display: block;
+}
+.production-log-author small {
+    color: var(--text-faint);
+    font-size: 7.5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.production-log-author strong {
+    overflow: hidden;
+    max-width: 19rem;
+    color: var(--text-muted);
+    font-size: 9.5px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.production-log-counter {
+    flex: 0 0 auto;
+    color: var(--text-faint);
+    font-size: 8.5px;
     font-variant-numeric: tabular-nums;
 }
-.production-log-composer > button {
+.production-log-composer-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-top: 11px;
+}
+.production-log-composer-actions > span {
     display: inline-flex;
-    width: 100%;
-    min-height: 40px;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-faint);
+    font-size: 8.5px;
+}
+.production-log-composer-actions > button {
+    display: inline-flex;
+    min-height: 39px;
     align-items: center;
     justify-content: center;
     gap: 7px;
+    padding: 0 15px;
+    border: 1px solid var(--primary);
     border-radius: 9px;
     background: var(--primary);
     color: var(--primary-contrast);
-    font-size: 12px;
-    font-weight: 700;
-    transition: transform 180ms ease, background-color 180ms ease, opacity 180ms ease;
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--primary) 18%, transparent);
+    font-size: 11px;
+    font-weight: 750;
+    transition: transform 160ms ease, background-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
 }
-.production-log-composer > button:hover:not(:disabled) {
+.production-log-composer-actions > button:hover:not(:disabled) {
     background: var(--primary-hover);
     transform: translateY(-1px);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--primary) 24%, transparent);
 }
-.production-log-composer > button:disabled {
+.production-log-composer-actions > button:active:not(:disabled) { transform: translateY(1px) scale(0.99); }
+.production-log-composer-actions > button:disabled {
     opacity: 0.48;
 }
 .production-log-error {
-    margin: -2px 0 10px;
+    margin: 9px 1px 0;
     color: var(--status-red-text);
-    font-size: 11px;
+    font-size: 10px;
     line-height: 1.45;
 }
 .production-log-timeline {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    padding: 16px 18px 22px;
+    padding: 18px 22px 24px;
+    background: color-mix(in srgb, var(--surface-subtle) 76%, var(--surface-raised));
 }
-.production-log-timeline-heading,
 .production-log-entry-meta {
     display: flex;
-    align-items: baseline;
     justify-content: space-between;
     gap: 12px;
 }
 .production-log-timeline-heading {
-    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 17px;
+}
+.production-log-timeline-heading > div {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
 }
 .production-log-timeline-heading p {
+    margin: 0;
     color: var(--text);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 750;
 }
-.production-log-timeline-heading span {
+.production-log-timeline-heading small {
+    display: block;
+    margin-top: 2px;
     color: var(--text-muted);
-    font-size: 10px;
-    font-weight: 600;
+    font-size: 8.5px;
+}
+.production-log-timeline-heading > strong {
+    flex: 0 0 auto;
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: var(--surface-muted);
+    color: var(--text-muted);
+    font-size: 8.5px;
+    font-weight: 750;
+    font-variant-numeric: tabular-nums;
 }
 .production-log-entries {
     position: relative;
     display: grid;
-    gap: 16px;
+    gap: 13px;
 }
 .production-log-entries::before {
     content: "";
     position: absolute;
-    top: 12px;
-    bottom: 12px;
-    left: 14px;
+    top: 17px;
+    bottom: 17px;
+    left: 17px;
     width: 1px;
-    background: var(--border);
+    background: var(--border-strong);
 }
 .production-log-entry {
     position: relative;
     display: grid;
-    grid-template-columns: 29px minmax(0, 1fr);
-    gap: 10px;
+    grid-template-columns: 35px minmax(0, 1fr);
+    align-items: start;
+    gap: 11px;
 }
 .production-log-avatar {
     position: relative;
     z-index: 1;
     display: inline-flex;
-    width: 29px;
-    height: 29px;
+    width: 35px;
+    height: 35px;
     align-items: center;
     justify-content: center;
-    border: 3px solid var(--surface-raised);
-    border-radius: 8px;
+    border: 3px solid color-mix(in srgb, var(--surface-subtle) 76%, var(--surface-raised));
+    border-radius: 10px;
     background: var(--primary);
     color: var(--primary-contrast);
-    font-family: "Manrope", sans-serif;
-    font-size: 8px;
-    font-weight: 700;
+    font-size: 8.5px;
+    font-weight: 800;
+}
+.production-log-entry-body {
+    padding: 12px 13px 13px;
+    border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+    border-radius: 11px;
+    background: var(--surface-raised);
+    box-shadow: 0 5px 15px rgba(var(--shadow-color), 0.035);
+    transition: border-color 170ms ease, transform 170ms ease, box-shadow 170ms ease;
+}
+.production-log-entry:hover .production-log-entry-body {
+    border-color: var(--border-strong);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(var(--shadow-color), 0.06);
+}
+.production-log-entry-meta {
+    align-items: flex-start;
+}
+.production-log-entry-meta > div {
+    min-width: 0;
+}
+.production-log-entry-meta strong,
+.production-log-entry-meta span {
+    display: block;
 }
 .production-log-entry-meta strong {
     overflow: hidden;
     color: var(--text);
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 10.5px;
+    font-weight: 750;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+.production-log-entry-meta span {
+    margin-top: 2px;
+    color: var(--text-faint);
+    font-size: 7.5px;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
 }
 .production-log-entry-meta time {
     flex: 0 0 auto;
     color: var(--text-muted);
-    font-family: "Manrope", sans-serif;
-    font-size: 8px;
+    font-size: 8.5px;
     font-variant-numeric: tabular-nums;
 }
-.production-log-entry > div > p {
-    margin-top: 5px;
-    color: var(--text-muted);
+.production-log-entry-body > p {
+    margin: 9px 0 0;
+    color: var(--text);
     font-size: 11.5px;
-    line-height: 1.55;
+    line-height: 1.65;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
 .production-log-empty {
     display: flex;
-    min-height: 190px;
+    min-height: 210px;
     align-items: center;
     justify-content: center;
     flex-direction: column;
-    padding: 26px;
+    padding: 30px;
     border: 1px dashed var(--border-strong);
-    border-radius: 12px;
+    border-radius: 14px;
+    background: var(--surface-raised);
     text-align: center;
 }
 .production-log-empty > span {
     display: inline-flex;
-    width: 42px;
-    height: 42px;
+    width: 46px;
+    height: 46px;
     align-items: center;
     justify-content: center;
-    margin-bottom: 12px;
-    border-radius: 10px;
+    margin-bottom: 13px;
+    border-radius: 12px;
     background: var(--primary-soft);
     color: var(--primary);
 }
 .production-log-empty strong {
     color: var(--text);
-    font-size: 12px;
+    font-size: 12.5px;
 }
 .production-log-empty p {
-    max-width: 28ch;
+    max-width: 34ch;
     margin-top: 6px;
     color: var(--text-muted);
-    font-size: 10.5px;
-    line-height: 1.5;
+    font-size: 10px;
+    line-height: 1.55;
 }
 .production-log-footer {
-    padding: 12px 18px;
+    padding: 11px 22px 13px;
     border-top: 1px solid var(--border);
-    background: var(--surface-subtle);
+    background: var(--surface-raised);
 }
 .production-log-footer button {
-    display: inline-flex;
+    display: flex;
     width: 100%;
-    min-height: 38px;
+    min-height: 40px;
     align-items: center;
-    justify-content: center;
-    gap: 7px;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    background: var(--surface-raised);
-    color: var(--text);
-    font-size: 11px;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 3px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 10.5px;
     font-weight: 700;
+    transition: color 160ms ease, transform 160ms ease;
+}
+.production-log-footer button > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
 }
 .production-log-footer button:hover {
-    border-color: var(--border-strong);
-    background: var(--surface-muted);
+    color: var(--text);
 }
+.production-log-footer button:hover > svg:last-child { transform: translateX(2px); }
+.production-log-footer button > svg:last-child { transition: transform 160ms ease; }
+.production-log-footer button:active { transform: translateY(1px); }
 @media (max-width: 1100px) {
     .production-room-hero-main {
         grid-template-columns: 1fr;
@@ -2607,13 +2861,60 @@ textarea:focus-visible,
     .production-log-trigger span:nth-child(2) {
         display: none;
     }
+    .production-log-panel {
+        top: 62px;
+        right: 7px;
+        bottom: calc(7px + env(safe-area-inset-bottom, 0px));
+        width: calc(100vw - 14px);
+        border-radius: 16px;
+    }
+    .production-log-panel-header,
+    .production-log-composer {
+        padding-inline: 16px;
+    }
+    .production-log-panel-header h3 {
+        font-size: 1.45rem;
+    }
+    .production-log-overview {
+        grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.8fr) 3.8rem;
+    }
+    .production-log-overview > div {
+        gap: 6px;
+        padding-right: 7px;
+    }
+    .production-log-overview > div + div {
+        padding-left: 8px;
+    }
+    .production-log-composer textarea {
+        min-height: 96px;
+    }
+    .production-log-author strong {
+        max-width: 12rem;
+    }
+    .production-log-composer-actions > span {
+        display: none;
+    }
+    .production-log-composer-actions > button {
+        width: 100%;
+    }
+    .production-log-timeline {
+        padding-inline: 16px;
+    }
+    .production-log-timeline-heading small {
+        display: none;
+    }
+    .production-log-footer {
+        padding-inline: 16px;
+    }
 }
 @media (min-width: 1536px) {
     .production-log-panel {
         position: static;
         z-index: auto;
         inset: auto;
+        width: auto;
         min-width: 0;
+        height: 100%;
         box-shadow: none;
     }
 }

@@ -10652,6 +10652,9 @@ const ProductionLogPanel = ({
     task._assignee?.name || task._ownerText || "Sin responsable asignado";
   const currentAuthor =
     currentUserProfile?.name || currentUserProfile?.email || "Usuario";
+  const statusMeta = getModuleStatusMeta(task._status, "production");
+  const taskDate = task._date ? formatShortDate(task._date) : "Sin fecha";
+  const currentAuthorInitials = getInitials(currentAuthor);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -10676,71 +10679,126 @@ const ProductionLogPanel = ({
   return (
     <aside className="production-log-panel" aria-label={`Bitácora de ${task._title}`}>
       <header className="production-log-panel-header">
-        <div className="min-w-0">
+        <div className="production-log-panel-topline">
           <p className="production-log-kicker">
-            <span aria-hidden="true" />
-            Bitácora de producción
+            <Icon name="ClipboardList" size={14} />
+            Bitácora
           </p>
-          <h3>{task._title}</h3>
-          <p className="production-log-responsible">
-            <Icon name="User" size={13} />
-            {responsibleName}
-          </p>
+          <div className="production-log-panel-actions">
+            <span className={`production-log-status is-${statusMeta.tone}`}>
+              <span aria-hidden="true" />
+              {statusMeta.label}
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="production-log-close"
+              aria-label="Cerrar bitácora"
+            >
+              <Icon name="X" size={18} />
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="production-log-close"
-          aria-label="Cerrar bitácora"
-        >
-          <Icon name="X" size={18} />
-        </button>
+        <h3>{task._title}</h3>
+        <div className="production-log-overview">
+          <div>
+            <Icon name="User" size={14} />
+            <span>
+              <small>Responsable</small>
+              <strong>{responsibleName}</strong>
+            </span>
+          </div>
+          <div>
+            <Icon name="CalendarDays" size={14} />
+            <span>
+              <small>Fecha</small>
+              <strong>{taskDate}</strong>
+            </span>
+          </div>
+          <div>
+            <Icon name="FileText" size={14} />
+            <span>
+              <small>Registros</small>
+              <strong>{entries.length}</strong>
+            </span>
+          </div>
+        </div>
       </header>
 
       <form className="production-log-composer" onSubmit={handleSubmit}>
-        <label htmlFor={`production-log-${task.id}`}>
-          Registrar lo que pasó
-        </label>
-        <textarea
-          id={`production-log-${task.id}`}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          maxLength={1600}
-          placeholder="Ej. Se repitió la toma 03 por ruido. El material quedó respaldado y pasó a edición."
-          disabled={saving || !onAddEntry}
-        />
-        <div className="production-log-composer-meta">
-          <span>Como {currentAuthor}</span>
-          <span>{draft.length}/1600</span>
+        <div className="production-log-composer-heading">
+          <span><Icon name="Pencil" size={16} /></span>
+          <div>
+            <label htmlFor={`production-log-${task.id}`}>Nuevo registro</label>
+            <p>Deja una nota concreta para que el siguiente turno sepa qué ocurrió.</p>
+          </div>
+        </div>
+        <div className="production-log-editor">
+          <textarea
+            id={`production-log-${task.id}`}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                handleSubmit(event);
+              }
+            }}
+            maxLength={1600}
+            placeholder="¿Qué pasó, qué decisión se tomó y qué necesita saber el siguiente responsable?"
+            disabled={saving || !onAddEntry}
+            aria-keyshortcuts="Control+Enter Meta+Enter"
+          />
+          <div className="production-log-editor-footer">
+            <span className="production-log-author">
+              <span aria-hidden="true">{currentAuthorInitials}</span>
+              <span>
+                <small>Registrado por</small>
+                <strong>{currentAuthor}</strong>
+              </span>
+            </span>
+            <span className="production-log-counter">{draft.length} / 1,600</span>
+          </div>
         </div>
         {error && (
           <p className="production-log-error" role="alert">
             {error}
           </p>
         )}
-        <button type="submit" disabled={!draft.trim() || saving || !onAddEntry}>
-          <Icon name={saving ? "Loader2" : "Send"} size={15} className={saving ? "animate-spin" : ""} />
-          {saving ? "Guardando…" : "Agregar a la bitácora"}
-        </button>
+        <div className="production-log-composer-actions">
+          <span><Icon name="Zap" size={13} /> Ctrl + Enter para guardar</span>
+          <button type="submit" disabled={!draft.trim() || saving || !onAddEntry}>
+            <Icon name={saving ? "Loader2" : "Send"} size={16} className={saving ? "animate-spin" : ""} />
+            {saving ? "Guardando…" : "Guardar registro"}
+          </button>
+        </div>
       </form>
 
       <div className="production-log-timeline custom-scroll" aria-live="polite">
         <div className="production-log-timeline-heading">
-          <p>Historial</p>
-          <span>{entries.length} {entries.length === 1 ? "nota" : "notas"}</span>
+          <div>
+            <span><Icon name="Clock" size={15} /></span>
+            <div>
+              <p>Historial de la tarea</p>
+              <small>La información más reciente aparece primero.</small>
+            </div>
+          </div>
+          <strong>{entries.length} {entries.length === 1 ? "nota" : "notas"}</strong>
         </div>
         {entries.length ? (
           <div className="production-log-entries">
-            {entries.map((entry) => {
+            {entries.map((entry, index) => {
               const author = entry.authorName || "Equipo";
               return (
                 <article className="production-log-entry" key={entry.id}>
                   <span className="production-log-avatar" aria-hidden="true">
                     {getInitials(author)}
                   </span>
-                  <div>
+                  <div className="production-log-entry-body">
                     <div className="production-log-entry-meta">
-                      <strong>{author}</strong>
+                      <div>
+                        <strong>{author}</strong>
+                        <span>Registro {String(entries.length - index).padStart(2, "0")}</span>
+                      </div>
                       <time dateTime={entry.createdAt || undefined}>
                         {formatProductionLogTimestamp(entry.createdAt)}
                       </time>
@@ -10754,16 +10812,19 @@ const ProductionLogPanel = ({
         ) : (
           <div className="production-log-empty">
             <span><Icon name="ClipboardList" size={22} /></span>
-            <strong>La bitácora está limpia</strong>
-            <p>Registra decisiones, bloqueos, cambios y entregas de esta tarea.</p>
+            <strong>Aún no hay registros</strong>
+            <p>Documenta aquí decisiones, bloqueos, cambios y entregas de esta tarea.</p>
           </div>
         )}
       </div>
 
       <footer className="production-log-footer">
         <button type="button" onClick={onOpenFull}>
-          Ver tarea completa
-          <Icon name="ExternalLink" size={14} />
+          <span>
+            <Icon name="ExternalLink" size={15} />
+            Ver tarea completa
+          </span>
+          <Icon name="ArrowRight" size={14} />
         </button>
       </footer>
     </aside>
@@ -10780,7 +10841,7 @@ const TaskRoomWorkspace = ({
   onDrop,
   inspector,
 }) => (
-  <div className={`task-room-workspace grid min-h-0 flex-1 gap-3 ${inspector ? "2xl:grid-cols-[minmax(0,1fr)_22rem]" : ""}`}>
+  <div className={`task-room-workspace grid min-h-0 flex-1 gap-3 ${inspector ? "2xl:grid-cols-[minmax(0,1fr)_30rem]" : ""}`}>
     <div className="task-room-board flex min-h-0 gap-3 overflow-x-auto pb-4 snap-x snap-mandatory kanban-mobile-scroll lg:grid lg:grid-cols-3 lg:overflow-hidden lg:pb-0">
       {groups.map((group) => {
         const count = group.stages.reduce((total, stage) => total + stage.tasks.length, 0);
