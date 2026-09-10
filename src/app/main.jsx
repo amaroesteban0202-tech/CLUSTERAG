@@ -591,6 +591,11 @@ const getUserRecordScore = (record = {}, referenceCount = 0) =>
   (record.seeded ? 5 : 10) +
   getVerificationPriority(record) * 25 +
   getUserRolePriority(record.role);
+const pickStableColor = (palette = [], key = "") => {
+  if (palette.length === 0) return "";
+  const seed = [...String(key)].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return palette[seed % palette.length];
+};
 const buildOrganizationTaskAssignees = (
   primaryMembers = [],
   organizationMembers = [],
@@ -2672,6 +2677,34 @@ function App() {
     editors,
     managementUsers,
     "linkedEditorId",
+  );
+  // Crear la persona desde Usuarios es la unica via que le da acceso, pero solo
+  // escribe en `users`: quien nunca paso por "Agregar a Editores/Accounts" tenia
+  // tareas y sesion pero no aparecia en el directorio de Equipo ni en el KPI.
+  // Se muestra la misma mezcla que ya usan las salas, acotada a ese rol.
+  const buildTeamDirectory = (assignees, role, palette) =>
+    assignees
+      .filter((person) => !person.isOrganizationMember || person.role === role)
+      .map((person) =>
+        person.isOrganizationMember
+          ? {
+              ...person,
+              userId: person.userId || person.assigneeUserId || "",
+              // Sin ficha no hay color guardado; se deriva del id para que la
+              // tarjeta no quede gris ni cambie de color en cada carga.
+              color: person.color || pickStableColor(palette, person.id),
+            }
+          : person,
+      );
+  const managerTeam = buildTeamDirectory(
+    accountTaskAssignees,
+    "manager",
+    ACCOUNT_COLORS,
+  );
+  const editorTeam = buildTeamDirectory(
+    editingTaskAssignees,
+    "editor",
+    EDITOR_COLORS,
   );
   const currentManagementAssignee = findCurrentUserTaskAssignee(
     currentUserProfile,
@@ -4981,6 +5014,28 @@ function App() {
     });
   };
 
+  // "Agregar a Editores/Accounts" solo escribia la ficha del directorio: la
+  // persona quedaba visible pero sin cuenta, sin correo de acceso y sin poder
+  // entrar. Ahora tambien se le crea el usuario con el rol que le corresponde.
+  // ponytail: la ficha y el usuario se emparejan por correo, que es lo que ya
+  // usan el directorio, el login y el selector de responsable; no se escribe
+  // userId/linkedEditorId porque el puente que los mantenia esta apagado.
+  const ensureTeamMemberAccount = async (fd = {}, role) => {
+    const normalizedEmail = normalizeEmail(fd.email);
+    if (!normalizedEmail) return;
+    if (!userHasPermission(currentUserProfile, "manage_users")) return;
+    if (appUsers.some((item) => normalizeEmail(item.email) === normalizedEmail))
+      return;
+    await addUserRecord({
+      name: fd.name || "",
+      email: normalizedEmail,
+      profession: fd.profession || "",
+      photo: fd.photo || "",
+      role,
+      isActive: true,
+    });
+  };
+
   const addManager = async (fd) => {
     const color = ACCOUNT_COLORS[managers.length % ACCOUNT_COLORS.length];
     const normalizedEmail = normalizeEmail(fd.email);
@@ -5002,12 +5057,14 @@ function App() {
         }),
       afterSuccess: closeModal,
     });
-    if (result?.id && normalizedEmail)
+    if (result?.id && normalizedEmail) {
       await syncIdentityLinks({
         email: normalizedEmail,
         managerId: result.id,
         silent: true,
       });
+      await ensureTeamMemberAccount(fd, "manager");
+    }
   };
   const updateManager = async (id, data) => {
     const normalizedEmail = normalizeEmail(data.email);
@@ -5056,12 +5113,14 @@ function App() {
         }),
       afterSuccess: closeModal,
     });
-    if (result?.id && normalizedEmail)
+    if (result?.id && normalizedEmail) {
       await syncIdentityLinks({
         email: normalizedEmail,
         editorId: result.id,
         silent: true,
       });
+      await ensureTeamMemberAccount(fd, "editor");
+    }
   };
   const updateEditor = async (id, data) => {
     const normalizedEmail = normalizeEmail(data.email);
@@ -7154,7 +7213,7 @@ function App() {
               />
               <TeamView
                 title="Account Managers"
-                team={managers}
+                team={managerTeam}
                 iconColor="indigo"
                 onAdd={() => setModalConfig({ isOpen: true, type: "manager" })}
                 onSelect={(m) => {
@@ -7219,7 +7278,7 @@ function App() {
               />
               <TeamView
                 title="Editores"
-                team={editors}
+                team={editorTeam}
                 iconColor="rose"
                 onAdd={() => setModalConfig({ isOpen: true, type: "editor" })}
                 onSelect={(e) => {
@@ -7516,8 +7575,8 @@ function App() {
             <PerformanceView
               accountTasks={accountTasks}
               editingTasks={editingTasks}
-              editors={editors}
-              managers={managers}
+              editors={editorTeam}
+              managers={managerTeam}
               users={appUsers}
             />
           )}
@@ -9684,7 +9743,9 @@ const TeamView = ({
   const filteredTeam = team.filter(
     (person) =>
       person.isActive !== false &&
-      person.name.toLowerCase().includes(searchTerm.toLowerCase()),
+      String(person.name || "")
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()),
   );
 
   return (
@@ -9720,30 +9781,34 @@ const TeamView = ({
                 onClick={() => onSelect(person)}
                 className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 hover:shadow-xl hover:border-slate-300 dark:hover:border-slate-600 transition-all cursor-pointer group relative"
               >
-                <div className="absolute top-4 right-4 flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEdit(person);
-                    }}
-                    aria-label={`Editar ${person.name || "miembro"}`}
-                    title="Editar"
-                    className="text-slate-500 dark:text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 p-3 md:p-2 bg-slate-50 dark:bg-slate-800 rounded-full hover:bg-blue-50 dark:hover:bg-slate-700"
-                  >
-                    <Icon name="Edit" size={16} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(person);
-                    }}
-                    aria-label={`Eliminar ${person.name || "miembro"}`}
-                    title="Eliminar"
-                    className="text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 p-3 md:p-2 bg-slate-50 dark:bg-slate-800 rounded-full hover:bg-red-50 dark:hover:bg-slate-700"
-                  >
-                    <Icon name="Trash2" size={16} />
-                  </button>
-                </div>
+                {/* Quien solo existe en `users` se edita y se da de baja desde
+                    Usuarios: no hay ficha propia que actualizar o borrar. */}
+                {!person.isOrganizationMember && (
+                  <div className="absolute top-4 right-4 flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEdit(person);
+                      }}
+                      aria-label={`Editar ${person.name || "miembro"}`}
+                      title="Editar"
+                      className="text-slate-500 dark:text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 p-3 md:p-2 bg-slate-50 dark:bg-slate-800 rounded-full hover:bg-blue-50 dark:hover:bg-slate-700"
+                    >
+                      <Icon name="Edit" size={16} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(person);
+                      }}
+                      aria-label={`Eliminar ${person.name || "miembro"}`}
+                      title="Eliminar"
+                      className="text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 p-3 md:p-2 bg-slate-50 dark:bg-slate-800 rounded-full hover:bg-red-50 dark:hover:bg-slate-700"
+                    >
+                      <Icon name="Trash2" size={16} />
+                    </button>
+                  </div>
+                )}
                 <div className="flex items-center gap-4">
                   {person.photo ? (
                     <img

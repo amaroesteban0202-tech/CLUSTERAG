@@ -59,6 +59,9 @@ const checks = [
   ["two-font system", css.includes('font-family: Arial, sans-serif') && css.includes('font-family: "Newsreader"') && !/SF Mono|Geist Mono|Consolas/.test(css)],
   ["no gradient source styles", !/\b(?:linear|radial)-gradient\b|\bbg-gradient-/i.test(`${app}\n${css}`)],
   ["no Lucide dependency", !`${app}\n${html}`.includes("lucide-react")],
+  ["team directory includes role users", app.includes("const managerTeam = buildTeamDirectory(") && app.includes("const editorTeam = buildTeamDirectory(") && app.includes("team={managerTeam}") && app.includes("team={editorTeam}") && !/team=\{(?:managers|editors)\}/.test(app)],
+  ["user-only members are read-only in the directory", app.includes("{!person.isOrganizationMember && (")],
+  ["adding a team member creates the login", app.includes("const ensureTeamMemberAccount = async") && app.includes('ensureTeamMemberAccount(fd, "manager")') && app.includes('ensureTeamMemberAccount(fd, "editor")')],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);
