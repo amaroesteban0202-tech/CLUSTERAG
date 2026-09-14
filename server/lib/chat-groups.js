@@ -39,6 +39,10 @@ export const buildChatDirectory = ({ users = [], managers = [], editors = [] } =
                 id,
                 name: name || email,
                 email,
+                // Sin view_users el cliente solo recibe su propio `users`; este
+                // directorio es su unica fuente del rol para listar en Equipo a
+                // quien solo existe como usuario (editores/accounts sin ficha).
+                role: String(record?.role || ''),
                 canReceiveCallsOutsideGroups
             };
             people.push(person);

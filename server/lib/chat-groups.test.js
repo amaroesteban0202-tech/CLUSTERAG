@@ -118,3 +118,13 @@ test('marca managers y superadmins como disponibles para llamadas fuera del grup
         false
     );
 });
+
+test('el directorio expone el rol de quien solo existe como usuario', () => {
+    const result = buildChatGroups({
+        users: [{ id: 'solo-user', name: 'Solo Usuario', email: 'solo@example.com', role: 'editor' }],
+        editors: [{ id: 'editor-record', name: 'Con Ficha', email: 'ficha@example.com' }]
+    });
+
+    assert.equal(result.people.find((person) => person.id === 'solo-user')?.role, 'editor');
+    assert.equal(result.people.find((person) => person.id === 'editor-record')?.role, '');
+});
