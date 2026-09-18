@@ -1,6 +1,6 @@
 # ClusterAG
 
-> **Este repositorio se migro.** El desarrollo continua en [MaycollJaramillo01/ClusterAgV2](https://github.com/MaycollJaramillo01/ClusterAgV2). Abre issues y PRs nuevos alla.
+> **Este repositorio se migro.** El desarrollo continua en [MaycollJaramillo01/ClusterAgV2](https://github.com/MaycollJaramillo01/ClusterAgV2). Abre issues y PRs nuevos alla. Al hacer merge de este PR, el sitio en vivo redirige automaticamente a https://clusterag-v2.vercel.app (las rutas `/api/*` no redirigen, para no romper la app movil ni los crons mientras dure la transicion).
 
 Aplicacion web y movil con frontend React, API Express y persistencia SQL. PostgreSQL es la base de produccion; SQLite se conserva para desarrollo local y pruebas. Firebase se usa solo para autenticacion por enlace/correo y notificaciones push, nunca como base de datos de la aplicacion.
 
