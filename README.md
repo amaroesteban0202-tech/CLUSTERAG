@@ -1,5 +1,7 @@
 # ClusterAG
 
+> **Este repositorio se migro.** El desarrollo continua en [MaycollJaramillo01/ClusterAgV2](https://github.com/MaycollJaramillo01/ClusterAgV2). Abre issues y PRs nuevos alla.
+
 Aplicacion web y movil con frontend React, API Express y persistencia SQL. PostgreSQL es la base de produccion; SQLite se conserva para desarrollo local y pruebas. Firebase se usa solo para autenticacion por enlace/correo y notificaciones push, nunca como base de datos de la aplicacion.
 
 ## Arranque local
