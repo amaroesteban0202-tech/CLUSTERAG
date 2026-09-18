@@ -33,6 +33,18 @@
       "maxDuration": 60
     }
   },
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "https://clusterag-v2.vercel.app/",
+      "permanent": false
+    },
+    {
+      "source": "/:path((?!api/).*)",
+      "destination": "https://clusterag-v2.vercel.app/:path",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/auth/google/:path*",
